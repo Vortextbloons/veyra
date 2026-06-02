@@ -1,5 +1,10 @@
 import type { ChatMessage, ModelInfo, ProviderInfo } from "@/lib/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
+import type { MemoryPack } from "@/lib/memory-types";
+
+export interface ProviderCompleteContext {
+  memoryPack?: MemoryPack | null;
+}
 
 export type ProviderChatOptions = {
   messages: ChatMessage[];
@@ -8,7 +13,7 @@ export type ProviderChatOptions = {
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
-  onComplete?: (result: LmChatCompleteResult) => void;
+  onComplete?: (result: LmChatCompleteResult, context?: ProviderCompleteContext) => void;
   onError: (error: string) => void;
 };
 

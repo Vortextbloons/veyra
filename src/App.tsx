@@ -3,6 +3,7 @@ import { TitleBar } from "@/components/title-bar";
 import { PrimarySidebar } from "@/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/components/chat-panel";
+import { MemoryPage } from "@/components/memory/memory-page";
 import { RightPanel } from "@/components/right-panel";
 import { sendChatRequest } from "@/lib/chat-orchestrator";
 import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
@@ -172,7 +173,8 @@ function App() {
   const supportsImages = selectedModelInfo?.supportsImages ?? false;
 
   const handleSend = useCallback(
-    (text: string, attachments?: MessageAttachment[]) => {
+    (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
+      const memoryEnabled = options?.memoryEnabled ?? false;
       const trimmed = text.trim();
       const imageAttachments =
         attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
@@ -217,6 +219,9 @@ function App() {
         model: selectedModel,
         previousResponseId: conversation?.lmResponseId,
         signal: controller.signal,
+        memoryEnabled,
+        conversationId,
+        projectId: undefined,
         onChunk: (chunk) => {
           if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
         },
@@ -231,10 +236,12 @@ function App() {
           setRequestStatus("error");
           setStreamingMessageId(null);
         },
-        onComplete: (result) => {
+        onComplete: (result, context) => {
+          const memoryPack = context?.memoryPack ?? null;
           commitAssistantMessage(conversationId, assistantMessage.id, {
             performance: result.performance,
             lmResponseId: result.responseId,
+            ...(memoryPack ? { memoryPack } : {}),
           });
         },
       }).then(() => {
@@ -281,21 +288,25 @@ function App() {
           collapsed={recentChatsCollapsed}
           onCollapsedChange={setRecentChatsCollapsed}
         />
-        <ChatPanel
-          title={activeConversation?.title}
-          messages={visibleMessages}
-          onSend={handleSend}
-          isStreaming={requestStatus === "streaming"}
-          streamingMessageId={streamingMessageId}
-          providers={providers}
-          selectedProvider={selectedProvider}
-          onProviderChange={selectProvider}
-          models={models}
-          selectedModel={selectedModel}
-          onModelChange={setSelectedModel}
-          supportsImages={supportsImages}
-          sidebarsCollapsed={sidebarsCollapsed}
-        />
+        {activeNav === "memory" ? (
+          <MemoryPage />
+        ) : (
+          <ChatPanel
+            title={activeConversation?.title}
+            messages={visibleMessages}
+            onSend={handleSend}
+            isStreaming={requestStatus === "streaming"}
+            streamingMessageId={streamingMessageId}
+            providers={providers}
+            selectedProvider={selectedProvider}
+            onProviderChange={selectProvider}
+            models={models}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            supportsImages={supportsImages}
+            sidebarsCollapsed={sidebarsCollapsed}
+          />
+        )}
         <RightPanel
           contextStats={contextStats}
           collapsed={rightPanelCollapsed}

@@ -1,6 +1,7 @@
 // ── Core chat types ──────────────────────────────────────────────────────────
 
 import type { MessageAttachment } from "@/lib/message-attachments";
+import type { MemoryPack } from "@/lib/memory-types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -14,6 +15,8 @@ export interface ChatMessage {
   reasoning?: string;
   timestamp: number;
   performance?: MessagePerformance;
+  /** Memory pack injected into context for this turn (only when chat Memory toggle was on) */
+  memoryPack?: MemoryPack;
 }
 
 export interface MessagePerformance {
@@ -81,7 +84,11 @@ export type RequestStatus = "idle" | "streaming" | "error";
 export interface ChatPanelProps {
   title?: string;
   messages?: ChatMessage[];
-  onSend?: (text: string, attachments?: MessageAttachment[]) => void;
+  onSend?: (
+    text: string,
+    attachments?: MessageAttachment[],
+    options?: { memoryEnabled: boolean },
+  ) => void;
   supportsImages?: boolean;
   isStreaming?: boolean;
   streamingMessageId?: string | null;

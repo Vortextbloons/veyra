@@ -1,6 +1,9 @@
 use std::fs;
 use tauri::Manager;
 
+mod memory_commands;
+mod memory_db;
+
 const CONVERSATIONS_FILE: &str = "conversations.json";
 
 #[tauri::command]
@@ -33,8 +36,22 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_http::init())
     .plugin(tauri_plugin_shell::init())
-    .invoke_handler(tauri::generate_handler![save_conversations, load_conversations])
+    .invoke_handler(tauri::generate_handler![
+      save_conversations,
+      load_conversations,
+      memory_commands::list_memory_folders,
+      memory_commands::list_memory_files,
+      memory_commands::list_memory_nodes,
+      memory_commands::create_memory_node,
+      memory_commands::update_memory_node,
+      memory_commands::delete_memory_node,
+      memory_commands::archive_memory_node,
+      memory_commands::pin_memory_node,
+      memory_commands::search_memory,
+    ])
     .setup(|app| {
+      let db = memory_db::MemoryDb::init(app.handle())?;
+      app.manage(db);
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

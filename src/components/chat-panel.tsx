@@ -18,6 +18,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import type { ChatMessage, ChatPanelProps, MessagePerformance } from "@/lib/chat-types";
+import type { MemoryPack } from "@/lib/memory-types";
 import {
   fileToAttachment,
   MAX_IMAGE_ATTACHMENTS,
@@ -315,6 +316,9 @@ function MessageBubble({
         {!isStreaming && message.performance && (
           <MessagePerformanceBar performance={message.performance} />
         )}
+        {!isStreaming && message.memoryPack && (
+          <MemoryUsedBadge memoryPack={message.memoryPack} />
+        )}
       </div>
     </div>
   );
@@ -416,6 +420,152 @@ function MessagePerformanceBar({
   );
 }
 
+function MemoryUsedBadge({
+  memoryPack,
+  nodeTitleLookup,
+}: {
+  memoryPack: MemoryPack;
+  nodeTitleLookup?: (id: string) => string | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reasonsOpen, setReasonsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const nodeCount = memoryPack.sourceNodeIds.length;
+  const tokenCount = memoryPack.tokenCount;
+  const reasonEntries = Object.entries(memoryPack.reasons ?? {});
+
+  const formatId = (id: string) =>
+    id.length > 14 ? `${id.slice(0, 12)}…` : id;
+
+  return (
+    <div ref={ref} className="relative mt-1.5 px-1">
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] transition-colors ${
+          open
+            ? "border-[var(--color-border-strong)] bg-white/[0.04] text-white"
+            : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
+        }`}
+      >
+        <Brain className="size-3" />
+        <span>
+          Memory used · {nodeCount} {nodeCount === 1 ? "node" : "nodes"} ·{" "}
+          {tokenCount} tokens
+        </span>
+        <ChevronDown
+          className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Memory pack details"
+          className="absolute left-0 top-full z-20 mt-1.5 w-[28rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/40"
+        >
+          <div className="border-b border-[var(--color-border)] p-3">
+            <div className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
+              Content
+            </div>
+            <pre className="m-0 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/70 p-2 font-mono text-[11px] leading-relaxed text-[var(--color-text)]">
+              {memoryPack.content}
+            </pre>
+          </div>
+
+          <div className="border-b border-[var(--color-border)] p-3">
+            <div className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
+              Sources
+            </div>
+            {nodeCount === 0 ? (
+              <p className="m-0 font-mono text-[11.5px] text-[var(--color-text-dim)]">
+                No source nodes
+              </p>
+            ) : (
+              <ul className="m-0 list-none space-y-0.5 p-0">
+                {memoryPack.sourceNodeIds.map((id) => {
+                  const title = nodeTitleLookup?.(id);
+                  return (
+                    <li
+                      key={id}
+                      className="truncate font-mono text-[11.5px] text-[var(--color-text-dim)]"
+                      title={title ?? id}
+                    >
+                      {title ?? formatId(id)}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="border-b border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-dim)]">
+            tokens: {memoryPack.tokenCount} · budget used:{" "}
+            {memoryPack.budgetUsed}
+          </div>
+
+          <div className="p-3">
+            <button
+              type="button"
+              onClick={() => setReasonsOpen((v) => !v)}
+              className="flex w-full items-center justify-between text-left text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)] hover:text-white"
+            >
+              <span>Reasons</span>
+              <ChevronDown
+                className={`size-3 transition-transform ${
+                  reasonsOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {reasonsOpen && (
+              <ul className="m-0 mt-1.5 list-none space-y-1 p-0">
+                {reasonEntries.length === 0 ? (
+                  <li className="font-mono text-[11.5px] text-[var(--color-text-dim)]">
+                    No reasons recorded
+                  </li>
+                ) : (
+                  reasonEntries.map(([key, value]) => (
+                    <li
+                      key={key}
+                      className="text-[11.5px] leading-snug"
+                    >
+                      <span className="font-mono text-[var(--color-text-dim)]">
+                        {key}:
+                      </span>{" "}
+                      <span className="text-[var(--color-text)]">{value}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MessageAttachmentsPreview({
   attachments,
   onRemove,
@@ -457,7 +607,11 @@ type ComposerProps = {
   onShowReasoningChange: (on: boolean) => void;
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
-  onSend?: (text: string, attachments?: MessageAttachment[]) => void;
+  onSend?: (
+    text: string,
+    attachments?: MessageAttachment[],
+    options?: { memoryEnabled: boolean },
+  ) => void;
   disabled?: boolean;
   supportsImages?: boolean;
   composerTextClass?: string;
@@ -483,6 +637,7 @@ function Composer({
 
   useEffect(() => {
     if (!supportsImages && attachments.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAttachments([]);
       setAttachError(null);
     }
@@ -494,7 +649,7 @@ function Composer({
   const handleSend = () => {
     const text = value.trim();
     if ((!text && attachments.length === 0) || disabled) return;
-    onSend?.(text, attachments.length > 0 ? attachments : undefined);
+    onSend?.(text, attachments.length > 0 ? attachments : undefined, { memoryEnabled: memory });
     setValue("");
     setAttachments([]);
     setAttachError(null);

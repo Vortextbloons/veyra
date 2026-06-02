@@ -1,0 +1,77 @@
+import { Pin, Tag } from "lucide-react";
+import type { MemoryNode } from "@/lib/memory-types";
+import { useMemoryStore } from "@/stores/memory-store";
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diff = Date.now() - then;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function ImportanceDots({ value }: { value: 1 | 2 | 3 | 4 | 5 }) {
+  return (
+    <span className="flex items-center gap-0.5" aria-label={`importance ${value}`}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span
+          key={i}
+          className={`size-1 rounded-full ${i <= value ? "bg-indigo-400" : "bg-white/10"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
+export function MemoryCard({ node }: { node: MemoryNode }) {
+  const selectedNodeId = useMemoryStore((s) => s.selectedNodeId);
+  const selectNode = useMemoryStore((s) => s.selectNode);
+  const active = selectedNodeId === node.id;
+
+  return (
+    <button
+      type="button"
+      onClick={() => selectNode(node.id)}
+      className={`group relative flex w-full flex-col gap-1.5 rounded-xl border px-3.5 py-2.5 text-left transition-all ${
+        active
+          ? "border-indigo-400/40 bg-[var(--color-accent-soft)] shadow-[0_0_0_1px_rgba(99,102,241,0.15)]"
+          : "border-[var(--color-border)] bg-[var(--color-panel)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.02]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-[13px] font-medium text-white">{node.title}</span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          {node.isPinned && <Pin className="size-3 text-indigo-300" />}
+          <ImportanceDots value={node.importance} />
+        </span>
+      </div>
+      {node.summary && (
+        <p className="line-clamp-2 text-[11.5px] leading-snug text-[var(--color-text-dim)]">
+          {node.summary}
+        </p>
+      )}
+      <div className="mt-0.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-full border border-[var(--color-border)] bg-white/[0.02] px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wide text-[var(--color-text-dim)]">
+            {node.type}
+          </span>
+          {node.tags.slice(0, 3).map((t) => (
+            <span key={t} className="flex items-center gap-0.5 text-[10px] text-[var(--color-text-dim)]">
+              <Tag className="size-2.5" />
+              {t}
+            </span>
+          ))}
+          {node.tags.length > 3 && (
+            <span className="text-[10px] text-[var(--color-text-dim)]">+{node.tags.length - 3}</span>
+          )}
+        </div>
+        <span className="font-mono text-[10px] text-[var(--color-text-dim)]">
+          {relativeTime(node.updatedAt)}
+        </span>
+      </div>
+    </button>
+  );
+}
