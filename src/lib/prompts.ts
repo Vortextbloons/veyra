@@ -31,15 +31,36 @@ export function composeMainSystemPrompt(options: {
   memoryBlock?: string;
   summaryBlock?: string;
   toolsBlock?: string;
+  contextAnchoringBlock?: string;
 }): string {
   const parts = [VEYRA_CORE_SYSTEM];
+  if (options.contextAnchoringBlock?.trim()) parts.push(options.contextAnchoringBlock.trim());
   if (options.memoryBlock?.trim()) parts.push(options.memoryBlock.trim());
   if (options.summaryBlock?.trim()) parts.push(options.summaryBlock.trim());
   if (options.toolsBlock?.trim()) parts.push(options.toolsBlock.trim());
   return parts.join("\n\n");
 }
 
-// --- Memory extraction (background job) ---
+export function buildContextAnchoringBlock(): string {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const timeStr = now.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+  const platform = navigator.platform;
+
+  return `<veyra_context>
+Current date/time: ${dateStr} at ${timeStr}
+Platform: ${platform}
+</veyra_context>`;
+}
 
 export const MEMORY_EXTRACTION_SYSTEM = `You extract durable memories from chat transcripts for a local assistant.
 

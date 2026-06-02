@@ -11,6 +11,7 @@ import type { MemoryRetrievalInfo } from "@/lib/memory-types";
 import { parseWebSearchToolCall } from "@/modules/web-search/tools/webSearchTool";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import { buildToolsBlock } from "@/lib/tool-registry";
+import { buildContextAnchoringBlock } from "@/lib/prompts";
 
 function stripToolCallFromContent(content: string): string {
   const regex = /\{[\s\S]*?"tool"\s*:\s*"web\.search"[\s\S]*?"args"\s*:\s*\{[\s\S]*?"query"\s*:\s*"[^"]*"[\s\S]*?\}[\s\S]*?\}/;
@@ -204,6 +205,11 @@ export async function sendChatRequest({
     ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
     : undefined;
 
+  const isFirstMessage = messages.filter((m) => m.role === "user").length <= 1;
+  const contextAnchoringBlock = isFirstMessage && settings.contextAnchoringEnabled
+    ? buildContextAnchoringBlock()
+    : undefined;
+
   await provider.sendChat({
     ...options,
     temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
@@ -217,6 +223,7 @@ export async function sendChatRequest({
         conversationSummary: conversation?.conversationSummary,
         summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
         toolsBlock: buildToolsBlock(settings),
+        contextAnchoringBlock,
       },
       resolvedContextLength,
     ),

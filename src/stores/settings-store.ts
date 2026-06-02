@@ -33,6 +33,7 @@ export type SettingsStoreState = {
   webSearchEnabled: boolean;
   webSearchSearxngUrl: string;
   webSearchDefaultMode: "auto" | "always" | "off";
+  contextAnchoringEnabled: boolean;
 };
 
 export type SettingsStore = SettingsStoreState & {
@@ -62,6 +63,7 @@ export type SettingsStore = SettingsStoreState & {
   setWebSearchEnabled: (enabled: boolean) => void;
   setWebSearchSearxngUrl: (url: string) => void;
   setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
+  setContextAnchoringEnabled: (enabled: boolean) => void;
 };
 
 const DEFAULT_STATE: SettingsStoreState = {
@@ -89,6 +91,7 @@ const DEFAULT_STATE: SettingsStoreState = {
   webSearchEnabled: false,
   webSearchSearxngUrl: "",
   webSearchDefaultMode: "auto",
+  contextAnchoringEnabled: true,
 };
 
 function loadState(): SettingsStoreState {
@@ -129,6 +132,7 @@ function persistState(state: SettingsStoreState) {
       webSearchEnabled: state.webSearchEnabled,
       webSearchSearxngUrl: state.webSearchSearxngUrl,
       webSearchDefaultMode: state.webSearchDefaultMode,
+      contextAnchoringEnabled: state.contextAnchoringEnabled,
     };
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(subset));
   } catch {
@@ -205,5 +209,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setWebSearchEnabled: (webSearchEnabled) => apply({ webSearchEnabled }),
     setWebSearchSearxngUrl: (webSearchSearxngUrl) => apply({ webSearchSearxngUrl }),
     setWebSearchDefaultMode: (webSearchDefaultMode) => apply({ webSearchDefaultMode }),
+    setContextAnchoringEnabled: (contextAnchoringEnabled) => apply({ contextAnchoringEnabled }),
   };
 });

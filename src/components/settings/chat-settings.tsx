@@ -17,6 +17,8 @@ export function ChatSettings() {
   const setAutoSummarizeChats = useSettingsStore((s) => s.setAutoSummarizeChats);
   const summaryModel = useSettingsStore((s) => s.summaryModel);
   const setSummaryModel = useSettingsStore((s) => s.setSummaryModel);
+  const contextAnchoringEnabled = useSettingsStore((s) => s.contextAnchoringEnabled);
+  const setContextAnchoringEnabled = useSettingsStore((s) => s.setContextAnchoringEnabled);
 
   const models = useProviderStore((s) => s.models);
 
@@ -101,6 +103,24 @@ export function ChatSettings() {
               placeholder="Use selected model"
             />
           </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
+          Context Anchoring
+        </h2>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Toggle
+              label="Enable context anchoring"
+              on={contextAnchoringEnabled}
+              onChange={setContextAnchoringEnabled}
+            />
+          </div>
+          <p className="text-[11px] text-[var(--color-text-dim)]">
+            Provides the AI with the current date/time and platform on the first message of each chat to reduce hallucinated dates and times.
+          </p>
         </div>
       </section>
 

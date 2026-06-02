@@ -10,6 +10,7 @@ const KEY_BYTES = 32;
 
 let encryptionKeyPromise: Promise<CryptoKey> | null = null;
 let decryptWorker: Worker | null = null;
+let saveQueue: Promise<void> = Promise.resolve();
 
 type EncryptedSnapshot = {
   version: number;
@@ -180,7 +181,7 @@ async function loadFallback(): Promise<Conversation[]> {
   }
 }
 
-export async function saveConversationSnapshot(conversations: Conversation[]) {
+async function writeConversationSnapshot(conversations: Conversation[]) {
   try {
     await invoke("save_conversations", {
       conversationsJson: await encryptSnapshot(conversations),
@@ -188,6 +189,15 @@ export async function saveConversationSnapshot(conversations: Conversation[]) {
   } catch {
     await saveFallback(conversations);
   }
+}
+
+export function saveConversationSnapshot(conversations: Conversation[]) {
+  const snapshot = conversations.map((conversation) => ({
+    ...conversation,
+    messages: conversation.messages.map((message) => ({ ...message })),
+  }));
+  saveQueue = saveQueue.catch(() => undefined).then(() => writeConversationSnapshot(snapshot));
+  return saveQueue;
 }
 
 export async function loadConversationSnapshot(): Promise<Conversation[]> {

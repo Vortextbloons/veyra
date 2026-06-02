@@ -326,10 +326,10 @@ impl MemoryDbState {
         }
     }
 
-    pub fn spawn_background_init(self: &std::sync::Arc<Self>) {
-        let state = std::sync::Arc::clone(self);
+    pub fn spawn_background_init(&self) {
+        let app = self.app.clone();
         std::thread::spawn(move || {
-            let _ = state.with_connection(|_| Ok(()));
+            let _ = MemoryDb::init(&app);
         });
     }
 

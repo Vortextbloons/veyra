@@ -27,6 +27,8 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
   const folders = useMemoryStore((s) => s.folders);
   const updateNode = useMemoryStore((s) => s.updateNode);
 
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [content, setContent] = useState(initial?.content ?? "");
   const [summary, setSummary] = useState(initial?.summary ?? "");
@@ -50,7 +52,9 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
   }, [content, mode, summary]);
 
   const handleSave = async () => {
-    if (!title.trim() || !content.trim()) return;
+    if (!title.trim() || !content.trim() || isSaving) return;
+    setError(null);
+    setIsSaving(true);
     const tags = tagsRaw.split(",").map((t) => t.trim()).filter(Boolean);
     const values: Omit<CreateMemoryNode, "id"> & { id?: string } = {
       folderId,
@@ -67,25 +71,31 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
       status,
       isPinned,
     };
-    if (mode === "edit" && initial && initial.id) {
-      const id = initial.id;
-      await updateNode({
-        id,
-        title: values.title,
-        content: values.content,
-        summary: values.summary,
-        type: values.type,
-        scope: values.scope,
-        tags: values.tags,
-        importance: values.importance,
-        confidence: values.confidence,
-        status: values.status,
-        isPinned: values.isPinned,
-        folderId: values.folderId,
-      });
-      onCancel();
-    } else {
-      await onSave(values);
+    try {
+      if (mode === "edit" && initial && initial.id) {
+        const id = initial.id;
+        await updateNode({
+          id,
+          title: values.title,
+          content: values.content,
+          summary: values.summary,
+          type: values.type,
+          scope: values.scope,
+          tags: values.tags,
+          importance: values.importance,
+          confidence: values.confidence,
+          status: values.status,
+          isPinned: values.isPinned,
+          folderId: values.folderId,
+        });
+        onCancel();
+      } else {
+        await onSave(values);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -203,6 +213,11 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
             />
             Pin this memory
           </label>
+          {error && (
+            <p role="alert" className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[12px] text-red-200">
+              {error}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] px-4 py-2.5">
@@ -216,10 +231,10 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
           <button
             type="button"
             onClick={handleSave}
-            disabled={!title.trim() || !content.trim()}
+            disabled={!title.trim() || !content.trim() || isSaving}
             className="h-7 rounded-md bg-[var(--color-accent)] px-3 text-[12px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110 disabled:opacity-40"
           >
-            {mode === "create" ? "Create" : "Save"}
+            {isSaving ? "Saving..." : mode === "create" ? "Create" : "Save"}
           </button>
         </div>
       </div>

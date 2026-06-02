@@ -117,6 +117,7 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
       set((state) => ({ nodes: [node, ...state.nodes] }));
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
+      throw err;
     } finally {
       pendingCreateIds.delete(id);
     }
@@ -128,6 +129,7 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
       set((state) => ({ nodes: replaceNode(state.nodes, node) }));
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
+      throw err;
     }
   },
 

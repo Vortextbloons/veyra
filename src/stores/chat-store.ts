@@ -17,6 +17,7 @@ type ChatStore = {
   activeConversationId: string | null;
   hydrationState: ConversationHydrationState;
   streamingBuffer: StreamingBuffer;
+  _skipNextClear: boolean;
   hydrateConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
   createConversation: () => string;
@@ -35,7 +36,6 @@ type ChatStore = {
   isBufferClearSkipped: () => boolean;
   skipNextBufferClear: () => void;
   resetAfterRePrompt: () => void;
-  setStreamingBufferContent: (content: string) => void;
   setStreamingWebSearchState: (state: WebSearchState) => void;
   commitAssistantMessage: (
     conversationId: string,
@@ -174,12 +174,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isBufferClearSkipped: () => get()._skipNextClear,
   skipNextBufferClear: () => set({ _skipNextClear: true }),
   resetAfterRePrompt: () => set({ streamingBuffer: null, _skipNextClear: false }),
-  setStreamingBufferContent: (content) => {
-    set((state) => {
-      if (!state.streamingBuffer) return state;
-      return { streamingBuffer: { ...state.streamingBuffer, content } };
-    });
-  },
   setStreamingWebSearchState: (webSearchState) => {
     set((state) => {
       if (!state.streamingBuffer) return state;

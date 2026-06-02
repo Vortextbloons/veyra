@@ -19,7 +19,7 @@ import {
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
-import { invokeCheckSearxngSetup, invokeStartSearxngContainer, invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
+import { invokeCheckSearxngSetup, invokeStartSearxngContainer } from "@/modules/web-search/searxng-setup";
 
 const ZOOM_MIN = 0.7;
 const ZOOM_MAX = 1.6;
@@ -166,7 +166,6 @@ function App() {
   // Auto-setup SearXNG via Docker — deferred so it does not compete with first paint.
   useEffect(() => {
     let cancelled = false;
-    let startedByUs = false;
 
     const cancelIdle = deferUntilIdle(() => {
       void (async () => {
@@ -175,14 +174,13 @@ function App() {
         if (cancelled) return;
 
         if (status.container_running && status.searxng_url) {
-          // Container already running — just wire it up, don't stop on close
+          // Container already running — just wire it up
           useSettingsStore.getState().setWebSearchSearxngUrl(status.searxng_url);
           useSettingsStore.getState().setWebSearchEnabled(true);
         } else if (status.docker_installed) {
-          // Docker available but container not running — start it
+          // Docker available but container not running — start it (Rust tracks ownership)
           const url = await invokeStartSearxngContainer();
           if (cancelled) return;
-          startedByUs = true;
           useSettingsStore.getState().setWebSearchSearxngUrl(url);
           useSettingsStore.getState().setWebSearchEnabled(true);
         }
@@ -196,10 +194,6 @@ function App() {
     return () => {
       cancelled = true;
       cancelIdle();
-      if (startedByUs) {
-        // Fire-and-forget stop — app is closing, don't await
-        invokeStopSearxngContainer().catch(() => {});
-      }
     };
   }, []);
 

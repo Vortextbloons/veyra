@@ -31,10 +31,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
             const rawCode = String(codeChildren).replace(/\n$/, "");
             return (
               <CodeBlock language={match?.[1]} rawCode={rawCode}>
-                <code
-                  className={codeClassName}
-                  dangerouslySetInnerHTML={{ __html: rawCode }}
-                />
+                <code className={codeClassName}>{rawCode}</code>
               </CodeBlock>
             );
           },

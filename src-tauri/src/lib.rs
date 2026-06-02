@@ -1,6 +1,6 @@
 use std::fs;
-use std::sync::Arc;
 use tauri::Manager;
+use tauri::WindowEvent;
 
 mod memory_commands;
 mod memory_db;
@@ -101,9 +101,13 @@ pub fn run() {
             searxng_setup::stop_searxng_container,
         ])
         .setup(|app| {
-            let db_state = Arc::new(memory_db::MemoryDbState::new(app.handle().clone()));
+            let db_state = memory_db::MemoryDbState::new(app.handle().clone());
             db_state.spawn_background_init();
             app.manage(db_state);
+
+            let searxng_state = searxng_setup::SearxngState::new();
+            app.manage(searxng_state);
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -112,6 +116,14 @@ pub fn run() {
                 )?;
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {
+                let state = window.state::<searxng_setup::SearxngState>();
+                if state.was_started_by_us() {
+                    searxng_setup::stop_container();
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

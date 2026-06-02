@@ -1,9 +1,33 @@
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 const CONTAINER_NAME: &str = "veyra-searxng";
 const SEARXNG_PORT: u16 = 8888;
+
+/// Tracks whether Veyra started the SearXNG container during this session.
+/// Used by the close handler to know if it should stop the container.
+pub struct SearxngState {
+    started_by_us: Arc<AtomicBool>,
+}
+
+impl SearxngState {
+    pub fn new() -> Self {
+        Self {
+            started_by_us: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn mark_started(&self) {
+        self.started_by_us.store(true, Ordering::Relaxed);
+    }
+
+    pub fn was_started_by_us(&self) -> bool {
+        self.started_by_us.load(Ordering::Relaxed)
+    }
+}
 
 /// Minimal SearXNG settings that enable JSON output and disable the rate
 /// limiter so the app can query the instance programmatically.
@@ -154,7 +178,9 @@ pub async fn check_searxng_setup() -> Result<SearxngSetupStatus, String> {
 /// If the container already exists we remove it first so that updated settings
 /// are applied on the next start.
 #[tauri::command]
-pub async fn start_searxng_container() -> Result<String, String> {
+pub async fn start_searxng_container(
+    state: tauri::State<'_, SearxngState>,
+) -> Result<String, String> {
     let _docker = find_docker().ok_or("Docker is not installed. Install Docker Desktop to use automatic SearXNG setup.")?;
 
     // Write a minimal settings.yml that enables JSON and disables the limiter.
@@ -211,18 +237,26 @@ pub async fn start_searxng_container() -> Result<String, String> {
         return Err("SearXNG container was started but is not running. Check Docker logs for errors.".into());
     }
 
+    state.mark_started();
+
     Ok(format!("http://localhost:{SEARXNG_PORT}"))
 }
 
 /// Stop the SearXNG container.
 #[tauri::command]
 pub async fn stop_searxng_container() -> Result<(), String> {
-    let output = run_docker(&["stop", CONTAINER_NAME])?;
-    if !output.status.success() {
-        return Err(format!(
-            "Failed to stop container: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
+    stop_container();
     Ok(())
+}
+
+/// Stop the SearXNG container synchronously. Used by the close handler.
+pub fn stop_container() {
+    if let Ok(output) = run_docker(&["stop", CONTAINER_NAME]) {
+        if !output.status.success() {
+            eprintln!(
+                "[SearXNG] Failed to stop container on close: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
 }

@@ -28,6 +28,8 @@ export interface BuildChatContextOptions {
   toolsBlock?: string | null;
   /** Web search results injected when re-prompting after a search. */
   webSearchContextBlock?: string | null;
+  /** Context anchoring block for first message (date/time, platform). */
+  contextAnchoringBlock?: string | null;
 }
 
 /**
@@ -62,7 +64,9 @@ function buildSystemContent(options: BuildChatContextOptions): string {
     || options.toolsBlock?.trim()
     || undefined;
 
-  return composeMainSystemPrompt({ memoryBlock, summaryBlock, toolsBlock: webSearchBlock });
+  const contextAnchoringBlock = options.contextAnchoringBlock?.trim() || undefined;
+
+  return composeMainSystemPrompt({ memoryBlock, summaryBlock, toolsBlock: webSearchBlock, contextAnchoringBlock });
 }
 
 /**

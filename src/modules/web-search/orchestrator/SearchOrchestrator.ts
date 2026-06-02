@@ -2,17 +2,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { SearXNGProvider } from "../providers/SearXNGProvider";
 import type { SearchContextBundle, SearXNGProviderConfig } from "../types";
 
-export const WEB_SEARCH_SYSTEM_HINT = `<veyra_web_search_hint>
-You have access to web search. When the user's question requires current information
-you do not have, emit a tool call in this exact JSON format:
-
-{"tool": "web.search", "args": {"query": "your search query here"}}
-
-Do NOT answer from the search results yourself — the app will handle the search and
-return results to you. Use web search only when genuinely needed. Do not search for
-trivial or timeless questions.
-</veyra_web_search_hint>`;
-
 const MAX_CONTEXT_TOKENS = 2500;
 
 export async function runSearch(query: string): Promise<SearchContextBundle> {
