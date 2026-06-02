@@ -23,7 +23,11 @@
         {
           "name": "lms",
           "cmd": "lms",
-          "args": true
+          "args": [
+            "--version",
+            ["daemon", "up"],
+            ["server", "start"]
+          ]
         }
       ]
     },
@@ -33,7 +37,7 @@
         {
           "name": "lmstudio",
           "cmd": "lmstudio",
-          "args": true
+          "args": false
         }
       ]
     }

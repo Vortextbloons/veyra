@@ -60,6 +60,12 @@ export interface ModelInfo {
   size?: string;
 }
 
+export interface ProviderConfig {
+  baseUrl: string;
+  model: string;
+  temperature: number;
+}
+
 // ── Request status ──────────────────────────────────────────────────────────
 
 export type RequestStatus = "idle" | "streaming" | "error";

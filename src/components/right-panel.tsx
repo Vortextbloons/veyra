@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Globe, PanelRightClose, PanelRightOpen } from "lucide-react";
-import type { RightPanelProps } from "@/lib/chat-types";
+import type { ContextStats, RightPanelProps } from "@/lib/chat-types";
 
 export function RightPanel({
   contextStats,

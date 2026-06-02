@@ -1,21 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TitleBar } from "@/components/title-bar";
 import { PrimarySidebar } from "@/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/components/chat-panel";
 import { RightPanel } from "@/components/right-panel";
-import type {
-  Conversation,
-  ModelInfo,
-  ProviderInfo,
-  RequestStatus,
-  ContextStats,
-  RecentChatsItem,
-} from "@/lib/chat-types";
-import { buildChatContext, getContextStats } from "@/lib/context";
-import { fetchModels, isServerRunning, sendLmStudioChat } from "@/lib/lm-studio";
-
-// ── Zoom helpers ───────────────────────────────────────────────────────────
+import { sendChatRequest } from "@/lib/chat-orchestrator";
+import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
+import { getContextStats } from "@/lib/context";
+import { useChatStore } from "@/stores/chat-store";
+import { useProviderStore } from "@/stores/provider-store";
+import { useSettingsStore } from "@/stores/settings-store";
 
 const ZOOM_MIN = 0.7;
 const ZOOM_MAX = 1.6;
@@ -33,7 +27,6 @@ function loadZoom(): number {
     if (!raw) return DEFAULT_ZOOM;
     const parsed = parseFloat(raw);
     if (!Number.isFinite(parsed)) return DEFAULT_ZOOM;
-    // Treat saved 100% as legacy default — bump to the new default zoom
     if (parsed === 1) return DEFAULT_ZOOM;
     return clampZoom(parsed);
   } catch {
@@ -48,67 +41,50 @@ function applyZoom(zoom: number) {
   document.documentElement.style.setProperty("--ui-zoom", z);
 }
 
-// ── Persistence helpers ────────────────────────────────────────────────────
-
-const STORAGE_KEY = "veyra.conversations";
-
-function saveConversations(conversations: Conversation[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
-  } catch {
-    // storage full or unavailable — silently ignore
-  }
-}
-
-function loadConversations(): Conversation[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as Conversation[];
-  } catch {
-    return [];
-  }
-}
-
-// ── App ────────────────────────────────────────────────────────────────────
-
 function App() {
-  const [activeNav, setActiveNav] = useState("chat");
   const [zoom, setZoom] = useState<number>(loadZoom);
-
-  // Chat state
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    return loadConversations();
-  });
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
-    const loaded = loadConversations();
-    return loaded.length > 0 ? loaded[0].id : null;
-  });
-  const [selectedModel, setSelectedModel] = useState<string>("");
-  const [models, setModels] = useState<ModelInfo[]>([]);
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("idle");
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-
-  // Provider state
-  const [providers, setProviders] = useState<ProviderInfo[]>([
-    { id: "lm-studio", name: "LM Studio", icon: "local", status: "disconnected" },
-  ]);
-  const [selectedProvider, setSelectedProvider] = useState<string>("lm-studio");
-  const [recentChatsCollapsed, setRecentChatsCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
-  const sidebarsCollapsed =
-    (recentChatsCollapsed ? 1 : 0) + (rightPanelCollapsed ? 1 : 0);
-
   const abortRef = useRef<AbortController | null>(null);
 
-  // ── Zoom ─────────────────────────────────────────────────────────────────
+  const conversations = useChatStore((state) => state.conversations);
+  const activeConversationId = useChatStore((state) => state.activeConversationId);
+  const streamingBuffer = useChatStore((state) => state.streamingBuffer);
+  const hydrateConversations = useChatStore((state) => state.hydrateConversations);
+  const createConversation = useChatStore((state) => state.createConversation);
+  const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const deleteAllConversations = useChatStore((state) => state.deleteAllConversations);
+  const addMessagePair = useChatStore((state) => state.addMessagePair);
+  const appendStreamingContent = useChatStore((state) => state.appendStreamingContent);
+  const appendStreamingReasoning = useChatStore((state) => state.appendStreamingReasoning);
+  const clearStreamingBuffer = useChatStore((state) => state.clearStreamingBuffer);
+  const commitAssistantMessage = useChatStore((state) => state.commitAssistantMessage);
+
+  const providers = useProviderStore((state) => state.providers);
+  const selectedProvider = useProviderStore((state) => state.selectedProvider);
+  const models = useProviderStore((state) => state.models);
+  const selectedModel = useProviderStore((state) => state.selectedModel);
+  const initializeProvider = useProviderStore((state) => state.initializeProvider);
+  const selectProvider = useProviderStore((state) => state.selectProvider);
+  const setSelectedModel = useProviderStore((state) => state.setSelectedModel);
+
+  const activeNav = useSettingsStore((state) => state.activeNav);
+  const recentChatsCollapsed = useSettingsStore((state) => state.recentChatsCollapsed);
+  const rightPanelCollapsed = useSettingsStore((state) => state.rightPanelCollapsed);
+  const setActiveNav = useSettingsStore((state) => state.setActiveNav);
+  const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
+  const setRightPanelCollapsed = useSettingsStore((state) => state.setRightPanelCollapsed);
+
+  const sidebarsCollapsed =
+    (recentChatsCollapsed ? 1 : 0) + (rightPanelCollapsed ? 1 : 0);
 
   useEffect(() => {
     applyZoom(zoom);
     try {
       localStorage.setItem(ZOOM_STORAGE_KEY, String(zoom));
     } catch {
-      // storage full or unavailable — silently ignore
+      // storage full or unavailable
     }
   }, [zoom]);
 
@@ -132,105 +108,44 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // ── Initialization ───────────────────────────────────────────────────────
-
   useEffect(() => {
-    (async () => {
-      const running = await isServerRunning();
-      setProviders((prev) =>
-        prev.map((p) =>
-          p.id === "lm-studio"
-            ? { ...p, status: running ? "connected" : "disconnected" }
-            : p,
-        ),
-      );
-
-      if (running) {
-        const fetchedModels = await fetchModels();
-        setModels(fetchedModels);
-        if (fetchedModels.length > 0 && !selectedModel) {
-          setSelectedModel(fetchedModels[0].id);
-        }
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── Persist on change (debounced) ────────────────────────────────────────
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      if (conversations.length === 0) {
-        try {
-          localStorage.removeItem(STORAGE_KEY);
-        } catch {
-          // storage unavailable — silently ignore
-        }
-      } else {
-        saveConversations(conversations);
-      }
-    }, 300);
-    return () => clearTimeout(id);
-  }, [conversations]);
-
-  // ── Derived state ────────────────────────────────────────────────────────
+    void hydrateConversations();
+    void initializeProvider();
+  }, [hydrateConversations, initializeProvider]);
 
   const activeConversation =
-    conversations.find((c) => c.id === activeConversationId) ?? null;
+    conversations.find((conversation) => conversation.id === activeConversationId) ?? null;
+
+  const visibleMessages = useMemo(() => {
+    const messages = activeConversation?.messages ?? [];
+    if (!streamingBuffer || streamingBuffer.conversationId !== activeConversation?.id) {
+      return messages;
+    }
+
+    return messages.map((message) =>
+      message.id === streamingBuffer.messageId
+        ? {
+            ...message,
+            content: streamingBuffer.content,
+            reasoning: streamingBuffer.reasoning || message.reasoning,
+          }
+        : message,
+    );
+  }, [activeConversation?.id, activeConversation?.messages, streamingBuffer]);
 
   const contextStats: ContextStats | undefined = activeConversation
     ? getContextStats(activeConversation.messages)
     : undefined;
 
-  const recentChats: RecentChatsItem[] = conversations.map((c) => ({
-    id: c.id,
-    title: c.title,
-    meta: new Date(c.updatedAt).toLocaleDateString(),
+  const recentChats: RecentChatsItem[] = conversations.map((conversation) => ({
+    id: conversation.id,
+    title: conversation.title,
+    meta: new Date(conversation.updatedAt).toLocaleDateString(),
   }));
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
-
-  const handleProviderChange = useCallback(async (providerId: string) => {
-    setSelectedProvider(providerId);
-    setSelectedModel("");
-    setModels([]);
-
-    if (providerId === "lm-studio") {
-      const running = await isServerRunning();
-      setProviders((prev) =>
-        prev.map((p) =>
-          p.id === "lm-studio"
-            ? { ...p, status: running ? "connected" : "disconnected" }
-            : p,
-        ),
-      );
-      if (running) {
-        const fetchedModels = await fetchModels();
-        setModels(fetchedModels);
-        if (fetchedModels.length > 0) {
-          setSelectedModel(fetchedModels[0].id);
-        }
-      }
-    }
-  }, []);
-
   const handleNewChat = useCallback(() => {
-    const id = crypto.randomUUID();
-    const now = Date.now();
-    const conv: Conversation = {
-      id,
-      title: "New conversation",
-      messages: [],
-      createdAt: now,
-      updatedAt: now,
-    };
-    setConversations((prev) => [conv, ...prev]);
-    setActiveConversationId(id);
-  }, []);
-
-  const handleSelectChat = useCallback((id: string) => {
-    setActiveConversationId(id);
-  }, []);
+    createConversation();
+  }, [createConversation]);
 
   const handleDeleteChat = useCallback(
     (id: string) => {
@@ -238,175 +153,95 @@ function App() {
         abortRef.current.abort();
         setRequestStatus("idle");
         setStreamingMessageId(null);
+        clearStreamingBuffer();
       }
-
-      setConversations((prev) => {
-        const next = prev.filter((c) => c.id !== id);
-        if (activeConversationId === id) {
-          setActiveConversationId(next.length > 0 ? next[0].id : null);
-        }
-        return next;
-      });
+      deleteConversation(id);
     },
-    [activeConversationId],
+    [activeConversationId, clearStreamingBuffer, deleteConversation],
   );
 
   const handleDeleteAllChats = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
+    abortRef.current?.abort();
     setRequestStatus("idle");
     setStreamingMessageId(null);
-    setConversations([]);
-    setActiveConversationId(null);
-  }, []);
+    deleteAllConversations();
+  }, [deleteAllConversations]);
 
   const handleSend = useCallback(
     (text: string) => {
-      // Ensure we have a conversation
-      let convId = activeConversationId;
-      if (!convId) {
-        const id = crypto.randomUUID();
-        const now = Date.now();
-        const conv: Conversation = {
-          id,
-          title: "New conversation",
-          messages: [],
-          createdAt: now,
-          updatedAt: now,
-        };
-        setConversations((prev) => [conv, ...prev]);
-        setActiveConversationId(id);
-        convId = id;
+      let conversationId = activeConversationId;
+      if (!conversationId) {
+        conversationId = createConversation();
       }
 
-      const userMsgId = crypto.randomUUID();
-      const assistantMsgId = crypto.randomUUID();
-
-      const userMessage = {
-        id: userMsgId,
-        role: "user" as const,
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
         content: text,
         timestamp: Date.now(),
       };
-
-      const assistantMessage = {
-        id: assistantMsgId,
-        role: "assistant" as const,
+      const assistantMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
         content: "",
         timestamp: Date.now(),
       };
 
-      // Add user + placeholder assistant message
-      setConversations((prev) =>
-        prev.map((conv) => {
-          if (conv.id !== convId) return conv;
-          const isFirstUser = conv.messages.filter((m) => m.role === "user").length === 0;
-          return {
-            ...conv,
-            title: isFirstUser ? text.slice(0, 50) : conv.title,
-            messages: [...conv.messages, userMessage, assistantMessage],
-            updatedAt: Date.now(),
-          };
-        }),
-      );
+      const conversation = conversations.find((item) => item.id === conversationId);
+      const messages = [...(conversation?.messages ?? []), userMessage];
 
-      setStreamingMessageId(assistantMsgId);
+      addMessagePair(conversationId, userMessage, assistantMessage);
+      setStreamingMessageId(assistantMessage.id);
       setRequestStatus("streaming");
-
-      // Build context from messages so far
-      const activeConv = conversations.find((c) => c.id === convId);
-      const contextMessages = buildChatContext([
-        ...(activeConv?.messages ?? []),
-        userMessage,
-      ]);
 
       const controller = new AbortController();
       abortRef.current = controller;
 
-      sendLmStudioChat({
-        messages: contextMessages,
+      void sendChatRequest({
+        providerId: selectedProvider,
+        messages,
         model: selectedModel,
-        previousResponseId: activeConv?.lmResponseId,
+        previousResponseId: conversation?.lmResponseId,
         signal: controller.signal,
         onChunk: (chunk) => {
-          if (!chunk) return;
-          setConversations((prev) =>
-            prev.map((conv) => {
-              if (conv.id !== convId) return conv;
-              return {
-                ...conv,
-                messages: conv.messages.map((msg) =>
-                  msg.id === assistantMsgId
-                    ? { ...msg, content: msg.content + chunk }
-                    : msg,
-                ),
-                updatedAt: Date.now(),
-              };
-            }),
-          );
+          if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
         },
         onReasoningChunk: (chunk) => {
-          if (!chunk) return;
-          setConversations((prev) =>
-            prev.map((conv) => {
-              if (conv.id !== convId) return conv;
-              return {
-                ...conv,
-                messages: conv.messages.map((msg) =>
-                  msg.id === assistantMsgId
-                    ? { ...msg, reasoning: (msg.reasoning ?? "") + chunk }
-                    : msg,
-                ),
-                updatedAt: Date.now(),
-              };
-            }),
-          );
+          if (chunk) appendStreamingReasoning(conversationId, assistantMessage.id, chunk);
         },
         onError: (error) => {
-          setConversations((prev) =>
-            prev.map((conv) => {
-              if (conv.id !== convId) return conv;
-              return {
-                ...conv,
-                messages: conv.messages.map((msg) =>
-                  msg.id === assistantMsgId
-                    ? { ...msg, content: `Error: ${error}` }
-                    : msg,
-                ),
-                updatedAt: Date.now(),
-              };
-            }),
-          );
+          commitAssistantMessage(conversationId, assistantMessage.id, {
+            content: `Error: ${error}`,
+          });
+          clearStreamingBuffer();
           setRequestStatus("error");
           setStreamingMessageId(null);
         },
         onComplete: (result) => {
-          setConversations((prev) =>
-            prev.map((conv) => {
-              if (conv.id !== convId) return conv;
-              return {
-                ...conv,
-                lmResponseId: result.responseId ?? conv.lmResponseId,
-                messages: conv.messages.map((msg) =>
-                  msg.id === assistantMsgId
-                    ? { ...msg, performance: result.performance }
-                    : msg,
-                ),
-                updatedAt: Date.now(),
-              };
-            }),
-          );
+          commitAssistantMessage(conversationId, assistantMessage.id, {
+            performance: result.performance,
+            lmResponseId: result.responseId,
+          });
         },
       }).then(() => {
+        clearStreamingBuffer();
         setRequestStatus("idle");
         setStreamingMessageId(null);
       });
     },
-    [activeConversationId, conversations, selectedModel],
+    [
+      activeConversationId,
+      addMessagePair,
+      appendStreamingContent,
+      appendStreamingReasoning,
+      clearStreamingBuffer,
+      commitAssistantMessage,
+      conversations,
+      createConversation,
+      selectedModel,
+      selectedProvider,
+    ],
   );
-
-  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--color-bg)]">
@@ -425,7 +260,7 @@ function App() {
         <RecentChats
           chats={recentChats}
           activeId={activeConversationId ?? undefined}
-          onSelect={handleSelectChat}
+          onSelect={setActiveConversationId}
           onDelete={handleDeleteChat}
           onDeleteAll={handleDeleteAllChats}
           collapsed={recentChatsCollapsed}
@@ -433,13 +268,13 @@ function App() {
         />
         <ChatPanel
           title={activeConversation?.title}
-          messages={activeConversation?.messages ?? []}
+          messages={visibleMessages}
           onSend={handleSend}
           isStreaming={requestStatus === "streaming"}
           streamingMessageId={streamingMessageId}
           providers={providers}
           selectedProvider={selectedProvider}
-          onProviderChange={handleProviderChange}
+          onProviderChange={selectProvider}
           models={models}
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}

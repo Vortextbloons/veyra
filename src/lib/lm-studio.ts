@@ -239,7 +239,7 @@ export async function isServerRunning(baseUrl?: string): Promise<boolean> {
 
 export async function startServer(): Promise<{ success: boolean; message: string }> {
   try {
-    const lmsCheck = await new Command("lms", ["--version"]).execute();
+    const lmsCheck = await Command.create("lms", ["--version"]).execute();
     if (lmsCheck.code !== 0) {
       return {
         success: false,
@@ -247,7 +247,7 @@ export async function startServer(): Promise<{ success: boolean; message: string
       };
     }
 
-    const daemonResult = await new Command("lms", ["daemon", "up"]).execute();
+    const daemonResult = await Command.create("lms", ["daemon", "up"]).execute();
     if (daemonResult.code !== 0) {
       return {
         success: false,
@@ -255,7 +255,7 @@ export async function startServer(): Promise<{ success: boolean; message: string
       };
     }
 
-    const serverResult = await new Command("lms", ["server", "start"]).execute();
+    const serverResult = await Command.create("lms", ["server", "start"]).execute();
     if (serverResult.code !== 0) {
       return {
         success: false,
