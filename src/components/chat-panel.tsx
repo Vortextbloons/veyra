@@ -1,4 +1,13 @@
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Bell,
   ChevronDown,
@@ -79,6 +88,46 @@ export function ChatPanel({
   const providerStatus = currentProvider?.status ?? "disconnected";
 
   const layout = chatLayoutClasses(sidebarsCollapsed);
+
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(messages.length);
+
+  const scrollMessagesToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 80;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (isStreaming) {
+      stickToBottomRef.current = true;
+      scrollMessagesToBottom("auto");
+    }
+  }, [isStreaming, streamingMessageId, scrollMessagesToBottom]);
+
+  useLayoutEffect(() => {
+    if (messages.length === 0) {
+      prevMessageCountRef.current = 0;
+      return;
+    }
+
+    if (messages.length > prevMessageCountRef.current) {
+      stickToBottomRef.current = true;
+    }
+    prevMessageCountRef.current = messages.length;
+
+    if (stickToBottomRef.current) {
+      scrollMessagesToBottom("auto");
+    }
+  }, [messages, scrollMessagesToBottom]);
 
   const selectorModels: Model[] = useMemo(() => {
     const favoriteSet = new Set(favoriteModels);
@@ -178,7 +227,11 @@ export function ChatPanel({
         </div>
       </div>
 
-      <div className="relative flex flex-1 flex-col overflow-y-auto">
+      <div
+        ref={messagesScrollRef}
+        onScroll={handleMessagesScroll}
+        className="relative flex flex-1 flex-col overflow-y-auto"
+      >
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 z-0 h-32 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.08),transparent_70%)]"
