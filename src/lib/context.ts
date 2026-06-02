@@ -24,6 +24,10 @@ export interface BuildChatContextOptions {
   conversationSummary?: string | null;
   /** How many leading messages are represented by the summary. */
   summaryCoversMessageCount?: number;
+  /** Web search hint injected when search is enabled but no results yet. */
+  webSearchHintBlock?: string | null;
+  /** Web search results injected when re-prompting after a search. */
+  webSearchContextBlock?: string | null;
 }
 
 /**
@@ -54,7 +58,11 @@ function buildSystemContent(options: BuildChatContextOptions): string {
       ? buildSummaryContextBlock(summaryText)
       : undefined;
 
-  return composeMainSystemPrompt({ memoryBlock, summaryBlock });
+  const webSearchBlock = options.webSearchContextBlock?.trim()
+    || options.webSearchHintBlock?.trim()
+    || undefined;
+
+  return composeMainSystemPrompt({ memoryBlock, summaryBlock, webSearchHintBlock: webSearchBlock });
 }
 
 /**

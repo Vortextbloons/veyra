@@ -30,6 +30,9 @@ export type SettingsStoreState = {
   memoryExtractionEnabled: boolean;
   memoryExtractionModel: string;
   schedulerPanelCollapsed: boolean;
+  webSearchEnabled: boolean;
+  webSearchSearxngUrl: string;
+  webSearchDefaultMode: "auto" | "always" | "off";
 };
 
 export type SettingsStore = SettingsStoreState & {
@@ -56,6 +59,9 @@ export type SettingsStore = SettingsStoreState & {
   setMemoryExtractionEnabled: (enabled: boolean) => void;
   setMemoryExtractionModel: (modelId: string) => void;
   setSchedulerPanelCollapsed: (collapsed: boolean) => void;
+  setWebSearchEnabled: (enabled: boolean) => void;
+  setWebSearchSearxngUrl: (url: string) => void;
+  setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
 };
 
 const DEFAULT_STATE: SettingsStoreState = {
@@ -80,6 +86,9 @@ const DEFAULT_STATE: SettingsStoreState = {
   memoryExtractionEnabled: true,
   memoryExtractionModel: "",
   schedulerPanelCollapsed: false,
+  webSearchEnabled: false,
+  webSearchSearxngUrl: "",
+  webSearchDefaultMode: "auto",
 };
 
 function loadState(): SettingsStoreState {
@@ -117,6 +126,9 @@ function persistState(state: SettingsStoreState) {
       memoryExtractionEnabled: state.memoryExtractionEnabled,
       memoryExtractionModel: state.memoryExtractionModel,
       schedulerPanelCollapsed: state.schedulerPanelCollapsed,
+      webSearchEnabled: state.webSearchEnabled,
+      webSearchSearxngUrl: state.webSearchSearxngUrl,
+      webSearchDefaultMode: state.webSearchDefaultMode,
     };
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(subset));
   } catch {
@@ -179,5 +191,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setMemoryExtractionEnabled: (memoryExtractionEnabled) => apply({ memoryExtractionEnabled }),
     setMemoryExtractionModel: (memoryExtractionModel) => apply({ memoryExtractionModel }),
     setSchedulerPanelCollapsed: (schedulerPanelCollapsed) => apply({ schedulerPanelCollapsed }),
+    setWebSearchEnabled: (webSearchEnabled) => apply({ webSearchEnabled }),
+    setWebSearchSearxngUrl: (webSearchSearxngUrl) => apply({ webSearchSearxngUrl }),
+    setWebSearchDefaultMode: (webSearchDefaultMode) => apply({ webSearchDefaultMode }),
   };
 });

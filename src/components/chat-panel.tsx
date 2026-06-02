@@ -15,6 +15,7 @@ import {
   Brain,
   X,
   ImageIcon,
+  Globe,
 } from "lucide-react";
 import type { ChatMessage, ChatPanelProps, MessagePerformance } from "@/lib/chat-types";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
@@ -349,6 +350,9 @@ const MessageBubble = memo(function MessageBubble({
             memoryRetrieval={message.memoryRetrieval}
           />
         )}
+        {!isStreaming && message.webSearchSources && message.webSearchSources.length > 0 && (
+          <WebSearchSourcesBadge sources={message.webSearchSources} />
+        )}
       </div>
     </div>
   );
@@ -615,6 +619,87 @@ function MemoryUsedBadge({
               </ul>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WebSearchSourcesBadge({
+  sources,
+}: {
+  sources: { id: string; title: string; url: string; snippet: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useClickOutside(ref, open, () => setOpen(false));
+
+  return (
+    <div ref={ref} className="relative mt-1.5 px-1">
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] transition-colors ${
+          open
+            ? "border-[var(--color-border-strong)] bg-white/[0.04] text-white"
+            : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
+        }`}
+      >
+        <Globe className="size-3" />
+        <span>
+          {sources.length} web source{sources.length !== 1 ? "s" : ""}
+        </span>
+        <ChevronDown
+          className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Web search sources"
+          className="absolute left-0 top-full z-20 mt-1.5 w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/40"
+        >
+          <div className="border-b border-[var(--color-border)] p-3">
+            <div className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
+              Sources Used
+            </div>
+          </div>
+          <ul className="m-0 max-h-72 list-none space-y-0 overflow-y-auto p-0">
+            {sources.map((source, i) => (
+              <li
+                key={source.id}
+                className="border-b border-[var(--color-border)] px-3 py-2 last:border-b-0"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 font-mono text-[10px] text-[var(--color-text-dim)]">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[12px] font-medium text-white">
+                      {source.title}
+                    </div>
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-0.5 block truncate text-[10.5px] text-[var(--color-accent)] hover:underline"
+                    >
+                      {source.url}
+                    </a>
+                    {source.snippet && (
+                      <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-dim)]">
+                        {source.snippet}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

@@ -2,7 +2,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
 import type { MemoryMode } from "@/lib/memory-types";
 import { Toggle } from "@/components/toggle";
-import { Cpu, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { ModelIcon } from "@/components/model-icon";

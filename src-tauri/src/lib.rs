@@ -3,6 +3,8 @@ use tauri::Manager;
 
 mod memory_commands;
 mod memory_db;
+mod searxng_setup;
+mod web_search_commands;
 
 const CONVERSATIONS_FILE: &str = "conversations.json";
 const CONVERSATION_KEY_FILE: &str = "conversation.key";
@@ -82,6 +84,11 @@ pub fn run() {
             memory_commands::archive_memory_node,
             memory_commands::pin_memory_node,
             memory_commands::search_memory,
+            web_search_commands::web_search_searxng,
+            web_search_commands::test_searxng_connection,
+            searxng_setup::check_searxng_setup,
+            searxng_setup::start_searxng_container,
+            searxng_setup::stop_searxng_container,
         ])
         .setup(|app| {
             let db = memory_db::MemoryDb::init(app.handle())?;

@@ -17,6 +17,7 @@ import { getContextStats } from "@/lib/context";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { invokeCheckSearxngSetup, invokeStartSearxngContainer, invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
 
 const ZOOM_MIN = 0.7;
 const ZOOM_MAX = 1.6;
@@ -142,6 +143,45 @@ function App() {
       void initializeProvider();
     });
   }, [hydrateConversations, initializeProvider]);
+
+  // Auto-setup SearXNG via Docker on first launch.
+  // Starts the container on mount; stops it on unmount (app close) only if
+  // *we* started it — if it was already running we leave it alone.
+  useEffect(() => {
+    let cancelled = false;
+    let startedByUs = false;
+
+    void (async () => {
+      try {
+        const status = await invokeCheckSearxngSetup();
+        if (cancelled) return;
+
+        if (status.container_running && status.searxng_url) {
+          // Container already running — just wire it up, don't stop on close
+          useSettingsStore.getState().setWebSearchSearxngUrl(status.searxng_url);
+          useSettingsStore.getState().setWebSearchEnabled(true);
+        } else if (status.docker_installed) {
+          // Docker available but container not running — start it
+          const url = await invokeStartSearxngContainer();
+          if (cancelled) return;
+          startedByUs = true;
+          useSettingsStore.getState().setWebSearchSearxngUrl(url);
+          useSettingsStore.getState().setWebSearchEnabled(true);
+        }
+        // If Docker is not installed, do nothing — user can configure manually
+      } catch (err) {
+        console.warn("[SearXNG] Auto-setup skipped:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (startedByUs) {
+        // Fire-and-forget stop — app is closing, don't await
+        invokeStopSearxngContainer().catch(() => {});
+      }
+    };
+  }, []);
 
   const activeConversation =
     conversations.find((conversation) => conversation.id === activeConversationId) ?? null;
@@ -322,11 +362,13 @@ function App() {
               onComplete: (result, context) => {
                 const memoryPack = context?.memoryPack ?? null;
                 const memoryRetrieval = context?.memoryRetrieval;
+                const webSearchSources = context?.webSearchSources;
                 commitAssistantMessage(conversationId, assistantMessage.id, {
                   performance: result.performance,
                   lmResponseId: result.responseId,
                   ...(memoryPack ? { memoryPack } : {}),
                   ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
+                  ...(webSearchSources ? { webSearchSources } : {}),
                 });
               },
             });

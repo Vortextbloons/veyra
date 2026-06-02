@@ -5,6 +5,13 @@ import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
+export type WebSearchSource = {
+  id: string;
+  title: string;
+  url: string;
+  snippet: string;
+};
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
@@ -19,6 +26,8 @@ export interface ChatMessage {
   memoryPack?: MemoryPack;
   /** Outcome of memory retrieval for this turn (toggle on). */
   memoryRetrieval?: MemoryRetrievalInfo;
+  /** Sources used from web search for this turn. */
+  webSearchSources?: WebSearchSource[];
 }
 
 export interface MessagePerformance {

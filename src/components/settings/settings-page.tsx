@@ -5,19 +5,22 @@ import {
   Database,
   Boxes,
   Sliders,
+  Wrench,
 } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { ChatSettings } from "./chat-settings";
 import { MemoriesSettings } from "./memories-settings";
 import { ModelsSettings } from "./models-settings";
+import { WebSearchSettings } from "./web-search-settings";
 
-type SettingsTab = "general" | "chat" | "memories" | "models";
+type SettingsTab = "general" | "chat" | "memories" | "models" | "tools";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <Settings className="size-4" /> },
   { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" /> },
   { id: "memories", label: "Memories", icon: <Database className="size-4" /> },
   { id: "models", label: "Models", icon: <Boxes className="size-4" /> },
+  { id: "tools", label: "Tools", icon: <Wrench className="size-4" /> },
 ];
 
 export function SettingsPage() {
@@ -62,6 +65,7 @@ export function SettingsPage() {
           {activeTab === "chat" && <ChatSettings />}
           {activeTab === "memories" && <MemoriesSettings />}
           {activeTab === "models" && <ModelsSettings />}
+          {activeTab === "tools" && <WebSearchSettings />}
         </div>
       </div>
     </main>

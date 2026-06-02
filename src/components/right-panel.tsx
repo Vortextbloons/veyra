@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Globe, PanelRightClose, PanelRightOpen } from "lucide-react";
 import type { ContextStats, RightPanelProps } from "@/lib/chat-types";
+import { useSettingsStore } from "@/stores/settings-store";
 
 export function RightPanel({
   contextStats,
@@ -14,7 +15,8 @@ export function RightPanel({
     onCollapsedChange?.(value);
     if (collapsedProp === undefined) setCollapsedInternal(value);
   };
-  const [webSearch, setWebSearch] = useState(false);
+  const webSearchEnabled = useSettingsStore((s) => s.webSearchEnabled);
+  const setWebSearchEnabled = useSettingsStore((s) => s.setWebSearchEnabled);
 
   return (
     <aside
@@ -50,8 +52,8 @@ export function RightPanel({
             <CompactToolToggle
               icon={<Globe className="size-3.5" />}
               label="Web Search"
-              on={webSearch}
-              onChange={setWebSearch}
+              on={webSearchEnabled}
+              onChange={setWebSearchEnabled}
             />
           </div>
         </div>
@@ -71,7 +73,7 @@ export function RightPanel({
 
           <ContextPanel stats={contextStats} />
           <ProjectPlaceholder />
-          <ToolsPanel webSearch={webSearch} onWebSearchChange={setWebSearch} />
+          <ToolsPanel webSearch={webSearchEnabled} onWebSearchChange={setWebSearchEnabled} />
         </div>
       )}
     </aside>
