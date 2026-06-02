@@ -6,6 +6,8 @@ export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
+  /** Model reasoning / chain-of-thought from LM Studio (when supported) */
+  reasoning?: string;
   timestamp: number;
   performance?: MessagePerformance;
 }

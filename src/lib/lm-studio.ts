@@ -32,6 +32,7 @@ type V1OutputItem =
 type StreamState = {
   firstTokenAt?: number;
   accumulatedContent: string;
+  accumulatedReasoning: string;
   stats?: LmChatStats;
   responseId?: string;
 };
@@ -40,6 +41,14 @@ function extractMessageText(output: V1OutputItem[] | undefined): string {
   if (!output?.length) return "";
   return output
     .filter((item): item is { type: "message"; content: string } => item.type === "message")
+    .map((item) => item.content)
+    .join("");
+}
+
+function extractReasoningText(output: V1OutputItem[] | undefined): string {
+  if (!output?.length) return "";
+  return output
+    .filter((item): item is { type: "reasoning"; content: string } => item.type === "reasoning")
     .map((item) => item.content)
     .join("");
 }
@@ -92,6 +101,7 @@ function processV1StreamEvent(
   data: string,
   state: StreamState,
   onChunk: (content: string, done: boolean) => void,
+  onReasoningChunk?: (content: string, done: boolean) => void,
 ): "continue" | "done" {
   if (!data) return "continue";
 
@@ -109,6 +119,12 @@ function processV1StreamEvent(
 
     const type = parsed.type ?? eventType;
 
+    if (type === "reasoning.delta" && parsed.content) {
+      state.accumulatedReasoning += parsed.content;
+      onReasoningChunk?.(parsed.content, false);
+      return "continue";
+    }
+
     if (type === "message.delta" && parsed.content) {
       if (state.firstTokenAt == null) state.firstTokenAt = Date.now();
       state.accumulatedContent += parsed.content;
@@ -125,6 +141,15 @@ function processV1StreamEvent(
       if (parsed.result.stats) state.stats = parsed.result.stats;
       if (parsed.result.response_id) state.responseId = parsed.result.response_id;
 
+      const finalReasoning = extractReasoningText(parsed.result.output);
+      if (finalReasoning.length > state.accumulatedReasoning.length) {
+        const reasoningRemainder = finalReasoning.slice(state.accumulatedReasoning.length);
+        if (reasoningRemainder) {
+          state.accumulatedReasoning = finalReasoning;
+          onReasoningChunk?.(reasoningRemainder, false);
+        }
+      }
+
       const finalText = extractMessageText(parsed.result.output);
       if (finalText && finalText.length > state.accumulatedContent.length) {
         const remainder = finalText.slice(state.accumulatedContent.length);
@@ -135,6 +160,7 @@ function processV1StreamEvent(
         }
       }
 
+      onReasoningChunk?.("", true);
       onChunk("", true);
       return "done";
     }
@@ -352,6 +378,7 @@ export async function sendLmStudioChat(options: {
   previousResponseId?: string;
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
+  onReasoningChunk?: (content: string, done: boolean) => void;
   onComplete?: (result: LmChatCompleteResult) => void;
   onError: (error: string) => void;
 }): Promise<void> {
@@ -363,6 +390,7 @@ export async function sendLmStudioChat(options: {
     previousResponseId,
     signal,
     onChunk,
+    onReasoningChunk,
     onComplete,
     onError,
   } = options;
@@ -370,6 +398,7 @@ export async function sendLmStudioChat(options: {
   const startedAt = Date.now();
   const streamState: StreamState = {
     accumulatedContent: "",
+    accumulatedReasoning: "",
   };
 
   try {
@@ -393,7 +422,7 @@ export async function sendLmStudioChat(options: {
     }
 
     const handleEvent = (eventType: string, data: string) =>
-      processV1StreamEvent(eventType, data, streamState, onChunk);
+      processV1StreamEvent(eventType, data, streamState, onChunk, onReasoningChunk);
 
     if (res.body) {
       await readV1SseStream(res.body, handleEvent, signal);
@@ -405,12 +434,18 @@ export async function sendLmStudioChat(options: {
       };
       streamState.stats = json.stats;
       streamState.responseId = json.response_id;
+      const reasoning = extractReasoningText(json.output);
+      if (reasoning) {
+        streamState.accumulatedReasoning = reasoning;
+        onReasoningChunk?.(reasoning, false);
+      }
       const text = extractMessageText(json.output);
       if (text) {
         streamState.firstTokenAt = Date.now();
         streamState.accumulatedContent = text;
         onChunk(text, false);
       }
+      onReasoningChunk?.("", true);
       onChunk("", true);
     }
 

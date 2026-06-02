@@ -13,6 +13,7 @@ import {
   Bot,
   Loader2,
   AlertTriangle,
+  Brain,
 } from "lucide-react";
 import type { ChatMessage, ChatPanelProps, MessagePerformance } from "@/lib/chat-types";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
@@ -48,6 +49,7 @@ export function ChatPanel({
   sidebarsCollapsed = 0,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(true);
+  const [showReasoning, setShowReasoning] = useState(false);
   const [mode, setMode] = useState<ChatMode>("chat");
 
   const currentProvider = providers.find((p) => p.id === selectedProvider);
@@ -154,6 +156,7 @@ export function ChatPanel({
                 key={m.id}
                 message={m}
                 isStreaming={m.id === streamingMessageId}
+                showReasoning={showReasoning}
                 layout={layout}
               />
             ))}
@@ -167,6 +170,8 @@ export function ChatPanel({
         <Composer
           memory={memory}
           onMemoryChange={setMemory}
+          showReasoning={showReasoning}
+          onShowReasoningChange={setShowReasoning}
           mode={mode}
           onModeChange={setMode}
           onSend={onSend}
@@ -225,10 +230,12 @@ function EmptyChat() {
 function MessageBubble({
   message,
   isStreaming,
+  showReasoning,
   layout,
 }: {
   message: ChatMessage;
   isStreaming: boolean;
+  showReasoning: boolean;
   layout: ReturnType<typeof chatLayoutClasses>;
 }) {
   const isUser = message.role === "user";
@@ -253,6 +260,11 @@ function MessageBubble({
     );
   }
   const body = message.content.trim();
+  const reasoning = message.reasoning?.trim() ?? "";
+  const hasReasoning = reasoning.length > 0;
+  const reasoningOnlyStreaming = isStreaming && hasReasoning && !body;
+  const showReplyBubble = Boolean(body) || !reasoningOnlyStreaming || !showReasoning;
+  const showPulseInReply = isStreaming && !reasoningOnlyStreaming;
 
   return (
     <div className="flex items-start gap-3">
@@ -265,20 +277,56 @@ function MessageBubble({
           <span className="size-1 rounded-full bg-[var(--color-text-dim)]/50" />
           <span className="text-[var(--color-text-dim)]">just now</span>
         </div>
+        {showReasoning && hasReasoning && (
+          <ReasoningBlock
+            content={reasoning}
+            isStreaming={reasoningOnlyStreaming}
+            messageTextClass={layout.messageText}
+          />
+        )}
+        {showReplyBubble && (
         <div
           className={`rounded-2xl rounded-tl-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-2.5 text-[var(--color-text)] shadow-[0_1px_0_rgba(255,255,255,0.03)_inset transition-[font-size] duration-200 ease-out ${layout.messageText}`}
         >
           <p className="m-0 whitespace-pre-wrap leading-snug">
             {body}
-            {isStreaming && (
+            {showPulseInReply && (
               <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
             )}
           </p>
         </div>
+        )}
         {!isStreaming && message.performance && (
           <MessagePerformanceBar performance={message.performance} />
         )}
       </div>
+    </div>
+  );
+}
+
+function ReasoningBlock({
+  content,
+  isStreaming,
+  messageTextClass,
+}: {
+  content: string;
+  isStreaming: boolean;
+  messageTextClass: string;
+}) {
+  return (
+    <div
+      className={`mb-2 rounded-xl border border-violet-500/15 bg-violet-500/[0.06] px-3.5 py-2.5 transition-[font-size] duration-200 ease-out ${messageTextClass}`}
+    >
+      <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-wide text-violet-300/80">
+        <Brain className="size-3" />
+        <span>Reasoning</span>
+        {isStreaming && (
+          <span className="ml-0.5 inline-block size-1.5 animate-pulse rounded-full bg-violet-400" />
+        )}
+      </div>
+      <p className="m-0 whitespace-pre-wrap text-[12.5px] leading-relaxed text-[var(--color-text-dim)]">
+        {content}
+      </p>
     </div>
   );
 }
@@ -355,6 +403,8 @@ function MessagePerformanceBar({
 type ComposerProps = {
   memory: boolean;
   onMemoryChange: (on: boolean) => void;
+  showReasoning: boolean;
+  onShowReasoningChange: (on: boolean) => void;
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
   onSend?: (text: string) => void;
@@ -365,6 +415,8 @@ type ComposerProps = {
 function Composer({
   memory,
   onMemoryChange,
+  showReasoning,
+  onShowReasoningChange,
   mode,
   onModeChange,
   onSend,
@@ -417,6 +469,11 @@ function Composer({
           <div className="flex shrink-0 items-center gap-1.5">
             <ModeMenu value={mode} onChange={onModeChange} />
             <Toggle label="Memory" on={memory} onChange={onMemoryChange} />
+            <Toggle
+              label="Reasoning"
+              on={showReasoning}
+              onChange={onShowReasoningChange}
+            />
             <button
               aria-label="Send"
               disabled={!canSend}

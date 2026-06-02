@@ -330,6 +330,7 @@ function App() {
         previousResponseId: activeConv?.lmResponseId,
         signal: controller.signal,
         onChunk: (chunk) => {
+          if (!chunk) return;
           setConversations((prev) =>
             prev.map((conv) => {
               if (conv.id !== convId) return conv;
@@ -338,6 +339,23 @@ function App() {
                 messages: conv.messages.map((msg) =>
                   msg.id === assistantMsgId
                     ? { ...msg, content: msg.content + chunk }
+                    : msg,
+                ),
+                updatedAt: Date.now(),
+              };
+            }),
+          );
+        },
+        onReasoningChunk: (chunk) => {
+          if (!chunk) return;
+          setConversations((prev) =>
+            prev.map((conv) => {
+              if (conv.id !== convId) return conv;
+              return {
+                ...conv,
+                messages: conv.messages.map((msg) =>
+                  msg.id === assistantMsgId
+                    ? { ...msg, reasoning: (msg.reasoning ?? "") + chunk }
                     : msg,
                 ),
                 updatedAt: Date.now(),
