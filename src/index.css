@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-bg: #0a0b10;
+  --color-surface: #0f1015;
+  --color-panel: #13141b;
+  --color-border: #1d1f28;
+  --color-border-strong: #262834;
+  --color-muted: #6b6e7d;
+  --color-text: #e7e8ee;
+  --color-text-dim: #9a9caa;
+  --color-accent: #6366f1;
+  --color-accent-soft: #1d1f3a;
+  --color-success: #34d399;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+
+input,
+textarea {
+  font-family: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f2230;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a2e3f;
+}
