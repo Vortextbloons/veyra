@@ -65,7 +65,7 @@ function newConversation(): Conversation {
 
 const initialConversations = loadConversations();
 
-export const useChatStore = create<ChatStore>((set, get) => ({
+export const useChatStore = create<ChatStore>((set) => ({
   conversations: initialConversations,
   activeConversationId: initialConversations[0]?.id ?? null,
   streamingBuffer: null,
@@ -153,8 +153,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
   clearStreamingBuffer: () => set({ streamingBuffer: null }),
   commitAssistantMessage: (conversationId, messageId, patch = {}) => {
-    const buffer = get().streamingBuffer;
     set((state) => {
+      const buffer =
+        state.streamingBuffer?.conversationId === conversationId &&
+        state.streamingBuffer.messageId === messageId
+          ? state.streamingBuffer
+          : null;
       const conversations = state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
         return {

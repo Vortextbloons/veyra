@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { useMemo } from "react";
 import { useMemoryStore, selectVisibleNodes } from "@/stores/memory-store";
 import type { MemoryView } from "@/stores/memory-store";
 import { MemoryCard } from "./memory-card";
@@ -8,7 +9,10 @@ export function MemoryList() {
   const setQuery = useMemoryStore((s) => s.setQuery);
   const activeView = useMemoryStore((s) => s.activeView);
   const nodes = useMemoryStore((s) => s.nodes);
-  const visible = selectVisibleNodes({ nodes }, activeView, query);
+  const visible = useMemo(
+    () => selectVisibleNodes({ nodes }, activeView, query),
+    [activeView, nodes, query],
+  );
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">

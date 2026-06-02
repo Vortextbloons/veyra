@@ -202,6 +202,37 @@ CREATE INDEX IF NOT EXISTS idx_memory_nodes_status ON memory_nodes(status);
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_scope  ON memory_nodes(scope);
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_folder ON memory_nodes(folder_id);
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_pinned ON memory_nodes(is_pinned);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_project ON memory_nodes(project_id);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_type ON memory_nodes(node_type);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_file ON memory_nodes(file_id);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_updated ON memory_nodes(updated_at);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_search_order ON memory_nodes(status, is_pinned, importance, updated_at);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_nodes_fts USING fts5(
+  title,
+  content,
+  summary,
+  tags,
+  content='memory_nodes',
+  content_rowid='rowid'
+);
+
+CREATE TRIGGER IF NOT EXISTS memory_nodes_ai AFTER INSERT ON memory_nodes BEGIN
+  INSERT INTO memory_nodes_fts(rowid, title, content, summary, tags)
+  VALUES (new.rowid, new.title, new.content, new.summary, new.tags);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memory_nodes_ad AFTER DELETE ON memory_nodes BEGIN
+  INSERT INTO memory_nodes_fts(memory_nodes_fts, rowid, title, content, summary, tags)
+  VALUES('delete', old.rowid, old.title, old.content, old.summary, old.tags);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memory_nodes_au AFTER UPDATE ON memory_nodes BEGIN
+  INSERT INTO memory_nodes_fts(memory_nodes_fts, rowid, title, content, summary, tags)
+  VALUES('delete', old.rowid, old.title, old.content, old.summary, old.tags);
+  INSERT INTO memory_nodes_fts(rowid, title, content, summary, tags)
+  VALUES (new.rowid, new.title, new.content, new.summary, new.tags);
+END;
 
 CREATE TABLE IF NOT EXISTS memory_events (
   id          TEXT PRIMARY KEY,
@@ -234,6 +265,9 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(SCHEMA)
         .map_err(|e| format!("schema migration failed: {}", e))?;
 
+    conn.execute_batch("INSERT INTO memory_nodes_fts(memory_nodes_fts) VALUES('rebuild');")
+        .map_err(|e| format!("fts rebuild failed: {}", e))?;
+
     // Seed a default folder so the first memory node has a valid FK target.
     let existing: i64 = conn
         .query_row("SELECT COUNT(*) FROM memory_folders", [], |r| r.get(0))
@@ -253,6 +287,20 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
 
 fn parse_json_array(s: &str) -> Vec<String> {
     serde_json::from_str::<Vec<String>>(s).unwrap_or_default()
+}
+
+fn fts_query(input: &str) -> Option<String> {
+    let terms: Vec<String> = input
+        .split(|c: char| !c.is_alphanumeric())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("\"{}\"*", s.replace('"', "")))
+        .collect();
+    if terms.is_empty() {
+        None
+    } else {
+        Some(terms.join(" AND "))
+    }
 }
 
 fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<MemoryNodeRow> {
@@ -383,8 +431,7 @@ pub fn list_nodes(conn: &Connection, filter_json: String) -> Result<Vec<MemoryNo
     let filter: MemoryNodeFilter = if trimmed.is_empty() || trimmed == "null" {
         MemoryNodeFilter::default()
     } else {
-        serde_json::from_str(trimmed)
-            .map_err(|e| format!("invalid list_nodes filter: {}", e))?
+        serde_json::from_str(trimmed).map_err(|e| format!("invalid list_nodes filter: {}", e))?
     };
 
     let mut conditions: Vec<String> = Vec::new();
@@ -507,13 +554,21 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
         Some(s) if !s.is_empty() => {}
         _ => return Err("create_node requires id".to_string()),
     }
-    let input: MemoryNodeCreateInput = serde_json::from_value(value)
-        .map_err(|e| format!("invalid create_node input: {}", e))?;
+    let input: MemoryNodeCreateInput =
+        serde_json::from_value(value).map_err(|e| format!("invalid create_node input: {}", e))?;
 
     let tags_json = serde_json::to_string(&input.tags.unwrap_or_default())
         .map_err(|e| format!("failed to serialize tags: {}", e))?;
-    let is_pinned_val = if input.is_pinned.unwrap_or(false) { 1i64 } else { 0i64 };
-    let user_editable_val = if input.user_editable.unwrap_or(true) { 1i64 } else { 0i64 };
+    let is_pinned_val = if input.is_pinned.unwrap_or(false) {
+        1i64
+    } else {
+        0i64
+    };
+    let user_editable_val = if input.user_editable.unwrap_or(true) {
+        1i64
+    } else {
+        0i64
+    };
     let importance_val = input.importance.unwrap_or(3);
     let confidence_val = input.confidence.unwrap_or(0.5);
     let use_count_val = input.use_count.unwrap_or(0);
@@ -614,8 +669,8 @@ pub fn update_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
         params.push(Value::Text(v));
     }
     if let Some(v) = input.tags {
-        let json = serde_json::to_string(&v)
-            .map_err(|e| format!("failed to serialize tags: {}", e))?;
+        let json =
+            serde_json::to_string(&v).map_err(|e| format!("failed to serialize tags: {}", e))?;
         sets.push(format!("tags = ?{}", params.len() + 1));
         params.push(Value::Text(json));
     }
@@ -716,6 +771,10 @@ pub fn search_nodes(
     limit: i64,
     project_id: Option<String>,
 ) -> Result<Vec<MemoryNodeRow>, String> {
+    if let Some(match_query) = fts_query(&query) {
+        return search_nodes_fts(conn, match_query, limit, project_id);
+    }
+
     let pattern = format!("%{}%", query.to_lowercase());
     let mut params: Vec<Value> = Vec::new();
 
@@ -764,6 +823,51 @@ pub fn search_nodes(
     let mut out = Vec::new();
     for r in rows {
         out.push(r.map_err(|e| format!("row error in search_nodes: {}", e))?);
+    }
+    Ok(out)
+}
+
+fn search_nodes_fts(
+    conn: &Connection,
+    match_query: String,
+    limit: i64,
+    project_id: Option<String>,
+) -> Result<Vec<MemoryNodeRow>, String> {
+    let mut params: Vec<Value> = vec![Value::Text(match_query)];
+
+    let project_filter = if let Some(pid) = project_id {
+        let placeholder = params.len() + 1;
+        params.push(Value::Text(pid));
+        format!(" AND n.project_id = ?{}", placeholder)
+    } else {
+        String::new()
+    };
+
+    let limit_placeholder = params.len() + 1;
+    params.push(Value::Integer(limit));
+
+    let sql = format!(
+        "SELECT n.id, n.folder_id, n.file_id, n.project_id, n.conversation_id, n.title, n.content, n.summary,
+                n.node_type, n.scope, n.tags, n.importance, n.confidence, n.origin, n.status,
+                n.is_pinned, n.user_editable, n.created_at, n.updated_at, n.last_used_at, n.use_count
+         FROM memory_nodes_fts f
+         JOIN memory_nodes n ON n.rowid = f.rowid
+         WHERE memory_nodes_fts MATCH ?1
+           AND n.status != 'archived'{}
+         ORDER BY bm25(memory_nodes_fts), n.importance DESC, n.last_used_at DESC NULLS LAST
+         LIMIT ?{}",
+        project_filter, limit_placeholder
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("prepare search_nodes_fts failed: {}", e))?;
+    let rows = stmt
+        .query_map(params_from_iter(params), row_to_node)
+        .map_err(|e| format!("query search_nodes_fts failed: {}", e))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| format!("row error in search_nodes_fts: {}", e))?);
     }
     Ok(out)
 }

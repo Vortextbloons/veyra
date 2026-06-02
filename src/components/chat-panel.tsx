@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Bell,
   ChevronDown,
@@ -259,7 +259,7 @@ function EmptyChat() {
   );
 }
 
-function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
   message,
   isStreaming,
   showReasoning,
@@ -342,7 +342,7 @@ function MessageBubble({
       </div>
     </div>
   );
-}
+});
 
 function ReasoningBlock({
   content,

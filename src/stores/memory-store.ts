@@ -23,6 +23,8 @@ import {
   updateMemoryNode as ipcUpdate,
 } from "@/lib/memory-storage";
 
+const pendingCreateIds = new Set<string>();
+
 export type MemoryView = "all" | "inbox" | "pinned" | "recent" | "archived";
 
 export type MemoryStore = {
@@ -107,11 +109,16 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
   setActiveView: (activeView) => set({ activeView }),
 
   createNode: async (input) => {
+    const id = input.id ?? crypto.randomUUID();
+    if (pendingCreateIds.has(id) || get().nodes.some((node) => node.id === id)) return;
+    pendingCreateIds.add(id);
     try {
-      const node = await ipcCreate(input);
+      const node = await ipcCreate({ ...input, id });
       set((state) => ({ nodes: [node, ...state.nodes] }));
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      pendingCreateIds.delete(id);
     }
   },
 

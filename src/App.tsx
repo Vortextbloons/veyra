@@ -53,7 +53,7 @@ function App() {
   const [zoom, setZoom] = useState<number>(loadZoom);
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("idle");
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const activeChatJobIdRef = useRef<string | null>(null);
 
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
@@ -151,9 +151,13 @@ function App() {
 
   const resolvedContextLength = getModelSettings(selectedModel).contextLength;
 
-  const contextStats: ContextStats | undefined = activeConversation
-    ? getContextStats(activeConversation.messages, resolvedContextLength)
-    : undefined;
+  const contextStats: ContextStats | undefined = useMemo(
+    () =>
+      activeConversation
+        ? getContextStats(activeConversation.messages, resolvedContextLength)
+        : undefined,
+    [activeConversation, resolvedContextLength],
+  );
 
   const recentChats: RecentChatsItem[] = conversations.map((conversation) => ({
     id: conversation.id,
@@ -162,7 +166,7 @@ function App() {
   }));
 
   const handleNewChat = useCallback(() => {
-    abortRef.current?.abort();
+    if (activeChatJobIdRef.current) aiScheduler.cancelAiJob(activeChatJobIdRef.current);
     setRequestStatus("idle");
     setStreamingMessageId(null);
     clearStreamingBuffer();
@@ -172,8 +176,8 @@ function App() {
 
   const handleDeleteChat = useCallback(
     (id: string) => {
-      if (id === activeConversationId && abortRef.current) {
-        abortRef.current.abort();
+      if (id === activeConversationId && activeChatJobIdRef.current) {
+        aiScheduler.cancelAiJob(activeChatJobIdRef.current);
         setRequestStatus("idle");
         setStreamingMessageId(null);
         clearStreamingBuffer();
@@ -185,7 +189,7 @@ function App() {
   );
 
   const handleDeleteAllChats = useCallback(() => {
-    abortRef.current?.abort();
+    if (activeChatJobIdRef.current) aiScheduler.cancelAiJob(activeChatJobIdRef.current);
     setRequestStatus("idle");
     setStreamingMessageId(null);
     // Cancel all queued jobs - active user job will finish naturally
@@ -230,8 +234,9 @@ function App() {
         timestamp: Date.now(),
       };
 
-      const conversation = conversations.find((item) => item.id === conversationId);
-      const messages = [...(conversation?.messages ?? []), userMessage];
+      const previousResponseId = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversationId)?.lmResponseId;
 
       addMessagePair(conversationId, userMessage, assistantMessage, {
         deferTitle: useSettingsStore.getState().autoNameEnabled,
@@ -242,82 +247,105 @@ function App() {
       // Abort any active background job to prioritize user message
       aiScheduler.abortActiveBackgroundJob();
 
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      aiScheduler.enqueueAiJob({
+      const jobId = aiScheduler.enqueueAiJob({
         type: "user_chat",
         priority: 0,
         title: "Sending message",
         conversationId,
         model: selectedModel,
         run: async (signal) => {
-          await prepareUserChatModel(selectedModel, signal);
+          try {
+            await prepareUserChatModel(selectedModel, signal);
 
-          await sendChatRequest({
-            providerId: selectedProvider,
-            messages,
-            model: selectedModel,
-            previousResponseId: conversation?.lmResponseId,
-            signal,
-            memoryEnabled,
-            conversationId,
-            projectId: undefined,
-            onChunk: (chunk) => {
-              if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
-            },
-            onReasoningChunk: (chunk) => {
-              if (chunk) appendStreamingReasoning(conversationId, assistantMessage.id, chunk);
-            },
-            onError: (error) => {
-              commitAssistantMessage(conversationId, assistantMessage.id, {
-                content: `Error: ${error}`,
-              });
-              clearStreamingBuffer();
-              setRequestStatus("error");
-              setStreamingMessageId(null);
-            },
-            onComplete: (result, context) => {
-              const memoryPack = context?.memoryPack ?? null;
-              commitAssistantMessage(conversationId, assistantMessage.id, {
-                performance: result.performance,
-                lmResponseId: result.responseId,
-                ...(memoryPack ? { memoryPack } : {}),
-              });
-            },
-          });
+            const liveConversation = useChatStore
+              .getState()
+              .conversations.find((item) => item.id === conversationId);
+            const userMessageIndex =
+              liveConversation?.messages.findIndex((message) => message.id === userMessage.id) ?? -1;
+            const messages =
+              userMessageIndex >= 0 && liveConversation
+                ? liveConversation.messages
+                    .slice(0, userMessageIndex + 1)
+                    .filter(
+                      (message) =>
+                        message.role !== "assistant" || getAssistantVisibleText(message).trim(),
+                    )
+                : [userMessage];
 
-          clearStreamingBuffer();
-          setRequestStatus("idle");
-          setStreamingMessageId(null);
-
-          const chatModel = useProviderStore.getState().selectedModel.trim();
-          const liveProvider = useProviderStore.getState().selectedProvider;
-          const conv = useChatStore.getState().conversations.find((c) => c.id === conversationId);
-          const assistantMsg = conv?.messages.find((m) => m.id === assistantMessage.id);
-          const assistantText = getAssistantVisibleText(assistantMsg);
-          const userMsgCount = conv?.messages.filter((m) => m.role === "user").length ?? 0;
-
-          if (chatModel && assistantText) {
-            const isFirstExchange = userMsgCount <= 1;
-            await handoffAfterUserChat({
-              chatModel,
-              conversationId,
-              isFirstExchange,
+            await sendChatRequest({
+              providerId: selectedProvider,
+              messages,
+              model: selectedModel,
+              previousResponseId,
               signal,
+              memoryEnabled,
+              conversationId,
+              projectId: undefined,
+              onChunk: (chunk) => {
+                if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
+              },
+              onReasoningChunk: (chunk) => {
+                if (chunk) appendStreamingReasoning(conversationId, assistantMessage.id, chunk);
+              },
+              onError: (error) => {
+                commitAssistantMessage(conversationId, assistantMessage.id, {
+                  content: `Error: ${error}`,
+                });
+                clearStreamingBuffer();
+                setRequestStatus("error");
+                setStreamingMessageId(null);
+              },
+              onComplete: (result, context) => {
+                const memoryPack = context?.memoryPack ?? null;
+                commitAssistantMessage(conversationId, assistantMessage.id, {
+                  performance: result.performance,
+                  lmResponseId: result.responseId,
+                  ...(memoryPack ? { memoryPack } : {}),
+                });
+              },
             });
 
-            queuePostChatJobs({
-              conversationId,
-              chatModel,
-              providerId: liveProvider,
-              userMessage: trimmed,
-              assistantMessage: assistantText,
-              isFirstExchange,
-            });
+            const chatModel = useProviderStore.getState().selectedModel.trim();
+            const liveProvider = useProviderStore.getState().selectedProvider;
+            const conv = useChatStore.getState().conversations.find((c) => c.id === conversationId);
+            const assistantMsg = conv?.messages.find((m) => m.id === assistantMessage.id);
+            const assistantText = getAssistantVisibleText(assistantMsg);
+            const userMsgCount = conv?.messages.filter((m) => m.role === "user").length ?? 0;
+
+            if (chatModel && assistantText) {
+              const isFirstExchange = userMsgCount <= 1;
+              await handoffAfterUserChat({
+                chatModel,
+                conversationId,
+                isFirstExchange,
+                signal,
+              });
+
+              queuePostChatJobs({
+                conversationId,
+                chatModel,
+                providerId: liveProvider,
+                userMessage: trimmed,
+                assistantMessage: assistantText,
+                isFirstExchange,
+              });
+            }
+          } catch (error) {
+            if (!signal.aborted) {
+              commitAssistantMessage(conversationId, assistantMessage.id, {
+                content: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+              });
+              setRequestStatus("error");
+            }
+          } finally {
+            clearStreamingBuffer();
+            setStreamingMessageId(null);
+            setRequestStatus((status) => (status === "error" ? "error" : "idle"));
+            if (activeChatJobIdRef.current === jobId) activeChatJobIdRef.current = null;
           }
         },
       });
+      activeChatJobIdRef.current = jobId;
     },
     [
       activeConversationId,
@@ -326,7 +354,6 @@ function App() {
       appendStreamingReasoning,
       clearStreamingBuffer,
       commitAssistantMessage,
-      conversations,
       createConversation,
       selectedModel,
       selectedProvider,

@@ -58,6 +58,7 @@ function persistModelChoice(providerId: string, modelId: string): void {
 }
 
 const initialPrefs = loadPrefs();
+let providerRequestSeq = 0;
 
 type ProviderStore = {
   providers: ProviderInfo[];
@@ -122,6 +123,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   },
 
   selectProvider: async (providerId) => {
+    const requestId = ++providerRequestSeq;
     const preferred = preferredModelForProvider(providerId);
 
     set({
@@ -142,6 +144,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
     const { available } = await syncProviderConnection(providerId, {});
     const adapter = getProviderAdapter(providerId);
+    if (requestId !== providerRequestSeq || get().selectedProvider !== providerId) return;
 
     set((state) => ({
       providers: state.providers.map((provider) =>
@@ -153,11 +156,13 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
     if (!available || !adapter) return;
     const models = await adapter.fetchModels();
+    if (requestId !== providerRequestSeq || get().selectedProvider !== providerId) return;
     const selectedModel = applyFetchedModels(providerId, models, get().selectedModel);
     set({ models, selectedModel });
   },
 
   reconnectProvider: async (providerId) => {
+    const requestId = ++providerRequestSeq;
     const id = providerId ?? get().selectedProvider;
     const adapter = getProviderAdapter(id);
     if (!adapter) return;
@@ -165,6 +170,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     set({ connectionPhase: "connecting", connectionError: null });
 
     const { available, message } = await syncProviderConnection(id, {});
+    if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
 
     set((state) => ({
       providers: state.providers.map((provider) =>
@@ -184,6 +190,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     if (!available) return;
 
     const models = await adapter.fetchModels();
+    if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
     if (id === get().selectedProvider) {
       const selectedModel = applyFetchedModels(id, models, get().selectedModel);
       set({ models, selectedModel });
@@ -191,6 +198,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   },
 
   startProviderServer: async (providerId) => {
+    const requestId = ++providerRequestSeq;
     const id = providerId ?? get().selectedProvider;
     const adapter = getProviderAdapter(id);
     if (!adapter) return;
@@ -203,6 +211,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     set({ connectionPhase: "connecting", connectionError: null });
 
     const { available, message } = await syncProviderConnection(id, { startServer: true });
+    if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
 
     set((state) => ({
       providers: state.providers.map((provider) =>
@@ -224,6 +233,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     }
 
     const models = await adapter.fetchModels();
+    if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
     if (id === get().selectedProvider) {
       const selectedModel = applyFetchedModels(id, models, get().selectedModel);
       set({ models, selectedModel });

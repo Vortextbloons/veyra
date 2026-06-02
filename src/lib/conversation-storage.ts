@@ -5,6 +5,9 @@ const STORAGE_KEY = "veyra.conversations";
 const ENCRYPTION_VERSION = 1;
 const KEY_MATERIAL = "veyra-local-conversation-storage-v1";
 const KEY_SALT = "veyra-conversations";
+const KEY_BYTES = 32;
+
+let encryptionKeyPromise: Promise<CryptoKey> | null = null;
 
 type EncryptedSnapshot = {
   version: number;
@@ -28,6 +31,26 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 async function getEncryptionKey(): Promise<CryptoKey> {
+  encryptionKeyPromise ??= getStoredEncryptionKey().catch(getLegacyEncryptionKey);
+  return encryptionKeyPromise;
+}
+
+async function getStoredEncryptionKey(): Promise<CryptoKey> {
+  let key = await invoke<string>("load_or_create_conversation_key");
+  if (!key) {
+    key = bytesToBase64(crypto.getRandomValues(new Uint8Array(KEY_BYTES)));
+    await invoke("save_conversation_key", { key });
+  }
+
+  const bytes = base64ToBytes(key);
+  if (bytes.byteLength !== KEY_BYTES) throw new Error("Invalid conversation key");
+  return crypto.subtle.importKey("raw", toArrayBuffer(bytes), { name: "AES-GCM" }, false, [
+    "encrypt",
+    "decrypt",
+  ]);
+}
+
+async function getLegacyEncryptionKey(): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const material = await crypto.subtle.importKey(
     "raw",
@@ -73,11 +96,20 @@ async function decryptSnapshot(raw: string): Promise<Conversation[]> {
   const iv = base64ToBytes(parsed.iv);
   const data = base64ToBytes(parsed.data);
 
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: toArrayBuffer(iv) },
-    await getEncryptionKey(),
-    toArrayBuffer(data),
-  );
+  let decrypted: ArrayBuffer;
+  try {
+    decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: toArrayBuffer(iv) },
+      await getEncryptionKey(),
+      toArrayBuffer(data),
+    );
+  } catch {
+    decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: toArrayBuffer(iv) },
+      await getLegacyEncryptionKey(),
+      toArrayBuffer(data),
+    );
+  }
 
   return JSON.parse(new TextDecoder().decode(decrypted)) as Conversation[];
 }

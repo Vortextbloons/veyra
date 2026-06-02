@@ -9,7 +9,6 @@
     "core:default",
     "core:window:allow-start-dragging",
     "http:default",
-    "shell:default",
     {
       "identifier": "http:allow-fetch",
       "allow": [
@@ -29,16 +28,6 @@
             ["daemon", "up"],
             ["server", "start"]
           ]
-        }
-      ]
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "lmstudio",
-          "cmd": "lmstudio",
-          "args": false
         }
       ]
     }
