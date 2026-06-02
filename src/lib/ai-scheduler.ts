@@ -24,6 +24,8 @@ export type AiJob = {
   description?: string;
   conversationId?: string;
   model?: string;
+  prompt?: string;
+  output?: string;
   createdAt: number;
   startedAt?: number;
   finishedAt?: number;
@@ -219,13 +221,8 @@ class AiScheduler {
         if (this.activeJob) break;
 
         const sorted = sortJobs(this.queue);
-        const next = sorted[0];
+        const next = sorted.find((job) => job.priority === 0) ?? (this.pausedBackground ? undefined : sorted[0]);
         if (!next) break;
-
-        if (next.priority > 0 && this.pausedBackground) {
-          const hasUserJob = sorted.some((j) => j.priority === 0);
-          if (!hasUserJob) break;
-        }
 
         this.queue = this.queue.filter((j) => j.id !== next.id);
         this.activeJob = next;
@@ -295,12 +292,4 @@ export const JOB_LABELS: Record<AiJobType, string> = {
   extract_memory: "Extracting memories",
   compress_context: "Compressing context",
   maintenance: "Maintenance",
-};
-
-export const PRIORITY_LABELS: Record<AiJobPriority, string> = {
-  0: "User",
-  1: "Visible",
-  2: "Chat",
-  3: "Memory",
-  4: "Idle",
 };

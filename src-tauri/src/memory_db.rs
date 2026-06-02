@@ -60,6 +60,12 @@ pub struct MemoryNodeRow {
     pub tags: Vec<String>,
     pub importance: i64,
     pub confidence: f64,
+    pub priority: String,
+    pub expires_at: Option<String>,
+    pub source_message_ids: Vec<String>,
+    pub extraction_batch_id: Option<String>,
+    pub duplicate_of: Option<String>,
+    pub contradiction_of: Option<String>,
     pub origin: String,
     pub status: String,
     pub is_pinned: bool,
@@ -103,6 +109,12 @@ pub struct MemoryNodeCreateInput {
     pub tags: Option<Vec<String>>,
     pub importance: Option<i64>,
     pub confidence: Option<f64>,
+    pub priority: Option<String>,
+    pub expires_at: Option<String>,
+    pub source_message_ids: Option<Vec<String>>,
+    pub extraction_batch_id: Option<String>,
+    pub duplicate_of: Option<String>,
+    pub contradiction_of: Option<String>,
     pub origin: String,
     pub status: String,
     pub is_pinned: Option<bool>,
@@ -130,12 +142,19 @@ pub struct MemoryNodeUpdateInput {
     pub tags: Option<Vec<String>>,
     pub importance: Option<i64>,
     pub confidence: Option<f64>,
+    pub priority: Option<String>,
+    pub expires_at: Option<String>,
+    pub source_message_ids: Option<Vec<String>>,
+    pub extraction_batch_id: Option<String>,
+    pub duplicate_of: Option<String>,
+    pub contradiction_of: Option<String>,
     pub origin: Option<String>,
     pub status: Option<String>,
     pub is_pinned: Option<bool>,
     pub user_editable: Option<bool>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    pub last_used_at: Option<String>,
     pub use_count: Option<i64>,
 }
 
@@ -187,6 +206,12 @@ CREATE TABLE IF NOT EXISTS memory_nodes (
   tags             TEXT NOT NULL DEFAULT '[]',
   importance       INTEGER NOT NULL DEFAULT 3,
   confidence       REAL NOT NULL DEFAULT 0.5,
+  priority         TEXT NOT NULL DEFAULT 'medium',
+  expires_at       TEXT,
+  source_message_ids TEXT NOT NULL DEFAULT '[]',
+  extraction_batch_id TEXT,
+  duplicate_of     TEXT,
+  contradiction_of TEXT,
   origin           TEXT NOT NULL,
   status           TEXT NOT NULL,
   is_pinned        INTEGER NOT NULL DEFAULT 0,
@@ -241,6 +266,18 @@ CREATE TABLE IF NOT EXISTS memory_events (
   payload     TEXT NOT NULL DEFAULT '{}',
   created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS memory_extraction_batches (
+  id                  TEXT PRIMARY KEY,
+  conversation_id     TEXT NOT NULL,
+  start_message_index INTEGER NOT NULL,
+  end_message_index   INTEGER NOT NULL,
+  status              TEXT NOT NULL,
+  created_at          TEXT NOT NULL,
+  completed_at        TEXT,
+  model               TEXT,
+  error               TEXT
+);
 "#;
 
 impl MemoryDb {
@@ -265,8 +302,22 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(SCHEMA)
         .map_err(|e| format!("schema migration failed: {}", e))?;
 
-    conn.execute_batch("INSERT INTO memory_nodes_fts(memory_nodes_fts) VALUES('rebuild');")
-        .map_err(|e| format!("fts rebuild failed: {}", e))?;
+    add_column_if_missing(conn, "memory_nodes", "priority", "TEXT NOT NULL DEFAULT 'medium'")?;
+    add_column_if_missing(conn, "memory_nodes", "expires_at", "TEXT")?;
+    add_column_if_missing(conn, "memory_nodes", "source_message_ids", "TEXT NOT NULL DEFAULT '[]'")?;
+    add_column_if_missing(conn, "memory_nodes", "extraction_batch_id", "TEXT")?;
+    add_column_if_missing(conn, "memory_nodes", "duplicate_of", "TEXT")?;
+    add_column_if_missing(conn, "memory_nodes", "contradiction_of", "TEXT")?;
+
+    let schema_version: i64 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap_or(0);
+    if schema_version < 1 {
+        conn.execute_batch("INSERT INTO memory_nodes_fts(memory_nodes_fts) VALUES('rebuild');")
+            .map_err(|e| format!("fts rebuild failed: {}", e))?;
+        conn.execute_batch("PRAGMA user_version = 1;")
+            .map_err(|e| format!("set schema version failed: {}", e))?;
+    }
 
     // Seed a default folder so the first memory node has a valid FK target.
     let existing: i64 = conn
@@ -282,6 +333,28 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         .map_err(|e| format!("seed default folder failed: {}", e))?;
     }
 
+    Ok(())
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({})", table))
+        .map_err(|e| format!("prepare table_info failed: {}", e))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| format!("query table_info failed: {}", e))?;
+    for row in rows {
+        if row.map_err(|e| format!("table_info row failed: {}", e))? == column {
+            return Ok(());
+        }
+    }
+    conn.execute(&format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition), [])
+        .map_err(|e| format!("add column {}.{} failed: {}", table, column, e))?;
     Ok(())
 }
 
@@ -305,8 +378,9 @@ fn fts_query(input: &str) -> Option<String> {
 
 fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<MemoryNodeRow> {
     let tags_str: String = row.get(10)?;
-    let is_pinned: i64 = row.get(15)?;
-    let user_editable: i64 = row.get(16)?;
+    let source_message_ids_str: String = row.get(15)?;
+    let is_pinned: i64 = row.get(21)?;
+    let user_editable: i64 = row.get(22)?;
     Ok(MemoryNodeRow {
         id: row.get(0)?,
         folder_id: row.get(1)?,
@@ -321,14 +395,20 @@ fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<MemoryNodeRow> {
         tags: parse_json_array(&tags_str),
         importance: row.get(11)?,
         confidence: row.get(12)?,
-        origin: row.get(13)?,
-        status: row.get(14)?,
+        priority: row.get(13)?,
+        expires_at: row.get(14)?,
+        source_message_ids: parse_json_array(&source_message_ids_str),
+        extraction_batch_id: row.get(16)?,
+        duplicate_of: row.get(17)?,
+        contradiction_of: row.get(18)?,
+        origin: row.get(19)?,
+        status: row.get(20)?,
         is_pinned: is_pinned != 0,
         user_editable: user_editable != 0,
-        created_at: row.get(17)?,
-        updated_at: row.get(18)?,
-        last_used_at: row.get(19)?,
-        use_count: row.get(20)?,
+        created_at: row.get(23)?,
+        updated_at: row.get(24)?,
+        last_used_at: row.get(25)?,
+        use_count: row.get(26)?,
     })
 }
 
@@ -526,7 +606,9 @@ pub fn list_nodes(conn: &Connection, filter_json: String) -> Result<Vec<MemoryNo
 
     let sql = format!(
         "SELECT id, folder_id, file_id, project_id, conversation_id, title, content, summary,
-                node_type, scope, tags, importance, confidence, origin, status,
+                node_type, scope, tags, importance, confidence, priority, expires_at,
+                source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
+                origin, status,
                 is_pinned, user_editable, created_at, updated_at, last_used_at, use_count
          FROM memory_nodes{}
          ORDER BY is_pinned DESC, importance DESC, created_at DESC
@@ -571,6 +653,15 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
     };
     let importance_val = input.importance.unwrap_or(3);
     let confidence_val = input.confidence.unwrap_or(0.5);
+    let priority_val = input.priority.unwrap_or_else(|| {
+        if input.is_pinned.unwrap_or(false) || importance_val >= 5 {
+            "permanent".to_string()
+        } else {
+            "medium".to_string()
+        }
+    });
+    let source_message_ids_json = serde_json::to_string(&input.source_message_ids.unwrap_or_default())
+        .map_err(|e| format!("failed to serialize source_message_ids: {}", e))?;
     let use_count_val = input.use_count.unwrap_or(0);
     let content_val = input.content.unwrap_or_default();
     let summary_val = input.summary.unwrap_or_default();
@@ -578,10 +669,12 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
     conn.execute(
         "INSERT INTO memory_nodes
            (id, folder_id, file_id, project_id, conversation_id, title, content, summary,
-            node_type, scope, tags, importance, confidence, origin, status,
+            node_type, scope, tags, importance, confidence, priority, expires_at,
+            source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
+            origin, status,
             is_pinned, user_editable, created_at, updated_at, last_used_at, use_count)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
         rusqlite::params![
             input.id,
             input.folder_id,
@@ -596,6 +689,12 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
             tags_json,
             importance_val,
             confidence_val,
+            priority_val,
+            input.expires_at,
+            source_message_ids_json,
+            input.extraction_batch_id,
+            input.duplicate_of,
+            input.contradiction_of,
             input.origin,
             input.status,
             is_pinned_val,
@@ -611,7 +710,9 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
     let created = conn
         .query_row(
             "SELECT id, folder_id, file_id, project_id, conversation_id, title, content, summary,
-                    node_type, scope, tags, importance, confidence, origin, status,
+                    node_type, scope, tags, importance, confidence, priority, expires_at,
+                    source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
+                    origin, status,
                     is_pinned, user_editable, created_at, updated_at, last_used_at, use_count
              FROM memory_nodes WHERE id = ?1",
             [&input.id],
@@ -682,6 +783,32 @@ pub fn update_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
         sets.push(format!("confidence = ?{}", params.len() + 1));
         params.push(Value::Real(v));
     }
+    if let Some(v) = input.priority {
+        sets.push(format!("priority = ?{}", params.len() + 1));
+        params.push(Value::Text(v));
+    }
+    if let Some(v) = input.expires_at {
+        sets.push(format!("expires_at = ?{}", params.len() + 1));
+        params.push(Value::Text(v));
+    }
+    if let Some(v) = input.source_message_ids {
+        let json = serde_json::to_string(&v)
+            .map_err(|e| format!("failed to serialize source_message_ids: {}", e))?;
+        sets.push(format!("source_message_ids = ?{}", params.len() + 1));
+        params.push(Value::Text(json));
+    }
+    if let Some(v) = input.extraction_batch_id {
+        sets.push(format!("extraction_batch_id = ?{}", params.len() + 1));
+        params.push(Value::Text(v));
+    }
+    if let Some(v) = input.duplicate_of {
+        sets.push(format!("duplicate_of = ?{}", params.len() + 1));
+        params.push(Value::Text(v));
+    }
+    if let Some(v) = input.contradiction_of {
+        sets.push(format!("contradiction_of = ?{}", params.len() + 1));
+        params.push(Value::Text(v));
+    }
     if let Some(v) = input.origin {
         sets.push(format!("origin = ?{}", params.len() + 1));
         params.push(Value::Text(v));
@@ -704,6 +831,10 @@ pub fn update_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
     }
     if let Some(v) = input.updated_at {
         sets.push(format!("updated_at = ?{}", params.len() + 1));
+        params.push(Value::Text(v));
+    }
+    if let Some(v) = input.last_used_at {
+        sets.push(format!("last_used_at = ?{}", params.len() + 1));
         params.push(Value::Text(v));
     }
     if let Some(v) = input.use_count {
@@ -729,7 +860,9 @@ pub fn update_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
     let updated = conn
         .query_row(
             "SELECT id, folder_id, file_id, project_id, conversation_id, title, content, summary,
-                    node_type, scope, tags, importance, confidence, origin, status,
+                    node_type, scope, tags, importance, confidence, priority, expires_at,
+                    source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
+                    origin, status,
                     is_pinned, user_editable, created_at, updated_at, last_used_at, use_count
              FROM memory_nodes WHERE id = ?1",
             [&input.id],
@@ -790,7 +923,7 @@ pub fn search_nodes(
     let project_filter = if let Some(pid) = project_id {
         let placeholder = params.len() + 1;
         params.push(Value::Text(pid));
-        format!(" AND project_id = ?{}", placeholder)
+        format!(" AND (project_id IS NULL OR project_id = ?{})", placeholder)
     } else {
         String::new()
     };
@@ -800,7 +933,9 @@ pub fn search_nodes(
 
     let sql = format!(
         "SELECT id, folder_id, file_id, project_id, conversation_id, title, content, summary,
-                node_type, scope, tags, importance, confidence, origin, status,
+                node_type, scope, tags, importance, confidence, priority, expires_at,
+                source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
+                origin, status,
                 is_pinned, user_editable, created_at, updated_at, last_used_at, use_count,
                 (CASE WHEN LOWER(title) LIKE ?1 THEN 3.0 ELSE 0 END) +
                 (CASE WHEN LOWER(tags) LIKE ?2 THEN 2.0 ELSE 0 END) +
@@ -838,7 +973,7 @@ fn search_nodes_fts(
     let project_filter = if let Some(pid) = project_id {
         let placeholder = params.len() + 1;
         params.push(Value::Text(pid));
-        format!(" AND n.project_id = ?{}", placeholder)
+        format!(" AND (n.project_id IS NULL OR n.project_id = ?{})", placeholder)
     } else {
         String::new()
     };
@@ -848,7 +983,9 @@ fn search_nodes_fts(
 
     let sql = format!(
         "SELECT n.id, n.folder_id, n.file_id, n.project_id, n.conversation_id, n.title, n.content, n.summary,
-                n.node_type, n.scope, n.tags, n.importance, n.confidence, n.origin, n.status,
+                n.node_type, n.scope, n.tags, n.importance, n.confidence, n.priority, n.expires_at,
+                n.source_message_ids, n.extraction_batch_id, n.duplicate_of, n.contradiction_of,
+                n.origin, n.status,
                 n.is_pinned, n.user_editable, n.created_at, n.updated_at, n.last_used_at, n.use_count
          FROM memory_nodes_fts f
          JOIN memory_nodes n ON n.rowid = f.rowid

@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TitleBar } from "@/components/title-bar";
 import { PrimarySidebar } from "@/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/components/chat-panel";
-import { MemoryPage } from "@/components/memory/memory-page";
-import { SettingsPage } from "@/components/settings/settings-page";
 import { RightPanel } from "@/components/right-panel";
 import { sendChatRequest } from "@/lib/chat-orchestrator";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { getAssistantVisibleText } from "@/lib/assistant-text";
-import { handoffAfterUserChat, queuePostChatJobs } from "@/lib/post-chat-jobs";
+import { handoffAfterUserChat, queueMemoryExtractionNow, queuePostChatJobs } from "@/lib/post-chat-jobs";
 import { prepareUserChatModel } from "@/lib/lm-model-session";
 import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
 import { isChatModeNav } from "@/lib/chat-types";
@@ -24,6 +22,9 @@ const ZOOM_MAX = 1.6;
 const ZOOM_STEP = 0.1;
 const ZOOM_STORAGE_KEY = "veyra.zoom";
 const DEFAULT_ZOOM = 1.1;
+
+const MemoryPage = lazy(() => import("@/components/memory/memory-page"));
+const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
 
 function clampZoom(z: number) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
@@ -47,6 +48,16 @@ function applyZoom(zoom: number) {
   document.documentElement.style.zoom = z;
   document.body.style.zoom = z;
   document.documentElement.style.setProperty("--ui-zoom", z);
+}
+
+function deferUntilIdle(callback: () => void): () => void {
+  if ("requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(callback, { timeout: 500 });
+    return () => window.cancelIdleCallback(id);
+  }
+
+  const id = setTimeout(callback, 0);
+  return () => clearTimeout(id);
 }
 
 function App() {
@@ -126,7 +137,9 @@ function App() {
 
   useEffect(() => {
     void hydrateConversations();
-    void initializeProvider();
+    return deferUntilIdle(() => {
+      void initializeProvider();
+    });
   }, [hydrateConversations, initializeProvider]);
 
   const activeConversation =
@@ -159,11 +172,15 @@ function App() {
     [activeConversation, resolvedContextLength],
   );
 
-  const recentChats: RecentChatsItem[] = conversations.map((conversation) => ({
-    id: conversation.id,
-    title: conversation.title,
-    meta: new Date(conversation.updatedAt).toLocaleDateString(),
-  }));
+  const recentChats: RecentChatsItem[] = useMemo(
+    () =>
+      conversations.map((conversation) => ({
+        id: conversation.id,
+        title: conversation.title,
+        meta: new Date(conversation.updatedAt).toLocaleDateString(),
+      })),
+    [conversations],
+  );
 
   const handleNewChat = useCallback(() => {
     if (activeChatJobIdRef.current) aiScheduler.cancelAiJob(activeChatJobIdRef.current);
@@ -202,6 +219,7 @@ function App() {
 
   const selectedModelInfo = models.find((model) => model.id === selectedModel);
   const supportsImages = selectedModelInfo?.supportsImages ?? false;
+  const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
 
   const handleSend = useCallback(
     (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
@@ -251,6 +269,8 @@ function App() {
         type: "user_chat",
         priority: 0,
         title: "Sending message",
+        description: trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed,
+        prompt: trimmed,
         conversationId,
         model: selectedModel,
         run: async (signal) => {
@@ -361,6 +381,18 @@ function App() {
     ],
   );
 
+  const handleTriggerMemoryExtraction = useCallback(() => {
+    if (!activeConversationId) return;
+    const chatModel = useProviderStore.getState().selectedModel.trim();
+    const providerId = useProviderStore.getState().selectedProvider;
+    if (!chatModel) return;
+    queueMemoryExtractionNow({
+      conversationId: activeConversationId,
+      chatModel,
+      providerId,
+    });
+  }, [activeConversationId]);
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--color-bg)]">
       <TitleBar
@@ -385,8 +417,10 @@ function App() {
           onCollapsedChange={setRecentChatsCollapsed}
           hidden={!isChatMode}
         />
-        {activeNav === "memory" && <MemoryPage />}
-        {activeNav === "settings" && <SettingsPage />}
+        <Suspense fallback={null}>
+          {activeNav === "memory" && <MemoryPage />}
+          {activeNav === "settings" && <SettingsPage />}
+        </Suspense>
         {isChatMode && (
           <ChatPanel
             title={activeConversation?.title}
@@ -407,6 +441,8 @@ function App() {
             favoriteModels={favoriteModels}
             onToggleFavorite={(id) => useSettingsStore.getState().toggleFavoriteModel(id)}
             supportsImages={supportsImages}
+            defaultMemoryEnabled={defaultMemoryEnabled}
+            onTriggerMemoryExtraction={handleTriggerMemoryExtraction}
             sidebarsCollapsed={sidebarsCollapsed}
           />
         )}

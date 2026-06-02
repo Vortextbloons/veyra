@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
-import type { CreateMemoryNode, MemoryScope, MemoryStatus } from "@/lib/memory-types";
+import type { CreateMemoryNode, MemoryPriority, MemoryScope, MemoryStatus } from "@/lib/memory-types";
 import { useMemoryStore } from "@/stores/memory-store";
 
 const TYPE_OPTIONS: CreateMemoryNode["type"][] = [
@@ -9,6 +9,7 @@ const TYPE_OPTIONS: CreateMemoryNode["type"][] = [
 ];
 const SCOPE_OPTIONS: MemoryScope[] = ["global", "project", "conversation", "session"];
 const STATUS_OPTIONS: MemoryStatus[] = ["active", "needs_review", "approved", "rejected", "archived"];
+const PRIORITY_OPTIONS: MemoryPriority[] = ["permanent", "high", "medium", "low", "ephemeral"];
 
 type Props = {
   mode: "create" | "edit";
@@ -34,11 +35,12 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
   const [folderId, setFolderId] = useState(initial?.folderId ?? folders[0]?.id ?? "default");
   const [tagsRaw, setTagsRaw] = useState((initial?.tags ?? []).join(", "));
   const [importance, setImportance] = useState<1 | 2 | 3 | 4 | 5>(
-    (initial?.importance ?? 3) as 1 | 2 | 3 | 4 | 5,
+    (initial?.importance ?? 5) as 1 | 2 | 3 | 4 | 5,
   );
   const [confidence, setConfidence] = useState<number>(initial?.confidence ?? 1);
   const [status, setStatus] = useState<MemoryStatus>(initial?.status ?? "active");
-  const [isPinned, setIsPinned] = useState<boolean>(initial?.isPinned ?? false);
+  const [priority, setPriority] = useState<MemoryPriority>(initial?.priority ?? (mode === "create" ? "permanent" : "medium"));
+  const [isPinned, setIsPinned] = useState<boolean>(initial?.isPinned ?? mode === "create");
 
   useEffect(() => {
     if (mode === "create" && !summary && content) {
@@ -60,6 +62,7 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
       tags,
       importance,
       confidence: Math.max(0, Math.min(1, confidence)),
+      priority,
       origin: initial?.origin ?? "manual_user_edit",
       status,
       isPinned,
@@ -146,6 +149,9 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
             </Field>
             <Field label="Status">
               <Select value={status} onChange={(v) => setStatus(v as MemoryStatus)} options={STATUS_OPTIONS} />
+            </Field>
+            <Field label="Priority">
+              <Select value={priority} onChange={(v) => setPriority(v as MemoryPriority)} options={PRIORITY_OPTIONS} />
             </Field>
             <Field label="Folder">
               <input

@@ -9,7 +9,7 @@ import type { ProviderAdapter } from "@/lib/providers/types";
 export const lmStudioAdapter: ProviderAdapter = {
   id: "lm-studio",
   name: "LM Studio",
-  icon: "local",
+  icon: "lm-studio",
   isAvailable: () => isServerRunning(),
   fetchModels: () => fetchModels(),
   sendChat: (options) =>

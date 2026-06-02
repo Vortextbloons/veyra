@@ -42,6 +42,10 @@ export interface Conversation {
   conversationSummary?: string;
   /** Number of leading messages folded into `conversationSummary` */
   summaryCoversMessageCount?: number;
+  /** Number of leading messages processed by batched memory extraction. */
+  memoryLastProcessedMessageCount?: number;
+  /** Timestamp when this conversation first became pending for memory extraction. */
+  memoryPendingSince?: number;
 }
 
 // ── Context stats ───────────────────────────────────────────────────────────
@@ -60,7 +64,8 @@ export interface ContextStats {
 export interface ProviderInfo {
   id: string;
   name: string;
-  icon: "local" | "cloud";
+  /** Provider identifier used to render the appropriate logo icon */
+  icon: string;
   status: "connected" | "disconnected";
 }
 
@@ -94,6 +99,7 @@ export interface ChatPanelProps {
     options?: { memoryEnabled: boolean },
   ) => void;
   supportsImages?: boolean;
+  defaultMemoryEnabled?: boolean;
   isStreaming?: boolean;
   streamingMessageId?: string | null;
   providers?: ProviderInfo[];
@@ -110,6 +116,7 @@ export interface ChatPanelProps {
   onToggleFavorite?: (id: string) => void;
   /** 0 = both side panels open, 1 = one collapsed, 2 = both collapsed */
   sidebarsCollapsed?: number;
+  onTriggerMemoryExtraction?: () => void;
 }
 
 export interface RightPanelProps {
@@ -145,7 +152,6 @@ export interface PrimarySidebarProps {
 // ── Nav mode helpers ─────────────────────────────────────────────────────────
 
 export const CHAT_MODE_NAV_IDS = ["chat", "projects", "tools"] as const;
-export type ChatModeNavId = (typeof CHAT_MODE_NAV_IDS)[number];
 
 export function isChatModeNav(navId: string): boolean {
   return (CHAT_MODE_NAV_IDS as readonly string[]).includes(navId);

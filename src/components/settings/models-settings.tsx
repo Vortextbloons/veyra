@@ -2,16 +2,16 @@ import { useState } from "react";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
-  Cpu,
   RefreshCw,
-  Plug,
   Play,
   Check,
   AlertTriangle,
   Eye,
   ChevronDown,
   RotateCcw,
+  Cpu,
 } from "lucide-react";
+import { ProviderIcon } from "@/components/provider-icon";
 
 export function ModelsSettings() {
   const providers = useProviderStore((s) => s.providers);
@@ -50,7 +50,7 @@ export function ModelsSettings() {
                     : "bg-red-500/15 text-red-400"
               }`}
             >
-              <Plug className="size-4" />
+              <ProviderIcon providerId={currentProvider?.icon ?? ""} className="size-4" />
             </div>
             <div className="flex-1">
               <div className="text-[13px] font-medium text-white">

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Database, Inbox, Pin, Clock, Archive, Globe, Folder } from "lucide-react";
+import { Database, Inbox, Pin, Clock, Archive, Globe, Folder, Shield, Hourglass } from "lucide-react";
 import { useMemoryStore, selectVisibleNodes } from "@/stores/memory-store";
 import type { MemoryView } from "@/stores/memory-store";
 
@@ -7,6 +7,8 @@ const VIEWS: { id: MemoryView; label: string; icon: ReactNode }[] = [
   { id: "all", label: "All", icon: <Database className="size-3.5" /> },
   { id: "inbox", label: "Inbox", icon: <Inbox className="size-3.5" /> },
   { id: "pinned", label: "Pinned", icon: <Pin className="size-3.5" /> },
+  { id: "permanent", label: "Permanent", icon: <Shield className="size-3.5" /> },
+  { id: "low_priority", label: "Low Priority", icon: <Hourglass className="size-3.5" /> },
   { id: "recent", label: "Recent", icon: <Clock className="size-3.5" /> },
   { id: "archived", label: "Archived", icon: <Archive className="size-3.5" /> },
 ];
@@ -22,6 +24,8 @@ export function MemorySidebar() {
     all: selectVisibleNodes({ nodes }, "all", "").length,
     inbox: selectVisibleNodes({ nodes }, "inbox", "").length,
     pinned: selectVisibleNodes({ nodes }, "pinned", "").length,
+    permanent: selectVisibleNodes({ nodes }, "permanent", "").length,
+    low_priority: selectVisibleNodes({ nodes }, "low_priority", "").length,
     recent: selectVisibleNodes({ nodes }, "recent", query).length,
     archived: selectVisibleNodes({ nodes }, "archived", "").length,
   };

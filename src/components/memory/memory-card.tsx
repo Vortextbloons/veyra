@@ -26,6 +26,14 @@ function ImportanceDots({ value }: { value: 1 | 2 | 3 | 4 | 5 }) {
   );
 }
 
+function priorityClass(priority: MemoryNode["priority"]): string {
+  if (priority === "permanent") return "border-white/20 bg-white/10 text-white";
+  if (priority === "high") return "border-indigo-400/25 bg-indigo-400/10 text-indigo-200";
+  if (priority === "low") return "border-slate-500/20 bg-slate-500/10 text-slate-400";
+  if (priority === "ephemeral") return "border-amber-400/25 bg-amber-400/10 text-amber-200";
+  return "border-[var(--color-border)] bg-white/[0.02] text-[var(--color-text-dim)]";
+}
+
 export function MemoryCard({ node }: { node: MemoryNode }) {
   const selectedNodeId = useMemoryStore((s) => s.selectedNodeId);
   const selectNode = useMemoryStore((s) => s.selectNode);
@@ -45,6 +53,9 @@ export function MemoryCard({ node }: { node: MemoryNode }) {
         <span className="truncate text-[13px] font-medium text-white">{node.title}</span>
         <span className="flex shrink-0 items-center gap-1.5">
           {node.isPinned && <Pin className="size-3 text-indigo-300" />}
+          <span className={`rounded-full border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide ${priorityClass(node.priority)}`}>
+            {node.priority}
+          </span>
           <ImportanceDots value={node.importance} />
         </span>
       </div>

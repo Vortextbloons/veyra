@@ -28,6 +28,7 @@ export type SettingsStoreState = {
   autoSummarizeChats: boolean;
   summaryModel: string;
   memoryExtractionEnabled: boolean;
+  memoryExtractionModel: string;
   schedulerPanelCollapsed: boolean;
 };
 
@@ -53,6 +54,7 @@ export type SettingsStore = SettingsStoreState & {
   setAutoSummarizeChats: (enabled: boolean) => void;
   setSummaryModel: (modelId: string) => void;
   setMemoryExtractionEnabled: (enabled: boolean) => void;
+  setMemoryExtractionModel: (modelId: string) => void;
   setSchedulerPanelCollapsed: (collapsed: boolean) => void;
 };
 
@@ -76,6 +78,7 @@ const DEFAULT_STATE: SettingsStoreState = {
   autoSummarizeChats: false,
   summaryModel: "",
   memoryExtractionEnabled: true,
+  memoryExtractionModel: "",
   schedulerPanelCollapsed: false,
 };
 
@@ -112,6 +115,7 @@ function persistState(state: SettingsStoreState) {
       autoSummarizeChats: state.autoSummarizeChats,
       summaryModel: state.summaryModel,
       memoryExtractionEnabled: state.memoryExtractionEnabled,
+      memoryExtractionModel: state.memoryExtractionModel,
       schedulerPanelCollapsed: state.schedulerPanelCollapsed,
     };
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(subset));
@@ -173,6 +177,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setAutoSummarizeChats: (autoSummarizeChats) => apply({ autoSummarizeChats }),
     setSummaryModel: (summaryModel) => apply({ summaryModel }),
     setMemoryExtractionEnabled: (memoryExtractionEnabled) => apply({ memoryExtractionEnabled }),
+    setMemoryExtractionModel: (memoryExtractionModel) => apply({ memoryExtractionModel }),
     setSchedulerPanelCollapsed: (schedulerPanelCollapsed) => apply({ schedulerPanelCollapsed }),
   };
 });

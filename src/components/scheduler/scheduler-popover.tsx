@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import {
   Activity,
   Pause,
@@ -9,10 +9,20 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
+  ChevronLeft,
+  Copy,
+  Check,
+  MessageSquare,
+  Wrench,
+  Brain,
+  FileText,
+  Zap,
+  Bot,
 } from "lucide-react";
 import { useAiScheduler } from "@/hooks/use-ai-scheduler";
 import { aiScheduler, JOB_LABELS } from "@/lib/ai-scheduler";
-import type { AiJobSnapshot, AiJobStatus } from "@/lib/ai-scheduler";
+import type { AiJobSnapshot, AiJobStatus, AiJobType } from "@/lib/ai-scheduler";
+import { useClickOutside } from "@/hooks/use-click-outside";
 
 function formatElapsed(startedAt: number): string {
   const seconds = Math.floor((Date.now() - startedAt) / 1000);
@@ -20,6 +30,15 @@ function formatElapsed(startedAt: number): string {
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${minutes}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${minutes}m ${secs}s`;
 }
 
 function statusIcon(status: AiJobStatus): ReactNode {
@@ -35,6 +54,56 @@ function statusIcon(status: AiJobStatus): ReactNode {
       return <AlertCircle className="size-3 text-amber-400" />;
     case "queued":
       return <Clock className="size-3 text-[var(--color-text-dim)]" />;
+  }
+}
+
+function statusColor(status: AiJobStatus): string {
+  switch (status) {
+    case "running":
+      return "text-indigo-400 bg-indigo-500/15 ring-indigo-500/25";
+    case "completed":
+      return "text-emerald-400 bg-emerald-500/15 ring-emerald-500/25";
+    case "failed":
+      return "text-red-400 bg-red-500/15 ring-red-500/25";
+    case "cancelled":
+    case "aborted":
+      return "text-amber-400 bg-amber-500/15 ring-amber-500/25";
+    case "queued":
+      return "text-[var(--color-text-dim)] bg-white/[0.04] ring-white/[0.06]";
+  }
+}
+
+function statusBorderColor(status: AiJobStatus): string {
+  switch (status) {
+    case "running":
+      return "border-indigo-500/30";
+    case "completed":
+      return "border-emerald-500/30";
+    case "failed":
+      return "border-red-500/30";
+    case "cancelled":
+    case "aborted":
+      return "border-amber-500/30";
+    case "queued":
+      return "border-[var(--color-border)]";
+  }
+}
+
+function jobTypeIcon(type: AiJobType): ReactNode {
+  switch (type) {
+    case "user_chat":
+      return <MessageSquare className="size-3.5" />;
+    case "auto_name_chat":
+    case "summarize_chat":
+      return <FileText className="size-3.5" />;
+    case "extract_memory":
+      return <Brain className="size-3.5" />;
+    case "compress_context":
+      return <Zap className="size-3.5" />;
+    case "maintenance":
+      return <Wrench className="size-3.5" />;
+    default:
+      return <Bot className="size-3.5" />;
   }
 }
 
@@ -54,12 +123,35 @@ function PriorityChip({ priority }: { priority: number }) {
   );
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="grid size-5 place-items-center rounded text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.06] hover:text-white"
+      title="Copy to clipboard"
+    >
+      {copied ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
+    </button>
+  );
+}
+
 function JobRow({
   job,
   showCancel = false,
+  onClick,
 }: {
   job: AiJobSnapshot;
   showCancel?: boolean;
+  onClick?: () => void;
 }) {
   const [elapsed, setElapsed] = useState("");
 
@@ -72,7 +164,11 @@ function JobRow({
   }, [job.status, job.startedAt]);
 
   return (
-    <div className="group/job flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-white/[0.03]">
+    <button
+      type="button"
+      onClick={onClick}
+      className="group/job flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/[0.04] active:bg-white/[0.06]"
+    >
       <span className="shrink-0">{statusIcon(job.status)}</span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -104,17 +200,21 @@ function JobRow({
           </span>
         )}
         {showCancel && job.status === "queued" && (
-          <button
-            type="button"
+          <span
+            role="button"
+            tabIndex={-1}
             aria-label={`Cancel ${job.title}`}
-            onClick={() => aiScheduler.cancelAiJob(job.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              aiScheduler.cancelAiJob(job.id);
+            }}
             className="grid size-5 place-items-center rounded text-[var(--color-text-dim)] opacity-0 transition-opacity hover:bg-white/[0.06] hover:text-red-400 group-hover/job:opacity-100"
           >
             <X className="size-3" />
-          </button>
+          </span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -129,6 +229,175 @@ function SectionHeader({ title, count }: { title: string; count?: number }) {
           {count}
         </span>
       )}
+    </div>
+  );
+}
+
+function DetailSection({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="border-t border-[var(--color-border)]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-white/[0.02]"
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
+          {title}
+        </span>
+        <ChevronLeft
+          className={`size-3 text-[var(--color-text-dim)] transition-transform ${open ? "-rotate-90" : "rotate-0"}`}
+        />
+      </button>
+      {open && <div className="px-3 pb-3">{children}</div>}
+    </div>
+  );
+}
+
+function MetaRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 py-0.5">
+      <span className="shrink-0 text-[10.5px] text-[var(--color-text-dim)]">{label}</span>
+      <span className="truncate font-mono text-[10.5px] text-[var(--color-text)]">{value}</span>
+    </div>
+  );
+}
+
+function JobDetail({ job, onBack }: { job: AiJobSnapshot; onBack: () => void }) {
+  const duration =
+    job.startedAt && job.finishedAt
+      ? formatDuration(job.finishedAt - job.startedAt)
+      : job.startedAt && job.status === "running"
+        ? formatElapsed(job.startedAt)
+        : null;
+
+  return (
+    <div className="flex flex-col" style={{ animation: "slideIn 180ms ease-out" }}>
+      {/* Detail Header */}
+      <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="grid size-6 place-items-center rounded-md text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.06] hover:text-white"
+        >
+          <ChevronLeft className="size-3.5" />
+        </button>
+        <div className="flex items-center gap-2 overflow-hidden">
+          <span className="text-[var(--color-text-dim)]">{jobTypeIcon(job.type)}</span>
+          <span className="truncate text-[12px] font-medium text-white">
+            {JOB_LABELS[job.type] ?? job.title}
+          </span>
+        </div>
+      </div>
+
+      <div className="max-h-[360px] overflow-y-auto">
+        {/* Status Banner */}
+        <div className={`mx-3 mt-3 rounded-lg border ${statusBorderColor(job.status)} bg-white/[0.02] p-3`}>
+          <div className="flex items-center gap-2">
+            {statusIcon(job.status)}
+            <span
+              className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${statusColor(job.status)}`}
+            >
+              {job.status}
+            </span>
+            <PriorityChip priority={job.priority} />
+            {duration && (
+              <span className="ml-auto font-mono text-[10.5px] text-[var(--color-text-dim)]">
+                {duration}
+              </span>
+            )}
+          </div>
+          {job.error && (
+            <div className="mt-2.5 rounded-md border border-red-500/20 bg-red-500/[0.06] p-2.5">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-red-400">
+                  Error
+                </span>
+                <CopyButton text={job.error} />
+              </div>
+              <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[10.5px] leading-relaxed text-red-300">
+                {job.error}
+              </pre>
+            </div>
+          )}
+        </div>
+
+        {/* Details Grid */}
+        <DetailSection title="Details">
+          <div className="space-y-1">
+            <MetaRow label="Job ID" value={job.id.slice(0, 12) + "..."} />
+            <MetaRow label="Type" value={job.type} />
+            <MetaRow label="Title" value={job.title} />
+            {job.model && <MetaRow label="Model" value={job.model} />}
+            {job.conversationId && (
+              <MetaRow label="Conversation" value={job.conversationId.slice(0, 12) + "..."} />
+            )}
+          </div>
+        </DetailSection>
+
+        {/* Timestamps */}
+        <DetailSection title="Timing">
+          <div className="space-y-1">
+            <MetaRow label="Created" value={new Date(job.createdAt).toLocaleString()} />
+            {job.startedAt && (
+              <MetaRow label="Started" value={new Date(job.startedAt).toLocaleString()} />
+            )}
+            {job.finishedAt && (
+              <MetaRow label="Finished" value={new Date(job.finishedAt).toLocaleString()} />
+            )}
+            {duration && <MetaRow label="Duration" value={duration} />}
+          </div>
+        </DetailSection>
+
+        {/* Description */}
+        {job.description && (
+          <DetailSection title="Description">
+            <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[var(--color-text)]">
+              {job.description}
+            </p>
+          </DetailSection>
+        )}
+
+        {/* Prompt */}
+        {job.prompt && (
+          <DetailSection title="Prompt" defaultOpen={false}>
+            <div className="relative rounded-md border border-[var(--color-border)] bg-white/[0.02] p-2.5">
+              <div className="absolute right-2 top-2">
+                <CopyButton text={job.prompt} />
+              </div>
+              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[10.5px] leading-relaxed text-[var(--color-text)]">
+                {job.prompt}
+              </pre>
+            </div>
+          </DetailSection>
+        )}
+
+        {/* Output */}
+        {job.output && (
+          <DetailSection title="Output" defaultOpen={false}>
+            <div className="relative rounded-md border border-[var(--color-border)] bg-white/[0.02] p-2.5">
+              <div className="absolute right-2 top-2">
+                <CopyButton text={job.output} />
+              </div>
+              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[10.5px] leading-relaxed text-[var(--color-text)]">
+                {job.output}
+              </pre>
+            </div>
+          </DetailSection>
+        )}
+
+        {/* Spacer */}
+        <div className="h-3" />
+      </div>
     </div>
   );
 }
@@ -152,28 +421,36 @@ function SchedulerStatusDot() {
 
 export function SchedulerPopover() {
   const [open, setOpen] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const snapshot = useAiScheduler();
 
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  useClickOutside(ref, open, () => {
+    setOpen(false);
+    setSelectedJobId(null);
+  });
+
+  const allJobs = [
+    ...(snapshot.activeJob ? [snapshot.activeJob] : []),
+    ...snapshot.queuedJobs,
+    ...snapshot.recentJobs,
+  ];
+  const selectedJob = selectedJobId ? allJobs.find((j) => j.id === selectedJobId) ?? null : null;
 
   const queuedBackground = snapshot.queuedJobs.filter((j) => j.priority > 0);
+
+  const handleSelectJob = useCallback((job: AiJobSnapshot) => {
+    setSelectedJobId(job.id);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    setSelectedJobId(null);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setOpen(false);
+    setSelectedJobId(null);
+  }, []);
 
   return (
     <div ref={ref} className="relative">
@@ -201,121 +478,138 @@ export function SchedulerPopover() {
         <div
           role="dialog"
           aria-label="Scheduler panel"
-          className="absolute left-1/2 top-full z-50 mt-2 w-[300px] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/50"
+          className="absolute left-1/2 top-full z-50 mt-2 w-[320px] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/50"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
             <div className="flex items-center gap-2">
               <Activity className="size-3.5 text-[var(--color-accent)]" />
               <span className="text-[12px] font-medium text-white">
-                Scheduler
+                {selectedJob ? JOB_LABELS[selectedJob.type] ?? selectedJob.title : "Scheduler"}
               </span>
             </div>
             <button
               type="button"
               aria-label="Close scheduler"
-              onClick={() => setOpen(false)}
+              onClick={handleClose}
               className="grid size-5 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/[0.06] hover:text-white"
             >
               <X className="size-3" />
             </button>
           </div>
 
-          <div className="max-h-[400px] overflow-y-auto p-3">
-            {/* Now Running */}
-            <div className="mb-3">
-              <SectionHeader title="Now" />
-              {snapshot.activeJob ? (
-                <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/[0.06] p-2">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex size-2">
-                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-indigo-400 opacity-60" />
-                      <span className="relative inline-flex size-2 rounded-full bg-indigo-400" />
-                    </span>
-                    <span className="text-[11.5px] font-medium text-white">
-                      {JOB_LABELS[snapshot.activeJob.type] ?? snapshot.activeJob.title}
-                    </span>
-                    <PriorityChip priority={snapshot.activeJob.priority} />
-                    {snapshot.activeJob.startedAt && (
-                      <span className="ml-auto font-mono text-[10px] text-indigo-300">
-                        {formatElapsed(snapshot.activeJob.startedAt)}
+          {selectedJob ? (
+            <JobDetail job={selectedJob} onBack={handleBack} />
+          ) : (
+            <div className="max-h-[400px] overflow-y-auto p-3">
+              {/* Now Running */}
+              <div className="mb-3">
+                <SectionHeader title="Now" />
+                {snapshot.activeJob ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectJob(snapshot.activeJob!)}
+                    className="w-full rounded-lg border border-indigo-500/20 bg-indigo-500/[0.06] p-2 text-left transition-colors hover:bg-indigo-500/[0.1]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex size-2">
+                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+                        <span className="relative inline-flex size-2 rounded-full bg-indigo-400" />
                       </span>
+                      <span className="text-[11.5px] font-medium text-white">
+                        {JOB_LABELS[snapshot.activeJob.type] ?? snapshot.activeJob.title}
+                      </span>
+                      <PriorityChip priority={snapshot.activeJob.priority} />
+                      {snapshot.activeJob.startedAt && (
+                        <span className="ml-auto font-mono text-[10px] text-indigo-300">
+                          {formatElapsed(snapshot.activeJob.startedAt)}
+                        </span>
+                      )}
+                    </div>
+                    {snapshot.activeJob.description && (
+                      <p className="mt-1 truncate text-[10px] text-[var(--color-text-dim)]">
+                        {snapshot.activeJob.description}
+                      </p>
                     )}
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2 text-center text-[11px] text-[var(--color-text-dim)]">
+                    Idle
                   </div>
-                  {snapshot.activeJob.description && (
-                    <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-                      {snapshot.activeJob.description}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2 text-center text-[11px] text-[var(--color-text-dim)]">
-                  Idle
-                </div>
-              )}
-            </div>
-
-            {/* Queue */}
-            {queuedBackground.length > 0 && (
-              <div className="mb-3">
-                <SectionHeader title="Next" count={queuedBackground.length} />
-                <div className="space-y-0.5">
-                  {queuedBackground.map((job) => (
-                    <JobRow key={job.id} job={job} showCancel />
-                  ))}
-                </div>
+                )}
               </div>
-            )}
 
-            {/* Recent */}
-            {snapshot.recentJobs.length > 0 && (
-              <div className="mb-3">
-                <SectionHeader title="History" />
-                <div className="max-h-32 space-y-0.5 overflow-y-auto">
-                  {snapshot.recentJobs.slice(0, 6).map((job) => (
-                    <JobRow key={job.id} job={job} />
-                  ))}
+              {/* Queue */}
+              {queuedBackground.length > 0 && (
+                <div className="mb-3">
+                  <SectionHeader title="Next" count={queuedBackground.length} />
+                  <div className="space-y-0.5">
+                    {queuedBackground.map((job) => (
+                      <JobRow
+                        key={job.id}
+                        job={job}
+                        showCancel
+                        onClick={() => handleSelectJob(job)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Controls */}
-            <div className="flex items-center gap-1.5 border-t border-[var(--color-border)] pt-3">
-              {snapshot.pausedBackground ? (
-                <button
-                  type="button"
-                  onClick={() => aiScheduler.resumeBackgroundJobs()}
-                  className="flex h-7 items-center gap-1.5 rounded-md bg-emerald-500/10 px-2.5 text-[11px] font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/20 transition-colors hover:bg-emerald-500/15"
-                >
-                  <Play className="size-3" />
-                  Resume
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => aiScheduler.pauseBackgroundJobs()}
-                  className="flex h-7 items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 text-[11px] font-medium text-amber-300 ring-1 ring-inset ring-amber-500/20 transition-colors hover:bg-amber-500/15"
-                >
-                  <Pause className="size-3" />
-                  Pause
-                </button>
+              {/* Recent */}
+              {snapshot.recentJobs.length > 0 && (
+                <div className="mb-3">
+                  <SectionHeader title="History" />
+                  <div className="max-h-32 space-y-0.5 overflow-y-auto">
+                    {snapshot.recentJobs.slice(0, 6).map((job) => (
+                      <JobRow
+                        key={job.id}
+                        job={job}
+                        onClick={() => handleSelectJob(job)}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
-              {snapshot.queuedBackgroundJobs > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    for (const job of snapshot.queuedJobs) {
-                      if (job.priority > 0) aiScheduler.cancelAiJob(job.id);
-                    }
-                  }}
-                  className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.04] hover:text-red-400"
-                >
-                  <X className="size-3" />
-                  Clear queue
-                </button>
-              )}
+
+              {/* Controls */}
+              <div className="flex items-center gap-1.5 border-t border-[var(--color-border)] pt-3">
+                {snapshot.pausedBackground ? (
+                  <button
+                    type="button"
+                    onClick={() => aiScheduler.resumeBackgroundJobs()}
+                    className="flex h-7 items-center gap-1.5 rounded-md bg-emerald-500/10 px-2.5 text-[11px] font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/20 transition-colors hover:bg-emerald-500/15"
+                  >
+                    <Play className="size-3" />
+                    Resume
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => aiScheduler.pauseBackgroundJobs()}
+                    className="flex h-7 items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 text-[11px] font-medium text-amber-300 ring-1 ring-inset ring-amber-500/20 transition-colors hover:bg-amber-500/15"
+                  >
+                    <Pause className="size-3" />
+                    Pause
+                  </button>
+                )}
+                {snapshot.queuedBackgroundJobs > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      for (const job of snapshot.queuedJobs) {
+                        if (job.priority > 0) aiScheduler.cancelAiJob(job.id);
+                      }
+                    }}
+                    className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.04] hover:text-red-400"
+                  >
+                    <X className="size-3" />
+                    Clear queue
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

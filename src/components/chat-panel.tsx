@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Bell,
   ChevronDown,
@@ -28,6 +28,7 @@ import { ProviderConnectionBanner } from "@/components/provider-connection-banne
 import { ProviderSelector } from "@/components/provider-selector";
 import { ModelSelector, type Model } from "@/components/model-selector";
 import { Toggle } from "@/components/toggle";
+import { useClickOutside } from "@/hooks/use-click-outside";
 
 type ChatMode = "chat" | "agents";
 
@@ -62,9 +63,11 @@ export function ChatPanel({
   favoriteModels = [],
   onToggleFavorite,
   supportsImages = false,
+  defaultMemoryEnabled = true,
+  onTriggerMemoryExtraction,
   sidebarsCollapsed = 0,
 }: ChatPanelProps) {
-  const [memory, setMemory] = useState(true);
+  const [memory, setMemory] = useState(defaultMemoryEnabled);
   const [showReasoning, setShowReasoning] = useState(true);
   const [mode, setMode] = useState<ChatMode>("chat");
 
@@ -74,15 +77,18 @@ export function ChatPanel({
 
   const layout = chatLayoutClasses(sidebarsCollapsed);
 
-  const selectorModels: Model[] = models.map((m) => ({
-    id: m.id,
-    name: m.name,
-    provider: providerLabel,
-    contextWindow: m.contextWindow,
-    size: m.size,
-    isFavorite: favoriteModels.includes(m.id),
-    supportsImages: m.supportsImages,
-  }));
+  const selectorModels: Model[] = useMemo(() => {
+    const favoriteSet = new Set(favoriteModels);
+    return models.map((m) => ({
+      id: m.id,
+      name: m.name,
+      provider: providerLabel,
+      contextWindow: m.contextWindow,
+      size: m.size,
+      isFavorite: favoriteSet.has(m.id),
+      supportsImages: m.supportsImages,
+    }));
+  }, [favoriteModels, models, providerLabel]);
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
@@ -198,10 +204,11 @@ export function ChatPanel({
       <div
         className={`shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)] pb-3 pt-2.5 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
       >
-        <Composer
-          memory={memory}
-          onMemoryChange={setMemory}
-          showReasoning={showReasoning}
+            <Composer
+              memory={memory}
+              onMemoryChange={setMemory}
+              onTriggerMemoryExtraction={onTriggerMemoryExtraction}
+              showReasoning={showReasoning}
           onShowReasoningChange={setShowReasoning}
           mode={mode}
           onModeChange={setMode}
@@ -304,7 +311,7 @@ const MessageBubble = memo(function MessageBubble({
   const showPulseInReply = isStreaming && !reasoningOnlyStreaming;
 
   return (
-    <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3">
       <div className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_0_0_2px_var(--color-bg)]">
         <Sparkles className="size-3.5" />
       </div>
@@ -451,23 +458,7 @@ function MemoryUsedBadge({
   const [reasonsOpen, setReasonsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  useClickOutside(ref, open, () => setOpen(false));
 
   const nodeCount = memoryPack.sourceNodeIds.length;
   const tokenCount = memoryPack.tokenCount;
@@ -623,6 +614,7 @@ function MessageAttachmentsPreview({
 type ComposerProps = {
   memory: boolean;
   onMemoryChange: (on: boolean) => void;
+  onTriggerMemoryExtraction?: () => void;
   showReasoning: boolean;
   onShowReasoningChange: (on: boolean) => void;
   mode: ChatMode;
@@ -640,6 +632,7 @@ type ComposerProps = {
 function Composer({
   memory,
   onMemoryChange,
+  onTriggerMemoryExtraction,
   showReasoning,
   onShowReasoningChange,
   mode,
@@ -771,6 +764,14 @@ function Composer({
           <div className="flex shrink-0 items-center gap-1.5">
             <ModeMenu value={mode} onChange={onModeChange} />
             <Toggle label="Memory" on={memory} onChange={onMemoryChange} />
+            <IconButton
+              aria-label="Extract memories now"
+              title="Extract memories now"
+              disabled={disabled || !onTriggerMemoryExtraction}
+              onClick={() => onTriggerMemoryExtraction?.()}
+            >
+              <Brain className="size-3.5" />
+            </IconButton>
             <Toggle
               label="Reasoning"
               on={showReasoning}
@@ -836,23 +837,7 @@ function ModeMenu({
   const ref = useRef<HTMLDivElement>(null);
   const current = MODES.find((m) => m.id === value) ?? MODES[0];
 
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  useClickOutside(ref, open, () => setOpen(false));
 
   return (
     <div ref={ref} className="relative">

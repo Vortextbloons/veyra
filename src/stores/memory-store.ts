@@ -25,7 +25,7 @@ import {
 
 const pendingCreateIds = new Set<string>();
 
-export type MemoryView = "all" | "inbox" | "pinned" | "recent" | "archived";
+export type MemoryView = "all" | "inbox" | "pinned" | "permanent" | "low_priority" | "recent" | "archived";
 
 export type MemoryStore = {
   folders: MemoryFolder[];
@@ -196,6 +196,18 @@ export function selectVisibleNodes(
       case "pinned":
         return (
           node.isPinned &&
+          node.status !== "archived" &&
+          node.status !== "rejected"
+        );
+      case "permanent":
+        return (
+          (node.isPinned || node.priority === "permanent" || node.importance >= 5) &&
+          node.status !== "archived" &&
+          node.status !== "rejected"
+        );
+      case "low_priority":
+        return (
+          (node.priority === "low" || node.priority === "ephemeral" || node.importance <= 2) &&
           node.status !== "archived" &&
           node.status !== "rejected"
         );

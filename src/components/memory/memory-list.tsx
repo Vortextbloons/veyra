@@ -1,14 +1,18 @@
 import { Search } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMemoryStore, selectVisibleNodes } from "@/stores/memory-store";
 import type { MemoryView } from "@/stores/memory-store";
 import { MemoryCard } from "./memory-card";
+import { MemoryGraph } from "./memory-graph";
 
 export function MemoryList() {
   const query = useMemoryStore((s) => s.query);
   const setQuery = useMemoryStore((s) => s.setQuery);
   const activeView = useMemoryStore((s) => s.activeView);
   const nodes = useMemoryStore((s) => s.nodes);
+  const selectedNodeId = useMemoryStore((s) => s.selectedNodeId);
+  const selectNode = useMemoryStore((s) => s.selectNode);
+  const [displayMode, setDisplayMode] = useState<"list" | "graph">("list");
   const visible = useMemo(
     () => selectVisibleNodes({ nodes }, activeView, query),
     [activeView, nodes, query],
@@ -27,6 +31,22 @@ export function MemoryList() {
             className="h-7 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] pl-7 pr-2 text-[12.5px] text-white placeholder:text-[var(--color-text-dim)]/70 focus:border-[var(--color-accent)]/40 focus:outline-none"
           />
         </div>
+        <div className="flex h-7 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5 text-[11.5px]">
+          <button
+            type="button"
+            onClick={() => setDisplayMode("list")}
+            className={`rounded px-2 ${displayMode === "list" ? "bg-[var(--color-accent-soft)] text-white" : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"}`}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setDisplayMode("graph")}
+            className={`rounded px-2 ${displayMode === "graph" ? "bg-[var(--color-accent-soft)] text-white" : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"}`}
+          >
+            Graph
+          </button>
+        </div>
         <span className="font-mono text-[10.5px] uppercase tracking-wider text-[var(--color-text-dim)]">
           {visible.length} {visible.length === 1 ? "item" : "items"}
         </span>
@@ -36,11 +56,15 @@ export function MemoryList() {
         {visible.length === 0 ? (
           <EmptyState view={activeView} />
         ) : (
-          <div className="flex flex-col gap-2">
-            {visible.map((node) => (
-              <MemoryCard key={node.id} node={node} />
-            ))}
-          </div>
+          displayMode === "graph" ? (
+            <MemoryGraph nodes={visible} selectedNodeId={selectedNodeId} onSelectNode={selectNode} />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {visible.map((node) => (
+                <MemoryCard key={node.id} node={node} />
+              ))}
+            </div>
+          )
         )}
       </div>
     </section>

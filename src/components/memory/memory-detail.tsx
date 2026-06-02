@@ -97,6 +97,7 @@ export function MemoryDetail({ onEdit }: Props) {
           <Meta label="Type" value={node.type} />
           <Meta label="Scope" value={node.scope} />
           <Meta label="Status" value={node.status} />
+          <Meta label="Priority" value={node.priority} />
           <Meta label="Origin" value={node.origin} />
           <Meta label="Importance" value={`${node.importance}/5`} />
           <Meta label="Confidence" value={node.confidence.toFixed(2)} />
@@ -110,6 +111,12 @@ export function MemoryDetail({ onEdit }: Props) {
           <Meta label="Created" value={new Date(node.createdAt).toLocaleString()} />
           <Meta label="Updated" value={new Date(node.updatedAt).toLocaleString()} />
           <Meta label="Used" value={`${node.useCount}×`} />
+          {node.lastUsedAt && <Meta label="Last used" value={new Date(node.lastUsedAt).toLocaleString()} />}
+          {node.expiresAt && <Meta label="Expires" value={new Date(node.expiresAt).toLocaleString()} />}
+          {node.sourceMessageIds.length > 0 && <Meta label="Sources" value={`${node.sourceMessageIds.length} messages`} />}
+          {node.extractionBatchId && <Meta label="Batch" value={node.extractionBatchId.slice(0, 8)} />}
+          {node.duplicateOf && <Meta label="Duplicate" value={node.duplicateOf.slice(0, 8)} />}
+          {node.contradictionOf && <Meta label="Conflict" value={node.contradictionOf.slice(0, 8)} />}
         </dl>
       </div>
     </aside>

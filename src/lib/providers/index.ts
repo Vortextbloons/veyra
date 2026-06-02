@@ -3,10 +3,6 @@ import type { ProviderAdapter } from "@/lib/providers/types";
 
 const providerAdapters = [lmStudioAdapter] satisfies ProviderAdapter[];
 
-export function getProviderAdapters(): ProviderAdapter[] {
-  return providerAdapters;
-}
-
 export function getProviderAdapter(providerId: string): ProviderAdapter | undefined {
   return providerAdapters.find((provider) => provider.id === providerId);
 }

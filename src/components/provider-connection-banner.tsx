@@ -1,7 +1,8 @@
-import { Loader2, PlugZap, RefreshCw, Server, Play } from "lucide-react";
+import { Loader2, PlugZap, RefreshCw, Play } from "lucide-react";
 import type { ProviderInfo } from "@/lib/chat-types";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
+import { ProviderIcon } from "@/components/provider-icon";
 
 type ProviderConnectionBannerProps = {
   provider: ProviderInfo | null;
@@ -91,7 +92,7 @@ export function ProviderConnectionBanner({
 
           {isLmStudio && !connecting && (
             <p className="mt-2.5 flex items-center gap-1.5 text-[10.5px] text-[var(--color-text-dim)]">
-              <Server className="size-3 shrink-0 opacity-70" aria-hidden />
+              <ProviderIcon providerId="lm-studio" className="size-3 shrink-0 opacity-70" aria-hidden />
               Uses the <span className="font-mono text-[var(--color-text)]">lms</span> CLI — install
               LM Studio and add it to your PATH.
             </p>

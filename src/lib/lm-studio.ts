@@ -2,7 +2,6 @@ import type {
   ChatMessage,
   MessagePerformance,
   ModelInfo,
-  ProviderConfig,
 } from "@/lib/chat-types";
 import { buildLmStudioInput, inferSupportsImages } from "@/lib/message-attachments";
 import {
@@ -80,7 +79,10 @@ function buildV1ChatBody(options: {
     maxTokens,
     store = true,
   } = options;
-  const systemMessage = messages.find((m) => m.role === "system");
+  const systemPrompt = messages
+    .filter((m) => m.role === "system" && m.content.trim())
+    .map((m) => m.content.trim())
+    .join("\n\n");
   const dialogue = messages.filter((m) => m.role !== "system");
 
   const body: Record<string, unknown> = {
@@ -94,8 +96,8 @@ function buildV1ChatBody(options: {
     body.max_tokens = maxTokens;
   }
 
-  if (systemMessage?.content) {
-    body.system_prompt = systemMessage.content;
+  if (systemPrompt) {
+    body.system_prompt = systemPrompt;
   }
 
   if (previousResponseId?.startsWith("resp_")) {
@@ -373,14 +375,6 @@ async function fetchModelEntries(url: string): Promise<LmStudioModelEntry[]> {
   return parseModelEntries(await res.json());
 }
 
-export async function fetchLoadedLmStudioModelsDirect(baseUrl?: string): Promise<string[]> {
-  return [
-    ...new Set(
-      (await fetchLoadedLmStudioModelInstancesDirect(baseUrl)).map((instance) => instance.modelId),
-    ),
-  ];
-}
-
 export async function fetchLoadedLmStudioModelInstancesDirect(
   baseUrl?: string,
 ): Promise<LoadedLmStudioModelInstance[]> {
@@ -405,17 +399,6 @@ export async function loadLmStudioModelDirect(
   },
 ): Promise<{ success: boolean; message: string }> {
   return loadModelImpl(model, options);
-}
-
-export async function loadModel(
-  model: string,
-  options?: {
-    baseUrl?: string;
-    contextLength?: number;
-    flashAttention?: boolean;
-  },
-): Promise<{ success: boolean; message: string }> {
-  return runLmStudioExclusive(() => loadModelImpl(model, options));
 }
 
 async function loadModelImpl(
@@ -461,13 +444,6 @@ export async function unloadLmStudioModelDirect(
   baseUrl?: string,
 ): Promise<{ success: boolean; message: string }> {
   return unloadModelImpl(model, baseUrl);
-}
-
-export async function unloadModel(
-  model: string,
-  baseUrl?: string,
-): Promise<{ success: boolean; message: string }> {
-  return runLmStudioExclusive(() => unloadModelImpl(model, baseUrl));
 }
 
 async function unloadModelImpl(
@@ -640,12 +616,4 @@ async function sendLmStudioChatImpl(options: {
       onError(err instanceof Error ? err.message : "Unknown error");
     }
   }
-}
-
-export function getDefaultProviderConfig(modelId?: string): ProviderConfig {
-  return {
-    baseUrl: DEFAULT_BASE_URL,
-    model: modelId || "local-model",
-    temperature: DEFAULT_TEMPERATURE,
-  };
 }

@@ -75,6 +75,8 @@ export function MemoryPage() {
   );
 }
 
+export default MemoryPage;
+
 function nodeToCreateInput(
   node: MemoryNode,
   defaultFolderId: string,
@@ -93,6 +95,7 @@ function nodeToCreateInput(
     tags: node.tags,
     importance: node.importance,
     confidence: node.confidence,
+    priority: node.priority,
     origin: node.origin,
     status: node.status,
     isPinned: node.isPinned,

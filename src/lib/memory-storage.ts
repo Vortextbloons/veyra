@@ -66,6 +66,12 @@ export async function createMemoryNode(
     tags: input.tags,
     importance: input.importance,
     confidence: input.confidence,
+    priority: input.priority ?? (input.isPinned ? "permanent" : "medium"),
+    expiresAt: input.expiresAt ?? null,
+    sourceMessageIds: input.sourceMessageIds ?? [],
+    extractionBatchId: input.extractionBatchId ?? null,
+    duplicateOf: input.duplicateOf ?? null,
+    contradictionOf: input.contradictionOf ?? null,
     origin: input.origin,
     status: input.status,
     isPinned: input.isPinned ?? false,
@@ -109,37 +115,4 @@ export async function searchMemory(
     limit,
     projectId: options.projectId ?? null,
   });
-}
-
-/**
- * Helper used by the memory store: re-export for convenience.
- * Useful for callers that want to set the in-memory representation of
- * a node from a CreateMemoryNode shape (e.g. optimistic updates).
- */
-export function makeNodeFromCreate(
-  input: Omit<CreateMemoryNode, "id"> & { id?: string },
-): MemoryNode {
-  const now = nowIso();
-  return {
-    id: input.id ?? newId(),
-    folderId: input.folderId,
-    fileId: input.fileId,
-    projectId: input.projectId,
-    conversationId: input.conversationId,
-    title: input.title,
-    content: input.content,
-    summary: input.summary,
-    type: input.type,
-    scope: input.scope,
-    tags: input.tags,
-    importance: input.importance,
-    confidence: input.confidence,
-    origin: input.origin,
-    status: input.status,
-    isPinned: input.isPinned ?? false,
-    userEditable: true,
-    createdAt: now,
-    updatedAt: now,
-    useCount: 0,
-  };
 }

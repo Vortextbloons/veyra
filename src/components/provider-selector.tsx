@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   ChevronDown,
   Check,
-  Server,
-  Cloud,
   RefreshCw,
   Play,
   Loader2,
 } from "lucide-react";
 import type { ProviderInfo } from "@/lib/chat-types";
+import { ProviderIcon } from "@/components/provider-icon";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
+import { useClickOutside } from "@/hooks/use-click-outside";
 
 type ProviderSelectorProps = {
   value: string;
@@ -38,23 +38,7 @@ export function ProviderSelector({
     current?.status === "disconnected" &&
     (onReconnect || (onStartServer && providerSupportsStartServer(current.id)));
 
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  useClickOutside(ref, open, () => setOpen(false));
 
   return (
     <div ref={ref} className="relative">
@@ -70,11 +54,7 @@ export function ProviderSelector({
         }`}
       >
         <div className="grid size-5 place-items-center rounded bg-violet-500/20 text-violet-300">
-          {current?.icon === "cloud" ? (
-            <Cloud className="size-3" />
-          ) : (
-            <Server className="size-3" />
-          )}
+          <ProviderIcon providerId={current?.icon ?? ""} className="size-3" />
         </div>
         <span className="max-w-[140px] truncate font-medium">
           {current?.name ?? "Provider"}
@@ -130,11 +110,7 @@ export function ProviderSelector({
                         : "bg-white/[0.04] text-[var(--color-text-dim)]"
                     }`}
                   >
-                    {p.icon === "cloud" ? (
-                      <Cloud className="size-3" />
-                    ) : (
-                      <Server className="size-3" />
-                    )}
+                    <ProviderIcon providerId={p.icon} className="size-3" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div

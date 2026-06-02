@@ -2,15 +2,14 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { Toggle } from "@/components/toggle";
 import { Cpu, ChevronDown } from "lucide-react";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
+import { useClickOutside } from "@/hooks/use-click-outside";
 
 export function ChatSettings() {
   const autoNameEnabled = useSettingsStore((s) => s.autoNameEnabled);
   const setAutoNameEnabled = useSettingsStore((s) => s.setAutoNameEnabled);
   const autoNameModel = useSettingsStore((s) => s.autoNameModel);
   const setAutoNameModel = useSettingsStore((s) => s.setAutoNameModel);
-  const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
-  const setDefaultMemoryEnabled = useSettingsStore((s) => s.setDefaultMemoryEnabled);
   const backgroundJobsEnabled = useSettingsStore((s) => s.backgroundJobsEnabled);
   const setBackgroundJobsEnabled = useSettingsStore((s) => s.setBackgroundJobsEnabled);
   const autoSummarizeChats = useSettingsStore((s) => s.autoSummarizeChats);
@@ -104,18 +103,6 @@ export function ChatSettings() {
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Memory
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <Toggle
-            label="Default memory for new chats"
-            on={defaultMemoryEnabled}
-            onChange={setDefaultMemoryEnabled}
-          />
-        </div>
-      </section>
     </div>
   );
 }
@@ -137,21 +124,7 @@ function ModelDropdown({
 
   const current = models.find((m) => m.id === value);
 
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  useClickOutside(ref, open, () => setOpen(false));
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

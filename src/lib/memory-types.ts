@@ -19,6 +19,8 @@ export type MemoryMode =
   | "review_all"
   | "aggressive_project_memory";
 
+export type MemoryPriority = "permanent" | "high" | "medium" | "low" | "ephemeral";
+
 export interface MemoryFolder {
   id: string;
   name: string;
@@ -75,6 +77,12 @@ export interface MemoryNode {
   tags: string[];
   importance: 1 | 2 | 3 | 4 | 5;
   confidence: number;
+  priority: MemoryPriority;
+  expiresAt?: string;
+  sourceMessageIds: string[];
+  extractionBatchId?: string;
+  duplicateOf?: string;
+  contradictionOf?: string;
   origin:
     | "explicit_user_save"
     | "auto_extracted"
@@ -128,6 +136,12 @@ export interface CreateMemoryNode {
   tags: string[];
   importance: 1 | 2 | 3 | 4 | 5;
   confidence: number;
+  priority?: MemoryPriority;
+  expiresAt?: string;
+  sourceMessageIds?: string[];
+  extractionBatchId?: string;
+  duplicateOf?: string;
+  contradictionOf?: string;
   origin: MemoryNode["origin"];
   status: MemoryStatus;
   isPinned?: boolean;
@@ -144,11 +158,18 @@ export interface UpdateMemoryNode {
   tags?: string[];
   importance?: 1 | 2 | 3 | 4 | 5;
   confidence?: number;
+  priority?: MemoryPriority;
+  expiresAt?: string;
+  sourceMessageIds?: string[];
+  extractionBatchId?: string;
+  duplicateOf?: string;
+  contradictionOf?: string;
   status?: MemoryStatus;
   isPinned?: boolean;
   folderId?: string;
   fileId?: string;
   lastUsedAt?: string;
+  useCount?: number;
 }
 
 /** Search options for search_memory */
@@ -156,14 +177,3 @@ export interface MemorySearchOptions {
   limit?: number;
   projectId?: string;
 }
-
-export const MEMORY_DEFAULTS = {
-  memoryMode: "safe_auto_save" as MemoryMode,
-  maxMemoryTokens: 700,
-  maxMemoryNodes: 10,
-  maxMemoryFiles: 4,
-  maxGraphDepth: 1,
-} as const;
-
-export const CASUAL_CHAT_BUDGET = 300;
-export const NORMAL_PROJECT_BUDGET = 700;

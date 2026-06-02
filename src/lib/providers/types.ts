@@ -1,4 +1,4 @@
-import type { ChatMessage, ModelInfo, ProviderInfo } from "@/lib/chat-types";
+import type { ChatMessage, ModelInfo } from "@/lib/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
 import type { MemoryPack } from "@/lib/memory-types";
 
@@ -27,7 +27,8 @@ export type ProviderConnectResult = {
 export interface ProviderAdapter {
   id: string;
   name: string;
-  icon: ProviderInfo["icon"];
+  /** Provider identifier — used to render the matching logo in ProviderIcon */
+  icon: string;
   isAvailable: () => Promise<boolean>;
   fetchModels: () => Promise<ModelInfo[]>;
   sendChat: (options: ProviderChatOptions) => Promise<void>;

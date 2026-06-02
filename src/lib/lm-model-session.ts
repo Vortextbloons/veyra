@@ -15,10 +15,6 @@ export function sameLmStudioModel(a: string, b: string): boolean {
   return left.length > 0 && left === right;
 }
 
-export function getLoadedLmStudioModel(): string | null {
-  return loadedModelId;
-}
-
 function contextLengthFor(modelId: string): number {
   return useSettingsStore.getState().getModelSettings(modelId).contextLength;
 }
@@ -87,22 +83,6 @@ export async function ensureLmStudioModel(
   });
 }
 
-/** Unload whatever model we believe is active. */
-export async function releaseLmStudioModel(signal?: AbortSignal): Promise<void> {
-  return runLmStudioExclusive(async () => {
-    if (signal?.aborted) return;
-    const instances = await fetchActualLoadedModelInstances();
-    if (instances.length === 0 && loadedModelId) {
-      await unloadDirect(loadedModelId);
-      return;
-    }
-
-    for (const instance of instances) {
-      await unloadDirect(instance.instanceId);
-    }
-  });
-}
-
 /** Before user chat: load the selected chat model if needed. */
 export async function prepareUserChatModel(
   chatModel: string,
@@ -111,31 +91,17 @@ export async function prepareUserChatModel(
   await ensureLmStudioModel(chatModel, signal);
 }
 
-export type AfterChatHandoffOptions = {
-  chatModel: string;
-  titleModel: string;
-  summaryModel: string;
-  willTitle: boolean;
-  willSummarize: boolean;
-  signal?: AbortSignal;
-};
-
-/** Keep the chat model resident after a user turn; the next job switches only if needed. */
-export async function afterUserChatHandoff(
-  options: AfterChatHandoffOptions,
-): Promise<void> {
-  if (options.signal?.aborted) return;
-}
-
 export type PostChatPipelineOptions = {
   chatModel: string;
   titleModel: string;
   summaryModel: string;
   willTitle: boolean;
   willSummarize: boolean;
+  willExtractMemory?: boolean;
   signal?: AbortSignal;
   runTitle: () => Promise<void>;
   runSummary: () => Promise<void>;
+  runMemoryExtraction?: () => Promise<void>;
 };
 
 /** Sequential background pipeline with exactly one resident model at a time. */
@@ -148,9 +114,11 @@ export async function runPostChatModelPipeline(
     summaryModel,
     willTitle,
     willSummarize,
+    willExtractMemory,
     signal,
     runTitle,
     runSummary,
+    runMemoryExtraction,
   } = options;
 
   if (signal?.aborted) return;
@@ -158,6 +126,10 @@ export async function runPostChatModelPipeline(
   if (willTitle) await runWithLmStudioModel(titleModel, runTitle, signal);
 
   if (willSummarize) await runWithLmStudioModel(summaryModel, runSummary, signal);
+
+  if (willExtractMemory && runMemoryExtraction) {
+    await runWithLmStudioModel(summaryModel, runMemoryExtraction, signal);
+  }
 
   if (!signal?.aborted) {
     await ensureLmStudioModel(chatModel, signal);

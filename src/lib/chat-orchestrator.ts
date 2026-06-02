@@ -94,5 +94,4 @@ export async function sendChatRequest({
     ),
   });
 
-  void conversationId;
 }

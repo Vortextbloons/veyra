@@ -7,6 +7,7 @@ import {
   Check,
   Box,
 } from "lucide-react";
+import { useClickOutside } from "@/hooks/use-click-outside";
 
 export type Model = {
   id: string;
@@ -41,23 +42,11 @@ export function ModelSelector({
     [models, value],
   );
 
+  useClickOutside(ref, open, () => setOpen(false));
+
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
     requestAnimationFrame(() => searchRef.current?.focus());
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
   }, [open]);
 
   const filtered = useMemo(() => {

@@ -7,7 +7,7 @@
 // MVP: deterministic, keyword-based. No embeddings. Phase 6+.
 
 import { estimateTokens } from "@/lib/context";
-import { searchMemory } from "@/lib/memory-storage";
+import { listMemoryNodes, searchMemory, updateMemoryNode } from "@/lib/memory-storage";
 import type { MemoryMode, MemoryNode, MemoryPack } from "@/lib/memory-types";
 
 const STOPWORDS = new Set([
@@ -21,6 +21,14 @@ const STOPWORDS = new Set([
 const MAX_NODES = 10;
 const NOISE_FLOOR = 0.05;
 const HARD_TRUNCATE_FALLBACK = 240;
+
+const PRIORITY_WEIGHT: Record<string, number> = {
+  permanent: 1,
+  high: 0.85,
+  medium: 0.55,
+  low: 0.25,
+  ephemeral: 0.15,
+};
 
 function tokenize(text: string): string[] {
   return text
@@ -58,17 +66,24 @@ export async function buildMemoryPack(
   // Hard rules
   if (!args.enabled) return null;
   if (args.mode === "off") return null;
-  if (args.mode === "manual_only") return null;
   if (!args.query || args.query.trim().length === 0) return null;
   if (args.budget <= 0) return null;
 
   try {
     const queryTokens = unique(tokenize(args.query));
-    if (queryTokens.length === 0) return null;
 
-    // Fetch candidates. The Rust search_memory does LIKE-based scoring; we
-    // re-rank here with the spec's weighted formula.
-    const candidates = await searchMemory(args.query, { limit: 50, projectId: args.projectId });
+    // Always seed durable memories. Permanent/manual facts like the user's
+    // name should not depend on the current query sharing keywords.
+    const durable = await listMemoryNodes({
+      status: ["active", "approved", "needs_review"],
+      limit: 100,
+    });
+
+    const searched = queryTokens.length > 0
+      ? await searchMemory(args.query, { limit: 50, projectId: args.projectId })
+      : [];
+
+    const candidates = uniqueById([...durable.filter(isDurableSeed), ...searched]);
 
     // Filter
     const allowed = candidates.filter((node) => {
@@ -91,15 +106,17 @@ export async function buildMemoryPack(
       const haystack = `${title} ${summary} ${content}`;
 
       const matched = queryTokens.filter((t) => haystack.includes(t));
-      const keywordMatch = clamp01(matched.length / queryTokens.length);
+      const keywordMatch = queryTokens.length > 0 ? clamp01(matched.length / queryTokens.length) : 0;
       const titleMatch = queryTokens.some((t) => title.includes(t)) ? 1 : 0;
       const tagMatch =
         node.tags.some((tag) => queryTokens.some((t) => tag.toLowerCase().includes(t))) ? 1 : 0;
-      const importance = clamp01(node.importance / 5);
+      const importance = Math.max(clamp01(node.importance / 5), PRIORITY_WEIGHT[node.priority] ?? 0.55);
       const confidence = clamp01(node.confidence);
       const pinnedBoost = node.isPinned ? 1 : 0;
 
+      const durableBase = isDurableSeed(node) ? 0.2 : 0;
       const score =
+        durableBase +
         keywordMatch * 0.35 +
         titleMatch * 0.15 +
         tagMatch * 0.15 +
@@ -116,15 +133,27 @@ export async function buildMemoryPack(
     if (kept.length === 0) return null;
 
     // Build bullets
-    const lines: string[] = ["Relevant memory:"];
-    for (const s of kept) {
-      const typeLabel = s.node.type
-        .split("_")
-        .map((w) => w[0]?.toUpperCase() + w.slice(1))
-        .join(" ");
-      const body = s.node.summary.trim() || s.node.content.replace(/\s+/g, " ").trim().slice(0, HARD_TRUNCATE_FALLBACK);
-      lines.push(`- [${typeLabel}] ${body}`);
-    }
+    const lines: string[] = ["Relevant memory:", "Use these only when relevant. If current user instructions conflict, follow the current user message."];
+    const permanent = kept.filter((s) => s.node.isPinned || s.node.priority === "permanent" || s.node.importance >= 5);
+    const project = kept.filter((s) => s.node.scope === "project" && !permanent.includes(s));
+    const other = kept.filter((s) => !permanent.includes(s) && !project.includes(s));
+
+    const addGroup = (label: string, group: ScoredNode[]) => {
+      if (group.length === 0) return;
+      lines.push(`${label}:`);
+      for (const s of group) {
+        const typeLabel = s.node.type
+          .split("_")
+          .map((w) => w[0]?.toUpperCase() + w.slice(1))
+          .join(" ");
+        const body = s.node.summary.trim() || s.node.content.replace(/\s+/g, " ").trim().slice(0, HARD_TRUNCATE_FALLBACK);
+        lines.push(`- [${typeLabel}] ${body}`);
+      }
+    };
+
+    addGroup("Permanent/user memory", permanent);
+    addGroup("Project memory", project);
+    addGroup("Related memory", other);
     let content = lines.join("\n");
 
     // Budget fit
@@ -147,9 +176,12 @@ export async function buildMemoryPack(
       }
     }
 
+    const sourceNodeIds = kept.map((s) => s.node.id);
+    void markMemoryUsed(kept.map((s) => s.node));
+
     return {
       content,
-      sourceNodeIds: kept.map((s) => s.node.id),
+      sourceNodeIds,
       sourceFileIds: unique(kept.map((s) => s.node.fileId).filter((x): x is string => Boolean(x))),
       sourceFolderIds: unique(kept.map((s) => s.node.folderId).filter((x): x is string => Boolean(x))),
       tokenCount: tokens,
@@ -168,4 +200,31 @@ export async function buildMemoryPack(
     }
     return null;
   }
+}
+
+function uniqueById(nodes: MemoryNode[]): MemoryNode[] {
+  return Array.from(new Map(nodes.map((node) => [node.id, node])).values());
+}
+
+function isDurableSeed(node: MemoryNode): boolean {
+  return (
+    node.isPinned ||
+    node.priority === "permanent" ||
+    node.importance >= 5 ||
+    node.origin === "explicit_user_save" ||
+    node.origin === "manual_user_edit"
+  );
+}
+
+async function markMemoryUsed(nodes: MemoryNode[]): Promise<void> {
+  const now = new Date().toISOString();
+  await Promise.allSettled(
+    nodes.map((node) =>
+      updateMemoryNode({
+        id: node.id,
+        lastUsedAt: now,
+        useCount: node.useCount + 1,
+      }),
+    ),
+  );
 }
