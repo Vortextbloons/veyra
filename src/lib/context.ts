@@ -1,10 +1,14 @@
 import type { ChatMessage, ContextStats } from "@/lib/chat-types";
 import type { MemoryPack } from "@/lib/memory-types";
+import {
+  buildMemoryContextBlock,
+  buildSummaryContextBlock,
+  composeMainSystemPrompt,
+  VEYRA_CORE_SYSTEM,
+} from "@/lib/prompts";
 
-const DEFAULT_SYSTEM_PROMPT = "You are Veyra, a helpful local AI assistant.";
 const DEFAULT_CONTEXT_LIMIT = 8192;
 const RESERVED_OUTPUT_TOKENS = 1024;
-const CHARS_PER_TOKEN = 4; // rough estimate
 const TOKENS_PER_IMAGE = 512; // rough vision patch budget
 
 /**
@@ -12,9 +16,8 @@ const TOKENS_PER_IMAGE = 512; // rough vision patch budget
  */
 export interface BuildChatContextOptions {
   /**
-   * Optional memory pack to inject as a system message. When undefined or
-   * null, no memory system message is added and behavior is identical to the
-   * pre-memory buildChatContext(messages) call.
+   * Optional memory pack to inject into the composed system prompt. When
+   * undefined or null, no memory block is added.
    */
   memoryPack?: MemoryPack | null;
   /** Rolling summary of older messages (auto-summarize). */
@@ -27,6 +30,7 @@ export interface BuildChatContextOptions {
  * Estimates the number of tokens in a string using a simple character-based heuristic.
  */
 export function estimateTokens(text: string): number {
+  const CHARS_PER_TOKEN = 4;
   return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
 
@@ -37,80 +41,60 @@ function estimateMessageTokens(message: ChatMessage): number {
   return textTokens + imageCount * TOKENS_PER_IMAGE;
 }
 
-const MEMORY_SYSTEM_MESSAGE_ID = "system-memory";
-const SUMMARY_SYSTEM_MESSAGE_ID = "system-conversation-summary";
+function buildSystemContent(options: BuildChatContextOptions): string {
+  const memoryBlock =
+    options.memoryPack && options.memoryPack.content.trim().length > 0
+      ? buildMemoryContextBlock(options.memoryPack.content)
+      : undefined;
 
-function makeMemorySystemMessage(pack: MemoryPack): ChatMessage {
-  return {
-    id: MEMORY_SYSTEM_MESSAGE_ID,
-    role: "system",
-    content: pack.content,
-    timestamp: 0,
-  };
-}
+  const summaryText = options.conversationSummary?.trim() ?? "";
+  const summaryCovers = Math.max(0, options.summaryCoversMessageCount ?? 0);
+  const summaryBlock =
+    summaryText.length > 0 && summaryCovers > 0
+      ? buildSummaryContextBlock(summaryText)
+      : undefined;
 
-function makeSummarySystemMessage(summary: string): ChatMessage {
-  return {
-    id: SUMMARY_SYSTEM_MESSAGE_ID,
-    role: "system",
-    content: `Earlier conversation summary:\n${summary.trim()}`,
-    timestamp: 0,
-  };
+  return composeMainSystemPrompt({ memoryBlock, summaryBlock });
 }
 
 /**
  * Builds the final request messages for the LM Studio chat.
- * Always starts with a system message, then includes as many recent messages
- * as fit within the token budget (context limit minus reserved output tokens).
+ * Always starts with a single composed system message, then includes as many
+ * recent messages as fit within the token budget (context limit minus reserved
+ * output tokens).
  *
- * If a memory pack is supplied, it is inserted as a second system message
- * (after the default system prompt, before any user/assistant turns). The
- * memory message is always included — the retrieval service is responsible
- * for keeping it under `maxMemoryTokens`, so by the time it reaches here it
- * should already fit. If it does not fit, it is still included (the system
- * prompt + memory are not dropped from the budget walk) and we let the
- * caller decide whether to truncate upstream.
+ * Memory and conversation summary are embedded in the system prompt (memory
+ * before summary). The memory pack body is always included when supplied —
+ * retrieval is responsible for keeping it under `maxMemoryTokens`.
  */
 export function buildChatContext(
   messages: ChatMessage[],
   options: BuildChatContextOptions = {},
   contextLimit?: number,
 ): ChatMessage[] {
+  const systemContent = buildSystemContent(options);
   const systemMessage: ChatMessage = {
     id: "system",
     role: "system",
-    content: DEFAULT_SYSTEM_PROMPT,
+    content: systemContent,
     timestamp: 0,
   };
 
-  const memoryMessage =
-    options.memoryPack && options.memoryPack.content.trim().length > 0
-      ? makeMemorySystemMessage(options.memoryPack)
-      : null;
-
-  const summaryText = options.conversationSummary?.trim() ?? "";
   const summaryCovers = Math.max(0, options.summaryCoversMessageCount ?? 0);
-  const summaryMessage =
-    summaryText.length > 0 && summaryCovers > 0
-      ? makeSummarySystemMessage(summaryText)
-      : null;
+  const hasSummary =
+    (options.conversationSummary?.trim().length ?? 0) > 0 && summaryCovers > 0;
 
   const activeMessages =
-    summaryMessage && summaryCovers > 0
+    hasSummary && summaryCovers > 0
       ? messages.slice(Math.min(summaryCovers, messages.length))
       : messages;
 
   const limit = contextLimit ?? DEFAULT_CONTEXT_LIMIT;
   const budget = limit - RESERVED_OUTPUT_TOKENS;
-  let remaining =
-    budget -
-    estimateTokens(systemMessage.content) -
-    (memoryMessage ? estimateTokens(memoryMessage.content) : 0) -
-    (summaryMessage ? estimateTokens(summaryMessage.content) : 0);
+  let remaining = budget - estimateTokens(systemMessage.content);
 
   const included: ChatMessage[] = [];
 
-  // Walk backwards from newest to oldest, including messages that fit
   for (let i = activeMessages.length - 1; i >= 0; i--) {
     const msg = activeMessages[i];
     const tokens = estimateMessageTokens(msg);
@@ -121,13 +105,9 @@ export function buildChatContext(
     }
   }
 
-  // Reverse to restore chronological order
   included.reverse();
 
-  const prefix = [systemMessage];
-  if (summaryMessage) prefix.push(summaryMessage);
-  if (memoryMessage) prefix.push(memoryMessage);
-  return [...prefix, ...included];
+  return [systemMessage, ...included];
 }
 
 /**
@@ -138,7 +118,7 @@ export function buildChatContext(
  */
 export function getContextStats(messages: ChatMessage[], contextLimit?: number): ContextStats {
   const limit = contextLimit ?? DEFAULT_CONTEXT_LIMIT;
-  const systemTokens = estimateTokens(DEFAULT_SYSTEM_PROMPT);
+  const systemTokens = estimateTokens(VEYRA_CORE_SYSTEM);
   const totalMessageTokens = messages.reduce(
     (sum, msg) => sum + estimateMessageTokens(msg),
     0,
@@ -146,7 +126,6 @@ export function getContextStats(messages: ChatMessage[], contextLimit?: number):
   const estimatedTokens = systemTokens + totalMessageTokens;
 
   const built = buildChatContext(messages, {}, limit);
-  // Subtract 1 for the system message we always inject
   const includedMessages = built.length - 1;
   const droppedMessages = messages.length - includedMessages;
 

@@ -54,7 +54,7 @@ export function ProviderSelector({
         }`}
       >
         <div className="grid size-5 place-items-center rounded bg-violet-500/20 text-violet-300">
-          <ProviderIcon providerId={current?.icon ?? ""} className="size-3" />
+          <ProviderIcon providerId={current?.icon ?? ""} className="size-full" />
         </div>
         <span className="max-w-[140px] truncate font-medium">
           {current?.name ?? "Provider"}
@@ -110,7 +110,7 @@ export function ProviderSelector({
                         : "bg-white/[0.04] text-[var(--color-text-dim)]"
                     }`}
                   >
-                    <ProviderIcon providerId={p.icon} className="size-3" />
+                    <ProviderIcon providerId={p.icon} className="size-full" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
-  Cpu,
   Search,
   Star,
   Check,
   Box,
 } from "lucide-react";
 import { useClickOutside } from "@/hooks/use-click-outside";
+import { ModelIcon } from "@/components/model-icon";
 
 export type Model = {
   id: string;
@@ -76,7 +76,7 @@ export function ModelSelector({
         }`}
       >
         <div className="grid size-5 place-items-center rounded bg-indigo-500/20 text-indigo-300">
-          <Cpu className="size-3" />
+          <ModelIcon modelId={current?.id ?? ""} className="size-full" />
         </div>
         <span className="max-w-[160px] truncate font-medium">
           {current?.name ?? "Select model"}
@@ -199,7 +199,7 @@ function ModelGroup({
                     : "bg-white/[0.04] text-[var(--color-text-dim)]"
                 }`}
               >
-                <Cpu className="size-3" />
+                <ModelIcon modelId={m.id} className="size-full" />
               </div>
               <div className="min-w-0 flex-1">
                 <div

@@ -350,6 +350,8 @@ function App() {
                 isFirstExchange,
               });
             }
+
+            return assistantText || undefined;
           } catch (error) {
             if (!signal.aborted) {
               commitAssistantMessage(conversationId, assistantMessage.id, {

@@ -5,6 +5,7 @@ import { Toggle } from "@/components/toggle";
 import { Cpu, ChevronDown } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useClickOutside } from "@/hooks/use-click-outside";
+import { ModelIcon } from "@/components/model-icon";
 
 const MEMORY_MODES: { value: MemoryMode; label: string; description: string }[] = [
   {
@@ -223,7 +224,7 @@ function ModelDropdown({
         className="flex h-8 w-full items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 text-[12px] transition-colors hover:border-[var(--color-border-strong)]"
       >
         <div className="grid size-5 shrink-0 place-items-center rounded bg-indigo-500/20 text-indigo-300">
-          <Cpu className="size-3" />
+          <ModelIcon modelId={current?.id ?? ""} className="size-full" />
         </div>
         <span className="min-w-0 flex-1 truncate text-left text-white">
           {current?.name ?? placeholder}

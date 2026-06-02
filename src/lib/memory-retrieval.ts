@@ -9,6 +9,7 @@
 import { estimateTokens } from "@/lib/context";
 import { listMemoryNodes, searchMemory, updateMemoryNode } from "@/lib/memory-storage";
 import type { MemoryMode, MemoryNode, MemoryPack } from "@/lib/memory-types";
+import { buildMemoryContextBlock } from "@/lib/prompts";
 
 const STOPWORDS = new Set([
   "the","a","an","is","are","was","were","be","been","being","have","has","had",
@@ -132,8 +133,8 @@ export async function buildMemoryPack(
     const kept = scored.filter((s) => s.score >= NOISE_FLOOR).slice(0, MAX_NODES);
     if (kept.length === 0) return null;
 
-    // Build bullets
-    const lines: string[] = ["Relevant memory:", "Use these only when relevant. If current user instructions conflict, follow the current user message."];
+    // Build bullets (inner body; wrapped for token budget via buildMemoryContextBlock)
+    const lines: string[] = [];
     const permanent = kept.filter((s) => s.node.isPinned || s.node.priority === "permanent" || s.node.importance >= 5);
     const project = kept.filter((s) => s.node.scope === "project" && !permanent.includes(s));
     const other = kept.filter((s) => !permanent.includes(s) && !project.includes(s));
@@ -154,27 +155,38 @@ export async function buildMemoryPack(
     addGroup("Permanent/user memory", permanent);
     addGroup("Project memory", project);
     addGroup("Related memory", other);
-    let content = lines.join("\n");
 
-    // Budget fit
+    let inner = lines.join("\n");
+
+    // Budget fit (count wrapped block as sent to the model)
     const budget = args.budget;
-    let tokens = estimateTokens(content);
+    let wrapped = buildMemoryContextBlock(inner);
+    let tokens = estimateTokens(wrapped);
     if (tokens > budget) {
-      // Drop trailing bullets (keep header).
-      while (lines.length > 1 && estimateTokens(lines.join("\n")) > budget) {
+      while (lines.length > 0 && estimateTokens(buildMemoryContextBlock(lines.join("\n"))) > budget) {
         lines.pop();
       }
-      content = lines.join("\n");
-      tokens = estimateTokens(content);
-      // If still over budget, truncate the last bullet.
+      inner = lines.join("\n");
+      wrapped = buildMemoryContextBlock(inner);
+      tokens = estimateTokens(wrapped);
       if (tokens > budget && lines.length > 0) {
         const last = lines[lines.length - 1];
-        const allowedChars = Math.max(0, budget * 4 - estimateTokens(lines.slice(0, -1).join("\n")) * 4 - 2);
-        lines[lines.length - 1] = (last.length > allowedChars ? last.slice(0, Math.max(0, allowedChars - 1)) + "…" : last);
-        content = lines.join("\n");
-        tokens = estimateTokens(content);
+        const prefix = lines.slice(0, -1).join("\n");
+        const allowedChars = Math.max(
+          0,
+          budget * 4 - estimateTokens(buildMemoryContextBlock(prefix)) * 4 - 2,
+        );
+        lines[lines.length - 1] =
+          last.length > allowedChars ? last.slice(0, Math.max(0, allowedChars - 1)) + "…" : last;
+        inner = lines.join("\n");
+        wrapped = buildMemoryContextBlock(inner);
+        tokens = estimateTokens(wrapped);
       }
     }
+
+    if (!inner.trim()) return null;
+
+    const content = inner;
 
     const sourceNodeIds = kept.map((s) => s.node.id);
     void markMemoryUsed(kept.map((s) => s.node));

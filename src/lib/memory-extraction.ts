@@ -2,6 +2,10 @@ import type { ChatMessage } from "@/lib/chat-types";
 import { getProviderAdapter } from "@/lib/providers";
 import { createMemoryNode, searchMemory } from "@/lib/memory-storage";
 import type { CreateMemoryNode, MemoryNode, MemoryPriority } from "@/lib/memory-types";
+import {
+  buildMemoryExtractionUserMessage,
+  MEMORY_EXTRACTION_SYSTEM,
+} from "@/lib/prompts";
 import { useChatStore } from "@/stores/chat-store";
 import { useMemoryStore } from "@/stores/memory-store";
 
@@ -28,31 +32,6 @@ type ExtractionResult = {
   conversation_summary_delta?: string;
   memory_candidates?: ExtractedCandidate[];
 };
-
-const EXTRACTION_PROMPT = `Extract durable memories from this chat batch.
-
-Return ONLY valid JSON with this shape:
-{
-  "conversation_summary_delta": "brief useful summary of this batch, or empty string",
-  "memory_candidates": [
-    {
-      "title": "general topic label describing what this memory is about (e.g. 'User's TypeScript preferences', 'Database schema decisions', 'UI design preferences', 'Project architecture')",
-      "content": "write whatever captures the memory best - a single fact, a list of related points, a decision with context, an instruction with rationale, whatever fits. Be thorough and include relevant details.",
-      "summary": "one-line compact description of the memory",
-      "type": "preference|project_fact|decision|instruction|summary|task|idea|temporary_context",
-      "scope": "global|project|conversation|session",
-      "priority": "permanent|high|medium|low|ephemeral",
-      "importance": 1,
-      "confidence": 0.0,
-      "tags": ["short", "tags"],
-      "retention": "keep|review|temporary|drop"
-    }
-  ]
-}
-
-Save explicit user instructions, stable preferences, identity details the user clearly wants remembered, project decisions, reusable technical facts, long-term goals, and recurring style preferences.
-
-Do not save filler, one-off details, raw transcripts, sensitive personal data unless explicitly requested, duplicates, or vague guesses. Use review for inferred or lower-confidence memories. Use drop for low-value items.`;
 
 function formatBatch(messages: ChatMessage[]): string {
   return messages
@@ -205,7 +184,7 @@ export async function runMemoryExtractionBatch(options: {
   model: string;
   force?: boolean;
   signal?: AbortSignal;
-}): Promise<void> {
+}): Promise<{ prompt?: string; output?: string } | void> {
   const store = useChatStore.getState();
   const conversation = store.conversations.find((c) => c.id === options.conversationId);
   if (!conversation || options.signal?.aborted) return;
@@ -226,13 +205,20 @@ export async function runMemoryExtractionBatch(options: {
   const adapter = getProviderAdapter(options.providerId);
   if (!adapter) return;
 
-  const prompt = `${EXTRACTION_PROMPT}\n\nConversation title: ${conversation.title}\n\nBatch:\n${transcript}`;
+  const userContent = buildMemoryExtractionUserMessage({
+    title: conversation.title,
+    transcript,
+  });
+  const fullPrompt = `${MEMORY_EXTRACTION_SYSTEM}\n\n---\n\n${userContent}`;
   const raw = await new Promise<string>((resolve) => {
     let output = "";
     adapter
       .sendChat({
         model: options.model,
-        messages: [{ id: crypto.randomUUID(), role: "user", content: prompt, timestamp: Date.now() }],
+        messages: [
+          { id: "memory-extraction-system", role: "system", content: MEMORY_EXTRACTION_SYSTEM, timestamp: 0 },
+          { id: crypto.randomUUID(), role: "user", content: userContent, timestamp: Date.now() },
+        ],
         signal: options.signal,
         temperature: 0.2,
         onChunk: (chunk) => {
@@ -293,4 +279,11 @@ export async function runMemoryExtractionBatch(options: {
   }
 
   useChatStore.getState().setMemoryProcessed(options.conversationId, end);
+
+  const summaryDelta = parsed?.conversation_summary_delta?.trim();
+  const parts: string[] = [];
+  if (createdCount > 0) parts.push(`${createdCount} memor${createdCount === 1 ? "y" : "ies"} extracted`);
+  if (summaryDelta) parts.push(`Summary updated`);
+  if (parts.length === 0) parts.push("No new memories");
+  return { prompt: fullPrompt, output: parts.join(" · ") };
 }

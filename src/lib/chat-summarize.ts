@@ -1,27 +1,12 @@
 import type { ChatMessage } from "@/lib/chat-types";
 import { getContextStats } from "@/lib/context";
 import { getProviderAdapter } from "@/lib/providers";
+import { buildSummarizeUserMessage, CHAT_SUMMARIZE_SYSTEM } from "@/lib/prompts";
 import { useChatStore } from "@/stores/chat-store";
 
 /** Recent turns kept verbatim; older content is folded into the rolling summary. */
 const KEEP_RECENT_MESSAGES = 8;
 const SUMMARIZE_THRESHOLD_PERCENT = 55;
-
-const SUMMARIZE_PROMPT = `Summarize this chat for future context.
-
-Rules:
-- Capture goals, decisions, facts, and open questions
-- Use concise bullet points or short paragraphs
-- Omit greetings and filler
-- Do not invent information not present in the transcript
-- Maximum 400 words
-
-{existingBlock}
-
-Transcript:
-{transcript}
-
-Summary:`;
 
 function formatTranscript(messages: ChatMessage[]): string {
   return messages
@@ -50,14 +35,10 @@ export function generateConversationSummary(options: {
   const adapter = getProviderAdapter(providerId);
   if (!adapter || messages.length === 0) return Promise.resolve("");
 
-  const existingBlock = existingSummary?.trim()
-    ? `Existing summary (update and merge, do not repeat verbatim):\n${existingSummary.trim()}\n`
-    : "";
-
-  const prompt = SUMMARIZE_PROMPT.replace("{existingBlock}", existingBlock).replace(
-    "{transcript}",
-    formatTranscript(messages),
-  );
+  const userContent = buildSummarizeUserMessage({
+    existingSummary,
+    transcript: formatTranscript(messages),
+  });
 
   return new Promise((resolve) => {
     let summary = "";
@@ -65,12 +46,8 @@ export function generateConversationSummary(options: {
       .sendChat({
         model,
         messages: [
-          {
-            id: crypto.randomUUID(),
-            role: "user",
-            content: prompt,
-            timestamp: Date.now(),
-          },
+          { id: "chat-summarize-system", role: "system", content: CHAT_SUMMARIZE_SYSTEM, timestamp: 0 },
+          { id: crypto.randomUUID(), role: "user", content: userContent, timestamp: Date.now() },
         ],
         signal,
         temperature: 0.3,
@@ -94,7 +71,7 @@ export async function runSummarizeForConversation(options: {
   model: string;
   contextLimit: number;
   signal?: AbortSignal;
-}): Promise<void> {
+}): Promise<{ prompt?: string; output?: string } | void> {
   const { conversationId, providerId, model, contextLimit, signal } = options;
   const latest = useChatStore.getState().conversations.find((c) => c.id === conversationId);
   if (!latest || signal?.aborted) return;
@@ -104,6 +81,12 @@ export async function runSummarizeForConversation(options: {
   const end = Math.max(0, latest.messages.length - KEEP_RECENT_MESSAGES);
   const batch = latest.messages.slice(start, end);
   if (batch.length < 2) return;
+
+  const userContent = buildSummarizeUserMessage({
+    existingSummary: latest.conversationSummary,
+    transcript: formatTranscript(batch),
+  });
+  const fullPrompt = `${CHAT_SUMMARIZE_SYSTEM}\n\n---\n\n${userContent}`;
 
   const summary = await generateConversationSummary({
     providerId,
@@ -115,5 +98,6 @@ export async function runSummarizeForConversation(options: {
 
   if (summary && !signal?.aborted) {
     useChatStore.getState().setConversationSummary(conversationId, summary, end);
+    return { prompt: fullPrompt, output: summary };
   }
 }

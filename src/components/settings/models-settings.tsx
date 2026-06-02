@@ -9,9 +9,9 @@ import {
   Eye,
   ChevronDown,
   RotateCcw,
-  Cpu,
 } from "lucide-react";
 import { ProviderIcon } from "@/components/provider-icon";
+import { ModelIcon } from "@/components/model-icon";
 
 export function ModelsSettings() {
   const providers = useProviderStore((s) => s.providers);
@@ -156,7 +156,7 @@ export function ModelsSettings() {
         </p>
         {models.length === 0 ? (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-8 text-center">
-            <Cpu className="mx-auto mb-2 size-5 text-[var(--color-text-dim)]" />
+            <ModelIcon modelId="" className="mx-auto mb-2 size-5 text-[var(--color-text-dim)]" />
             <p className="text-[12px] text-[var(--color-text-dim)]">
               {isConnected
                 ? "No models found. Load a model in your provider."
@@ -243,7 +243,7 @@ function ModelOverrideCard({
                 : "bg-white/[0.04] text-[var(--color-text-dim)]"
             }`}
           >
-            <Cpu className="size-3.5" />
+            <ModelIcon modelId={model.id} className="size-full" />
           </div>
           <div className="min-w-0 flex-1">
             <div

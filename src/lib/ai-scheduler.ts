@@ -31,7 +31,7 @@ export type AiJob = {
   finishedAt?: number;
   status: AiJobStatus;
   error?: string;
-  run: (signal: AbortSignal) => Promise<void>;
+  run: (signal: AbortSignal) => Promise<{ prompt?: string; output?: string } | string | void>;
 };
 
 export type AiJobSnapshot = Omit<AiJob, "run">;
@@ -234,7 +234,15 @@ class AiScheduler {
         this.activeController = controller;
 
         try {
-          await next.run(controller.signal);
+          const result = await next.run(controller.signal);
+          if (result !== undefined && result !== null) {
+            if (typeof result === "string") {
+              if (!next.output) next.output = result;
+            } else {
+              if (result.prompt && !next.prompt) next.prompt = result.prompt;
+              if (result.output && !next.output) next.output = result.output;
+            }
+          }
           if (next.status === "running") {
             next.status = "completed";
             next.finishedAt = Date.now();

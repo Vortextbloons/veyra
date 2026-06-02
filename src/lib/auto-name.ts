@@ -1,4 +1,5 @@
 import { sendLmStudioChat } from "@/lib/lm-studio";
+import { AUTO_NAME_SYSTEM, buildAutoNameUserMessage } from "@/lib/prompts";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -6,9 +7,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 const TITLE_CONTEXT_LENGTH = 2048;
 const TITLE_MAX_OUTPUT_TOKENS = 80;
 const SNIPPET_MAX_CHARS = 400;
-
-const TITLE_SYSTEM_PROMPT =
-  "You generate concise, descriptive chat titles that capture the topic or goal of a conversation. Reply with only the title: 3–7 words, sentence case, no quotes, no period, no prefixes like 'Title:'.";
 
 function truncateSnippet(text: string, max = SNIPPET_MAX_CHARS): string {
   const trimmed = text.trim();
@@ -97,15 +95,15 @@ export async function generateConversationTitle(options: {
   userMessage: string;
   assistantMessage: string;
   signal?: AbortSignal;
-}): Promise<string> {
+}): Promise<{ prompt: string; title: string }> {
   const { model, userMessage, assistantMessage, signal } = options;
-  if (!model.trim()) return "";
+  if (!model.trim()) return { prompt: "", title: "" };
 
-  const prompt = `User: ${truncateSnippet(userMessage)}
-
-Assistant: ${truncateSnippet(assistantMessage)}
-
-Title:`;
+  const userContent = buildAutoNameUserMessage({
+    userSnippet: truncateSnippet(userMessage),
+    assistantSnippet: truncateSnippet(assistantMessage),
+  });
+  const fullPrompt = `${AUTO_NAME_SYSTEM}\n\n---\n\n${userContent}`;
 
   let message = "";
   let reasoning = "";
@@ -116,13 +114,13 @@ Title:`;
       {
         id: "auto-name-system",
         role: "system",
-        content: TITLE_SYSTEM_PROMPT,
+        content: AUTO_NAME_SYSTEM,
         timestamp: 0,
       },
       {
         id: crypto.randomUUID(),
         role: "user",
-        content: prompt,
+        content: userContent,
         timestamp: Date.now(),
       },
     ],
@@ -142,9 +140,10 @@ Title:`;
   }).catch(() => {});
 
   const llmTitle = cleanGeneratedTitle(message, reasoning);
-  if (llmTitle) return llmTitle;
+  if (llmTitle) return { prompt: fullPrompt, title: llmTitle };
 
-  return fallbackTitleFromExchange(userMessage, assistantMessage);
+  const fallback = fallbackTitleFromExchange(userMessage, assistantMessage);
+  return { prompt: fullPrompt, title: fallback };
 }
 
 export async function runAutoNameForConversation(options: {
@@ -153,7 +152,7 @@ export async function runAutoNameForConversation(options: {
   userMessage: string;
   assistantMessage: string;
   signal?: AbortSignal;
-}): Promise<void> {
+}): Promise<{ prompt?: string; output?: string } | void> {
   if (!useSettingsStore.getState().autoNameEnabled) return;
 
   const { conversationId, userMessage, assistantMessage, signal } = options;
@@ -165,7 +164,7 @@ export async function runAutoNameForConversation(options: {
   const userMsgCount = conv?.messages.filter((m) => m.role === "user").length ?? 0;
   if (userMsgCount > 1) return;
 
-  const title = await generateConversationTitle({
+  const { prompt, title } = await generateConversationTitle({
     model: titleModel,
     userMessage,
     assistantMessage,
@@ -174,5 +173,6 @@ export async function runAutoNameForConversation(options: {
 
   if (title && !signal?.aborted) {
     useChatStore.getState().renameConversation(conversationId, title);
+    return { prompt, output: title };
   }
 }

@@ -99,15 +99,15 @@ export type PostChatPipelineOptions = {
   willSummarize: boolean;
   willExtractMemory?: boolean;
   signal?: AbortSignal;
-  runTitle: () => Promise<void>;
-  runSummary: () => Promise<void>;
-  runMemoryExtraction?: () => Promise<void>;
+  runTitle: () => Promise<{ prompt?: string; output?: string } | string | void>;
+  runSummary: () => Promise<{ prompt?: string; output?: string } | string | void>;
+  runMemoryExtraction?: () => Promise<{ prompt?: string; output?: string } | string | void>;
 };
 
 /** Sequential background pipeline with exactly one resident model at a time. */
 export async function runPostChatModelPipeline(
   options: PostChatPipelineOptions,
-): Promise<void> {
+): Promise<{ prompt?: string; output?: string } | void> {
   const {
     chatModel,
     titleModel,
@@ -123,25 +123,60 @@ export async function runPostChatModelPipeline(
 
   if (signal?.aborted) return;
 
-  if (willTitle) await runWithLmStudioModel(titleModel, runTitle, signal);
+  const prompts: string[] = [];
+  const outputs: string[] = [];
 
-  if (willSummarize) await runWithLmStudioModel(summaryModel, runSummary, signal);
+  if (willTitle) {
+    const result = await runWithLmStudioModel(titleModel, runTitle, signal);
+    if (result) {
+      if (typeof result === "object") {
+        if (result.prompt) prompts.push(`[Title]\n${result.prompt}`);
+        if (result.output) outputs.push(`Title: ${result.output}`);
+      } else {
+        outputs.push(`Title: ${result}`);
+      }
+    }
+  }
+
+  if (willSummarize) {
+    const result = await runWithLmStudioModel(summaryModel, runSummary, signal);
+    if (result) {
+      if (typeof result === "object") {
+        if (result.prompt) prompts.push(`[Summary]\n${result.prompt}`);
+        if (result.output) outputs.push(`Summary: ${result.output.slice(0, 120)}${result.output.length > 120 ? "..." : ""}`);
+      } else {
+        outputs.push(`Summary: ${result.slice(0, 120)}${result.length > 120 ? "..." : ""}`);
+      }
+    }
+  }
 
   if (willExtractMemory && runMemoryExtraction) {
-    await runWithLmStudioModel(summaryModel, runMemoryExtraction, signal);
+    const result = await runWithLmStudioModel(summaryModel, runMemoryExtraction, signal);
+    if (result) {
+      if (typeof result === "object") {
+        if (result.prompt) prompts.push(`[Memory]\n${result.prompt}`);
+        if (result.output) outputs.push(result.output);
+      } else {
+        outputs.push(result);
+      }
+    }
   }
 
   if (!signal?.aborted) {
     await ensureLmStudioModel(chatModel, signal);
   }
+
+  const prompt = prompts.length > 0 ? prompts.join("\n\n---\n\n") : undefined;
+  const output = outputs.length > 0 ? outputs.join("\n") : undefined;
+  return prompt || output ? { prompt, output } : undefined;
 }
 
 async function runWithLmStudioModel(
   modelId: string,
-  run: () => Promise<void>,
+  run: () => Promise<{ prompt?: string; output?: string } | string | void>,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<{ prompt?: string; output?: string } | string | void> {
   if (signal?.aborted) return;
   await ensureLmStudioModel(modelId, signal);
-  if (!signal?.aborted) await run();
+  if (!signal?.aborted) return run();
 }

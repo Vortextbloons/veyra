@@ -118,7 +118,7 @@ export function queuePostChatJobs(options: PostChatJobOptions): void {
     conversationId,
     model: chatModel,
     run: async (signal) => {
-      await runPostChatModelPipeline({
+      return runPostChatModelPipeline({
         chatModel,
         titleModel: plan.titleModel,
         summaryModel: plan.summaryModel,
@@ -127,7 +127,7 @@ export function queuePostChatJobs(options: PostChatJobOptions): void {
         willExtractMemory: plan.willExtractMemory,
         signal,
         runTitle: async () => {
-          await runAutoNameForConversation({
+          return runAutoNameForConversation({
             conversationId,
             chatModel,
             userMessage,
@@ -136,7 +136,7 @@ export function queuePostChatJobs(options: PostChatJobOptions): void {
           });
         },
         runSummary: async () => {
-          await runSummarizeForConversation({
+          return runSummarizeForConversation({
             conversationId,
             providerId,
             model: plan.summaryModel,
@@ -145,13 +145,14 @@ export function queuePostChatJobs(options: PostChatJobOptions): void {
           });
         },
         runMemoryExtraction: async () => {
-          await runMemoryExtractionBatch({
+          const result = await runMemoryExtractionBatch({
             conversationId,
             providerId,
             model: plan.memoryModel,
             signal,
           });
           if (!signal.aborted) await runMemoryRetentionCleanup();
+          return result;
         },
       });
     },
@@ -178,7 +179,7 @@ export function queueMemoryExtractionNow(options: ManualMemoryExtractionOptions)
     conversationId: options.conversationId,
     model: memoryModel,
     run: async (signal) => {
-      await runPostChatModelPipeline({
+      return runPostChatModelPipeline({
         chatModel,
         titleModel: memoryModel,
         summaryModel: memoryModel,
@@ -189,7 +190,7 @@ export function queueMemoryExtractionNow(options: ManualMemoryExtractionOptions)
         runTitle: async () => {},
         runSummary: async () => {},
         runMemoryExtraction: async () => {
-          await runMemoryExtractionBatch({
+          const result = await runMemoryExtractionBatch({
             conversationId: options.conversationId,
             providerId: options.providerId,
             model: memoryModel,
@@ -197,6 +198,7 @@ export function queueMemoryExtractionNow(options: ManualMemoryExtractionOptions)
             signal,
           });
           if (!signal.aborted) await runMemoryRetentionCleanup();
+          return result;
         },
       });
     },
@@ -233,7 +235,7 @@ function scheduleDelayedMemoryExtraction(options: {
       conversationId: options.conversationId,
       model: options.memoryModel,
       run: async (signal) => {
-        await runPostChatModelPipeline({
+        return runPostChatModelPipeline({
           chatModel: options.chatModel,
           titleModel: options.memoryModel,
           summaryModel: options.memoryModel,
@@ -244,13 +246,14 @@ function scheduleDelayedMemoryExtraction(options: {
           runTitle: async () => {},
           runSummary: async () => {},
           runMemoryExtraction: async () => {
-            await runMemoryExtractionBatch({
+            const result = await runMemoryExtractionBatch({
               conversationId: options.conversationId,
               providerId: options.providerId,
               model: options.memoryModel,
               signal,
             });
             if (!signal.aborted) await runMemoryRetentionCleanup();
+            return result;
           },
         });
       },
