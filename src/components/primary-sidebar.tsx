@@ -6,7 +6,6 @@ import {
   Settings,
   Sparkles,
   Wrench,
-  Boxes,
 } from "lucide-react";
 import type { PrimarySidebarProps } from "@/lib/chat-types";
 
@@ -20,7 +19,6 @@ const NAV: NavItem[] = [
   { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" /> },
   { id: "projects", label: "Projects", icon: <Folder className="size-4" /> },
   { id: "memory", label: "Memory", icon: <Database className="size-4" /> },
-  { id: "models", label: "Models", icon: <Boxes className="size-4" /> },
   { id: "tools", label: "Tools", icon: <Wrench className="size-4" /> },
   { id: "settings", label: "Settings", icon: <Settings className="size-4" /> },
 ];

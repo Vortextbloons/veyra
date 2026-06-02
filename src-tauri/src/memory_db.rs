@@ -232,7 +232,23 @@ impl MemoryDb {
 
 fn run_migrations(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(SCHEMA)
-        .map_err(|e| format!("schema migration failed: {}", e))
+        .map_err(|e| format!("schema migration failed: {}", e))?;
+
+    // Seed a default folder so the first memory node has a valid FK target.
+    let existing: i64 = conn
+        .query_row("SELECT COUNT(*) FROM memory_folders", [], |r| r.get(0))
+        .map_err(|e| format!("count folders failed: {}", e))?;
+    if existing == 0 {
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO memory_folders (id, name, folder_type, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 0, ?4, ?5)",
+            rusqlite::params!["default", "General", "manual", &now, &now],
+        )
+        .map_err(|e| format!("seed default folder failed: {}", e))?;
+    }
+
+    Ok(())
 }
 
 fn parse_json_array(s: &str) -> Vec<String> {

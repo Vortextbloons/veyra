@@ -9,6 +9,7 @@ import {
   buildMessagePerformance,
   type LmChatStats,
 } from "@/lib/performance";
+import { runLmStudioExclusive } from "@/lib/lm-studio-session";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { Command } from "@tauri-apps/plugin-shell";
 
@@ -68,19 +69,34 @@ function buildV1ChatBody(options: {
   model: string;
   messages: ChatMessage[];
   temperature?: number;
+  contextLength?: number;
   previousResponseId?: string;
+  maxTokens?: number;
+  store?: boolean;
 }): Record<string, unknown> {
-  const { model, messages, temperature, previousResponseId } = options;
+  const {
+    model,
+    messages,
+    temperature,
+    contextLength,
+    previousResponseId,
+    maxTokens,
+    store = true,
+  } = options;
   const systemMessage = messages.find((m) => m.role === "system");
   const dialogue = messages.filter((m) => m.role !== "system");
 
   const body: Record<string, unknown> = {
     model,
     stream: true,
-    store: true,
+    store,
     temperature: temperature ?? DEFAULT_TEMPERATURE,
-    context_length: DEFAULT_CONTEXT_LENGTH - RESERVED_OUTPUT_TOKENS,
+    context_length: (contextLength ?? DEFAULT_CONTEXT_LENGTH) - RESERVED_OUTPUT_TOKENS,
   };
+
+  if (maxTokens != null && maxTokens > 0) {
+    body.max_tokens = maxTokens;
+  }
 
   if (systemMessage?.content) {
     body.system_prompt = systemMessage.content;
@@ -301,7 +317,29 @@ export async function ensureServerRunning(baseUrl?: string): Promise<boolean> {
   return false;
 }
 
+export async function loadLmStudioModelDirect(
+  model: string,
+  options?: {
+    baseUrl?: string;
+    contextLength?: number;
+    flashAttention?: boolean;
+  },
+): Promise<{ success: boolean; message: string }> {
+  return loadModelImpl(model, options);
+}
+
 export async function loadModel(
+  model: string,
+  options?: {
+    baseUrl?: string;
+    contextLength?: number;
+    flashAttention?: boolean;
+  },
+): Promise<{ success: boolean; message: string }> {
+  return runLmStudioExclusive(() => loadModelImpl(model, options));
+}
+
+async function loadModelImpl(
   model: string,
   options?: {
     baseUrl?: string;
@@ -339,7 +377,21 @@ export async function loadModel(
   }
 }
 
+export async function unloadLmStudioModelDirect(
+  model: string,
+  baseUrl?: string,
+): Promise<{ success: boolean; message: string }> {
+  return unloadModelImpl(model, baseUrl);
+}
+
 export async function unloadModel(
+  model: string,
+  baseUrl?: string,
+): Promise<{ success: boolean; message: string }> {
+  return runLmStudioExclusive(() => unloadModelImpl(model, baseUrl));
+}
+
+async function unloadModelImpl(
   model: string,
   baseUrl?: string,
 ): Promise<{ success: boolean; message: string }> {
@@ -386,6 +438,27 @@ export async function sendLmStudioChat(options: {
   model: string;
   baseUrl?: string;
   temperature?: number;
+  contextLength?: number;
+  maxTokens?: number;
+  store?: boolean;
+  previousResponseId?: string;
+  signal?: AbortSignal;
+  onChunk: (content: string, done: boolean) => void;
+  onReasoningChunk?: (content: string, done: boolean) => void;
+  onComplete?: (result: LmChatCompleteResult) => void;
+  onError: (error: string) => void;
+}): Promise<void> {
+  return runLmStudioExclusive(() => sendLmStudioChatImpl(options));
+}
+
+async function sendLmStudioChatImpl(options: {
+  messages: ChatMessage[];
+  model: string;
+  baseUrl?: string;
+  temperature?: number;
+  contextLength?: number;
+  maxTokens?: number;
+  store?: boolean;
   previousResponseId?: string;
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
@@ -398,6 +471,9 @@ export async function sendLmStudioChat(options: {
     model,
     baseUrl,
     temperature,
+    contextLength,
+    maxTokens,
+    store,
     previousResponseId,
     signal,
     onChunk,
@@ -417,7 +493,15 @@ export async function sendLmStudioChat(options: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        buildV1ChatBody({ model, messages, temperature, previousResponseId }),
+        buildV1ChatBody({
+          model,
+          messages,
+          temperature,
+          contextLength,
+          maxTokens,
+          store,
+          previousResponseId,
+        }),
       ),
       signal,
     });

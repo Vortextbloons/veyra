@@ -6,6 +6,7 @@ export function RightPanel({
   contextStats,
   collapsed: collapsedProp,
   onCollapsedChange,
+  hidden,
 }: RightPanelProps) {
   const [collapsedInternal, setCollapsedInternal] = useState(false);
   const collapsed = collapsedProp ?? collapsedInternal;
@@ -17,9 +18,14 @@ export function RightPanel({
 
   return (
     <aside
-      className={`relative flex h-full shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] transition-[width] duration-200 ease-out ${
-        collapsed ? "w-11 overflow-visible" : "w-[300px] min-w-0"
+      className={`relative flex h-full shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] transition-[width,opacity] duration-200 ease-out ${
+        hidden
+          ? "w-0 overflow-hidden opacity-0 pointer-events-none"
+          : collapsed
+            ? "w-11 overflow-visible"
+            : "w-[300px] min-w-0"
       }`}
+      aria-hidden={hidden}
     >
       <div
         aria-hidden

@@ -5,6 +5,7 @@ import { getProviderAdapter } from "@/lib/providers";
 import type { ProviderChatOptions } from "@/lib/providers/types";
 import type { MemoryPack } from "@/lib/memory-types";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useChatStore } from "@/stores/chat-store";
 import { buildMemoryPack } from "@/lib/memory-retrieval";
 
 /**
@@ -71,10 +72,26 @@ export async function sendChatRequest({
     userOnComplete?.(result, { memoryPack });
   };
 
+  const resolvedContextLength = options.contextLength ?? settings.getModelSettings(options.model).contextLength;
+
+  const conversation = conversationId
+    ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
+    : undefined;
+
   await provider.sendChat({
     ...options,
+    temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
+    contextLength: resolvedContextLength,
     onComplete: wrappedOnComplete,
-    messages: buildChatContext(messages, { memoryPack: memoryPack ?? null }),
+    messages: buildChatContext(
+      messages,
+      {
+        memoryPack: memoryPack ?? null,
+        conversationSummary: conversation?.conversationSummary,
+        summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
+      },
+      resolvedContextLength,
+    ),
   });
 
   void conversationId;

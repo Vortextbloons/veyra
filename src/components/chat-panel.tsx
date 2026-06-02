@@ -12,7 +12,6 @@ import {
   Sparkles,
   Bot,
   Loader2,
-  AlertTriangle,
   Brain,
   X,
   ImageIcon,
@@ -25,6 +24,7 @@ import {
   type MessageAttachment,
 } from "@/lib/message-attachments";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
+import { ProviderConnectionBanner } from "@/components/provider-connection-banner";
 import { ProviderSelector } from "@/components/provider-selector";
 import { ModelSelector, type Model } from "@/components/model-selector";
 import { Toggle } from "@/components/toggle";
@@ -52,14 +52,20 @@ export function ChatPanel({
   providers = [],
   selectedProvider = "",
   onProviderChange,
+  providerConnectionPhase = "idle",
+  providerConnectionError = null,
+  onProviderReconnect,
+  onProviderStartServer,
   models = [],
   selectedModel = "",
   onModelChange,
+  favoriteModels = [],
+  onToggleFavorite,
   supportsImages = false,
   sidebarsCollapsed = 0,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(true);
-  const [showReasoning, setShowReasoning] = useState(false);
+  const [showReasoning, setShowReasoning] = useState(true);
   const [mode, setMode] = useState<ChatMode>("chat");
 
   const currentProvider = providers.find((p) => p.id === selectedProvider);
@@ -74,6 +80,7 @@ export function ChatPanel({
     provider: providerLabel,
     contextWindow: m.contextWindow,
     size: m.size,
+    isFavorite: favoriteModels.includes(m.id),
     supportsImages: m.supportsImages,
   }));
 
@@ -85,30 +92,42 @@ export function ChatPanel({
             value={selectedProvider}
             providers={providers}
             onChange={onProviderChange}
+            connectionPhase={providerConnectionPhase}
+            onReconnect={(id) => onProviderReconnect?.(id)}
+            onStartServer={(id) => onProviderStartServer?.(id)}
           />
 
           <ModelSelector
             value={selectedModel}
             models={selectorModels}
             onChange={onModelChange}
+            onToggleFavorite={onToggleFavorite}
           />
         </div>
 
         <div
           className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] ${
-            providerStatus === "connected"
-              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-              : "border-red-500/20 bg-red-500/10 text-red-300"
+            providerConnectionPhase === "connecting"
+              ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
+              : providerStatus === "connected"
+                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                : "border-red-500/20 bg-red-500/10 text-red-300"
           }`}
         >
           <span
             className={`size-1.5 rounded-full ${
-              providerStatus === "connected"
-                ? "bg-emerald-400"
-                : "bg-red-400"
+              providerConnectionPhase === "connecting"
+                ? "animate-pulse bg-amber-400"
+                : providerStatus === "connected"
+                  ? "bg-emerald-400"
+                  : "bg-red-400"
             }`}
           />
-          {providerStatus === "connected" ? "Connected" : "Disconnected"}
+          {providerConnectionPhase === "connecting"
+            ? "Connecting…"
+            : providerStatus === "connected"
+              ? "Connected"
+              : "Disconnected"}
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -124,12 +143,13 @@ export function ChatPanel({
         </div>
       </header>
 
-      {providerStatus === "disconnected" && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-5 py-2 text-[12px] text-amber-300">
-          <AlertTriangle className="size-3.5 shrink-0" />
-          <span>Provider is disconnected — responses will not work until reconnected.</span>
-        </div>
-      )}
+      <ProviderConnectionBanner
+        provider={currentProvider ?? null}
+        phase={providerConnectionPhase}
+        error={providerConnectionError}
+        onReconnect={() => onProviderReconnect?.()}
+        onStartServer={() => onProviderStartServer?.()}
+      />
 
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4">
         <h1 className="text-[14px] font-medium tracking-tight">{title}</h1>

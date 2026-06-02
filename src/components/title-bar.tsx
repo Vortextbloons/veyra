@@ -1,4 +1,5 @@
 import { Minus, Square, X, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { SchedulerPopover } from "@/components/scheduler/scheduler-popover";
 
 type TitleBarProps = {
   zoom?: number;
@@ -40,11 +41,14 @@ export function TitleBar({
         </button>
       </div>
 
-      <div
-        data-tauri-drag-region
-        className="text-[12px] text-[var(--color-text-dim)]"
-      >
-        Veyra
+      <div className="flex items-center gap-2">
+        <SchedulerPopover />
+        <span
+          data-tauri-drag-region
+          className="text-[12px] text-[var(--color-text-dim)]"
+        >
+          Veyra
+        </span>
       </div>
 
       <div className="flex w-12 items-center justify-end gap-1">

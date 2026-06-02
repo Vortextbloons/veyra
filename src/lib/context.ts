@@ -17,6 +17,10 @@ export interface BuildChatContextOptions {
    * pre-memory buildChatContext(messages) call.
    */
   memoryPack?: MemoryPack | null;
+  /** Rolling summary of older messages (auto-summarize). */
+  conversationSummary?: string | null;
+  /** How many leading messages are represented by the summary. */
+  summaryCoversMessageCount?: number;
 }
 
 /**
@@ -34,12 +38,22 @@ function estimateMessageTokens(message: ChatMessage): number {
 }
 
 const MEMORY_SYSTEM_MESSAGE_ID = "system-memory";
+const SUMMARY_SYSTEM_MESSAGE_ID = "system-conversation-summary";
 
 function makeMemorySystemMessage(pack: MemoryPack): ChatMessage {
   return {
     id: MEMORY_SYSTEM_MESSAGE_ID,
     role: "system",
     content: pack.content,
+    timestamp: 0,
+  };
+}
+
+function makeSummarySystemMessage(summary: string): ChatMessage {
+  return {
+    id: SUMMARY_SYSTEM_MESSAGE_ID,
+    role: "system",
+    content: `Earlier conversation summary:\n${summary.trim()}`,
     timestamp: 0,
   };
 }
@@ -60,6 +74,7 @@ function makeMemorySystemMessage(pack: MemoryPack): ChatMessage {
 export function buildChatContext(
   messages: ChatMessage[],
   options: BuildChatContextOptions = {},
+  contextLimit?: number,
 ): ChatMessage[] {
   const systemMessage: ChatMessage = {
     id: "system",
@@ -73,15 +88,31 @@ export function buildChatContext(
       ? makeMemorySystemMessage(options.memoryPack)
       : null;
 
-  const budget = DEFAULT_CONTEXT_LIMIT - RESERVED_OUTPUT_TOKENS;
+  const summaryText = options.conversationSummary?.trim() ?? "";
+  const summaryCovers = Math.max(0, options.summaryCoversMessageCount ?? 0);
+  const summaryMessage =
+    summaryText.length > 0 && summaryCovers > 0
+      ? makeSummarySystemMessage(summaryText)
+      : null;
+
+  const activeMessages =
+    summaryMessage && summaryCovers > 0
+      ? messages.slice(Math.min(summaryCovers, messages.length))
+      : messages;
+
+  const limit = contextLimit ?? DEFAULT_CONTEXT_LIMIT;
+  const budget = limit - RESERVED_OUTPUT_TOKENS;
   let remaining =
-    budget - estimateTokens(systemMessage.content) - (memoryMessage ? estimateTokens(memoryMessage.content) : 0);
+    budget -
+    estimateTokens(systemMessage.content) -
+    (memoryMessage ? estimateTokens(memoryMessage.content) : 0) -
+    (summaryMessage ? estimateTokens(summaryMessage.content) : 0);
 
   const included: ChatMessage[] = [];
 
   // Walk backwards from newest to oldest, including messages that fit
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
+  for (let i = activeMessages.length - 1; i >= 0; i--) {
+    const msg = activeMessages[i];
     const tokens = estimateMessageTokens(msg);
 
     if (tokens <= remaining) {
@@ -93,9 +124,10 @@ export function buildChatContext(
   // Reverse to restore chronological order
   included.reverse();
 
-  return memoryMessage
-    ? [systemMessage, memoryMessage, ...included]
-    : [systemMessage, ...included];
+  const prefix = [systemMessage];
+  if (summaryMessage) prefix.push(summaryMessage);
+  if (memoryMessage) prefix.push(memoryMessage);
+  return [...prefix, ...included];
 }
 
 /**
@@ -104,7 +136,8 @@ export function buildChatContext(
  * raw conversation length. The caller can add pack token count to the result
  * if they need budget visibility for memory.
  */
-export function getContextStats(messages: ChatMessage[]): ContextStats {
+export function getContextStats(messages: ChatMessage[], contextLimit?: number): ContextStats {
+  const limit = contextLimit ?? DEFAULT_CONTEXT_LIMIT;
   const systemTokens = estimateTokens(DEFAULT_SYSTEM_PROMPT);
   const totalMessageTokens = messages.reduce(
     (sum, msg) => sum + estimateMessageTokens(msg),
@@ -112,15 +145,15 @@ export function getContextStats(messages: ChatMessage[]): ContextStats {
   );
   const estimatedTokens = systemTokens + totalMessageTokens;
 
-  const built = buildChatContext(messages);
+  const built = buildChatContext(messages, {}, limit);
   // Subtract 1 for the system message we always inject
   const includedMessages = built.length - 1;
   const droppedMessages = messages.length - includedMessages;
 
   return {
     estimatedTokens,
-    contextLimit: DEFAULT_CONTEXT_LIMIT,
-    percentUsed: Math.round((estimatedTokens / DEFAULT_CONTEXT_LIMIT) * 100),
+    contextLimit: limit,
+    percentUsed: Math.round((estimatedTokens / limit) * 100),
     includedMessages,
     droppedMessages,
     reservedOutputTokens: RESERVED_OUTPUT_TOKENS,

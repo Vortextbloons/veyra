@@ -19,3 +19,7 @@ export function getInitialProviders() {
     status: "disconnected" as const,
   }));
 }
+
+export function providerSupportsStartServer(providerId: string): boolean {
+  return Boolean(getProviderAdapter(providerId)?.startServer);
+}

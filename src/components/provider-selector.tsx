@@ -4,24 +4,39 @@ import {
   Check,
   Server,
   Cloud,
+  RefreshCw,
+  Play,
+  Loader2,
 } from "lucide-react";
 import type { ProviderInfo } from "@/lib/chat-types";
+import { providerSupportsStartServer } from "@/lib/providers";
+import type { ProviderConnectionPhase } from "@/stores/provider-store";
 
 type ProviderSelectorProps = {
   value: string;
   providers?: ProviderInfo[];
   onChange?: (id: string) => void;
+  connectionPhase?: ProviderConnectionPhase;
+  onReconnect?: (providerId: string) => void;
+  onStartServer?: (providerId: string) => void;
 };
 
 export function ProviderSelector({
   value,
   providers = [],
   onChange,
+  connectionPhase = "idle",
+  onReconnect,
+  onStartServer,
 }: ProviderSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const current = providers.find((p) => p.id === value) ?? null;
+  const connecting = connectionPhase === "connecting";
+  const showActions =
+    current?.status === "disconnected" &&
+    (onReconnect || (onStartServer && providerSupportsStartServer(current.id)));
 
   useEffect(() => {
     if (!open) return;
@@ -67,9 +82,11 @@ export function ProviderSelector({
         {current && (
           <span
             className={`size-1.5 rounded-full ${
-              current.status === "connected"
-                ? "bg-emerald-400"
-                : "bg-red-400"
+              connecting
+                ? "animate-pulse bg-amber-400"
+                : current.status === "connected"
+                  ? "bg-emerald-400"
+                  : "bg-red-400"
             }`}
           />
         )}
@@ -83,7 +100,7 @@ export function ProviderSelector({
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 top-full z-50 mt-1.5 w-56 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/50"
+          className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/50"
         >
           <div className="px-2 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
             Provider
@@ -147,6 +164,52 @@ export function ProviderSelector({
               );
             })}
           </div>
+
+          {showActions && current && (
+            <div className="border-t border-[var(--color-border)] p-2">
+              <p className="mb-2 px-1 text-[10.5px] leading-snug text-[var(--color-text-dim)]">
+                {current.id === "lm-studio"
+                  ? "Start the local server or retry if LM Studio is already open."
+                  : "Retry when the provider is ready."}
+              </p>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  disabled={connecting}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReconnect?.(current.id);
+                  }}
+                  className="flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-border)] bg-white/[0.03] py-1.5 text-[11px] font-medium text-white hover:bg-white/[0.06] disabled:opacity-50"
+                >
+                  {connecting ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-3" />
+                  )}
+                  Retry
+                </button>
+                {providerSupportsStartServer(current.id) && onStartServer && (
+                  <button
+                    type="button"
+                    disabled={connecting}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartServer(current.id);
+                    }}
+                    className="flex flex-1 items-center justify-center gap-1 rounded-md bg-[var(--color-accent)] py-1.5 text-[11px] font-medium text-white hover:brightness-110 disabled:opacity-50"
+                  >
+                    {connecting ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Play className="size-3" />
+                    )}
+                    Start
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

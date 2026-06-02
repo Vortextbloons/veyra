@@ -38,6 +38,10 @@ export interface Conversation {
   updatedAt: number;
   /** LM Studio `/api/v1/chat` response id for multi-turn continuity */
   lmResponseId?: string;
+  /** Rolling summary of older turns (see auto-summarize setting) */
+  conversationSummary?: string;
+  /** Number of leading messages folded into `conversationSummary` */
+  summaryCoversMessageCount?: number;
 }
 
 // ── Context stats ───────────────────────────────────────────────────────────
@@ -95,9 +99,15 @@ export interface ChatPanelProps {
   providers?: ProviderInfo[];
   selectedProvider?: string;
   onProviderChange?: (id: string) => void;
+  providerConnectionPhase?: "idle" | "connecting" | "error";
+  providerConnectionError?: string | null;
+  onProviderReconnect?: (providerId?: string) => void;
+  onProviderStartServer?: (providerId?: string) => void;
   models?: ModelInfo[];
   selectedModel?: string;
   onModelChange?: (id: string) => void;
+  favoriteModels?: string[];
+  onToggleFavorite?: (id: string) => void;
   /** 0 = both side panels open, 1 = one collapsed, 2 = both collapsed */
   sidebarsCollapsed?: number;
 }
@@ -106,6 +116,7 @@ export interface RightPanelProps {
   contextStats?: ContextStats;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  hidden?: boolean;
 }
 
 export interface RecentChatsItem {
@@ -122,10 +133,20 @@ export interface RecentChatsProps {
   onDeleteAll?: () => void;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  hidden?: boolean;
 }
 
 export interface PrimarySidebarProps {
   activeNav?: string;
   onNavChange?: (id: string) => void;
   onNewChat?: () => void;
+}
+
+// ── Nav mode helpers ─────────────────────────────────────────────────────────
+
+export const CHAT_MODE_NAV_IDS = ["chat", "projects", "tools"] as const;
+export type ChatModeNavId = (typeof CHAT_MODE_NAV_IDS)[number];
+
+export function isChatModeNav(navId: string): boolean {
+  return (CHAT_MODE_NAV_IDS as readonly string[]).includes(navId);
 }

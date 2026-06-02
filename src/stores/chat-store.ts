@@ -30,7 +30,12 @@ type ChatStore = {
   createConversation: () => string;
   deleteConversation: (id: string) => void;
   deleteAllConversations: () => void;
-  addMessagePair: (conversationId: string, userMessage: ChatMessage, assistantMessage: ChatMessage) => void;
+  addMessagePair: (
+    conversationId: string,
+    userMessage: ChatMessage,
+    assistantMessage: ChatMessage,
+    options?: { deferTitle?: boolean },
+  ) => void;
   appendStreamingContent: (conversationId: string, messageId: string, chunk: string) => void;
   appendStreamingReasoning: (conversationId: string, messageId: string, chunk: string) => void;
   clearStreamingBuffer: () => void;
@@ -38,6 +43,12 @@ type ChatStore = {
     conversationId: string,
     messageId: string,
     patch?: Partial<ChatMessage> & { lmResponseId?: string },
+  ) => void;
+  renameConversation: (id: string, title: string) => void;
+  setConversationSummary: (
+    id: string,
+    summary: string,
+    coversMessageCount: number,
   ) => void;
 };
 
@@ -89,18 +100,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     void saveConversationSnapshot([]);
     set({ conversations: [], activeConversationId: null, streamingBuffer: null });
   },
-  addMessagePair: (conversationId, userMessage, assistantMessage) => {
+  addMessagePair: (conversationId, userMessage, assistantMessage, options) => {
     set((state) => {
       const conversations = state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
         const isFirstUser = conversation.messages.every((message) => message.role !== "user");
+        const provisionalTitle = options?.deferTitle
+          ? "New conversation"
+          : (userMessage.content.trim() ||
+              userMessage.attachments?.[0]?.name ||
+              "Image message").slice(0, 50);
         return {
           ...conversation,
-          title: isFirstUser
-            ? (userMessage.content.trim() ||
-                userMessage.attachments?.[0]?.name ||
-                "Image message").slice(0, 50)
-            : conversation.title,
+          title: isFirstUser ? provisionalTitle : conversation.title,
           messages: [...conversation.messages, userMessage, assistantMessage],
           updatedAt: Date.now(),
         };
@@ -161,6 +173,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           updatedAt: Date.now(),
         };
       });
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  renameConversation: (id, title) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const limited = trimmed.length > 80 ? trimmed.slice(0, 80) : trimmed;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) =>
+        conversation.id === id ? { ...conversation, title: limited } : conversation,
+      );
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  setConversationSummary: (id, summary, coversMessageCount) => {
+    const trimmed = summary.trim();
+    if (!trimmed || coversMessageCount < 1) return;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) =>
+        conversation.id === id
+          ? {
+              ...conversation,
+              conversationSummary: trimmed,
+              summaryCoversMessageCount: coversMessageCount,
+              updatedAt: Date.now(),
+            }
+          : conversation,
+      );
       void saveConversationSnapshot(conversations);
       return { conversations };
     });

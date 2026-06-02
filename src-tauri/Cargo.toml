@@ -27,3 +27,4 @@ tauri-plugin-http = "2"
 tauri-plugin-shell = "2"
 rusqlite = { version = "0.31", features = ["bundled"] }
 parking_lot = "0.12"
+chrono = "0.4"

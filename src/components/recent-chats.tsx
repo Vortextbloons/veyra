@@ -10,6 +10,7 @@ export function RecentChats({
   onDeleteAll,
   collapsed: collapsedProp,
   onCollapsedChange,
+  hidden,
 }: RecentChatsProps) {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [collapsedInternal, setCollapsedInternal] = useState(false);
@@ -21,9 +22,14 @@ export function RecentChats({
 
   return (
     <aside
-      className={`flex h-full shrink-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-[width] duration-200 ease-out ${
-        collapsed ? "w-11" : "w-[260px]"
+      className={`flex h-full shrink-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-[width,opacity] duration-200 ease-out ${
+        hidden
+          ? "w-0 opacity-0 pointer-events-none"
+          : collapsed
+            ? "w-11"
+            : "w-[260px]"
       }`}
+      aria-hidden={hidden}
     >
       {collapsed ? (
         <div className="flex h-full flex-col items-center py-3">

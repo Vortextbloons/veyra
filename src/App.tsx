@@ -4,9 +4,15 @@ import { PrimarySidebar } from "@/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/components/chat-panel";
 import { MemoryPage } from "@/components/memory/memory-page";
+import { SettingsPage } from "@/components/settings/settings-page";
 import { RightPanel } from "@/components/right-panel";
 import { sendChatRequest } from "@/lib/chat-orchestrator";
+import { aiScheduler } from "@/lib/ai-scheduler";
+import { getAssistantVisibleText } from "@/lib/assistant-text";
+import { handoffAfterUserChat, queuePostChatJobs } from "@/lib/post-chat-jobs";
+import { prepareUserChatModel } from "@/lib/lm-model-session";
 import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
+import { isChatModeNav } from "@/lib/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { getContextStats } from "@/lib/context";
 import { useChatStore } from "@/stores/chat-store";
@@ -69,17 +75,25 @@ function App() {
   const selectedModel = useProviderStore((state) => state.selectedModel);
   const initializeProvider = useProviderStore((state) => state.initializeProvider);
   const selectProvider = useProviderStore((state) => state.selectProvider);
+  const reconnectProvider = useProviderStore((state) => state.reconnectProvider);
+  const startProviderServer = useProviderStore((state) => state.startProviderServer);
+  const connectionPhase = useProviderStore((state) => state.connectionPhase);
+  const connectionError = useProviderStore((state) => state.connectionError);
   const setSelectedModel = useProviderStore((state) => state.setSelectedModel);
 
   const activeNav = useSettingsStore((state) => state.activeNav);
   const recentChatsCollapsed = useSettingsStore((state) => state.recentChatsCollapsed);
   const rightPanelCollapsed = useSettingsStore((state) => state.rightPanelCollapsed);
+  const favoriteModels = useSettingsStore((state) => state.favoriteModels);
+  const getModelSettings = useSettingsStore((state) => state.getModelSettings);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
   const setRightPanelCollapsed = useSettingsStore((state) => state.setRightPanelCollapsed);
 
   const sidebarsCollapsed =
     (recentChatsCollapsed ? 1 : 0) + (rightPanelCollapsed ? 1 : 0);
+
+  const isChatMode = isChatModeNav(activeNav);
 
   useEffect(() => {
     applyZoom(zoom);
@@ -135,8 +149,10 @@ function App() {
     );
   }, [activeConversation?.id, activeConversation?.messages, streamingBuffer]);
 
+  const resolvedContextLength = getModelSettings(selectedModel).contextLength;
+
   const contextStats: ContextStats | undefined = activeConversation
-    ? getContextStats(activeConversation.messages)
+    ? getContextStats(activeConversation.messages, resolvedContextLength)
     : undefined;
 
   const recentChats: RecentChatsItem[] = conversations.map((conversation) => ({
@@ -146,8 +162,13 @@ function App() {
   }));
 
   const handleNewChat = useCallback(() => {
+    abortRef.current?.abort();
+    setRequestStatus("idle");
+    setStreamingMessageId(null);
+    clearStreamingBuffer();
+    setActiveNav("chat");
     createConversation();
-  }, [createConversation]);
+  }, [clearStreamingBuffer, createConversation, setActiveNav]);
 
   const handleDeleteChat = useCallback(
     (id: string) => {
@@ -157,6 +178,7 @@ function App() {
         setStreamingMessageId(null);
         clearStreamingBuffer();
       }
+      aiScheduler.cancelAiJobsByConversation(id);
       deleteConversation(id);
     },
     [activeConversationId, clearStreamingBuffer, deleteConversation],
@@ -166,6 +188,11 @@ function App() {
     abortRef.current?.abort();
     setRequestStatus("idle");
     setStreamingMessageId(null);
+    // Cancel all queued jobs - active user job will finish naturally
+    const snapshot = aiScheduler.getSchedulerSnapshot();
+    for (const job of snapshot.queuedJobs) {
+      aiScheduler.cancelAiJob(job.id);
+    }
     deleteAllConversations();
   }, [deleteAllConversations]);
 
@@ -206,48 +233,90 @@ function App() {
       const conversation = conversations.find((item) => item.id === conversationId);
       const messages = [...(conversation?.messages ?? []), userMessage];
 
-      addMessagePair(conversationId, userMessage, assistantMessage);
+      addMessagePair(conversationId, userMessage, assistantMessage, {
+        deferTitle: useSettingsStore.getState().autoNameEnabled,
+      });
       setStreamingMessageId(assistantMessage.id);
       setRequestStatus("streaming");
+
+      // Abort any active background job to prioritize user message
+      aiScheduler.abortActiveBackgroundJob();
 
       const controller = new AbortController();
       abortRef.current = controller;
 
-      void sendChatRequest({
-        providerId: selectedProvider,
-        messages,
-        model: selectedModel,
-        previousResponseId: conversation?.lmResponseId,
-        signal: controller.signal,
-        memoryEnabled,
+      aiScheduler.enqueueAiJob({
+        type: "user_chat",
+        priority: 0,
+        title: "Sending message",
         conversationId,
-        projectId: undefined,
-        onChunk: (chunk) => {
-          if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
-        },
-        onReasoningChunk: (chunk) => {
-          if (chunk) appendStreamingReasoning(conversationId, assistantMessage.id, chunk);
-        },
-        onError: (error) => {
-          commitAssistantMessage(conversationId, assistantMessage.id, {
-            content: `Error: ${error}`,
+        model: selectedModel,
+        run: async (signal) => {
+          await prepareUserChatModel(selectedModel, signal);
+
+          await sendChatRequest({
+            providerId: selectedProvider,
+            messages,
+            model: selectedModel,
+            previousResponseId: conversation?.lmResponseId,
+            signal,
+            memoryEnabled,
+            conversationId,
+            projectId: undefined,
+            onChunk: (chunk) => {
+              if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
+            },
+            onReasoningChunk: (chunk) => {
+              if (chunk) appendStreamingReasoning(conversationId, assistantMessage.id, chunk);
+            },
+            onError: (error) => {
+              commitAssistantMessage(conversationId, assistantMessage.id, {
+                content: `Error: ${error}`,
+              });
+              clearStreamingBuffer();
+              setRequestStatus("error");
+              setStreamingMessageId(null);
+            },
+            onComplete: (result, context) => {
+              const memoryPack = context?.memoryPack ?? null;
+              commitAssistantMessage(conversationId, assistantMessage.id, {
+                performance: result.performance,
+                lmResponseId: result.responseId,
+                ...(memoryPack ? { memoryPack } : {}),
+              });
+            },
           });
+
           clearStreamingBuffer();
-          setRequestStatus("error");
+          setRequestStatus("idle");
           setStreamingMessageId(null);
+
+          const chatModel = useProviderStore.getState().selectedModel.trim();
+          const liveProvider = useProviderStore.getState().selectedProvider;
+          const conv = useChatStore.getState().conversations.find((c) => c.id === conversationId);
+          const assistantMsg = conv?.messages.find((m) => m.id === assistantMessage.id);
+          const assistantText = getAssistantVisibleText(assistantMsg);
+          const userMsgCount = conv?.messages.filter((m) => m.role === "user").length ?? 0;
+
+          if (chatModel && assistantText) {
+            const isFirstExchange = userMsgCount <= 1;
+            await handoffAfterUserChat({
+              chatModel,
+              conversationId,
+              isFirstExchange,
+              signal,
+            });
+
+            queuePostChatJobs({
+              conversationId,
+              chatModel,
+              providerId: liveProvider,
+              userMessage: trimmed,
+              assistantMessage: assistantText,
+              isFirstExchange,
+            });
+          }
         },
-        onComplete: (result, context) => {
-          const memoryPack = context?.memoryPack ?? null;
-          commitAssistantMessage(conversationId, assistantMessage.id, {
-            performance: result.performance,
-            lmResponseId: result.responseId,
-            ...(memoryPack ? { memoryPack } : {}),
-          });
-        },
-      }).then(() => {
-        clearStreamingBuffer();
-        setRequestStatus("idle");
-        setStreamingMessageId(null);
       });
     },
     [
@@ -287,10 +356,11 @@ function App() {
           onDeleteAll={handleDeleteAllChats}
           collapsed={recentChatsCollapsed}
           onCollapsedChange={setRecentChatsCollapsed}
+          hidden={!isChatMode}
         />
-        {activeNav === "memory" ? (
-          <MemoryPage />
-        ) : (
+        {activeNav === "memory" && <MemoryPage />}
+        {activeNav === "settings" && <SettingsPage />}
+        {isChatMode && (
           <ChatPanel
             title={activeConversation?.title}
             messages={visibleMessages}
@@ -300,9 +370,15 @@ function App() {
             providers={providers}
             selectedProvider={selectedProvider}
             onProviderChange={selectProvider}
+            providerConnectionPhase={connectionPhase}
+            providerConnectionError={connectionError}
+            onProviderReconnect={(id) => void reconnectProvider(id)}
+            onProviderStartServer={(id) => void startProviderServer(id)}
             models={models}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
+            favoriteModels={favoriteModels}
+            onToggleFavorite={(id) => useSettingsStore.getState().toggleFavoriteModel(id)}
             supportsImages={supportsImages}
             sidebarsCollapsed={sidebarsCollapsed}
           />
@@ -311,6 +387,7 @@ function App() {
           contextStats={contextStats}
           collapsed={rightPanelCollapsed}
           onCollapsedChange={setRightPanelCollapsed}
+          hidden={!isChatMode}
         />
       </div>
     </div>
