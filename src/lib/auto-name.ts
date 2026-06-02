@@ -176,4 +176,3 @@ export async function runAutoNameForConversation(options: {
     useChatStore.getState().renameConversation(conversationId, title);
   }
 }
-

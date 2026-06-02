@@ -15,8 +15,6 @@ import { Command } from "@tauri-apps/plugin-shell";
 
 const DEFAULT_BASE_URL = "http://localhost:1234";
 const DEFAULT_TEMPERATURE = 0.7;
-const DEFAULT_CONTEXT_LENGTH = 8192;
-const RESERVED_OUTPUT_TOKENS = 1024;
 
 /** LM Studio 0.4+ native chat — accurate `stats` on `chat.end` when streaming. */
 const CHAT_PATH = "/api/v1/chat";
@@ -78,7 +76,6 @@ function buildV1ChatBody(options: {
     model,
     messages,
     temperature,
-    contextLength,
     previousResponseId,
     maxTokens,
     store = true,
@@ -91,7 +88,6 @@ function buildV1ChatBody(options: {
     stream: true,
     store,
     temperature: temperature ?? DEFAULT_TEMPERATURE,
-    context_length: (contextLength ?? DEFAULT_CONTEXT_LENGTH) - RESERVED_OUTPUT_TOKENS,
   };
 
   if (maxTokens != null && maxTokens > 0) {
@@ -317,6 +313,89 @@ export async function ensureServerRunning(baseUrl?: string): Promise<boolean> {
   return false;
 }
 
+type LmStudioModelEntry = {
+  id?: unknown;
+  key?: unknown;
+  model?: unknown;
+  path?: unknown;
+  loaded?: unknown;
+  state?: unknown;
+  status?: unknown;
+  loaded_instances?: unknown;
+};
+
+export type LoadedLmStudioModelInstance = {
+  modelId: string;
+  instanceId: string;
+};
+
+function modelIdFromEntry(entry: LmStudioModelEntry): string {
+  const value = entry.id ?? entry.key ?? entry.model ?? entry.path;
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function loadedInstancesFromEntry(entry: LmStudioModelEntry): LoadedLmStudioModelInstance[] {
+  if (!Array.isArray(entry.loaded_instances)) return [];
+  const modelId = modelIdFromEntry(entry);
+  if (!modelId) return [];
+
+  return entry.loaded_instances
+    .map((instance) => {
+      if (!instance || typeof instance !== "object") return null;
+      const value = (instance as Record<string, unknown>).id;
+      const instanceId = typeof value === "string" ? value.trim() : "";
+      return instanceId ? { modelId, instanceId } : null;
+    })
+    .filter((instance): instance is LoadedLmStudioModelInstance => Boolean(instance));
+}
+
+function isLoadedModelEntry(entry: LmStudioModelEntry): boolean {
+  if (entry.loaded === true) return true;
+  const state = typeof entry.state === "string" ? entry.state.toLowerCase() : "";
+  const status = typeof entry.status === "string" ? entry.status.toLowerCase() : "";
+  return state === "loaded" || status === "loaded";
+}
+
+function parseModelEntries(json: unknown): LmStudioModelEntry[] {
+  if (Array.isArray(json)) return json as LmStudioModelEntry[];
+  if (!json || typeof json !== "object") return [];
+
+  const record = json as Record<string, unknown>;
+  if (Array.isArray(record.data)) return record.data as LmStudioModelEntry[];
+  if (Array.isArray(record.models)) return record.models as LmStudioModelEntry[];
+  if (Array.isArray(record.loaded)) return record.loaded as LmStudioModelEntry[];
+  return [];
+}
+
+async function fetchModelEntries(url: string): Promise<LmStudioModelEntry[]> {
+  const res = await tauriFetch(url);
+  if (!res.ok) return [];
+  return parseModelEntries(await res.json());
+}
+
+export async function fetchLoadedLmStudioModelsDirect(baseUrl?: string): Promise<string[]> {
+  return [
+    ...new Set(
+      (await fetchLoadedLmStudioModelInstancesDirect(baseUrl)).map((instance) => instance.modelId),
+    ),
+  ];
+}
+
+export async function fetchLoadedLmStudioModelInstancesDirect(
+  baseUrl?: string,
+): Promise<LoadedLmStudioModelInstance[]> {
+  const root = baseUrl || DEFAULT_BASE_URL;
+  const nativeEntries = await fetchModelEntries(`${root}/api/v1/models`);
+  return nativeEntries.flatMap((entry) => {
+    const instances = loadedInstancesFromEntry(entry);
+    if (instances.length > 0) return instances;
+    if (!isLoadedModelEntry(entry)) return [];
+
+    const modelId = modelIdFromEntry(entry);
+    return modelId ? [{ modelId, instanceId: modelId }] : [];
+  });
+}
+
 export async function loadLmStudioModelDirect(
   model: string,
   options?: {
@@ -392,7 +471,7 @@ export async function unloadModel(
 }
 
 async function unloadModelImpl(
-  model: string,
+  instanceId: string,
   baseUrl?: string,
 ): Promise<{ success: boolean; message: string }> {
   try {
@@ -400,7 +479,7 @@ async function unloadModelImpl(
     const res = await tauriFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model }),
+      body: JSON.stringify({ instance_id: instanceId }),
     });
 
     if (!res.ok) {

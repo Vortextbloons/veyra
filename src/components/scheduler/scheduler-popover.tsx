@@ -86,6 +86,11 @@ function JobRow({
             {job.description}
           </p>
         )}
+        {job.error && (
+          <p className="mt-0.5 truncate text-[10px] text-red-300">
+            {job.error}
+          </p>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         {job.status === "running" && job.startedAt && (

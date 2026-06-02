@@ -1,6 +1,8 @@
 import {
+  fetchLoadedLmStudioModelInstancesDirect,
   loadLmStudioModelDirect,
   unloadLmStudioModelDirect,
+  type LoadedLmStudioModelInstance,
 } from "@/lib/lm-studio";
 import { runLmStudioExclusive } from "@/lib/lm-studio-session";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -29,12 +31,20 @@ async function loadDirect(modelId: string): Promise<void> {
   loadedModelId = id;
 }
 
-async function unloadDirect(modelId: string): Promise<void> {
-  const id = modelId.trim();
-  if (!id || loadedModelId !== id) return;
+async function unloadDirect(instanceId: string): Promise<void> {
+  const id = instanceId.trim();
+  if (!id) return;
   const result = await unloadLmStudioModelDirect(id);
   if (!result.success) throw new Error(result.message);
   loadedModelId = null;
+}
+
+async function fetchActualLoadedModelInstances(): Promise<LoadedLmStudioModelInstance[]> {
+  try {
+    return await fetchLoadedLmStudioModelInstancesDirect();
+  } catch {
+    return [];
+  }
 }
 
 /** Ensure the given model is the only one loaded in LM Studio. */
@@ -46,9 +56,32 @@ export async function ensureLmStudioModel(
     if (signal?.aborted) return;
     const next = modelId.trim();
     if (!next) return;
-    if (sameLmStudioModel(loadedModelId ?? "", next)) return;
 
-    if (loadedModelId) await unloadDirect(loadedModelId);
+    const actualLoadedInstances = await fetchActualLoadedModelInstances();
+    const actualTargetLoaded = actualLoadedInstances.some((instance) =>
+      sameLmStudioModel(instance.modelId, next),
+    );
+    const instancesToUnload = actualLoadedInstances.length > 0
+      ? actualLoadedInstances.filter((instance) => !sameLmStudioModel(instance.modelId, next))
+      : loadedModelId && !sameLmStudioModel(loadedModelId, next)
+        ? [{ modelId: loadedModelId, instanceId: loadedModelId }]
+        : [];
+
+    if (instancesToUnload.length === 0 && actualTargetLoaded) {
+      loadedModelId = next;
+      return;
+    }
+
+    if (instancesToUnload.length === 0 && sameLmStudioModel(loadedModelId ?? "", next)) return;
+
+    for (const loadedInstance of instancesToUnload) {
+      await unloadDirect(loadedInstance.instanceId);
+    }
+
+    if (actualTargetLoaded) {
+      loadedModelId = next;
+      return;
+    }
 
     await loadDirect(next);
   });
@@ -57,8 +90,16 @@ export async function ensureLmStudioModel(
 /** Unload whatever model we believe is active. */
 export async function releaseLmStudioModel(signal?: AbortSignal): Promise<void> {
   return runLmStudioExclusive(async () => {
-    if (signal?.aborted || !loadedModelId) return;
-    await unloadDirect(loadedModelId);
+    if (signal?.aborted) return;
+    const instances = await fetchActualLoadedModelInstances();
+    if (instances.length === 0 && loadedModelId) {
+      await unloadDirect(loadedModelId);
+      return;
+    }
+
+    for (const instance of instances) {
+      await unloadDirect(instance.instanceId);
+    }
   });
 }
 
