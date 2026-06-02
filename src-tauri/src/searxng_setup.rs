@@ -27,6 +27,10 @@ impl SearxngState {
     pub fn was_started_by_us(&self) -> bool {
         self.started_by_us.load(Ordering::Relaxed)
     }
+
+    pub fn clear_started(&self) {
+        self.started_by_us.store(false, Ordering::Relaxed);
+    }
 }
 
 /// Minimal SearXNG settings that enable JSON output and disable the rate
@@ -244,8 +248,11 @@ pub async fn start_searxng_container(
 
 /// Stop the SearXNG container.
 #[tauri::command]
-pub async fn stop_searxng_container() -> Result<(), String> {
+pub async fn stop_searxng_container(
+    state: tauri::State<'_, SearxngState>,
+) -> Result<(), String> {
     stop_container();
+    state.clear_started();
     Ok(())
 }
 

@@ -271,6 +271,30 @@ class AiScheduler {
     }
   }
 
+  /** Cancel all queued and active jobs (app exit). */
+  shutdown(): void {
+    const now = Date.now();
+    for (const job of this.queue) {
+      job.status = "cancelled";
+      job.finishedAt = now;
+      this.recentJobs.unshift(snapshotOf(job));
+    }
+    this.queue = [];
+    this.trimRecent();
+
+    if (this.activeJob) {
+      this.activeJob.status = "aborted";
+      this.activeJob.finishedAt = now;
+      this.recentJobs.unshift(snapshotOf(this.activeJob));
+      this.trimRecent();
+      this.activeController?.abort();
+      this.activeJob = null;
+      this.activeController = null;
+    }
+
+    this.notify();
+  }
+
   /** Abort the active background job (priority > 0). */
   abortActiveBackgroundJob(): boolean {
     if (this.activeJob && this.activeJob.priority > 0) {

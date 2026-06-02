@@ -10,6 +10,8 @@ import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "
 import { isChatModeNav } from "@/lib/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { getContextStats } from "@/lib/context";
+import { ShutdownOverlay } from "@/components/shutdown-overlay";
+import { registerAppShutdownHandler } from "@/lib/app-shutdown";
 import {
   deferUntilIdle,
   emitAppReady,
@@ -147,6 +149,8 @@ function App() {
     markStartup("veyra:app-mounted");
     logStartupDuration("veyra:main-start", "veyra:app-mounted", "main-to-mount");
   }, []);
+
+  useEffect(() => registerAppShutdownHandler(), []);
 
   useEffect(() => {
     void (async () => {
@@ -421,6 +425,7 @@ function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--color-bg)]">
+      <ShutdownOverlay />
       <TitleBar
         zoom={zoom}
         onZoomIn={() => setZoom((z) => clampZoom(+(z + ZOOM_STEP).toFixed(2)))}

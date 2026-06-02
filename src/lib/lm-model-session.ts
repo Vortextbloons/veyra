@@ -35,6 +35,24 @@ async function unloadDirect(instanceId: string): Promise<void> {
   loadedModelId = null;
 }
 
+/** Unload every model instance Veyra (or LM Studio) has in memory. */
+export async function unloadAllLmStudioModels(): Promise<void> {
+  return runLmStudioExclusive(async () => {
+    const instances = await fetchActualLoadedModelInstances();
+    for (const instance of instances) {
+      try {
+        await unloadDirect(instance.instanceId);
+      } catch (err) {
+        console.warn(
+          "[LM Studio] Unload failed on shutdown:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+    loadedModelId = null;
+  });
+}
+
 async function fetchActualLoadedModelInstances(): Promise<LoadedLmStudioModelInstance[]> {
   try {
     return await fetchLoadedLmStudioModelInstancesDirect();

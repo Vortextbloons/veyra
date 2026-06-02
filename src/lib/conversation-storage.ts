@@ -200,6 +200,11 @@ export function saveConversationSnapshot(conversations: Conversation[]) {
   return saveQueue;
 }
 
+/** Wait for any in-flight conversation snapshot write (e.g. on app exit). */
+export function flushConversationSave(): Promise<void> {
+  return saveQueue.catch(() => undefined);
+}
+
 export async function loadConversationSnapshot(): Promise<Conversation[]> {
   try {
     const raw = await invoke<string>("load_conversations");

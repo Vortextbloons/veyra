@@ -1,6 +1,5 @@
 use std::fs;
-use tauri::Manager;
-use tauri::WindowEvent;
+use tauri::{Manager, RunEvent, WindowEvent};
 
 mod memory_commands;
 mod memory_db;
@@ -67,6 +66,11 @@ fn load_conversations(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
 fn app_ready(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -85,6 +89,7 @@ pub fn run() {
             load_or_create_conversation_key,
             save_conversation_key,
             app_ready,
+            exit_app,
             memory_commands::list_memory_folders,
             memory_commands::list_memory_files,
             memory_commands::list_memory_nodes,
@@ -122,9 +127,20 @@ pub fn run() {
                 let state = window.state::<searxng_setup::SearxngState>();
                 if state.was_started_by_us() {
                     searxng_setup::stop_container();
+                    state.clear_started();
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let RunEvent::ExitRequested { .. } = event {
+                if let Some(state) = app_handle.try_state::<searxng_setup::SearxngState>() {
+                    if state.was_started_by_us() {
+                        searxng_setup::stop_container();
+                        state.clear_started();
+                    }
+                }
+            }
+        });
 }
