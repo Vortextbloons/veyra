@@ -34,7 +34,7 @@ export function RightPanel({
         className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.06),transparent_70%)]"
       />
 
-      {collapsed ? (
+      {hidden ? null : collapsed ? (
         <div className="relative z-10 flex h-full flex-col items-center gap-4 py-3">
           <button
             type="button"
@@ -109,7 +109,7 @@ function ContextPanel({ stats }: { stats?: ContextStats }) {
     <PanelShell
       title="Context"
       action={
-        <button className="text-[10.5px] text-[var(--color-text-dim)] hover:text-white">
+        <button type="button" aria-label="Context information" className="text-[10.5px] text-[var(--color-text-dim)] hover:text-white">
           ⓘ
         </button>
       }
@@ -265,7 +265,7 @@ function ProjectPlaceholder() {
     <PanelShell
       title="Active Project"
       action={
-        <button className="text-[var(--color-text-dim)] hover:text-white">
+        <button type="button" aria-label="Project options" className="text-[var(--color-text-dim)] hover:text-white">
           ⋯
         </button>
       }

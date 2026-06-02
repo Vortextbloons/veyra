@@ -9,7 +9,7 @@ const MEMORY_CUE =
   /\b(remember|memory|memories|recall|what do you know|what did i|my name|my preference|preferences?|about me|earlier|before|last time|we discussed|you said|you know|saved|pinned|project|context|continue|follow up)\b/i;
 
 const TRIVIAL_MATH =
-  /^\s*\d+\s*[\+\-\*\/\^%]\s*\d+/;
+  /^\s*\d+\s*[-+*/^%]\s*\d+/;
 
 export interface MemoryRouterInput {
   query: string;

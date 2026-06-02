@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 
+const MAX_SEARCH_RESULTS: usize = 10;
+
 #[derive(Serialize, Deserialize)]
 pub struct TauriSearchResult {
     pub id: String,
@@ -92,7 +94,7 @@ pub async fn web_search_searxng(
         .and_then(|r| r.as_array())
         .map(|arr| {
             arr.iter()
-                .take(limit)
+                .take(limit.clamp(1, MAX_SEARCH_RESULTS))
                 .enumerate()
                 .map(|(i, item)| TauriSearchResult {
                     id: item

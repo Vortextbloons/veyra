@@ -51,7 +51,9 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     onComplete,
   } = params;
 
-  void trySaveExplicitMemory(trimmed, { conversationId });
+  if (memoryEnabled) {
+    void trySaveExplicitMemory(trimmed, { conversationId });
+  }
 
   await prepareUserChatModel(selectedModel, signal);
 

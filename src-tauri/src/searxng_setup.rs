@@ -206,7 +206,7 @@ pub async fn start_searxng_container(
     // Create and start a fresh container with the settings file mounted.
     let host_path = settings_path.to_string_lossy().to_string();
     let mount_arg = format!("{host_path}:/etc/searxng/settings.yml:ro");
-    let port_arg = format!("{SEARXNG_PORT}:8080");
+    let port_arg = format!("127.0.0.1:{SEARXNG_PORT}:8080");
 
     let output = run_docker(&[
         "run",

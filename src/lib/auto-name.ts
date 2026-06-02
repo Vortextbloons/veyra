@@ -171,7 +171,9 @@ export async function runAutoNameForConversation(options: {
     signal,
   });
 
-  if (title && !signal?.aborted) {
+  const latest = useChatStore.getState().conversations.find((c) => c.id === conversationId);
+  const latestUserMsgCount = latest?.messages.filter((m) => m.role === "user").length ?? 0;
+  if (title && !signal?.aborted && latest?.title === "New conversation" && latestUserMsgCount <= 1) {
     useChatStore.getState().renameConversation(conversationId, title);
     return { prompt, output: title };
   }

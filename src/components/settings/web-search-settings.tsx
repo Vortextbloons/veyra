@@ -39,7 +39,8 @@ export function WebSearchSettings() {
   }, []);
 
   useEffect(() => {
-    void refreshSetupStatus();
+    const id = window.setTimeout(() => void refreshSetupStatus(), 0);
+    return () => window.clearTimeout(id);
   }, [refreshSetupStatus]);
 
   async function handleTestConnection() {

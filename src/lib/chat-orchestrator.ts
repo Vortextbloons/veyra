@@ -8,15 +8,10 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { buildMemoryPackWithInfo } from "@/lib/memory-retrieval";
 import type { MemoryRetrievalInfo } from "@/lib/memory-types";
-import { parseWebSearchToolCall } from "@/modules/web-search/tools/webSearchTool";
+import { parseWebSearchToolCall, stripWebSearchToolCall } from "@/modules/web-search/tools/webSearchTool";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import { buildToolsBlock } from "@/lib/tool-registry";
 import { buildContextAnchoringBlock } from "@/lib/prompts";
-
-function stripToolCallFromContent(content: string): string {
-  const regex = /\{[\s\S]*?"tool"\s*:\s*"web\.search"[\s\S]*?"args"\s*:\s*\{[\s\S]*?"query"\s*:\s*"[^"]*"[\s\S]*?\}[\s\S]*?\}/;
-  return content.replace(regex, "").replace(/\n{3,}/g, "\n\n").trim();
-}
 
 /**
  * Optional context threaded through to the chat consumer's onComplete
@@ -99,7 +94,7 @@ export async function sendChatRequest({
         chatStore.skipNextBufferClear();
 
         // Strip tool call JSON from accumulated content for re-prompt context
-        const strippedContent = stripToolCallFromContent(accumulatedContent);
+        const strippedContent = stripWebSearchToolCall(accumulatedContent);
         accumulatedContent = strippedContent;
 
         // Show web search UI in the existing buffer (preserves reasoning and prior content)
