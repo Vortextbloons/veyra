@@ -9,10 +9,10 @@ import {
 import { useChatStore } from "@/stores/chat-store";
 import { useMemoryStore } from "@/stores/memory-store";
 
-const MIN_NEW_MESSAGES = 6;
-const MIN_NEW_EXCHANGES = 3;
+const MIN_NEW_MESSAGES = 4;
+const MIN_NEW_EXCHANGES = 2;
 const MAX_BATCH_MESSAGES = 16;
-const MIN_PENDING_MS = 3 * 60 * 1000;
+const MIN_PENDING_MS = 90 * 1000;
 const EPHEMERAL_TTL_DAYS = 7;
 
 type ExtractedCandidate = {

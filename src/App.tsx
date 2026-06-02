@@ -5,6 +5,7 @@ import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/components/chat-panel";
 import { RightPanel } from "@/components/right-panel";
 import { sendChatRequest } from "@/lib/chat-orchestrator";
+import { trySaveExplicitMemory } from "@/lib/explicit-memory";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { getAssistantVisibleText } from "@/lib/assistant-text";
 import { handoffAfterUserChat, queueMemoryExtractionNow, queuePostChatJobs } from "@/lib/post-chat-jobs";
@@ -223,7 +224,8 @@ function App() {
 
   const handleSend = useCallback(
     (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
-      const memoryEnabled = options?.memoryEnabled ?? false;
+      const memoryEnabled =
+        options?.memoryEnabled ?? useSettingsStore.getState().defaultMemoryEnabled;
       const trimmed = text.trim();
       const imageAttachments =
         attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
@@ -261,6 +263,8 @@ function App() {
       });
       setStreamingMessageId(assistantMessage.id);
       setRequestStatus("streaming");
+
+      void trySaveExplicitMemory(trimmed, { conversationId });
 
       // Abort any active background job to prioritize user message
       aiScheduler.abortActiveBackgroundJob();
@@ -317,10 +321,12 @@ function App() {
               },
               onComplete: (result, context) => {
                 const memoryPack = context?.memoryPack ?? null;
+                const memoryRetrieval = context?.memoryRetrieval;
                 commitAssistantMessage(conversationId, assistantMessage.id, {
                   performance: result.performance,
                   lmResponseId: result.responseId,
                   ...(memoryPack ? { memoryPack } : {}),
+                  ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
                 });
               },
             });

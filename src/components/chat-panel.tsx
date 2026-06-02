@@ -17,7 +17,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import type { ChatMessage, ChatPanelProps, MessagePerformance } from "@/lib/chat-types";
-import type { MemoryPack } from "@/lib/memory-types";
+import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import {
   fileToAttachment,
   MAX_IMAGE_ATTACHMENTS,
@@ -343,8 +343,11 @@ const MessageBubble = memo(function MessageBubble({
         {!isStreaming && message.performance && (
           <MessagePerformanceBar performance={message.performance} />
         )}
-        {!isStreaming && message.memoryPack && (
-          <MemoryUsedBadge memoryPack={message.memoryPack} />
+        {!isStreaming && (message.memoryPack || message.memoryRetrieval) && (
+          <MemoryRetrievalBadge
+            memoryPack={message.memoryPack}
+            memoryRetrieval={message.memoryRetrieval}
+          />
         )}
       </div>
     </div>
@@ -443,6 +446,47 @@ function MessagePerformanceBar({
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+function MemoryRetrievalBadge({
+  memoryPack,
+  memoryRetrieval,
+  nodeTitleLookup,
+}: {
+  memoryPack?: MemoryPack;
+  memoryRetrieval?: MemoryRetrievalInfo;
+  nodeTitleLookup?: (id: string) => string | undefined;
+}) {
+  if (memoryRetrieval?.status === "used" && memoryPack) {
+    return (
+      <MemoryUsedBadge memoryPack={memoryPack} nodeTitleLookup={nodeTitleLookup} />
+    );
+  }
+
+  const detail = memoryRetrieval?.detail ?? "Memory enabled";
+  const status = memoryRetrieval?.status ?? "empty";
+  const label =
+    status === "skipped"
+      ? "Memory skipped"
+      : status === "empty"
+        ? "No memory matched"
+        : status === "disabled"
+          ? "Memory off"
+          : "Memory";
+
+  return (
+    <div className="mt-1.5 px-1">
+      <span
+        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-text-dim)]"
+        title={detail}
+      >
+        <Brain className="size-3 shrink-0" />
+        <span>
+          {label} · {detail}
+        </span>
+      </span>
     </div>
   );
 }

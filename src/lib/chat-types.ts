@@ -1,7 +1,7 @@
 // ── Core chat types ──────────────────────────────────────────────────────────
 
 import type { MessageAttachment } from "@/lib/message-attachments";
-import type { MemoryPack } from "@/lib/memory-types";
+import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -17,6 +17,8 @@ export interface ChatMessage {
   performance?: MessagePerformance;
   /** Memory pack injected into context for this turn (only when chat Memory toggle was on) */
   memoryPack?: MemoryPack;
+  /** Outcome of memory retrieval for this turn (toggle on). */
+  memoryRetrieval?: MemoryRetrievalInfo;
 }
 
 export interface MessagePerformance {

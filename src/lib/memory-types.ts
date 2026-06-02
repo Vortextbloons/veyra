@@ -107,6 +107,15 @@ export interface MemoryPack {
   reasons: Record<string, string>;
 }
 
+/** Per-turn outcome when the user had Memory enabled (for UI + debugging). */
+export type MemoryRetrievalStatus = "disabled" | "skipped" | "empty" | "used";
+
+export interface MemoryRetrievalInfo {
+  status: MemoryRetrievalStatus;
+  detail: string;
+  pack?: MemoryPack;
+}
+
 /** Optional filter for list_memory_nodes / listMemoryNodes */
 export interface MemoryNodeFilter {
   status?: MemoryStatus[];

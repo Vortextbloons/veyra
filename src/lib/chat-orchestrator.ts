@@ -6,7 +6,8 @@ import type { ProviderChatOptions } from "@/lib/providers/types";
 import type { MemoryPack } from "@/lib/memory-types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
-import { buildMemoryPack } from "@/lib/memory-retrieval";
+import { buildMemoryPackWithInfo } from "@/lib/memory-retrieval";
+import type { MemoryRetrievalInfo } from "@/lib/memory-types";
 
 /**
  * Optional context threaded through to the chat consumer's onComplete
@@ -16,6 +17,7 @@ import { buildMemoryPack } from "@/lib/memory-retrieval";
  */
 export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;
+  memoryRetrieval: MemoryRetrievalInfo;
 }
 
 export type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
@@ -56,12 +58,14 @@ export async function sendChatRequest({
   // is sufficient — no need to thread settings through every call site.
   const settings = useSettingsStore.getState();
 
-  const memoryPack = await buildMemoryPack({
+  const { pack: memoryPack, info: memoryRetrieval } = await buildMemoryPackWithInfo({
     enabled: memoryEnabled,
     mode: settings.memoryMode,
     query: latestUserMessageText(messages),
+    messages,
     projectId,
     budget: settings.maxMemoryTokens,
+    maxNodes: settings.maxMemoryNodes,
   });
 
   // Wrap onComplete so the caller receives the same memoryPack that we
@@ -69,7 +73,7 @@ export async function sendChatRequest({
   // the orchestrator is the boundary.
   const userOnComplete = options.onComplete;
   const wrappedOnComplete: ProviderChatOptions["onComplete"] = (result) => {
-    userOnComplete?.(result, { memoryPack });
+    userOnComplete?.(result, { memoryPack, memoryRetrieval });
   };
 
   const resolvedContextLength = options.contextLength ?? settings.getModelSettings(options.model).contextLength;
