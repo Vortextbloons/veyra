@@ -136,15 +136,26 @@ function persistState(state: SettingsStoreState) {
   }
 }
 
+let settingsHydrated = false;
+let settingsHydratePromise: Promise<void> | null = null;
+
+export async function ensureSettingsHydrated(): Promise<void> {
+  if (settingsHydrated) return;
+  settingsHydratePromise ??= Promise.resolve().then(() => {
+    useSettingsStore.setState(loadState());
+    settingsHydrated = true;
+  });
+  await settingsHydratePromise;
+}
+
 export const useSettingsStore = create<SettingsStore>((set, get) => {
-  const initial = loadState();
   const apply = (patch: Partial<SettingsStoreState>) => {
     set(patch as SettingsStore);
     const next = { ...get(), ...patch } as SettingsStoreState;
     persistState(next);
   };
   return {
-    ...initial,
+    ...DEFAULT_STATE,
     setActiveNav: (activeNav) => apply({ activeNav }),
     setRecentChatsCollapsed: (recentChatsCollapsed) =>
       apply({ recentChatsCollapsed }),

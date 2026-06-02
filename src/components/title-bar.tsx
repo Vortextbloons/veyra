@@ -1,5 +1,11 @@
+import { lazy, Suspense } from "react";
 import { Minus, Square, X, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
-import { SchedulerPopover } from "@/components/scheduler/scheduler-popover";
+
+const SchedulerPopover = lazy(() =>
+  import("@/components/scheduler/scheduler-popover").then((module) => ({
+    default: module.SchedulerPopover,
+  })),
+);
 
 type TitleBarProps = {
   zoom?: number;
@@ -42,7 +48,9 @@ export function TitleBar({
       </div>
 
       <div className="flex items-center gap-2">
-        <SchedulerPopover />
+        <Suspense fallback={<span className="size-5" aria-hidden="true" />}>
+          <SchedulerPopover />
+        </Suspense>
         <span
           data-tauri-drag-region
           className="text-[12px] text-[var(--color-text-dim)]"

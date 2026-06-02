@@ -12,6 +12,15 @@ export type WebSearchSource = {
   snippet: string;
 };
 
+export type WebSearchPhase = "searching" | "reading" | "done" | "error";
+
+export type WebSearchState = {
+  query: string;
+  phase: WebSearchPhase;
+  sources: WebSearchSource[];
+  error?: string;
+};
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
@@ -28,6 +37,8 @@ export interface ChatMessage {
   memoryRetrieval?: MemoryRetrievalInfo;
   /** Sources used from web search for this turn. */
   webSearchSources?: WebSearchSource[];
+  /** Live web search state for rendering tool call UI during/after search. */
+  webSearchState?: WebSearchState;
 }
 
 export interface MessagePerformance {

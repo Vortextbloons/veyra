@@ -1,29 +1,21 @@
 import { create } from "zustand";
-import type { ChatMessage, Conversation } from "@/lib/chat-types";
+import type { ChatMessage, Conversation, WebSearchState } from "@/lib/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 
-const STORAGE_KEY = "veyra.conversations";
-
-function loadConversations(): Conversation[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as Conversation[];
-  } catch {
-    return [];
-  }
-}
+export type ConversationHydrationState = "loading" | "ready";
 
 type StreamingBuffer = {
   conversationId: string;
   messageId: string;
   content: string;
   reasoning: string;
+  webSearchState?: WebSearchState;
 } | null;
 
 type ChatStore = {
   conversations: Conversation[];
   activeConversationId: string | null;
+  hydrationState: ConversationHydrationState;
   streamingBuffer: StreamingBuffer;
   hydrateConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
@@ -39,6 +31,12 @@ type ChatStore = {
   appendStreamingContent: (conversationId: string, messageId: string, chunk: string) => void;
   appendStreamingReasoning: (conversationId: string, messageId: string, chunk: string) => void;
   clearStreamingBuffer: () => void;
+  clearStreamingBufferUnlessSkipped: () => void;
+  isBufferClearSkipped: () => boolean;
+  skipNextBufferClear: () => void;
+  resetAfterRePrompt: () => void;
+  setStreamingBufferContent: (content: string) => void;
+  setStreamingWebSearchState: (state: WebSearchState) => void;
   commitAssistantMessage: (
     conversationId: string,
     messageId: string,
@@ -65,15 +63,27 @@ function newConversation(): Conversation {
   };
 }
 
-const initialConversations = loadConversations();
+let hydratePromise: Promise<void> | null = null;
 
-export const useChatStore = create<ChatStore>((set) => ({
-  conversations: initialConversations,
-  activeConversationId: initialConversations[0]?.id ?? null,
+export const useChatStore = create<ChatStore>((set, get) => ({
+  conversations: [],
+  activeConversationId: null,
+  hydrationState: "loading",
   streamingBuffer: null,
+  _skipNextClear: false,
   hydrateConversations: async () => {
-    const conversations = await loadConversationSnapshot();
-    set({ conversations, activeConversationId: conversations[0]?.id ?? null });
+    if (get().hydrationState === "ready") return;
+    hydratePromise ??= (async () => {
+      const conversations = await loadConversationSnapshot();
+      set({
+        conversations,
+        activeConversationId: conversations[0]?.id ?? null,
+        hydrationState: "ready",
+      });
+    })().finally(() => {
+      hydratePromise = null;
+    });
+    await hydratePromise;
   },
   setActiveConversationId: (id) => set({ activeConversationId: id }),
   createConversation: () => {
@@ -153,7 +163,29 @@ export const useChatStore = create<ChatStore>((set) => ({
       return { streamingBuffer: { ...current, reasoning: current.reasoning + chunk } };
     });
   },
-  clearStreamingBuffer: () => set({ streamingBuffer: null }),
+  clearStreamingBuffer: () => set({ streamingBuffer: null, _skipNextClear: false }),
+  clearStreamingBufferUnlessSkipped: () => {
+    if (get()._skipNextClear) {
+      set({ _skipNextClear: false });
+      return;
+    }
+    set({ streamingBuffer: null });
+  },
+  isBufferClearSkipped: () => get()._skipNextClear,
+  skipNextBufferClear: () => set({ _skipNextClear: true }),
+  resetAfterRePrompt: () => set({ streamingBuffer: null, _skipNextClear: false }),
+  setStreamingBufferContent: (content) => {
+    set((state) => {
+      if (!state.streamingBuffer) return state;
+      return { streamingBuffer: { ...state.streamingBuffer, content } };
+    });
+  },
+  setStreamingWebSearchState: (webSearchState) => {
+    set((state) => {
+      if (!state.streamingBuffer) return state;
+      return { streamingBuffer: { ...state.streamingBuffer, webSearchState } };
+    });
+  },
   commitAssistantMessage: (conversationId, messageId, patch = {}) => {
     set((state) => {
       const buffer =
@@ -173,6 +205,7 @@ export const useChatStore = create<ChatStore>((set) => ({
                   ...patch,
                   content: patch.content ?? buffer?.content ?? message.content,
                   reasoning: patch.reasoning ?? buffer?.reasoning ?? message.reasoning,
+                  webSearchState: patch.webSearchState ?? buffer?.webSearchState ?? message.webSearchState,
                 }
               : message,
           ),

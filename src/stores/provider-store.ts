@@ -5,10 +5,18 @@ import { getInitialProviders, getProviderAdapter } from "@/lib/providers";
 export type ProviderConnectionPhase = "idle" | "connecting" | "error";
 
 const PROVIDER_STORAGE_KEY = "veyra.provider.v1";
+const MODEL_CACHE_KEY = "veyra.models.cache.v1";
+const MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type ProviderPrefs = {
   selectedProvider: string;
   selectedModelByProvider: Record<string, string>;
+};
+
+type ModelCacheEntry = {
+  providerId: string;
+  models: ModelInfo[];
+  cachedAt: number;
 };
 
 const DEFAULT_PREFS: ProviderPrefs = {
@@ -38,6 +46,32 @@ function savePrefs(prefs: ProviderPrefs): void {
   }
 }
 
+function loadCachedModels(providerId: string): ModelInfo[] | null {
+  try {
+    const raw = localStorage.getItem(MODEL_CACHE_KEY);
+    if (!raw) return null;
+    const entries = JSON.parse(raw) as ModelCacheEntry[];
+    const entry = entries.find((item) => item.providerId === providerId);
+    if (!entry) return null;
+    if (Date.now() - entry.cachedAt > MODEL_CACHE_TTL_MS) return null;
+    return entry.models;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedModels(providerId: string, models: ModelInfo[]): void {
+  try {
+    const raw = localStorage.getItem(MODEL_CACHE_KEY);
+    const entries = raw ? (JSON.parse(raw) as ModelCacheEntry[]) : [];
+    const next = entries.filter((item) => item.providerId !== providerId);
+    next.push({ providerId, models, cachedAt: Date.now() });
+    localStorage.setItem(MODEL_CACHE_KEY, JSON.stringify(next));
+  } catch {
+    // storage unavailable
+  }
+}
+
 function resolveModelId(models: ModelInfo[], preferredId: string): string {
   if (preferredId && models.some((model) => model.id === preferredId)) {
     return preferredId;
@@ -58,7 +92,13 @@ function persistModelChoice(providerId: string, modelId: string): void {
 }
 
 const initialPrefs = loadPrefs();
+const initialCachedModels = loadCachedModels(initialPrefs.selectedProvider);
+const initialSelectedModel = initialCachedModels?.length
+  ? resolveModelId(initialCachedModels, preferredModelForProvider(initialPrefs.selectedProvider))
+  : preferredModelForProvider(initialPrefs.selectedProvider);
+
 let providerRequestSeq = 0;
+let providerReadyPromise: Promise<void> | null = null;
 
 type ProviderStore = {
   providers: ProviderInfo[];
@@ -67,7 +107,8 @@ type ProviderStore = {
   selectedModel: string;
   connectionPhase: ProviderConnectionPhase;
   connectionError: string | null;
-  initializeProvider: () => Promise<void>;
+  initializeProvider: () => void;
+  ensureProviderReady: () => Promise<void>;
   selectProvider: (providerId: string) => Promise<void>;
   reconnectProvider: (providerId?: string) => Promise<void>;
   startProviderServer: (providerId?: string) => Promise<void>;
@@ -103,62 +144,107 @@ function applyFetchedModels(
   models: ModelInfo[],
   currentModelId: string,
 ): string {
-  const preferred =
-    currentModelId || preferredModelForProvider(providerId);
+  const preferred = currentModelId || preferredModelForProvider(providerId);
   const selectedModel = resolveModelId(models, preferred);
   persistModelChoice(providerId, selectedModel);
+  saveCachedModels(providerId, models);
   return selectedModel;
+}
+
+async function fetchProviderModels(providerId: string, currentModelId: string): Promise<void> {
+  const requestId = ++providerRequestSeq;
+  const preferred = preferredModelForProvider(providerId);
+
+  useProviderStore.setState({
+    selectedProvider: providerId,
+    selectedModel: preferred || currentModelId,
+    connectionPhase: "idle",
+    connectionError: null,
+  });
+
+  savePrefs({
+    selectedProvider: providerId,
+    selectedModelByProvider: {
+      ...loadPrefs().selectedModelByProvider,
+      ...(preferred ? { [providerId]: preferred } : {}),
+    },
+  });
+
+  const { available } = await syncProviderConnection(providerId, {});
+  const adapter = getProviderAdapter(providerId);
+  if (requestId !== providerRequestSeq || useProviderStore.getState().selectedProvider !== providerId) {
+    return;
+  }
+
+  useProviderStore.setState((state) => ({
+    providers: state.providers.map((provider) =>
+      provider.id === providerId
+        ? { ...provider, status: available ? "connected" : "disconnected" }
+        : provider,
+    ),
+  }));
+
+  if (!available || !adapter) return;
+
+  const models = await adapter.fetchModels();
+  if (requestId !== providerRequestSeq || useProviderStore.getState().selectedProvider !== providerId) {
+    return;
+  }
+  const selectedModel = applyFetchedModels(providerId, models, useProviderStore.getState().selectedModel);
+  useProviderStore.setState({ models, selectedModel });
 }
 
 export const useProviderStore = create<ProviderStore>((set, get) => ({
   providers: getInitialProviders(),
   selectedProvider: initialPrefs.selectedProvider,
-  models: [],
-  selectedModel: preferredModelForProvider(initialPrefs.selectedProvider),
+  models: initialCachedModels ?? [],
+  selectedModel: initialSelectedModel,
   connectionPhase: "idle",
   connectionError: null,
 
-  initializeProvider: async () => {
-    await get().selectProvider(get().selectedProvider);
+  initializeProvider: () => {
+    const providerId = get().selectedProvider;
+    const cached = loadCachedModels(providerId);
+    if (!cached?.length) return;
+    const selectedModel = resolveModelId(cached, get().selectedModel);
+    set({ models: cached, selectedModel });
+  },
+
+  ensureProviderReady: async () => {
+    const providerId = get().selectedProvider;
+    const cached = loadCachedModels(providerId);
+    if (cached?.length) {
+      const selectedModel = resolveModelId(cached, get().selectedModel);
+      set({ models: cached, selectedModel });
+      return;
+    }
+
+    if (providerReadyPromise) {
+      await providerReadyPromise;
+      return;
+    }
+
+    providerReadyPromise = fetchProviderModels(providerId, get().selectedModel).finally(() => {
+      providerReadyPromise = null;
+    });
+    await providerReadyPromise;
   },
 
   selectProvider: async (providerId) => {
-    const requestId = ++providerRequestSeq;
+    providerRequestSeq += 1;
+    const cached = loadCachedModels(providerId);
     const preferred = preferredModelForProvider(providerId);
-
     set({
       selectedProvider: providerId,
       selectedModel: preferred,
-      models: [],
+      models: cached ?? [],
       connectionPhase: "idle",
       connectionError: null,
     });
-
-    savePrefs({
-      selectedProvider: providerId,
-      selectedModelByProvider: {
-        ...loadPrefs().selectedModelByProvider,
-        ...(preferred ? { [providerId]: preferred } : {}),
-      },
+    providerReadyPromise = fetchProviderModels(providerId, preferred).finally(() => {
+      providerReadyPromise = null;
     });
-
-    const { available } = await syncProviderConnection(providerId, {});
-    const adapter = getProviderAdapter(providerId);
-    if (requestId !== providerRequestSeq || get().selectedProvider !== providerId) return;
-
-    set((state) => ({
-      providers: state.providers.map((provider) =>
-        provider.id === providerId
-          ? { ...provider, status: available ? "connected" : "disconnected" }
-          : provider,
-      ),
-    }));
-
-    if (!available || !adapter) return;
-    const models = await adapter.fetchModels();
-    if (requestId !== providerRequestSeq || get().selectedProvider !== providerId) return;
-    const selectedModel = applyFetchedModels(providerId, models, get().selectedModel);
-    set({ models, selectedModel });
+    await providerReadyPromise;
   },
 
   reconnectProvider: async (providerId) => {

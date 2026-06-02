@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Conversation } from "@/lib/chat-types";
+import DecryptWorker from "@/workers/conversation-decrypt.worker?worker";
 
 const STORAGE_KEY = "veyra.conversations";
 const ENCRYPTION_VERSION = 1;
@@ -8,6 +9,7 @@ const KEY_SALT = "veyra-conversations";
 const KEY_BYTES = 32;
 
 let encryptionKeyPromise: Promise<CryptoKey> | null = null;
+let decryptWorker: Worker | null = null;
 
 type EncryptedSnapshot = {
   version: number;
@@ -74,23 +76,52 @@ async function getLegacyEncryptionKey(): Promise<CryptoKey> {
   );
 }
 
-async function encryptSnapshot(conversations: Conversation[]): Promise<string> {
-  const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    await getEncryptionKey(),
-    encoder.encode(JSON.stringify(conversations)),
-  );
+async function getKeyBytesForWorker(): Promise<ArrayBuffer> {
+  let key = await invoke<string>("load_or_create_conversation_key");
+  if (!key) {
+    key = bytesToBase64(crypto.getRandomValues(new Uint8Array(KEY_BYTES)));
+    await invoke("save_conversation_key", { key });
+  }
+  const bytes = base64ToBytes(key);
+  if (bytes.byteLength !== KEY_BYTES) throw new Error("Invalid conversation key");
+  return toArrayBuffer(bytes);
+}
 
-  return JSON.stringify({
-    version: ENCRYPTION_VERSION,
-    iv: bytesToBase64(iv),
-    data: bytesToBase64(new Uint8Array(encrypted)),
-  } satisfies EncryptedSnapshot);
+function getDecryptWorker(): Worker {
+  decryptWorker ??= new DecryptWorker();
+  return decryptWorker;
 }
 
 async function decryptSnapshot(raw: string): Promise<Conversation[]> {
+  try {
+    const keyBytes = await getKeyBytesForWorker();
+    const worker = getDecryptWorker();
+    return await new Promise<Conversation[]>((resolve, reject) => {
+      const handler = (event: MessageEvent<{ ok: boolean; conversations?: Conversation[]; error?: string }>) => {
+        worker.removeEventListener("message", handler);
+        if (event.data.ok && event.data.conversations) {
+          resolve(event.data.conversations);
+          return;
+        }
+        reject(new Error(event.data.error ?? "decrypt failed"));
+      };
+      worker.addEventListener("message", handler);
+      worker.postMessage(
+        {
+          raw,
+          keyBytes,
+          legacyKeyMaterial: KEY_MATERIAL,
+          legacySalt: KEY_SALT,
+        },
+        [keyBytes],
+      );
+    });
+  } catch {
+    return decryptSnapshotOnMainThread(raw);
+  }
+}
+
+async function decryptSnapshotOnMainThread(raw: string): Promise<Conversation[]> {
   const parsed = JSON.parse(raw) as EncryptedSnapshot | Conversation[];
   if (Array.isArray(parsed)) return parsed;
   const iv = base64ToBytes(parsed.iv);
@@ -112,6 +143,22 @@ async function decryptSnapshot(raw: string): Promise<Conversation[]> {
   }
 
   return JSON.parse(new TextDecoder().decode(decrypted)) as Conversation[];
+}
+
+async function encryptSnapshot(conversations: Conversation[]): Promise<string> {
+  const encoder = new TextEncoder();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    await getEncryptionKey(),
+    encoder.encode(JSON.stringify(conversations)),
+  );
+
+  return JSON.stringify({
+    version: ENCRYPTION_VERSION,
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(new Uint8Array(encrypted)),
+  } satisfies EncryptedSnapshot);
 }
 
 async function saveFallback(conversations: Conversation[]) {

@@ -10,7 +10,12 @@ import { buildMemoryPackWithInfo } from "@/lib/memory-retrieval";
 import type { MemoryRetrievalInfo } from "@/lib/memory-types";
 import { parseWebSearchToolCall } from "@/modules/web-search/tools/webSearchTool";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
-import { buildWebSearchHintBlock } from "@/lib/prompts";
+import { buildToolsBlock } from "@/lib/tool-registry";
+
+function stripToolCallFromContent(content: string): string {
+  const regex = /\{[\s\S]*?"tool"\s*:\s*"web\.search"[\s\S]*?"args"\s*:\s*\{[\s\S]*?"query"\s*:\s*"[^"]*"[\s\S]*?\}[\s\S]*?\}/;
+  return content.replace(regex, "").replace(/\n{3,}/g, "\n\n").trim();
+}
 
 /**
  * Optional context threaded through to the chat consumer's onComplete
@@ -87,28 +92,40 @@ export async function sendChatRequest({
 
       if (toolCall) {
         isRePrompt = true;
+        const chatStore = useChatStore.getState();
+
+        // Prevent the App.tsx finally block from clearing the buffer
+        chatStore.skipNextBufferClear();
+
+        // Strip tool call JSON from accumulated content for re-prompt context
+        const strippedContent = stripToolCallFromContent(accumulatedContent);
+        accumulatedContent = strippedContent;
+
+        // Show web search UI in the existing buffer (preserves reasoning and prior content)
+        chatStore.setStreamingWebSearchState({
+          query: toolCall.args.query,
+          phase: "searching",
+          sources: [],
+        });
 
         void (async () => {
           try {
-            // Clear the tool-call JSON and show searching progress
-            useChatStore.getState().clearStreamingBuffer();
-            options.onChunk(`Searching the web for: "${toolCall.args.query}"…`, false);
-
             const searchBundle = await runSearch(toolCall.args.query);
             const contextBlock = buildSearchContextBlock(searchBundle);
 
-            // Update progress with result count
-            useChatStore.getState().clearStreamingBuffer();
-            options.onChunk(
-              `Found ${searchBundle.sources.length} sources. Reading…`,
-              false,
-            );
+            const searchSources: WebSearchSource[] = searchBundle.sources.map((s) => ({
+              id: s.id,
+              title: s.title,
+              url: s.url,
+              snippet: s.snippet,
+            }));
 
-            // Brief pause so the user sees the progress
-            await new Promise((r) => setTimeout(r, 600));
-
-            // Clear progress and start streaming the final answer
-            useChatStore.getState().clearStreamingBuffer();
+            // Update to reading phase with sources
+            chatStore.setStreamingWebSearchState({
+              query: toolCall.args.query,
+              phase: "reading",
+              sources: searchSources,
+            });
 
             const rePromptMessages: ChatMessage[] = [
               ...messages,
@@ -121,7 +138,7 @@ export async function sendChatRequest({
               {
                 id: crypto.randomUUID(),
                 role: "user",
-                content: `Here are the web search results for "${toolCall.args.query}". Please answer the original question using these sources. Cite URLs when referencing search results.`,
+                content: `Here are the web search results for "${toolCall.args.query}". Answer using this information. Sources are displayed separately — do not list or cite URLs.`,
                 timestamp: Date.now(),
               },
             ];
@@ -131,21 +148,24 @@ export async function sendChatRequest({
               ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
               : undefined;
 
-            const searchSources: WebSearchSource[] = searchBundle.sources.map((s) => ({
-              id: s.id,
-              title: s.title,
-              url: s.url,
-              snippet: s.snippet,
-            }));
-
+            // Re-prompt — chunks stream into the same buffer
             await provider.sendChat({
               ...options,
               previousResponseId: undefined,
               onChunk: options.onChunk,
+              onReasoningChunk: options.onReasoningChunk,
               temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
               contextLength: resolvedContextLength,
               onComplete: (rePromptResult) => {
+                // Mark search as done
+                useChatStore.getState().setStreamingWebSearchState({
+                  query: toolCall.args.query,
+                  phase: "done",
+                  sources: searchSources,
+                });
                 userOnComplete?.(rePromptResult, { memoryPack, memoryRetrieval, webSearchSources: searchSources });
+                // Clean up streaming state after re-prompt completes
+                useChatStore.getState().resetAfterRePrompt();
               },
               messages: buildChatContext(
                 rePromptMessages,
@@ -160,11 +180,15 @@ export async function sendChatRequest({
             });
           } catch (searchError) {
             console.error("[WebSearch] Search failed:", searchError);
-            // Clear the tool-call JSON and show a user-facing error message
-            useChatStore.getState().clearStreamingBuffer();
-            const errorMsg = searchError instanceof Error ? searchError.message : String(searchError);
-            options.onChunk(`Web search failed: ${errorMsg}`, false);
+            useChatStore.getState().setStreamingWebSearchState({
+              query: toolCall.args.query,
+              phase: "error",
+              sources: [],
+              error: searchError instanceof Error ? searchError.message : String(searchError),
+            });
             userOnComplete?.(result, { memoryPack, memoryRetrieval });
+            // Clean up streaming state after error
+            useChatStore.getState().resetAfterRePrompt();
           }
         })();
         return;
@@ -192,7 +216,7 @@ export async function sendChatRequest({
         memoryPack: memoryPack ?? null,
         conversationSummary: conversation?.conversationSummary,
         summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
-        webSearchHintBlock: webSearchEnabled ? buildWebSearchHintBlock() : undefined,
+        toolsBlock: buildToolsBlock(settings),
       },
       resolvedContextLength,
     ),

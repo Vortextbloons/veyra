@@ -16,8 +16,10 @@ import {
   X,
   ImageIcon,
   Globe,
+  Search,
+  ExternalLink,
 } from "lucide-react";
-import type { ChatMessage, ChatPanelProps, MessagePerformance } from "@/lib/chat-types";
+import type { ChatMessage, ChatPanelProps, MessagePerformance, WebSearchState } from "@/lib/chat-types";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import {
   fileToAttachment,
@@ -28,6 +30,7 @@ import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
 import { ProviderConnectionBanner } from "@/components/provider-connection-banner";
 import { ProviderSelector } from "@/components/provider-selector";
 import { ModelSelector, type Model } from "@/components/model-selector";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Toggle } from "@/components/toggle";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
@@ -295,16 +298,19 @@ const MessageBubble = memo(function MessageBubble({
               <MessageAttachmentsPreview attachments={message.attachments} />
             )}
             {message.content.trim() && (
-              <p className="m-0 whitespace-pre-wrap leading-snug">
+              <MarkdownRenderer className="leading-snug">
                 {message.content.trim()}
-              </p>
+              </MarkdownRenderer>
             )}
           </div>
         </div>
       </div>
     );
   }
-  const body = message.content.trim();
+  const rawBody = message.content.trim();
+  const body = message.webSearchState
+    ? rawBody.replace(/\{[\s\S]*?"tool"\s*:\s*"web\.search"[\s\S]*?"args"\s*:\s*\{[\s\S]*?"query"\s*:\s*"[^"]*"[\s\S]*?\}[\s\S]*?\}/, "").replace(/\n{3,}/g, "\n\n").trim()
+    : rawBody;
   const reasoning = message.reasoning?.trim() ?? "";
   const hasReasoning = reasoning.length > 0;
   const reasoningOnlyStreaming = isStreaming && hasReasoning && !body;
@@ -329,16 +335,19 @@ const MessageBubble = memo(function MessageBubble({
             messageTextClass={layout.messageText}
           />
         )}
+        {message.webSearchState && (
+          <WebSearchToolCallBlock state={message.webSearchState} />
+        )}
         {showReplyBubble && (
         <div
           className={`rounded-2xl rounded-tl-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-2.5 text-[var(--color-text)] shadow-[0_1px_0_rgba(255,255,255,0.03)_inset transition-[font-size] duration-200 ease-out ${layout.messageText}`}
         >
-          <p className="m-0 whitespace-pre-wrap leading-snug">
+          <MarkdownRenderer className="leading-snug">
             {body}
-            {showPulseInReply && (
-              <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
-            )}
-          </p>
+          </MarkdownRenderer>
+          {showPulseInReply && (
+            <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
+          )}
         </div>
         )}
         {!isStreaming && message.performance && (
@@ -350,7 +359,7 @@ const MessageBubble = memo(function MessageBubble({
             memoryRetrieval={message.memoryRetrieval}
           />
         )}
-        {!isStreaming && message.webSearchSources && message.webSearchSources.length > 0 && (
+        {!isStreaming && !message.webSearchState && message.webSearchSources && message.webSearchSources.length > 0 && (
           <WebSearchSourcesBadge sources={message.webSearchSources} />
         )}
       </div>
@@ -700,6 +709,97 @@ function WebSearchSourcesBadge({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WebSearchToolCallBlock({ state }: { state: WebSearchState }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const isSearching = state.phase === "searching";
+  const isError = state.phase === "error";
+
+  const phaseLabel = isSearching
+    ? "Searching…"
+    : state.phase === "reading"
+      ? `Reading ${state.sources.length} source${state.sources.length !== 1 ? "s" : ""}…`
+      : isError
+        ? "Search failed"
+        : `${state.sources.length} source${state.sources.length !== 1 ? "s" : ""} found`;
+
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/[0.06] px-3 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/[0.09]"
+      >
+        <div className="flex size-5 shrink-0 items-center justify-center rounded bg-cyan-500/20">
+          {isSearching ? (
+            <Loader2 className="size-3 animate-spin text-cyan-400" />
+          ) : isError ? (
+            <X className="size-3 text-red-400" />
+          ) : (
+            <Search className="size-3 text-cyan-400" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="text-[11.5px] font-medium text-cyan-300">
+            Web Search
+          </span>
+          <span className="mx-1.5 text-[10px] text-[var(--color-text-dim)]/40">·</span>
+          <span className="text-[11.5px] text-[var(--color-text-dim)]">
+            {phaseLabel}
+          </span>
+        </div>
+        <span className="shrink-0 text-[10.5px] text-[var(--color-text-dim)]/60 truncate max-w-[200px]">
+          {state.query}
+        </span>
+        <ChevronDown
+          className={`size-3 shrink-0 text-[var(--color-text-dim)]/50 transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {expanded && state.sources.length > 0 && (
+        <div className="mt-1 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]/50">
+          <ul className="m-0 list-none divide-y divide-[var(--color-border)] p-0">
+            {state.sources.map((source, i) => (
+              <li key={source.id} className="px-3 py-2">
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 font-mono text-[10px] text-[var(--color-text-dim)]/60">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group/link inline-flex items-center gap-1 text-[12px] font-medium text-white hover:text-cyan-300"
+                    >
+                      <span className="truncate">{source.title}</span>
+                      <ExternalLink className="size-3 shrink-0 opacity-0 transition-opacity group-hover/link:opacity-100" />
+                    </a>
+                    <div className="mt-0.5 truncate text-[10.5px] text-[var(--color-accent)]/70">
+                      {source.url}
+                    </div>
+                    {source.snippet && (
+                      <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-dim)]">
+                        {source.snippet}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {expanded && isError && state.error && (
+        <div className="mt-1 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-3 py-2 text-[11.5px] text-red-300">
+          {state.error}
         </div>
       )}
     </div>

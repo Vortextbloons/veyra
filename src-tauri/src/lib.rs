@@ -1,4 +1,5 @@
 use std::fs;
+use std::sync::Arc;
 use tauri::Manager;
 
 mod memory_commands;
@@ -65,6 +66,14 @@ fn load_conversations(app: tauri::AppHandle) -> Result<String, String> {
     fs::read_to_string(path).map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn app_ready(app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -75,6 +84,7 @@ pub fn run() {
             load_conversations,
             load_or_create_conversation_key,
             save_conversation_key,
+            app_ready,
             memory_commands::list_memory_folders,
             memory_commands::list_memory_files,
             memory_commands::list_memory_nodes,
@@ -91,8 +101,9 @@ pub fn run() {
             searxng_setup::stop_searxng_container,
         ])
         .setup(|app| {
-            let db = memory_db::MemoryDb::init(app.handle())?;
-            app.manage(db);
+            let db_state = Arc::new(memory_db::MemoryDbState::new(app.handle().clone()));
+            db_state.spawn_background_init();
+            app.manage(db_state);
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

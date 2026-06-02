@@ -2,6 +2,7 @@ use parking_lot::Mutex;
 use rusqlite::{params_from_iter, types::Value, Connection};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::sync::Arc;
 use tauri::Manager;
 
 pub struct MemoryDb(pub Mutex<Connection>);
@@ -280,8 +281,11 @@ CREATE TABLE IF NOT EXISTS memory_extraction_batches (
 );
 "#;
 
+const SCHEMA_VERSION: i64 = 1;
+
 impl MemoryDb {
     pub fn init(app: &tauri::AppHandle) -> Result<Self, String> {
+        let start = std::time::Instant::now();
         let dir = app
             .path()
             .app_data_dir()
@@ -291,31 +295,85 @@ impl MemoryDb {
         let db_path = dir.join("veyra.sqlite");
         let conn = Connection::open(&db_path)
             .map_err(|e| format!("failed to open sqlite at {:?}: {}", db_path, e))?;
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")
-            .map_err(|e| format!("failed to set pragmas: {}", e))?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA foreign_keys = ON;
+             PRAGMA cache_size = -64000;
+             PRAGMA mmap_size = 268435456;",
+        )
+        .map_err(|e| format!("failed to set pragmas: {}", e))?;
         run_migrations(&conn)?;
+        if cfg!(debug_assertions) {
+            log::info!(
+                "MemoryDb::init completed in {}ms",
+                start.elapsed().as_millis()
+            );
+        }
         Ok(MemoryDb(Mutex::new(conn)))
     }
 }
 
+pub struct MemoryDbState {
+    app: tauri::AppHandle,
+    db: Mutex<Option<Result<Arc<MemoryDb>, String>>>,
+}
+
+impl MemoryDbState {
+    pub fn new(app: tauri::AppHandle) -> Self {
+        Self {
+            app,
+            db: Mutex::new(None),
+        }
+    }
+
+    pub fn spawn_background_init(self: &std::sync::Arc<Self>) {
+        let state = std::sync::Arc::clone(self);
+        std::thread::spawn(move || {
+            let _ = state.with_connection(|_| Ok(()));
+        });
+    }
+
+    pub fn with_connection<F, T>(&self, f: F) -> Result<T, String>
+    where
+        F: FnOnce(&Connection) -> Result<T, String>,
+    {
+        let db = {
+            let mut slot = self.db.lock();
+            if slot.is_none() {
+                *slot = Some(MemoryDb::init(&self.app).map(Arc::new));
+            }
+            match slot.as_ref().unwrap() {
+                Ok(db) => Arc::clone(db),
+                Err(error) => return Err(error.clone()),
+            }
+        };
+        let guard = db.0.lock();
+        f(&guard)
+    }
+}
+
 fn run_migrations(conn: &Connection) -> Result<(), String> {
-    conn.execute_batch(SCHEMA)
-        .map_err(|e| format!("schema migration failed: {}", e))?;
-
-    add_column_if_missing(conn, "memory_nodes", "priority", "TEXT NOT NULL DEFAULT 'medium'")?;
-    add_column_if_missing(conn, "memory_nodes", "expires_at", "TEXT")?;
-    add_column_if_missing(conn, "memory_nodes", "source_message_ids", "TEXT NOT NULL DEFAULT '[]'")?;
-    add_column_if_missing(conn, "memory_nodes", "extraction_batch_id", "TEXT")?;
-    add_column_if_missing(conn, "memory_nodes", "duplicate_of", "TEXT")?;
-    add_column_if_missing(conn, "memory_nodes", "contradiction_of", "TEXT")?;
-
     let schema_version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap_or(0);
-    if schema_version < 1 {
-        conn.execute_batch("INSERT INTO memory_nodes_fts(memory_nodes_fts) VALUES('rebuild');")
-            .map_err(|e| format!("fts rebuild failed: {}", e))?;
-        conn.execute_batch("PRAGMA user_version = 1;")
+
+    if schema_version < SCHEMA_VERSION {
+        conn.execute_batch(SCHEMA)
+            .map_err(|e| format!("schema migration failed: {}", e))?;
+
+        add_column_if_missing(conn, "memory_nodes", "priority", "TEXT NOT NULL DEFAULT 'medium'")?;
+        add_column_if_missing(conn, "memory_nodes", "expires_at", "TEXT")?;
+        add_column_if_missing(conn, "memory_nodes", "source_message_ids", "TEXT NOT NULL DEFAULT '[]'")?;
+        add_column_if_missing(conn, "memory_nodes", "extraction_batch_id", "TEXT")?;
+        add_column_if_missing(conn, "memory_nodes", "duplicate_of", "TEXT")?;
+        add_column_if_missing(conn, "memory_nodes", "contradiction_of", "TEXT")?;
+
+        if schema_version < 1 {
+            conn.execute_batch("INSERT INTO memory_nodes_fts(memory_nodes_fts) VALUES('rebuild');")
+                .map_err(|e| format!("fts rebuild failed: {}", e))?;
+        }
+
+        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))
             .map_err(|e| format!("set schema version failed: {}", e))?;
     }
 

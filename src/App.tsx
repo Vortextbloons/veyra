@@ -4,19 +4,21 @@ import { PrimarySidebar } from "@/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/components/chat-panel";
 import { RightPanel } from "@/components/right-panel";
-import { sendChatRequest } from "@/lib/chat-orchestrator";
-import { trySaveExplicitMemory } from "@/lib/explicit-memory";
 import { aiScheduler } from "@/lib/ai-scheduler";
-import { getAssistantVisibleText } from "@/lib/assistant-text";
-import { handoffAfterUserChat, queueMemoryExtractionNow, queuePostChatJobs } from "@/lib/post-chat-jobs";
-import { prepareUserChatModel } from "@/lib/lm-model-session";
+import { executeChatSend, ensureProviderReady, triggerMemoryExtractionNow } from "@/lib/chat-actions";
 import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
 import { isChatModeNav } from "@/lib/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { getContextStats } from "@/lib/context";
+import {
+  deferUntilIdle,
+  emitAppReady,
+  logStartupDuration,
+  markStartup,
+} from "@/lib/startup";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
-import { useSettingsStore } from "@/stores/settings-store";
+import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
 import { invokeCheckSearxngSetup, invokeStartSearxngContainer, invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
 
 const ZOOM_MIN = 0.7;
@@ -52,14 +54,17 @@ function applyZoom(zoom: number) {
   document.documentElement.style.setProperty("--ui-zoom", z);
 }
 
-function deferUntilIdle(callback: () => void): () => void {
-  if ("requestIdleCallback" in window) {
-    const id = window.requestIdleCallback(callback, { timeout: 500 });
-    return () => window.cancelIdleCallback(id);
-  }
-
-  const id = setTimeout(callback, 0);
-  return () => clearTimeout(id);
+function ChatHydrationSkeleton() {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-3 p-6">
+      <div className="h-6 w-48 animate-pulse rounded bg-white/5" />
+      <div className="mt-4 flex flex-1 flex-col gap-3">
+        <div className="h-16 w-2/3 animate-pulse rounded-xl bg-white/5" />
+        <div className="ml-auto h-16 w-1/2 animate-pulse rounded-xl bg-white/5" />
+        <div className="h-16 w-3/5 animate-pulse rounded-xl bg-white/5" />
+      </div>
+    </div>
+  );
 }
 
 function App() {
@@ -70,8 +75,8 @@ function App() {
 
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
+  const hydrationState = useChatStore((state) => state.hydrationState);
   const streamingBuffer = useChatStore((state) => state.streamingBuffer);
-  const hydrateConversations = useChatStore((state) => state.hydrateConversations);
   const createConversation = useChatStore((state) => state.createConversation);
   const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
@@ -80,6 +85,7 @@ function App() {
   const appendStreamingContent = useChatStore((state) => state.appendStreamingContent);
   const appendStreamingReasoning = useChatStore((state) => state.appendStreamingReasoning);
   const clearStreamingBuffer = useChatStore((state) => state.clearStreamingBuffer);
+  const clearStreamingBufferUnlessSkipped = useChatStore((state) => state.clearStreamingBufferUnlessSkipped);
   const commitAssistantMessage = useChatStore((state) => state.commitAssistantMessage);
 
   const providers = useProviderStore((state) => state.providers);
@@ -138,20 +144,32 @@ function App() {
   }, []);
 
   useEffect(() => {
-    void hydrateConversations();
-    return deferUntilIdle(() => {
-      void initializeProvider();
-    });
-  }, [hydrateConversations, initializeProvider]);
+    markStartup("veyra:app-mounted");
+    logStartupDuration("veyra:main-start", "veyra:app-mounted", "main-to-mount");
+  }, []);
 
-  // Auto-setup SearXNG via Docker on first launch.
-  // Starts the container on mount; stops it on unmount (app close) only if
-  // *we* started it — if it was already running we leave it alone.
+  useEffect(() => {
+    void (async () => {
+      await ensureSettingsHydrated();
+      await useChatStore.getState().hydrateConversations();
+      markStartup("veyra:hydration-ready");
+      logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
+      initializeProvider();
+      await emitAppReady();
+    })();
+
+    return deferUntilIdle(() => {
+      void ensureProviderReady();
+    }, 3000);
+  }, [initializeProvider]);
+
+  // Auto-setup SearXNG via Docker — deferred so it does not compete with first paint.
   useEffect(() => {
     let cancelled = false;
     let startedByUs = false;
 
-    void (async () => {
+    const cancelIdle = deferUntilIdle(() => {
+      void (async () => {
       try {
         const status = await invokeCheckSearxngSetup();
         if (cancelled) return;
@@ -172,10 +190,12 @@ function App() {
       } catch (err) {
         console.warn("[SearXNG] Auto-setup skipped:", err);
       }
-    })();
+      })();
+    }, 5000);
 
     return () => {
       cancelled = true;
+      cancelIdle();
       if (startedByUs) {
         // Fire-and-forget stop — app is closing, don't await
         invokeStopSearxngContainer().catch(() => {});
@@ -198,6 +218,7 @@ function App() {
             ...message,
             content: streamingBuffer.content,
             reasoning: streamingBuffer.reasoning || message.reasoning,
+            webSearchState: streamingBuffer.webSearchState ?? message.webSearchState,
           }
         : message,
     );
@@ -304,8 +325,6 @@ function App() {
       setStreamingMessageId(assistantMessage.id);
       setRequestStatus("streaming");
 
-      void trySaveExplicitMemory(trimmed, { conversationId });
-
       // Abort any active background job to prioritize user message
       aiScheduler.abortActiveBackgroundJob();
 
@@ -319,32 +338,18 @@ function App() {
         model: selectedModel,
         run: async (signal) => {
           try {
-            await prepareUserChatModel(selectedModel, signal);
+            await ensureProviderReady();
 
-            const liveConversation = useChatStore
-              .getState()
-              .conversations.find((item) => item.id === conversationId);
-            const userMessageIndex =
-              liveConversation?.messages.findIndex((message) => message.id === userMessage.id) ?? -1;
-            const messages =
-              userMessageIndex >= 0 && liveConversation
-                ? liveConversation.messages
-                    .slice(0, userMessageIndex + 1)
-                    .filter(
-                      (message) =>
-                        message.role !== "assistant" || getAssistantVisibleText(message).trim(),
-                    )
-                : [userMessage];
-
-            await sendChatRequest({
-              providerId: selectedProvider,
-              messages,
-              model: selectedModel,
-              previousResponseId,
-              signal,
-              memoryEnabled,
+            return await executeChatSend({
               conversationId,
-              projectId: undefined,
+              userMessage,
+              assistantMessage,
+              trimmed,
+              previousResponseId,
+              selectedProvider,
+              selectedModel,
+              memoryEnabled,
+              signal,
               onChunk: (chunk) => {
                 if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
               },
@@ -360,6 +365,8 @@ function App() {
                 setStreamingMessageId(null);
               },
               onComplete: (result, context) => {
+                // Skip premature commit when orchestrator is doing a web search re-prompt
+                if (useChatStore.getState().isBufferClearSkipped()) return;
                 const memoryPack = context?.memoryPack ?? null;
                 const memoryRetrieval = context?.memoryRetrieval;
                 const webSearchSources = context?.webSearchSources;
@@ -372,34 +379,6 @@ function App() {
                 });
               },
             });
-
-            const chatModel = useProviderStore.getState().selectedModel.trim();
-            const liveProvider = useProviderStore.getState().selectedProvider;
-            const conv = useChatStore.getState().conversations.find((c) => c.id === conversationId);
-            const assistantMsg = conv?.messages.find((m) => m.id === assistantMessage.id);
-            const assistantText = getAssistantVisibleText(assistantMsg);
-            const userMsgCount = conv?.messages.filter((m) => m.role === "user").length ?? 0;
-
-            if (chatModel && assistantText) {
-              const isFirstExchange = userMsgCount <= 1;
-              await handoffAfterUserChat({
-                chatModel,
-                conversationId,
-                isFirstExchange,
-                signal,
-              });
-
-              queuePostChatJobs({
-                conversationId,
-                chatModel,
-                providerId: liveProvider,
-                userMessage: trimmed,
-                assistantMessage: assistantText,
-                isFirstExchange,
-              });
-            }
-
-            return assistantText || undefined;
           } catch (error) {
             if (!signal.aborted) {
               commitAssistantMessage(conversationId, assistantMessage.id, {
@@ -408,9 +387,11 @@ function App() {
               setRequestStatus("error");
             }
           } finally {
-            clearStreamingBuffer();
-            setStreamingMessageId(null);
-            setRequestStatus((status) => (status === "error" ? "error" : "idle"));
+            clearStreamingBufferUnlessSkipped();
+            if (!useChatStore.getState().isBufferClearSkipped()) {
+              setStreamingMessageId(null);
+              setRequestStatus((status) => (status === "error" ? "error" : "idle"));
+            }
             if (activeChatJobIdRef.current === jobId) activeChatJobIdRef.current = null;
           }
         },
@@ -423,6 +404,7 @@ function App() {
       appendStreamingContent,
       appendStreamingReasoning,
       clearStreamingBuffer,
+      clearStreamingBufferUnlessSkipped,
       commitAssistantMessage,
       createConversation,
       selectedModel,
@@ -436,7 +418,7 @@ function App() {
     const chatModel = useProviderStore.getState().selectedModel.trim();
     const providerId = useProviderStore.getState().selectedProvider;
     if (!chatModel) return;
-    queueMemoryExtractionNow({
+    void triggerMemoryExtractionNow({
       conversationId: activeConversationId,
       chatModel,
       providerId,
@@ -471,7 +453,8 @@ function App() {
           {activeNav === "memory" && <MemoryPage />}
           {activeNav === "settings" && <SettingsPage />}
         </Suspense>
-        {isChatMode && (
+        {isChatMode && hydrationState === "loading" && <ChatHydrationSkeleton />}
+        {isChatMode && hydrationState === "ready" && (
           <ChatPanel
             title={activeConversation?.title}
             messages={visibleMessages}
