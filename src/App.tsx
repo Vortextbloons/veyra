@@ -6,6 +6,7 @@ import { ChatPanel } from "@/components/chat-panel";
 import { RightPanel } from "@/components/right-panel";
 import { sendChatRequest } from "@/lib/chat-orchestrator";
 import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
+import type { MessageAttachment } from "@/lib/message-attachments";
 import { getContextStats } from "@/lib/context";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
@@ -167,8 +168,20 @@ function App() {
     deleteAllConversations();
   }, [deleteAllConversations]);
 
+  const selectedModelInfo = models.find((model) => model.id === selectedModel);
+  const supportsImages = selectedModelInfo?.supportsImages ?? false;
+
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, attachments?: MessageAttachment[]) => {
+      const trimmed = text.trim();
+      const imageAttachments =
+        attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
+      if (!trimmed && imageAttachments.length === 0) return;
+
+      if (imageAttachments.length > 0 && !supportsImages) {
+        return;
+      }
+
       let conversationId = activeConversationId;
       if (!conversationId) {
         conversationId = createConversation();
@@ -177,7 +190,8 @@ function App() {
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
-        content: text,
+        content: trimmed,
+        attachments: imageAttachments.length > 0 ? imageAttachments : undefined,
         timestamp: Date.now(),
       };
       const assistantMessage: ChatMessage = {
@@ -240,6 +254,7 @@ function App() {
       createConversation,
       selectedModel,
       selectedProvider,
+      supportsImages,
     ],
   );
 
@@ -278,6 +293,7 @@ function App() {
           models={models}
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
+          supportsImages={supportsImages}
           sidebarsCollapsed={sidebarsCollapsed}
         />
         <RightPanel

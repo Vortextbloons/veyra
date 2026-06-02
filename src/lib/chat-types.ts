@@ -1,11 +1,15 @@
 // ── Core chat types ──────────────────────────────────────────────────────────
 
+import type { MessageAttachment } from "@/lib/message-attachments";
+
 export type ChatRole = "user" | "assistant" | "system";
 
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
+  /** Images and other media attached to user messages */
+  attachments?: MessageAttachment[];
   /** Model reasoning / chain-of-thought from LM Studio (when supported) */
   reasoning?: string;
   timestamp: number;
@@ -58,6 +62,8 @@ export interface ModelInfo {
   name: string;
   contextWindow?: number;
   size?: string;
+  /** Vision-language model — accepts image input */
+  supportsImages?: boolean;
 }
 
 export interface ProviderConfig {
@@ -75,7 +81,8 @@ export type RequestStatus = "idle" | "streaming" | "error";
 export interface ChatPanelProps {
   title?: string;
   messages?: ChatMessage[];
-  onSend?: (text: string) => void;
+  onSend?: (text: string, attachments?: MessageAttachment[]) => void;
+  supportsImages?: boolean;
   isStreaming?: boolean;
   streamingMessageId?: string | null;
   providers?: ProviderInfo[];

@@ -4,12 +4,20 @@ const DEFAULT_SYSTEM_PROMPT = "You are Veyra, a helpful local AI assistant.";
 const DEFAULT_CONTEXT_LIMIT = 8192;
 const RESERVED_OUTPUT_TOKENS = 1024;
 const CHARS_PER_TOKEN = 4; // rough estimate
+const TOKENS_PER_IMAGE = 512; // rough vision patch budget
 
 /**
  * Estimates the number of tokens in a string using a simple character-based heuristic.
  */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
+}
+
+function estimateMessageTokens(message: ChatMessage): number {
+  const textTokens = estimateTokens(message.content);
+  const imageCount =
+    message.attachments?.filter((a) => a.mimeType.startsWith("image/")).length ?? 0;
+  return textTokens + imageCount * TOKENS_PER_IMAGE;
 }
 
 /**
@@ -34,7 +42,7 @@ export function buildChatContext(messages: ChatMessage[]): ChatMessage[] {
   // Walk backwards from newest to oldest, including messages that fit
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
-    const tokens = estimateTokens(msg.content);
+    const tokens = estimateMessageTokens(msg);
 
     if (tokens <= remaining) {
       included.push(msg);
@@ -54,7 +62,7 @@ export function buildChatContext(messages: ChatMessage[]): ChatMessage[] {
 export function getContextStats(messages: ChatMessage[]): ContextStats {
   const systemTokens = estimateTokens(DEFAULT_SYSTEM_PROMPT);
   const totalMessageTokens = messages.reduce(
-    (sum, msg) => sum + estimateTokens(msg.content),
+    (sum, msg) => sum + estimateMessageTokens(msg),
     0,
   );
   const estimatedTokens = systemTokens + totalMessageTokens;

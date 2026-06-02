@@ -14,8 +14,15 @@ import {
   Loader2,
   AlertTriangle,
   Brain,
+  X,
+  ImageIcon,
 } from "lucide-react";
 import type { ChatMessage, ChatPanelProps, MessagePerformance } from "@/lib/chat-types";
+import {
+  fileToAttachment,
+  MAX_IMAGE_ATTACHMENTS,
+  type MessageAttachment,
+} from "@/lib/message-attachments";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
 import { ProviderSelector } from "@/components/provider-selector";
 import { ModelSelector, type Model } from "@/components/model-selector";
@@ -47,6 +54,7 @@ export function ChatPanel({
   models = [],
   selectedModel = "",
   onModelChange,
+  supportsImages = false,
   sidebarsCollapsed = 0,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(true);
@@ -65,6 +73,7 @@ export function ChatPanel({
     provider: providerLabel,
     contextWindow: m.contextWindow,
     size: m.size,
+    supportsImages: m.supportsImages,
   }));
 
   return (
@@ -177,6 +186,7 @@ export function ChatPanel({
           onModeChange={setMode}
           onSend={onSend}
           disabled={isStreaming}
+          supportsImages={supportsImages}
           composerTextClass={layout.composerText}
         />
         <div className="mt-2.5 flex items-center justify-center gap-4 text-[11px] text-[var(--color-text-dim)]">
@@ -252,9 +262,14 @@ function MessageBubble({
           <div
             className={`rounded-2xl rounded-tr-md border border-indigo-400/15 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset transition-[font-size] duration-200 ease-out ${layout.messageText}`}
           >
-            <p className="m-0 whitespace-pre-wrap leading-snug">
-              {message.content.trim()}
-            </p>
+            {message.attachments && message.attachments.length > 0 && (
+              <MessageAttachmentsPreview attachments={message.attachments} />
+            )}
+            {message.content.trim() && (
+              <p className="m-0 whitespace-pre-wrap leading-snug">
+                {message.content.trim()}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -401,6 +416,40 @@ function MessagePerformanceBar({
   );
 }
 
+function MessageAttachmentsPreview({
+  attachments,
+  onRemove,
+}: {
+  attachments: MessageAttachment[];
+  onRemove?: (id: string) => void;
+}) {
+  return (
+    <div
+      className={`flex flex-wrap gap-2 ${onRemove ? "mb-2" : "mb-2 last:mb-0"}`}
+    >
+      {attachments.map((attachment) => (
+        <div key={attachment.id} className="group/att relative">
+          <img
+            src={attachment.dataUrl}
+            alt={attachment.name}
+            className="max-h-40 max-w-full rounded-lg border border-white/10 object-cover"
+          />
+          {onRemove && (
+            <button
+              type="button"
+              aria-label={`Remove ${attachment.name}`}
+              onClick={() => onRemove(attachment.id)}
+              className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full border border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-text-dim)] opacity-0 transition-opacity hover:text-white group-hover/att:opacity-100"
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 type ComposerProps = {
   memory: boolean;
   onMemoryChange: (on: boolean) => void;
@@ -408,8 +457,9 @@ type ComposerProps = {
   onShowReasoningChange: (on: boolean) => void;
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
-  onSend?: (text: string) => void;
+  onSend?: (text: string, attachments?: MessageAttachment[]) => void;
   disabled?: boolean;
+  supportsImages?: boolean;
   composerTextClass?: string;
 };
 
@@ -422,19 +472,54 @@ function Composer({
   onModeChange,
   onSend,
   disabled,
+  supportsImages = false,
   composerTextClass = "text-[14px]",
 }: ComposerProps) {
   const [value, setValue] = useState("");
+  const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const canSend = value.trim().length > 0 && !disabled;
+  useEffect(() => {
+    if (!supportsImages && attachments.length > 0) {
+      setAttachments([]);
+      setAttachError(null);
+    }
+  }, [supportsImages, attachments.length]);
+
+  const canSend =
+    (value.trim().length > 0 || attachments.length > 0) && !disabled;
 
   const handleSend = () => {
     const text = value.trim();
-    if (!text || disabled) return;
-    onSend?.(text);
+    if ((!text && attachments.length === 0) || disabled) return;
+    onSend?.(text, attachments.length > 0 ? attachments : undefined);
     setValue("");
+    setAttachments([]);
+    setAttachError(null);
     textareaRef.current?.focus();
+  };
+
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files?.length || !supportsImages) return;
+    setAttachError(null);
+
+    const remaining = MAX_IMAGE_ATTACHMENTS - attachments.length;
+    if (remaining <= 0) {
+      setAttachError(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images.`);
+      return;
+    }
+
+    const selected = Array.from(files).slice(0, remaining);
+    try {
+      const next = await Promise.all(selected.map((file) => fileToAttachment(file)));
+      setAttachments((current) => [...current, ...next]);
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : "Failed to attach image.");
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -447,6 +532,25 @@ function Composer({
   return (
     <div className="group/composer relative rounded-2xl border border-[var(--color-border)] bg-gradient-to-b from-[var(--color-panel)] to-[var(--color-bg)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all focus-within:border-[var(--color-accent)]/40 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_0_0_3px_rgba(99,102,241,0.08)]">
       <div className="flex flex-col gap-1.5">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          className="hidden"
+          onChange={(e) => void handleFilesSelected(e.target.files)}
+        />
+        {attachments.length > 0 && (
+          <MessageAttachmentsPreview
+            attachments={attachments}
+            onRemove={(id) =>
+              setAttachments((current) => current.filter((item) => item.id !== id))
+            }
+          />
+        )}
+        {attachError && (
+          <p className="px-2 text-[11.5px] text-amber-300">{attachError}</p>
+        )}
         <textarea
           ref={textareaRef}
           rows={2}
@@ -459,8 +563,30 @@ function Composer({
         />
         <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)]/50 pt-1.5">
           <div className="flex items-center gap-0.5">
-            <IconButton aria-label="Attach file">
-              <Paperclip className="size-3.5" />
+            <IconButton
+              aria-label={
+                supportsImages
+                  ? "Attach image"
+                  : "Images not supported by the selected model"
+              }
+              title={
+                supportsImages
+                  ? "Attach image (JPEG, PNG, WebP)"
+                  : "Select a vision model to attach images"
+              }
+              disabled={!supportsImages || disabled}
+              onClick={() => fileInputRef.current?.click()}
+              className={
+                !supportsImages
+                  ? "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-[var(--color-text-dim)]"
+                  : undefined
+              }
+            >
+              {supportsImages ? (
+                <ImageIcon className="size-3.5" />
+              ) : (
+                <Paperclip className="size-3.5" />
+              )}
             </IconButton>
             <IconButton aria-label="Mention">
               <AtSign className="size-3.5" />
@@ -496,12 +622,13 @@ function Composer({
 
 function IconButton({
   children,
+  className,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       {...props}
-      className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+      className={`grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white disabled:pointer-events-none ${className ?? ""}`}
     >
       {children}
     </button>

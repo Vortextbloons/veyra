@@ -4,6 +4,7 @@ import type {
   ModelInfo,
   ProviderConfig,
 } from "@/lib/chat-types";
+import { buildLmStudioInput, inferSupportsImages } from "@/lib/message-attachments";
 import {
   buildMessagePerformance,
   type LmChatStats,
@@ -88,9 +89,18 @@ function buildV1ChatBody(options: {
   if (previousResponseId?.startsWith("resp_")) {
     body.previous_response_id = previousResponseId;
     const lastUser = [...dialogue].reverse().find((m) => m.role === "user");
-    body.input = lastUser?.content ?? "";
+    body.input = lastUser
+      ? buildLmStudioInput(lastUser.content, lastUser.attachments)
+      : "";
   } else {
-    body.input = formatTranscript(dialogue);
+    const lastUser = dialogue[dialogue.length - 1];
+    const onlyUserTurn =
+      dialogue.length === 1 && lastUser?.role === "user" && lastUser.attachments?.length;
+    if (onlyUserTurn) {
+      body.input = buildLmStudioInput(lastUser.content, lastUser.attachments);
+    } else {
+      body.input = formatTranscript(dialogue);
+    }
   }
 
   return body;
@@ -364,6 +374,7 @@ export async function fetchModels(baseUrl?: string): Promise<ModelInfo[]> {
     return (json.data ?? []).map((m: { id: string }) => ({
       id: m.id,
       name: m.id,
+      supportsImages: inferSupportsImages(m.id),
     }));
   } catch {
     return [];

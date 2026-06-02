@@ -15,6 +15,7 @@ export type Model = {
   contextWindow?: number;
   size?: string;
   isFavorite?: boolean;
+  supportsImages?: boolean;
 };
 
 type ModelSelectorProps = {
@@ -233,6 +234,12 @@ function ModelGroup({
                       <span className="font-mono">
                         {formatContext(m.contextWindow)} ctx
                       </span>
+                    </>
+                  )}
+                  {m.supportsImages && (
+                    <>
+                      <span className="opacity-50">·</span>
+                      <span>Vision</span>
                     </>
                   )}
                 </div>

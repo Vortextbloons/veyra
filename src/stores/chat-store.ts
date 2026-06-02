@@ -96,7 +96,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         const isFirstUser = conversation.messages.every((message) => message.role !== "user");
         return {
           ...conversation,
-          title: isFirstUser ? userMessage.content.slice(0, 50) : conversation.title,
+          title: isFirstUser
+            ? (userMessage.content.trim() ||
+                userMessage.attachments?.[0]?.name ||
+                "Image message").slice(0, 50)
+            : conversation.title,
           messages: [...conversation.messages, userMessage, assistantMessage],
           updatedAt: Date.now(),
         };
