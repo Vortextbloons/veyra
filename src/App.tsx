@@ -232,7 +232,7 @@ function App() {
   const resolvedContextLength = getModelSettings(selectedModel).contextLength;
   const resolvedReservedOutputTokens = getModelSettings(selectedModel).reservedOutputTokens;
 
-  const contextStats: ContextStats | undefined = useMemo(
+  const chatContextStats: ContextStats | undefined = useMemo(
     () =>
       activeConversation
         ? getContextStats(activeConversation.messages, resolvedContextLength, resolvedReservedOutputTokens)
@@ -302,6 +302,51 @@ function App() {
   const checkAgentRuntime = useAgentStore((state) => state.checkRuntime);
   const startAgentSession = useAgentStore((state) => state.startSession);
   const stopAgentSession = useAgentStore((state) => state.stopSession);
+  const clearAgentSessions = useAgentStore((state) => state.clearSessions);
+
+  const activeAgentSession = useMemo(
+    () =>
+      agentSessions.find((session) => session.id === activeAgentSessionId) ??
+      agentSessions[0] ??
+      null,
+    [activeAgentSessionId, agentSessions],
+  );
+
+  const agentContextStats: ContextStats | undefined = useMemo(() => {
+    if (!activeAgentSession) return undefined;
+    const messages: ChatMessage[] = [];
+    for (const item of activeAgentSession.events) {
+      if (item.title === "Prompt" && item.detail?.trim()) {
+        messages.push({
+          id: item.id,
+          role: "user",
+          content: item.detail.trim(),
+          timestamp: item.at,
+        });
+      }
+      if (item.type === "output" && item.detail?.trim()) {
+        messages.push({
+          id: item.id,
+          role: "assistant",
+          content: item.detail.trim(),
+          timestamp: item.at,
+        });
+      }
+    }
+
+    if (messages.length === 0 && activeAgentSession.prompt.trim()) {
+      messages.push({
+        id: `${activeAgentSession.id}:prompt`,
+        role: "user",
+        content: activeAgentSession.prompt.trim(),
+        timestamp: activeAgentSession.startedAt,
+      });
+    }
+
+    return getContextStats(messages, resolvedContextLength, resolvedReservedOutputTokens);
+  }, [activeAgentSession, resolvedContextLength, resolvedReservedOutputTokens]);
+
+  const displayContextStats = chatMode === "agents" ? agentContextStats : chatContextStats;
 
   useEffect(() => {
     if (chatMode === "agents" && agentRuntimeAvailable == null) {
@@ -320,10 +365,29 @@ function App() {
 
       if (chatMode === "agents") {
         if (!trimmed) return;
-        void startAgentSession({
-          mode: agentMode,
-          projectPath: agentProjectPath,
+        aiScheduler.abortActiveBackgroundJob();
+        aiScheduler.enqueueAiJob({
+          type: "agent_opencode",
+          priority: 0,
+          title: "Running OpenCode agent",
+          description: trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed,
           prompt: trimmed,
+          model: selectedModel,
+          run: async (signal) => {
+            if (signal.aborted) throw new DOMException("Agent job aborted", "AbortError");
+            const sessionId = await startAgentSession({
+              mode: agentMode,
+              projectPath: agentProjectPath,
+              prompt: trimmed,
+              model: selectedModel,
+              providerId: selectedProvider,
+            });
+            const session = useAgentStore.getState().sessions.find((item) => item.id === sessionId);
+            return {
+              prompt: trimmed,
+              output: session?.summary,
+            };
+          },
         });
         return;
       }
@@ -545,12 +609,16 @@ function App() {
           />
         )}
         <RightPanel
-          contextStats={contextStats}
+          contextStats={displayContextStats}
           collapsed={rightPanelCollapsed}
           onCollapsedChange={setRightPanelCollapsed}
-          hidden={!isChatMode}
+          hidden={!isChatMode && chatMode !== "agents"}
           webSearchEnabled={webSearchEnabled}
           onWebSearchChange={setWebSearchEnabled}
+          isAgentsMode={chatMode === "agents"}
+          agentSessionCount={agentSessions.length}
+          agentActiveCount={agentSessions.filter((s) => s.status === "running").length}
+          onAgentClearSessions={clearAgentSessions}
         />
       </div>
     </div>

@@ -2,6 +2,7 @@ export type AiJobPriority = 0 | 1 | 2 | 3 | 4;
 
 export type AiJobType =
   | "user_chat"
+  | "agent_opencode"
   | "auto_name_chat"
   | "summarize_chat"
   | "extract_memory"
@@ -319,6 +320,7 @@ export const aiScheduler = new AiScheduler();
 
 export const JOB_LABELS: Record<AiJobType, string> = {
   user_chat: "User message",
+  agent_opencode: "OpenCode agent",
   auto_name_chat: "Naming chat",
   summarize_chat: "Summarizing chat",
   extract_memory: "Extracting memories",

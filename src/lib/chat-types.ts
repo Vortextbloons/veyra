@@ -171,6 +171,10 @@ export interface RightPanelProps {
   hidden?: boolean;
   webSearchEnabled?: boolean;
   onWebSearchChange?: (enabled: boolean) => void;
+  isAgentsMode?: boolean;
+  agentSessionCount?: number;
+  agentActiveCount?: number;
+  onAgentClearSessions?: () => void;
 }
 
 export interface RecentChatsItem {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Server } from "lucide-react";
 
 type ModelIconProps = {
@@ -34,19 +35,29 @@ function matchModelFamily(modelId: string): string | null {
   if (/^chatglm/i.test(id)) return "zhipu";
   if (/^baichuan/i.test(id)) return "baichuan";
   if (/^dbrx/i.test(id)) return "databricks";
+  if (/^minimax/i.test(id)) return "minimax";
+  if (/^gpt-|^o[13]/i.test(id)) return "chatgpt";
   return null;
 }
 
 export function ModelIcon({ modelId, className }: ModelIconProps) {
   const family = matchModelFamily(modelId);
-  if (family) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const [triedPng, setTriedPng] = useState(false);
+
+  if (family && !imgFailed) {
+    const src = triedPng ? `/logos/${family}.svg` : `/logos/${family}.png`;
     return (
       <img
-        src={`/logos/${family}.png`}
+        src={src}
         alt=""
         className={className}
-        onError={(e) => {
-          (e.target as HTMLImageElement).style.display = "none";
+        onError={() => {
+          if (!triedPng) {
+            setTriedPng(true);
+          } else {
+            setImgFailed(true);
+          }
         }}
       />
     );

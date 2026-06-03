@@ -1,19 +1,36 @@
 {
   "name": "veyra",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Local-first AI desktop workspace (Tauri + React)",
+  "homepage": "https://github.com/Vortextbloons/veyra#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vortextbloons/veyra.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Vortextbloons/veyra/issues"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "dev:ui": "vite",
     "dev:app": "node scripts/dev-app.mjs",
+    "dev:full": "npm run tauri -- dev",
     "build": "tsc -b && vite build",
+    "build:app": "npm run tauri -- build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "sync-version": "node scripts/sync-version.mjs",
+    "version:check": "node scripts/sync-version.mjs --check"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "class-variance-authority": "^0.7",

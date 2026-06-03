@@ -27,4 +27,11 @@ src-tauri/gen/
 *.njsproj
 *.sln
 *.sw?
-.cursor/    
+.cursor/
+
+# Windows / build artifacts
+Thumbs.db
+Desktop.ini
+*.pdb
+*.exe
+!src-tauri/icons/**

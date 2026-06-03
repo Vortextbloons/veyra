@@ -1,6 +1,12 @@
 import { useState, type ReactNode } from "react";
-import { Globe, PanelRightClose, PanelRightOpen } from "lucide-react";
+import {
+  Globe,
+  PanelRightClose,
+  PanelRightOpen,
+  Trash2,
+} from "lucide-react";
 import type { ContextStats, RightPanelProps } from "@/lib/chat-types";
+
 export function RightPanel({
   contextStats,
   collapsed: collapsedProp,
@@ -8,6 +14,10 @@ export function RightPanel({
   hidden,
   webSearchEnabled = false,
   onWebSearchChange,
+  isAgentsMode = false,
+  agentSessionCount = 0,
+  agentActiveCount = 0,
+  onAgentClearSessions,
 }: RightPanelProps) {
   const [collapsedInternal, setCollapsedInternal] = useState(false);
   const collapsed = collapsedProp ?? collapsedInternal;
@@ -69,8 +79,18 @@ export function RightPanel({
             </button>
           </div>
 
+          {isAgentsMode && (
+            <AgentSessionsPanel
+              sessionCount={agentSessionCount}
+              activeCount={agentActiveCount}
+              onClearSessions={onAgentClearSessions}
+            />
+          )}
+
           <ContextPanel stats={contextStats} />
-          <ProjectPlaceholder />
+
+          {!isAgentsMode && <ProjectPlaceholder />}
+
           <ToolsPanel
             webSearch={webSearchEnabled}
             onWebSearchChange={(on) => onWebSearchChange?.(on)}
@@ -100,6 +120,52 @@ function PanelShell({
       </div>
       {children}
     </section>
+  );
+}
+
+function AgentSessionsPanel({
+  sessionCount,
+  activeCount,
+  onClearSessions,
+}: {
+  sessionCount: number;
+  activeCount: number;
+  onClearSessions?: () => void;
+}) {
+  return (
+    <PanelShell title="Sessions">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[20px] font-semibold text-white">{sessionCount}</span>
+            <span className="text-[11px] text-[var(--color-text-dim)]">total</span>
+          </div>
+          {activeCount > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block size-1.5 animate-pulse rounded-full bg-indigo-400" />
+              <span className="text-[12px] font-medium text-indigo-300">
+                {activeCount} running
+              </span>
+            </div>
+          )}
+        </div>
+        {sessionCount > 0 && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onClearSessions}
+              title="Clear all sessions"
+              className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] transition-colors hover:bg-red-400/10 hover:text-red-300"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+      <p className="mt-2 text-[10.5px] text-[var(--color-text-dim)]">
+        Send tasks from the composer below
+      </p>
+    </PanelShell>
   );
 }
 

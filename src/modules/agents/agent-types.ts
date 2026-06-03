@@ -1,8 +1,9 @@
-export type AgentMode = "plan" | "review" | "build" | "debug" | "refactor";
+export type AgentMode = "ask" | "plan" | "build";
 
 export type AgentStatus =
   | "idle"
   | "checking_runtime"
+  | "ready"
   | "running"
   | "completed"
   | "failed"
@@ -27,6 +28,8 @@ export type AgentSession = {
   status: AgentStatus;
   projectPath: string;
   prompt: string;
+  model: string;
+  opencodeSessionId?: string;
   title: string;
   summary?: string;
   startedAt: number;
@@ -39,6 +42,9 @@ export type StartAgentSessionInput = {
   mode: AgentMode;
   projectPath: string;
   prompt: string;
+  model: string;
+  providerId?: string;
+  opencodeSessionId?: string;
 };
 
 export type OpencodeRunResult = {

@@ -10,8 +10,8 @@ import {
 } from "react";
 import {
   Bell,
-  ChevronDown,
   Check,
+  ChevronDown,
   MessageSquare,
   MoreHorizontal,
   Star,
@@ -963,7 +963,7 @@ function Composer({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything…"
+          placeholder={mode === "agents" ? "Describe a coding task…" : "Ask anything…"}
           disabled={disabled}
           className={`block w-full resize-none rounded-md bg-transparent px-2 py-1.5 font-medium leading-snug tracking-[-0.005em] text-white transition-[font-size] duration-200 ease-out placeholder:font-normal placeholder:tracking-normal placeholder:text-[var(--color-text-dim)]/70 focus:outline-none disabled:opacity-50 ${composerTextClass}`}
         />
@@ -1000,7 +1000,7 @@ function Composer({
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <ModeMenu value={mode} onChange={onModeChange} />
+            <ModeSelector value={mode} onChange={onModeChange} />
             <Toggle label="Memory" on={memory} onChange={onMemoryChange} />
             <IconButton
               aria-label="Extract memories now"
@@ -1064,7 +1064,7 @@ const MODES: { id: ChatMode; label: string; description: string; icon: ReactNode
   },
 ];
 
-function ModeMenu({
+function ModeSelector({
   value,
   onChange,
 }: {
@@ -1081,17 +1081,17 @@ function ModeMenu({
     <div ref={ref} className="relative">
       <button
         type="button"
-        aria-haspopup="menu"
+        aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`flex h-7 items-center gap-1.5 rounded-md border px-2 text-[12px] transition-colors ${
+        className={`flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11.5px] font-medium transition-colors ${
           open
             ? "border-[var(--color-border-strong)] bg-white/[0.04] text-white"
-            : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
+            : "border-[var(--color-border)] bg-[var(--color-bg)]/40 text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
         }`}
       >
         {current.icon}
-        <span className="font-medium">{current.label}</span>
+        <span>{current.label}</span>
         <ChevronDown
           className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
         />
@@ -1099,24 +1099,22 @@ function ModeMenu({
 
       {open && (
         <div
-          role="menu"
-          className="absolute bottom-full left-0 z-50 mb-1.5 w-56 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-1 shadow-2xl shadow-black/40"
+          role="listbox"
+          aria-label="Mode"
+          className="absolute bottom-full left-0 z-50 mb-1.5 w-60 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-1 shadow-2xl shadow-black/50"
         >
-          <div className="px-2 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
-            Switch mode
-          </div>
           {MODES.map((m) => {
             const active = m.id === value;
             return (
               <button
                 key={m.id}
-                role="menuitemradio"
-                aria-checked={active}
+                role="option"
+                aria-selected={active}
                 onClick={() => {
                   onChange?.(m.id);
                   setOpen(false);
                 }}
-                className={`flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors ${
+                className={`flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors ${
                   active
                     ? "bg-[var(--color-accent-soft)]"
                     : "hover:bg-white/[0.04]"
@@ -1133,7 +1131,7 @@ function ModeMenu({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div
-                    className={`text-[12.5px] font-medium ${
+                    className={`text-[12px] font-medium ${
                       active ? "text-white" : "text-[var(--color-text)]"
                     }`}
                   >
