@@ -15,6 +15,7 @@ export type ProviderChatOptions = {
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
+  onModelLoadProgress?: (phase: string, percent?: number) => void;
   onComplete?: (result: LmChatCompleteResult, context?: ProviderCompleteContext) => void;
   onError: (error: string) => void;
 };

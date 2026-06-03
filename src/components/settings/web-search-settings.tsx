@@ -13,13 +13,16 @@ import { CheckCircle, XCircle, Loader2, Container } from "lucide-react";
 type TestStatus = "idle" | "testing" | "success" | "error";
 
 export function WebSearchSettings() {
-  const webSearchEnabled = useSettingsStore((s) => s.webSearchEnabled);
-  const setWebSearchEnabled = useSettingsStore((s) => s.setWebSearchEnabled);
+  const defaultWebSearchEnabled = useSettingsStore((s) => s.defaultWebSearchEnabled);
+  const setDefaultWebSearchEnabled = useSettingsStore(
+    (s) => s.setDefaultWebSearchEnabled,
+  );
   const webSearchSearxngUrl = useSettingsStore((s) => s.webSearchSearxngUrl);
   const setWebSearchSearxngUrl = useSettingsStore(
     (s) => s.setWebSearchSearxngUrl,
   );
   const webSearchDefaultMode = useSettingsStore((s) => s.webSearchDefaultMode);
+  const searxngSetupError = useSettingsStore((s) => s.searxngSetupError);
 
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testError, setTestError] = useState<string>("");
@@ -33,8 +36,8 @@ export function WebSearchSettings() {
     try {
       const status = await invokeCheckSearxngSetup();
       setSetupStatus(status);
-    } catch {
-      // ignore — Docker may not be available
+    } catch (e) {
+      setContainerError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -62,7 +65,6 @@ export function WebSearchSettings() {
     try {
       const url = await invokeStartSearxngContainer();
       setWebSearchSearxngUrl(url);
-      setWebSearchEnabled(true);
       await refreshSetupStatus();
     } catch (e) {
       setContainerError(e instanceof Error ? e.message : String(e));
@@ -85,7 +87,9 @@ export function WebSearchSettings() {
   }
 
   const dockerInstalled = setupStatus?.docker_installed ?? false;
+  const dockerDaemonRunning = setupStatus?.docker_daemon_running ?? false;
   const containerRunning = setupStatus?.container_running ?? false;
+  const setupError = containerError || searxngSetupError;
 
   return (
     <div className="space-y-8">
@@ -112,6 +116,20 @@ export function WebSearchSettings() {
           </div>
         ) : (
           <div className="space-y-3">
+            {!dockerDaemonRunning && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                <p className="text-[12px] text-amber-200">
+                  Docker is not running yet. Veyra will start Docker Desktop
+                  automatically when you start SearXNG (first launch may take up
+                  to a minute).
+                </p>
+                <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
+                  Class lab tip: in Docker Desktop → Settings → General, enable
+                  &quot;Start Docker Desktop when you sign in&quot; so students
+                  never need to open it manually.
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
               <div
                 className={`grid size-8 place-items-center rounded-md ${
@@ -147,19 +165,24 @@ export function WebSearchSettings() {
                 <button
                   type="button"
                   onClick={handleStartContainer}
-                  disabled={containerAction !== "idle" || !dockerInstalled}
+                  disabled={containerAction !== "idle"}
                   className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
                 >
-                  {containerAction === "starting" ? "Starting…" : "Start SearXNG"}
+                  {containerAction === "starting"
+                    ? dockerDaemonRunning
+                      ? "Starting…"
+                      : "Starting Docker…"
+                    : "Start SearXNG"}
                 </button>
               )}
             </div>
 
-            {containerError && (
-              <p className="text-[11px] text-red-400">{containerError}</p>
+            {setupError && (
+              <p className="text-[11px] text-red-400">{setupError}</p>
             )}
           </div>
         )}
+
       </section>
 
       {/* ── Web Search Toggle ────────────────────────────────────────────── */}
@@ -170,13 +193,14 @@ export function WebSearchSettings() {
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <Toggle
-              label="Enable web search"
-              on={webSearchEnabled}
-              onChange={setWebSearchEnabled}
+              label="Enable web search by default"
+              on={defaultWebSearchEnabled}
+              onChange={setDefaultWebSearchEnabled}
             />
           </div>
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            Allow the AI to search the web when it needs current information.
+            When on, new chats start with web search enabled. You can still turn
+            web search on or off per chat from the tools panel.
           </p>
         </div>
       </section>
@@ -246,8 +270,9 @@ export function WebSearchSettings() {
             Auto When Needed
           </div>
           <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">
-            The AI decides when to search based on the conversation. You can
-            override this per-chat.
+            When web search is on for a chat, the AI decides when a search is
+            needed. Use the right-panel toggle to enable or disable search for
+            the current chat without changing this default.
           </p>
           <div className="mt-2 inline-block rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[10.5px] text-[var(--color-text-dim)]">
             Current: {webSearchDefaultMode}

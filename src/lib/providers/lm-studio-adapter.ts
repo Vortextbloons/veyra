@@ -22,6 +22,7 @@ export const lmStudioAdapter: ProviderAdapter = {
       signal: options.signal,
       onChunk: options.onChunk,
       onReasoningChunk: options.onReasoningChunk,
+      onModelLoadProgress: options.onModelLoadProgress,
       onComplete: options.onComplete,
       onError: options.onError,
     }),

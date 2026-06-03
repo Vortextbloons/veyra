@@ -30,9 +30,10 @@ export type SettingsStoreState = {
   memoryExtractionEnabled: boolean;
   memoryExtractionModel: string;
   schedulerPanelCollapsed: boolean;
-  webSearchEnabled: boolean;
+  defaultWebSearchEnabled: boolean;
   webSearchSearxngUrl: string;
   webSearchDefaultMode: "auto" | "always" | "off";
+  searxngSetupError: string;
   contextAnchoringEnabled: boolean;
 };
 
@@ -60,9 +61,10 @@ export type SettingsStore = SettingsStoreState & {
   setMemoryExtractionEnabled: (enabled: boolean) => void;
   setMemoryExtractionModel: (modelId: string) => void;
   setSchedulerPanelCollapsed: (collapsed: boolean) => void;
-  setWebSearchEnabled: (enabled: boolean) => void;
+  setDefaultWebSearchEnabled: (enabled: boolean) => void;
   setWebSearchSearxngUrl: (url: string) => void;
   setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
+  setSearxngSetupError: (message: string) => void;
   setContextAnchoringEnabled: (enabled: boolean) => void;
 };
 
@@ -88,9 +90,10 @@ const DEFAULT_STATE: SettingsStoreState = {
   memoryExtractionEnabled: true,
   memoryExtractionModel: "",
   schedulerPanelCollapsed: false,
-  webSearchEnabled: false,
+  defaultWebSearchEnabled: false,
   webSearchSearxngUrl: "",
   webSearchDefaultMode: "auto",
+  searxngSetupError: "",
   contextAnchoringEnabled: true,
 };
 
@@ -98,8 +101,17 @@ function loadState(): SettingsStoreState {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (!raw) return DEFAULT_STATE;
-    const parsed = JSON.parse(raw) as Partial<SettingsStoreState>;
-    return { ...DEFAULT_STATE, ...parsed };
+    const parsed = JSON.parse(raw) as Partial<SettingsStoreState> & {
+      webSearchEnabled?: boolean;
+    };
+    const migrated: Partial<SettingsStoreState> = { ...parsed };
+    if (
+      parsed.webSearchEnabled !== undefined &&
+      parsed.defaultWebSearchEnabled === undefined
+    ) {
+      migrated.defaultWebSearchEnabled = parsed.webSearchEnabled;
+    }
+    return { ...DEFAULT_STATE, ...migrated };
   } catch {
     return DEFAULT_STATE;
   }
@@ -129,7 +141,7 @@ function persistState(state: SettingsStoreState) {
       memoryExtractionEnabled: state.memoryExtractionEnabled,
       memoryExtractionModel: state.memoryExtractionModel,
       schedulerPanelCollapsed: state.schedulerPanelCollapsed,
-      webSearchEnabled: state.webSearchEnabled,
+      defaultWebSearchEnabled: state.defaultWebSearchEnabled,
       webSearchSearxngUrl: state.webSearchSearxngUrl,
       webSearchDefaultMode: state.webSearchDefaultMode,
       contextAnchoringEnabled: state.contextAnchoringEnabled,
@@ -206,9 +218,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setMemoryExtractionEnabled: (memoryExtractionEnabled) => apply({ memoryExtractionEnabled }),
     setMemoryExtractionModel: (memoryExtractionModel) => apply({ memoryExtractionModel }),
     setSchedulerPanelCollapsed: (schedulerPanelCollapsed) => apply({ schedulerPanelCollapsed }),
-    setWebSearchEnabled: (webSearchEnabled) => apply({ webSearchEnabled }),
+    setDefaultWebSearchEnabled: (defaultWebSearchEnabled) =>
+      apply({ defaultWebSearchEnabled }),
     setWebSearchSearxngUrl: (webSearchSearxngUrl) => apply({ webSearchSearxngUrl }),
     setWebSearchDefaultMode: (webSearchDefaultMode) => apply({ webSearchDefaultMode }),
+    setSearxngSetupError: (searxngSetupError) => apply({ searxngSetupError }),
     setContextAnchoringEnabled: (contextAnchoringEnabled) => apply({ contextAnchoringEnabled }),
   };
 });

@@ -28,12 +28,19 @@ export function deferUntilIdle(callback: () => void, timeout = 2000): () => void
   return () => clearTimeout(id);
 }
 
+let appReadyEmitted = false;
+
+/** Reveal the main window once the UI is hydrated. Idempotent across Vite HMR. */
 export async function emitAppReady(): Promise<void> {
+  if (appReadyEmitted) return;
+  appReadyEmitted = true;
+
   markStartup("veyra:app-ready");
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("app_ready");
   } catch {
     // not running under Tauri (e.g. vite preview)
+    appReadyEmitted = false;
   }
 }

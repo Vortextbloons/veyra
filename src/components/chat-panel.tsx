@@ -38,6 +38,7 @@ import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
 import { ProviderConnectionBanner } from "@/components/provider-connection-banner";
 import { ProviderSelector } from "@/components/provider-selector";
 import { ModelSelector, type Model } from "@/components/model-selector";
+import { ModelLoadingBar } from "@/components/model-loading-bar";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Toggle } from "@/components/toggle";
 import { useClickOutside } from "@/hooks/use-click-outside";
@@ -78,6 +79,7 @@ export function ChatPanel({
   defaultMemoryEnabled = true,
   onTriggerMemoryExtraction,
   sidebarsCollapsed = 0,
+  modelLoadProgress,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(defaultMemoryEnabled);
   const [showReasoning, setShowReasoning] = useState(true);
@@ -260,6 +262,11 @@ export function ChatPanel({
       <div
         className={`shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)] pb-3 pt-2.5 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
       >
+        {modelLoadProgress && modelLoadProgress.phase !== "ready" && (
+          <div className="px-1 pb-2">
+            <ModelLoadingBar progress={modelLoadProgress} />
+          </div>
+        )}
             <Composer
               memory={memory}
               onMemoryChange={setMemory}

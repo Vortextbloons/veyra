@@ -1,5 +1,10 @@
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Manager, RunEvent, WindowEvent};
+
+/// Ensures `app_ready` only reveals/focuses the window once per process (avoids
+/// stealing focus on Vite HMR remounts during `tauri dev`).
+static INITIAL_WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
 
 mod memory_commands;
 mod memory_db;
@@ -72,9 +77,15 @@ fn exit_app(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn app_ready(app: tauri::AppHandle) {
+    if INITIAL_WINDOW_SHOWN.swap(true, Ordering::SeqCst) {
+        return;
+    }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
-        let _ = window.set_focus();
+        // Dev: never steal OS focus on show/HMR. Release: focus on first real launch.
+        if !cfg!(debug_assertions) {
+            let _ = window.set_focus();
+        }
     }
 }
 

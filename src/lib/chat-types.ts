@@ -110,6 +110,12 @@ export interface ProviderConfig {
 
 export type RequestStatus = "idle" | "streaming" | "error";
 
+export type ModelLoadProgress = {
+  phase: "unloading" | "loading" | "ready";
+  /** 0–100 when available, otherwise undefined (indeterminate) */
+  percent?: number;
+} | null;
+
 // ── Component prop interfaces ───────────────────────────────────────────────
 
 export interface ChatPanelProps {
@@ -139,6 +145,7 @@ export interface ChatPanelProps {
   /** 0 = both side panels open, 1 = one collapsed, 2 = both collapsed */
   sidebarsCollapsed?: number;
   onTriggerMemoryExtraction?: () => void;
+  modelLoadProgress?: ModelLoadProgress;
 }
 
 export interface RightPanelProps {
@@ -146,6 +153,8 @@ export interface RightPanelProps {
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   hidden?: boolean;
+  webSearchEnabled?: boolean;
+  onWebSearchChange?: (enabled: boolean) => void;
 }
 
 export interface RecentChatsItem {

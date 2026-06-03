@@ -21,7 +21,10 @@ import {
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
-import { invokeCheckSearxngSetup, invokeStartSearxngContainer } from "@/modules/web-search/searxng-setup";
+import {
+  invokeCheckSearxngSetup,
+  runSearxngAutoSetup,
+} from "@/modules/web-search/searxng-setup";
 
 const ZOOM_MIN = 0.7;
 const ZOOM_MAX = 1.6;
@@ -89,6 +92,7 @@ function App() {
   const clearStreamingBuffer = useChatStore((state) => state.clearStreamingBuffer);
   const clearStreamingBufferUnlessSkipped = useChatStore((state) => state.clearStreamingBufferUnlessSkipped);
   const commitAssistantMessage = useChatStore((state) => state.commitAssistantMessage);
+  const setModelLoadProgress = useChatStore((state) => state.setModelLoadProgress);
 
   const providers = useProviderStore((state) => state.providers);
   const selectedProvider = useProviderStore((state) => state.selectedProvider);
@@ -110,6 +114,10 @@ function App() {
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
   const setRightPanelCollapsed = useSettingsStore((state) => state.setRightPanelCollapsed);
+  const defaultWebSearchEnabled = useSettingsStore(
+    (state) => state.defaultWebSearchEnabled,
+  );
+  const [webSearchEnabled, setWebSearchEnabled] = useState(defaultWebSearchEnabled);
 
   const sidebarsCollapsed =
     (recentChatsCollapsed ? 1 : 0) + (rightPanelCollapsed ? 1 : 0);
@@ -155,6 +163,7 @@ function App() {
   useEffect(() => {
     void (async () => {
       await ensureSettingsHydrated();
+      setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
       await useChatStore.getState().hydrateConversations();
       markStartup("veyra:hydration-ready");
       logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
@@ -173,26 +182,22 @@ function App() {
 
     const cancelIdle = deferUntilIdle(() => {
       void (async () => {
-      try {
-        const status = await invokeCheckSearxngSetup();
+        const { setSearxngSetupError, setWebSearchSearxngUrl } = useSettingsStore.getState();
+        setSearxngSetupError("");
+
+        await runSearxngAutoSetup();
         if (cancelled) return;
 
-        if (status.container_running && status.searxng_url) {
-          // Container already running — just wire it up
-          useSettingsStore.getState().setWebSearchSearxngUrl(status.searxng_url);
-          useSettingsStore.getState().setWebSearchEnabled(true);
-        } else if (status.docker_installed) {
-          // Docker available but container not running — start it (Rust tracks ownership)
-          const url = await invokeStartSearxngContainer();
-          if (cancelled) return;
-          useSettingsStore.getState().setWebSearchSearxngUrl(url);
-          useSettingsStore.getState().setWebSearchEnabled(true);
+        const status = await invokeCheckSearxngSetup();
+        if (status.searxng_url) {
+          setWebSearchSearxngUrl(status.searxng_url);
         }
-        // If Docker is not installed, do nothing — user can configure manually
-      } catch (err) {
-        console.warn("[SearXNG] Auto-setup skipped:", err);
-      }
-      })();
+      })().catch((err) => {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err);
+        useSettingsStore.getState().setSearxngSetupError(message);
+        console.error("[SearXNG] Auto-setup failed:", err);
+      });
     }, 5000);
 
     return () => {
@@ -247,6 +252,7 @@ function App() {
     setRequestStatus("idle");
     setStreamingMessageId(null);
     clearStreamingBuffer();
+    setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
     setActiveNav("chat");
     createConversation();
   }, [clearStreamingBuffer, createConversation, setActiveNav]);
@@ -280,6 +286,7 @@ function App() {
   const selectedModelInfo = models.find((model) => model.id === selectedModel);
   const supportsImages = selectedModelInfo?.supportsImages ?? false;
   const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
+  const modelLoadProgress = useChatStore((state) => state.modelLoadProgress);
 
   const handleSend = useCallback(
     (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
@@ -347,6 +354,7 @@ function App() {
               selectedProvider,
               selectedModel,
               memoryEnabled,
+              webSearchEnabled,
               signal,
               onChunk: (chunk) => {
                 if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
@@ -354,17 +362,24 @@ function App() {
               onReasoningChunk: (chunk) => {
                 if (chunk) appendStreamingReasoning(conversationId, assistantMessage.id, chunk);
               },
+              onModelLoadProgress: (phase: string, percent?: number) => {
+                setModelLoadProgress(
+                  phase === "ready" ? null : { phase: phase as "unloading" | "loading", percent },
+                );
+              },
               onError: (error) => {
                 commitAssistantMessage(conversationId, assistantMessage.id, {
                   content: `Error: ${error}`,
                 });
                 clearStreamingBuffer();
+                setModelLoadProgress(null);
                 setRequestStatus("error");
                 setStreamingMessageId(null);
               },
               onComplete: (result, context) => {
                 // Skip premature commit when orchestrator is doing a web search re-prompt
                 if (useChatStore.getState().isBufferClearSkipped()) return;
+                setModelLoadProgress(null);
                 const memoryPack = context?.memoryPack ?? null;
                 const memoryRetrieval = context?.memoryRetrieval;
                 const webSearchSources = context?.webSearchSources;
@@ -390,6 +405,7 @@ function App() {
               setStreamingMessageId(null);
               setRequestStatus((status) => (status === "error" ? "error" : "idle"));
             }
+            setModelLoadProgress(null);
             if (activeChatJobIdRef.current === jobId) activeChatJobIdRef.current = null;
           }
         },
@@ -405,9 +421,11 @@ function App() {
       clearStreamingBufferUnlessSkipped,
       commitAssistantMessage,
       createConversation,
+      setModelLoadProgress,
       selectedModel,
       selectedProvider,
       supportsImages,
+      webSearchEnabled,
     ],
   );
 
@@ -476,6 +494,7 @@ function App() {
             defaultMemoryEnabled={defaultMemoryEnabled}
             onTriggerMemoryExtraction={handleTriggerMemoryExtraction}
             sidebarsCollapsed={sidebarsCollapsed}
+            modelLoadProgress={modelLoadProgress}
           />
         )}
         <RightPanel
@@ -483,6 +502,8 @@ function App() {
           collapsed={rightPanelCollapsed}
           onCollapsedChange={setRightPanelCollapsed}
           hidden={!isChatMode}
+          webSearchEnabled={webSearchEnabled}
+          onWebSearchChange={setWebSearchEnabled}
         />
       </div>
     </div>

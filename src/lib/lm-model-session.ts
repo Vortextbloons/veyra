@@ -65,6 +65,7 @@ async function fetchActualLoadedModelInstances(): Promise<LoadedLmStudioModelIns
 export async function ensureLmStudioModel(
   modelId: string,
   signal?: AbortSignal,
+  onProgress?: (phase: string, percent?: number) => void,
 ): Promise<void> {
   return runLmStudioExclusive(async () => {
     if (signal?.aborted) return;
@@ -83,10 +84,18 @@ export async function ensureLmStudioModel(
 
     if (instancesToUnload.length === 0 && actualTargetLoaded) {
       loadedModelId = next;
+      onProgress?.("ready");
       return;
     }
 
-    if (instancesToUnload.length === 0 && sameLmStudioModel(loadedModelId ?? "", next)) return;
+    if (instancesToUnload.length === 0 && sameLmStudioModel(loadedModelId ?? "", next)) {
+      onProgress?.("ready");
+      return;
+    }
+
+    if (instancesToUnload.length > 0) {
+      onProgress?.("unloading");
+    }
 
     for (const loadedInstance of instancesToUnload) {
       await unloadDirect(loadedInstance.instanceId);
@@ -94,10 +103,13 @@ export async function ensureLmStudioModel(
 
     if (actualTargetLoaded) {
       loadedModelId = next;
+      onProgress?.("ready");
       return;
     }
 
+    onProgress?.("loading");
     await loadDirect(next);
+    onProgress?.("ready");
   });
 }
 
@@ -105,8 +117,9 @@ export async function ensureLmStudioModel(
 export async function prepareUserChatModel(
   chatModel: string,
   signal?: AbortSignal,
+  onProgress?: (phase: string, percent?: number) => void,
 ): Promise<void> {
-  await ensureLmStudioModel(chatModel, signal);
+  await ensureLmStudioModel(chatModel, signal, onProgress);
 }
 
 export type PostChatPipelineOptions = {

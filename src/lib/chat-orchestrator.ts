@@ -30,6 +30,8 @@ export type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete
   messages: ChatMessage[];
   /** When false, no memory retrieval, no pack injection, no extraction. */
   memoryEnabled: boolean;
+  /** When false, web search tools are not offered and searches are not run. */
+  webSearchEnabled: boolean;
   conversationId?: string;
   projectId?: string;
   onComplete?: (
@@ -49,6 +51,7 @@ export async function sendChatRequest({
   providerId,
   messages,
   memoryEnabled,
+  webSearchEnabled,
   conversationId,
   projectId,
   ...options
@@ -60,7 +63,6 @@ export async function sendChatRequest({
   }
 
   const settings = useSettingsStore.getState();
-  const webSearchEnabled = settings.webSearchEnabled;
 
   const { pack: memoryPack, info: memoryRetrieval } = await buildMemoryPackWithInfo({
     enabled: memoryEnabled,
@@ -217,7 +219,7 @@ export async function sendChatRequest({
         memoryPack: memoryPack ?? null,
         conversationSummary: conversation?.conversationSummary,
         summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
-        toolsBlock: buildToolsBlock(settings),
+        toolsBlock: buildToolsBlock(webSearchEnabled),
         contextAnchoringBlock,
       },
       resolvedContextLength,

@@ -1,5 +1,3 @@
-import type { SettingsStoreState } from "@/stores/settings-store";
-
 export interface ToolDefinition {
   id: string;
   name: string;
@@ -25,15 +23,15 @@ trivial or timeless questions.`,
 
 const ALL_TOOLS: ToolDefinition[] = [WEB_SEARCH_TOOL];
 
-export function getEnabledTools(settings: SettingsStoreState): ToolDefinition[] {
+export function getEnabledTools(webSearchEnabled: boolean): ToolDefinition[] {
   return ALL_TOOLS.map((tool) => ({
     ...tool,
-    enabled: tool.id === "web-search" ? settings.webSearchEnabled : false,
+    enabled: tool.id === "web-search" ? webSearchEnabled : false,
   })).filter((tool) => tool.enabled);
 }
 
-export function buildToolsBlock(settings: SettingsStoreState): string {
-  const enabled = getEnabledTools(settings);
+export function buildToolsBlock(webSearchEnabled: boolean): string {
+  const enabled = getEnabledTools(webSearchEnabled);
   if (enabled.length === 0) return "";
 
   const toolEntries = enabled

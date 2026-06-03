@@ -14,9 +14,11 @@ export type ChatSendParams = {
   selectedProvider: string;
   selectedModel: string;
   memoryEnabled: boolean;
+  webSearchEnabled: boolean;
   signal: AbortSignal;
   onChunk: (chunk: string) => void;
   onReasoningChunk: (chunk: string) => void;
+  onModelLoadProgress?: (phase: string, percent?: number) => void;
   onError: (error: string) => void;
   onComplete: (result: LmChatCompleteResult, context: SendChatCompleteContext) => void;
 };
@@ -44,9 +46,11 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     selectedProvider,
     selectedModel,
     memoryEnabled,
+    webSearchEnabled,
     signal,
     onChunk,
     onReasoningChunk,
+    onModelLoadProgress,
     onError,
     onComplete,
   } = params;
@@ -55,7 +59,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     void trySaveExplicitMemory(trimmed, { conversationId });
   }
 
-  await prepareUserChatModel(selectedModel, signal);
+  await prepareUserChatModel(selectedModel, signal, onModelLoadProgress);
 
   const liveConversation = useChatStore
     .getState()
@@ -79,12 +83,14 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     previousResponseId,
     signal,
     memoryEnabled,
+    webSearchEnabled,
     conversationId,
     projectId: undefined,
     onChunk,
     onReasoningChunk,
     onError,
     onComplete,
+    onModelLoadProgress,
   });
 
   const chatModel = useProviderStore.getState().selectedModel.trim();

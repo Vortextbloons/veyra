@@ -126,6 +126,7 @@ function processV1StreamEvent(
   state: StreamState,
   onChunk: (content: string, done: boolean) => void,
   onReasoningChunk?: (content: string, done: boolean) => void,
+  onModelLoadProgress?: (phase: string, percent?: number) => void,
 ): "continue" | "done" {
   if (!data) return "continue";
 
@@ -153,6 +154,21 @@ function processV1StreamEvent(
       if (state.firstTokenAt == null) state.firstTokenAt = Date.now();
       state.accumulatedContent += parsed.content;
       onChunk(parsed.content, false);
+      return "continue";
+    }
+
+    if (type.startsWith("model_load.")) {
+      const phase = type === "model_load.start" ? "loading"
+        : type === "model_load.progress" ? "loading"
+        : type === "model_load.end" ? "ready"
+        : type === "model_load.error" ? "error"
+        : "loading";
+      const percent = typeof parsed === "object" && parsed !== null
+        ? (parsed as Record<string, unknown>).percent != null
+          ? Number((parsed as Record<string, unknown>).percent)
+          : undefined
+        : undefined;
+      onModelLoadProgress?.(phase, Number.isFinite(percent) ? percent : undefined);
       return "continue";
     }
 
@@ -500,6 +516,7 @@ export async function sendLmStudioChat(options: {
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
+  onModelLoadProgress?: (phase: string, percent?: number) => void;
   onComplete?: (result: LmChatCompleteResult) => void;
   onError: (error: string) => void;
 }): Promise<void> {
@@ -518,6 +535,7 @@ async function sendLmStudioChatImpl(options: {
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
+  onModelLoadProgress?: (phase: string, percent?: number) => void;
   onComplete?: (result: LmChatCompleteResult) => void;
   onError: (error: string) => void;
 }): Promise<void> {
@@ -533,6 +551,7 @@ async function sendLmStudioChatImpl(options: {
     signal,
     onChunk,
     onReasoningChunk,
+    onModelLoadProgress,
     onComplete,
     onError,
   } = options;
@@ -572,7 +591,7 @@ async function sendLmStudioChatImpl(options: {
     }
 
     const handleEvent = (eventType: string, data: string) =>
-      processV1StreamEvent(eventType, data, streamState, onChunk, onReasoningChunk);
+      processV1StreamEvent(eventType, data, streamState, onChunk, onReasoningChunk, onModelLoadProgress);
 
     if (res.body) {
       await readV1SseStream(res.body, handleEvent, signal);

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, Conversation, WebSearchState } from "@/lib/chat-types";
+import type { ChatMessage, Conversation, ModelLoadProgress, WebSearchState } from "@/lib/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 
 export type ConversationHydrationState = "loading" | "ready";
@@ -17,6 +17,7 @@ type ChatStore = {
   activeConversationId: string | null;
   hydrationState: ConversationHydrationState;
   streamingBuffer: StreamingBuffer;
+  modelLoadProgress: ModelLoadProgress;
   _skipNextClear: boolean;
   hydrateConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
@@ -36,6 +37,7 @@ type ChatStore = {
   isBufferClearSkipped: () => boolean;
   skipNextBufferClear: () => void;
   resetAfterRePrompt: () => void;
+  setModelLoadProgress: (progress: ModelLoadProgress) => void;
   setStreamingWebSearchState: (state: WebSearchState) => void;
   commitAssistantMessage: (
     conversationId: string,
@@ -70,6 +72,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   activeConversationId: null,
   hydrationState: "loading",
   streamingBuffer: null,
+  modelLoadProgress: null,
   _skipNextClear: false,
   hydrateConversations: async () => {
     if (get().hydrationState === "ready") return;
@@ -174,6 +177,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isBufferClearSkipped: () => get()._skipNextClear,
   skipNextBufferClear: () => set({ _skipNextClear: true }),
   resetAfterRePrompt: () => set({ streamingBuffer: null, _skipNextClear: false }),
+  setModelLoadProgress: (progress) => set({ modelLoadProgress: progress }),
   setStreamingWebSearchState: (webSearchState) => {
     set((state) => {
       if (!state.streamingBuffer) return state;
