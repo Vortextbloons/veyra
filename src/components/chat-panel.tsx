@@ -27,7 +27,7 @@ import {
   Search,
   ExternalLink,
 } from "lucide-react";
-import type { ChatMessage, ChatPanelProps, MessagePerformance, WebSearchState } from "@/lib/chat-types";
+import type { ChatMessage, ChatMode, ChatPanelProps, MessagePerformance, WebSearchState } from "@/lib/chat-types";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import {
   fileToAttachment,
@@ -42,8 +42,7 @@ import { ModelLoadingBar } from "@/components/model-loading-bar";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Toggle } from "@/components/toggle";
 import { useClickOutside } from "@/hooks/use-click-outside";
-
-type ChatMode = "chat" | "agents";
+import { AgentsPanel } from "@/modules/agents/components/agents-panel";
 
 function chatLayoutClasses(sidebarsCollapsed: number) {
   const wide = sidebarsCollapsed >= 1;
@@ -80,10 +79,24 @@ export function ChatPanel({
   onTriggerMemoryExtraction,
   sidebarsCollapsed = 0,
   modelLoadProgress,
+  mode: controlledMode,
+  defaultMode = "chat",
+  onModeChange,
+  agentSessions = [],
+  activeAgentSessionId = null,
+  agentRuntimeAvailable = null,
+  agentMode = "plan",
+  agentProjectPath = "",
+  onAgentModeChange,
+  onAgentProjectPathChange,
+  onAgentRuntimeCheck,
+  onAgentSessionSelect,
+  onAgentSessionStop,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(defaultMemoryEnabled);
   const [showReasoning, setShowReasoning] = useState(true);
-  const [mode, setMode] = useState<ChatMode>("chat");
+  const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
+  const mode = controlledMode ?? internalMode;
 
   const currentProvider = providers.find((p) => p.id === selectedProvider);
   const providerLabel = currentProvider?.name ?? "LM Studio";
@@ -143,6 +156,14 @@ export function ChatPanel({
       supportsImages: m.supportsImages,
     }));
   }, [favoriteModels, models, providerLabel]);
+
+  const handleModeChange = useCallback(
+    (nextMode: ChatMode) => {
+      if (controlledMode === undefined) setInternalMode(nextMode);
+      onModeChange?.(nextMode);
+    },
+    [controlledMode, onModeChange],
+  );
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
@@ -238,7 +259,20 @@ export function ChatPanel({
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 z-0 h-32 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.08),transparent_70%)]"
         />
-        {messages.length === 0 ? (
+        {mode === "agents" ? (
+          <AgentsPanel
+            sessions={agentSessions}
+            activeSessionId={activeAgentSessionId}
+            runtimeAvailable={agentRuntimeAvailable}
+            mode={agentMode}
+            projectPath={agentProjectPath}
+            onModeChange={(nextMode) => onAgentModeChange?.(nextMode)}
+            onProjectPathChange={(path) => onAgentProjectPathChange?.(path)}
+            onCheckRuntime={() => onAgentRuntimeCheck?.()}
+            onSelectSession={(id) => onAgentSessionSelect?.(id)}
+            onStopSession={(id) => onAgentSessionStop?.(id)}
+          />
+        ) : messages.length === 0 ? (
           <div className="relative z-10 flex flex-1 items-center justify-center px-6">
             <EmptyChat />
           </div>
@@ -274,7 +308,7 @@ export function ChatPanel({
               showReasoning={showReasoning}
           onShowReasoningChange={setShowReasoning}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
           onSend={onSend}
           disabled={isStreaming}
           supportsImages={supportsImages}

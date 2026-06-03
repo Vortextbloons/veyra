@@ -1,5 +1,5 @@
-use tauri::State;
 use crate::memory_db::{self, MemoryDbState};
+use tauri::State;
 
 macro_rules! with_db {
     ($state:expr, |$conn:ident| $body:expr) => {{
@@ -72,5 +72,10 @@ pub fn search_memory(
     project_id: Option<String>,
     state: State<'_, MemoryDbState>,
 ) -> Result<Vec<memory_db::MemoryNodeRow>, String> {
-    with_db!(state, |conn| memory_db::search_nodes(conn, query, limit as i64, project_id))
+    with_db!(state, |conn| memory_db::search_nodes(
+        conn,
+        query,
+        limit as i64,
+        project_id
+    ))
 }

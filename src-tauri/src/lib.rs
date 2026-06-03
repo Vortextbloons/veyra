@@ -6,6 +6,7 @@ use tauri::{Manager, RunEvent, WindowEvent};
 /// stealing focus on Vite HMR remounts during `tauri dev`).
 static INITIAL_WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
 
+mod agent_commands;
 mod memory_commands;
 mod memory_db;
 mod searxng_setup;
@@ -101,6 +102,8 @@ pub fn run() {
             save_conversation_key,
             app_ready,
             exit_app,
+            agent_commands::check_opencode_available,
+            agent_commands::run_opencode_agent,
             memory_commands::list_memory_folders,
             memory_commands::list_memory_files,
             memory_commands::list_memory_nodes,

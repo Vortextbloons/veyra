@@ -6,7 +6,7 @@ import { ChatPanel } from "@/components/chat-panel";
 import { RightPanel } from "@/components/right-panel";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { executeChatSend, ensureProviderReady, triggerMemoryExtractionNow } from "@/lib/chat-actions";
-import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
+import type { ChatMessage, ChatMode, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
 import { isChatModeNav } from "@/lib/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { getContextStats } from "@/lib/context";
@@ -19,6 +19,7 @@ import {
   markStartup,
 } from "@/lib/startup";
 import { useChatStore } from "@/stores/chat-store";
+import { useAgentStore } from "@/modules/agents/agent-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
 import {
@@ -76,6 +77,7 @@ function App() {
   const [zoom, setZoom] = useState<number>(loadZoom);
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("idle");
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [chatMode, setChatMode] = useState<ChatMode>("chat");
   const activeChatJobIdRef = useRef<string | null>(null);
 
   const conversations = useChatStore((state) => state.conversations);
@@ -228,13 +230,14 @@ function App() {
   }, [activeConversation?.id, activeConversation?.messages, streamingBuffer]);
 
   const resolvedContextLength = getModelSettings(selectedModel).contextLength;
+  const resolvedReservedOutputTokens = getModelSettings(selectedModel).reservedOutputTokens;
 
   const contextStats: ContextStats | undefined = useMemo(
     () =>
       activeConversation
-        ? getContextStats(activeConversation.messages, resolvedContextLength)
+        ? getContextStats(activeConversation.messages, resolvedContextLength, resolvedReservedOutputTokens)
         : undefined,
-    [activeConversation, resolvedContextLength],
+    [activeConversation, resolvedContextLength, resolvedReservedOutputTokens],
   );
 
   const recentChats: RecentChatsItem[] = useMemo(
@@ -288,6 +291,24 @@ function App() {
   const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
   const modelLoadProgress = useChatStore((state) => state.modelLoadProgress);
 
+  const agentSessions = useAgentStore((state) => state.sessions);
+  const activeAgentSessionId = useAgentStore((state) => state.activeSessionId);
+  const agentRuntimeAvailable = useAgentStore((state) => state.runtimeAvailable);
+  const agentMode = useAgentStore((state) => state.mode);
+  const agentProjectPath = useAgentStore((state) => state.projectPath);
+  const setAgentMode = useAgentStore((state) => state.setMode);
+  const setAgentProjectPath = useAgentStore((state) => state.setProjectPath);
+  const setActiveAgentSessionId = useAgentStore((state) => state.setActiveSessionId);
+  const checkAgentRuntime = useAgentStore((state) => state.checkRuntime);
+  const startAgentSession = useAgentStore((state) => state.startSession);
+  const stopAgentSession = useAgentStore((state) => state.stopSession);
+
+  useEffect(() => {
+    if (chatMode === "agents" && agentRuntimeAvailable == null) {
+      void checkAgentRuntime();
+    }
+  }, [agentRuntimeAvailable, chatMode, checkAgentRuntime]);
+
   const handleSend = useCallback(
     (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
       const memoryEnabled =
@@ -296,6 +317,16 @@ function App() {
       const imageAttachments =
         attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
       if (!trimmed && imageAttachments.length === 0) return;
+
+      if (chatMode === "agents") {
+        if (!trimmed) return;
+        void startAgentSession({
+          mode: agentMode,
+          projectPath: agentProjectPath,
+          prompt: trimmed,
+        });
+        return;
+      }
 
       if (imageAttachments.length > 0 && !supportsImages) {
         return;
@@ -415,8 +446,11 @@ function App() {
     [
       activeConversationId,
       addMessagePair,
+      agentMode,
+      agentProjectPath,
       appendStreamingContent,
       appendStreamingReasoning,
+      chatMode,
       clearStreamingBuffer,
       clearStreamingBufferUnlessSkipped,
       commitAssistantMessage,
@@ -424,6 +458,7 @@ function App() {
       setModelLoadProgress,
       selectedModel,
       selectedProvider,
+      startAgentSession,
       supportsImages,
       webSearchEnabled,
     ],
@@ -495,6 +530,18 @@ function App() {
             onTriggerMemoryExtraction={handleTriggerMemoryExtraction}
             sidebarsCollapsed={sidebarsCollapsed}
             modelLoadProgress={modelLoadProgress}
+            mode={chatMode}
+            onModeChange={setChatMode}
+            agentSessions={agentSessions}
+            activeAgentSessionId={activeAgentSessionId}
+            agentRuntimeAvailable={agentRuntimeAvailable}
+            agentMode={agentMode}
+            agentProjectPath={agentProjectPath}
+            onAgentModeChange={setAgentMode}
+            onAgentProjectPathChange={setAgentProjectPath}
+            onAgentRuntimeCheck={() => void checkAgentRuntime()}
+            onAgentSessionSelect={setActiveAgentSessionId}
+            onAgentSessionStop={stopAgentSession}
           />
         )}
         <RightPanel

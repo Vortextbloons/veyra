@@ -122,10 +122,7 @@ pub async fn web_search_searxng(
                         .and_then(|e| e.as_str())
                         .unwrap_or("unknown")
                         .to_string(),
-                    score: item
-                        .get("score")
-                        .and_then(|s| s.as_f64())
-                        .unwrap_or(0.0),
+                    score: item.get("score").and_then(|s| s.as_f64()).unwrap_or(0.0),
                 })
                 .collect::<Vec<_>>()
         })
@@ -169,13 +166,16 @@ pub async fn test_searxng_connection(base_url: String) -> Result<bool, String> {
         ));
     }
 
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|_| "SearXNG responded but did not return valid JSON. Ensure format=json is supported.".to_string())?;
+    let body: serde_json::Value = response.json().await.map_err(|_| {
+        "SearXNG responded but did not return valid JSON. Ensure format=json is supported."
+            .to_string()
+    })?;
 
     if body.get("results").and_then(|r| r.as_array()).is_none() {
-        return Err("SearXNG responded with JSON but no results array. The instance may be misconfigured.".into());
+        return Err(
+            "SearXNG responded with JSON but no results array. The instance may be misconfigured."
+                .into(),
+        );
     }
 
     Ok(true)

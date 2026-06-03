@@ -8,7 +8,7 @@ import {
 } from "@/lib/prompts";
 
 const DEFAULT_CONTEXT_LIMIT = 8192;
-const RESERVED_OUTPUT_TOKENS = 1024;
+const DEFAULT_RESERVED_OUTPUT_TOKENS = 1024;
 const TOKENS_PER_IMAGE = 512; // rough vision patch budget
 
 /**
@@ -30,6 +30,10 @@ export interface BuildChatContextOptions {
   webSearchContextBlock?: string | null;
   /** Context anchoring block for first message (date/time, platform). */
   contextAnchoringBlock?: string | null;
+  /** Custom user system prompt prepended before the core prompt. */
+  userPrompt?: string | null;
+  /** Number of tokens reserved for the model's response. */
+  reservedOutputTokens?: number;
 }
 
 /**
@@ -65,8 +69,9 @@ function buildSystemContent(options: BuildChatContextOptions): string {
     || undefined;
 
   const contextAnchoringBlock = options.contextAnchoringBlock?.trim() || undefined;
+  const userPrompt = options.userPrompt?.trim() || undefined;
 
-  return composeMainSystemPrompt({ memoryBlock, summaryBlock, toolsBlock: webSearchBlock, contextAnchoringBlock });
+  return composeMainSystemPrompt({ userPrompt, memoryBlock, summaryBlock, toolsBlock: webSearchBlock, contextAnchoringBlock });
 }
 
 /**
@@ -102,7 +107,8 @@ export function buildChatContext(
       : messages;
 
   const limit = contextLimit ?? DEFAULT_CONTEXT_LIMIT;
-  const budget = limit - RESERVED_OUTPUT_TOKENS;
+  const reserved = options.reservedOutputTokens ?? DEFAULT_RESERVED_OUTPUT_TOKENS;
+  const budget = limit - reserved;
   let remaining = budget - estimateTokens(systemMessage.content);
 
   const included: ChatMessage[] = [];
@@ -128,8 +134,13 @@ export function buildChatContext(
  * raw conversation length. The caller can add pack token count to the result
  * if they need budget visibility for memory.
  */
-export function getContextStats(messages: ChatMessage[], contextLimit?: number): ContextStats {
+export function getContextStats(
+  messages: ChatMessage[],
+  contextLimit?: number,
+  reservedOutputTokens?: number,
+): ContextStats {
   const limit = contextLimit ?? DEFAULT_CONTEXT_LIMIT;
+  const reserved = reservedOutputTokens ?? DEFAULT_RESERVED_OUTPUT_TOKENS;
   const systemTokens = estimateTokens(VEYRA_CORE_SYSTEM);
   const totalMessageTokens = messages.reduce(
     (sum, msg) => sum + estimateMessageTokens(msg),
@@ -137,7 +148,7 @@ export function getContextStats(messages: ChatMessage[], contextLimit?: number):
   );
   const estimatedTokens = systemTokens + totalMessageTokens;
 
-  const built = buildChatContext(messages, {}, limit);
+  const built = buildChatContext(messages, { reservedOutputTokens: reserved }, limit);
   const includedMessages = built.length - 1;
   const droppedMessages = messages.length - includedMessages;
 
@@ -147,6 +158,6 @@ export function getContextStats(messages: ChatMessage[], contextLimit?: number):
     percentUsed: Math.round((estimatedTokens / limit) * 100),
     includedMessages,
     droppedMessages,
-    reservedOutputTokens: RESERVED_OUTPUT_TOKENS,
+    reservedOutputTokens: reserved,
   };
 }

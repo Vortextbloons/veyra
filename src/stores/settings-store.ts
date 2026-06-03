@@ -6,6 +6,12 @@ const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 export interface ModelSettings {
   temperature?: number;
   contextLength?: number;
+  maxTokens?: number;
+  topP?: number;
+  repetitionPenalty?: number;
+  stopSequences?: string[];
+  reservedOutputTokens?: number;
+  systemPrompt?: string;
 }
 
 export type SettingsStoreState = {
@@ -23,6 +29,12 @@ export type SettingsStoreState = {
   defaultMemoryEnabled: boolean;
   defaultTemperature: number;
   defaultContextLength: number;
+  defaultMaxTokens: number;
+  defaultTopP: number;
+  defaultRepetitionPenalty: number;
+  defaultStopSequences: string[];
+  defaultReservedOutputTokens: number;
+  defaultSystemPrompt: string;
   modelOverrides: Record<string, ModelSettings>;
   backgroundJobsEnabled: boolean;
   autoSummarizeChats: boolean;
@@ -35,6 +47,17 @@ export type SettingsStoreState = {
   webSearchDefaultMode: "auto" | "always" | "off";
   searxngSetupError: string;
   contextAnchoringEnabled: boolean;
+};
+
+export type ResolvedModelSettings = {
+  temperature: number;
+  contextLength: number;
+  maxTokens: number;
+  topP: number;
+  repetitionPenalty: number;
+  stopSequences: string[];
+  reservedOutputTokens: number;
+  systemPrompt: string;
 };
 
 export type SettingsStore = SettingsStoreState & {
@@ -52,9 +75,15 @@ export type SettingsStore = SettingsStoreState & {
   setDefaultMemoryEnabled: (enabled: boolean) => void;
   setDefaultTemperature: (n: number) => void;
   setDefaultContextLength: (n: number) => void;
+  setDefaultMaxTokens: (n: number) => void;
+  setDefaultTopP: (n: number) => void;
+  setDefaultRepetitionPenalty: (n: number) => void;
+  setDefaultStopSequences: (s: string[]) => void;
+  setDefaultReservedOutputTokens: (n: number) => void;
+  setDefaultSystemPrompt: (s: string) => void;
   setModelOverride: (modelId: string, settings: ModelSettings) => void;
   clearModelOverride: (modelId: string) => void;
-  getModelSettings: (modelId: string) => { temperature: number; contextLength: number };
+  getModelSettings: (modelId: string) => ResolvedModelSettings;
   setBackgroundJobsEnabled: (enabled: boolean) => void;
   setAutoSummarizeChats: (enabled: boolean) => void;
   setSummaryModel: (modelId: string) => void;
@@ -83,6 +112,12 @@ const DEFAULT_STATE: SettingsStoreState = {
   defaultMemoryEnabled: true,
   defaultTemperature: 0.7,
   defaultContextLength: 8192,
+  defaultMaxTokens: 0,
+  defaultTopP: 1.0,
+  defaultRepetitionPenalty: 1.0,
+  defaultStopSequences: [],
+  defaultReservedOutputTokens: 1024,
+  defaultSystemPrompt: "",
   modelOverrides: {},
   backgroundJobsEnabled: true,
   autoSummarizeChats: false,
@@ -134,6 +169,12 @@ function persistState(state: SettingsStoreState) {
       defaultMemoryEnabled: state.defaultMemoryEnabled,
       defaultTemperature: state.defaultTemperature,
       defaultContextLength: state.defaultContextLength,
+      defaultMaxTokens: state.defaultMaxTokens,
+      defaultTopP: state.defaultTopP,
+      defaultRepetitionPenalty: state.defaultRepetitionPenalty,
+      defaultStopSequences: state.defaultStopSequences,
+      defaultReservedOutputTokens: state.defaultReservedOutputTokens,
+      defaultSystemPrompt: state.defaultSystemPrompt,
       modelOverrides: state.modelOverrides,
       backgroundJobsEnabled: state.backgroundJobsEnabled,
       autoSummarizeChats: state.autoSummarizeChats,
@@ -144,6 +185,7 @@ function persistState(state: SettingsStoreState) {
       defaultWebSearchEnabled: state.defaultWebSearchEnabled,
       webSearchSearxngUrl: state.webSearchSearxngUrl,
       webSearchDefaultMode: state.webSearchDefaultMode,
+      searxngSetupError: state.searxngSetupError,
       contextAnchoringEnabled: state.contextAnchoringEnabled,
     };
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(subset));
@@ -194,6 +236,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setDefaultMemoryEnabled: (defaultMemoryEnabled) => apply({ defaultMemoryEnabled }),
     setDefaultTemperature: (defaultTemperature) => apply({ defaultTemperature }),
     setDefaultContextLength: (defaultContextLength) => apply({ defaultContextLength }),
+    setDefaultMaxTokens: (defaultMaxTokens) => apply({ defaultMaxTokens }),
+    setDefaultTopP: (defaultTopP) => apply({ defaultTopP }),
+    setDefaultRepetitionPenalty: (defaultRepetitionPenalty) => apply({ defaultRepetitionPenalty }),
+    setDefaultStopSequences: (defaultStopSequences) => apply({ defaultStopSequences }),
+    setDefaultReservedOutputTokens: (defaultReservedOutputTokens) => apply({ defaultReservedOutputTokens }),
+    setDefaultSystemPrompt: (defaultSystemPrompt) => apply({ defaultSystemPrompt }),
     setModelOverride: (modelId: string, settings: ModelSettings) => {
       const current = get().modelOverrides;
       apply({ modelOverrides: { ...current, [modelId]: settings } });
@@ -204,12 +252,18 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
       delete next[modelId];
       apply({ modelOverrides: next });
     },
-    getModelSettings: (modelId: string): { temperature: number; contextLength: number } => {
+    getModelSettings: (modelId: string): ResolvedModelSettings => {
       const state = get();
       const override = state.modelOverrides[modelId];
       return {
         temperature: override?.temperature ?? state.defaultTemperature,
         contextLength: override?.contextLength ?? state.defaultContextLength,
+        maxTokens: override?.maxTokens ?? state.defaultMaxTokens,
+        topP: override?.topP ?? state.defaultTopP,
+        repetitionPenalty: override?.repetitionPenalty ?? state.defaultRepetitionPenalty,
+        stopSequences: override?.stopSequences ?? state.defaultStopSequences,
+        reservedOutputTokens: override?.reservedOutputTokens ?? state.defaultReservedOutputTokens,
+        systemPrompt: override?.systemPrompt ?? state.defaultSystemPrompt,
       };
     },
     setBackgroundJobsEnabled: (backgroundJobsEnabled) => apply({ backgroundJobsEnabled }),

@@ -102,10 +102,7 @@ fn find_docker() -> Option<PathBuf> {
 
     #[cfg(target_os = "macos")]
     {
-        let candidates = [
-            "/usr/local/bin/docker",
-            "/opt/homebrew/bin/docker",
-        ];
+        let candidates = ["/usr/local/bin/docker", "/opt/homebrew/bin/docker"];
         for path in &candidates {
             let p = PathBuf::from(path);
             if p.exists() {
@@ -121,9 +118,9 @@ fn find_docker() -> Option<PathBuf> {
 fn find_docker_desktop_app() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        let candidates = [
-            PathBuf::from(r"C:\Program Files\Docker\Docker\Docker Desktop.exe"),
-        ];
+        let candidates = [PathBuf::from(
+            r"C:\Program Files\Docker\Docker\Docker Desktop.exe",
+        )];
         for p in &candidates {
             if p.exists() {
                 return Some(p.clone());
@@ -267,7 +264,8 @@ fn wait_for_docker_daemon() -> Result<(), String> {
 
 fn ensure_docker_daemon() -> Result<(), String> {
     find_docker().ok_or_else(|| {
-        "Docker is not installed. Install Docker Desktop to use automatic SearXNG setup.".to_string()
+        "Docker is not installed. Install Docker Desktop to use automatic SearXNG setup."
+            .to_string()
     })?;
 
     if is_docker_daemon_running() {
@@ -431,9 +429,7 @@ pub async fn start_searxng_container(
 
 /// Stop the SearXNG container.
 #[tauri::command]
-pub async fn stop_searxng_container(
-    state: tauri::State<'_, SearxngState>,
-) -> Result<(), String> {
+pub async fn stop_searxng_container(state: tauri::State<'_, SearxngState>) -> Result<(), String> {
     stop_container();
     state.clear_started();
     Ok(())

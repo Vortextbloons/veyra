@@ -69,6 +69,9 @@ function buildV1ChatBody(options: {
   contextLength?: number;
   previousResponseId?: string;
   maxTokens?: number;
+  topP?: number;
+  repetitionPenalty?: number;
+  stopSequences?: string[];
   store?: boolean;
 }): Record<string, unknown> {
   const {
@@ -77,6 +80,9 @@ function buildV1ChatBody(options: {
     temperature,
     previousResponseId,
     maxTokens,
+    topP,
+    repetitionPenalty,
+    stopSequences,
     store = true,
   } = options;
   const systemPrompt = messages
@@ -94,6 +100,18 @@ function buildV1ChatBody(options: {
 
   if (maxTokens != null && maxTokens > 0) {
     body.max_tokens = maxTokens;
+  }
+
+  if (topP != null && topP < 1) {
+    body.top_p = topP;
+  }
+
+  if (repetitionPenalty != null && repetitionPenalty !== 1) {
+    body.repeat_penalty = repetitionPenalty;
+  }
+
+  if (stopSequences && stopSequences.length > 0) {
+    body.stop = stopSequences;
   }
 
   if (systemPrompt) {
@@ -511,6 +529,9 @@ export async function sendLmStudioChat(options: {
   temperature?: number;
   contextLength?: number;
   maxTokens?: number;
+  topP?: number;
+  repetitionPenalty?: number;
+  stopSequences?: string[];
   store?: boolean;
   previousResponseId?: string;
   signal?: AbortSignal;
@@ -530,6 +551,9 @@ async function sendLmStudioChatImpl(options: {
   temperature?: number;
   contextLength?: number;
   maxTokens?: number;
+  topP?: number;
+  repetitionPenalty?: number;
+  stopSequences?: string[];
   store?: boolean;
   previousResponseId?: string;
   signal?: AbortSignal;
@@ -546,6 +570,9 @@ async function sendLmStudioChatImpl(options: {
     temperature,
     contextLength,
     maxTokens,
+    topP,
+    repetitionPenalty,
+    stopSequences,
     store,
     previousResponseId,
     signal,
@@ -573,6 +600,9 @@ async function sendLmStudioChatImpl(options: {
           temperature,
           contextLength,
           maxTokens,
+          topP,
+          repetitionPenalty,
+          stopSequences,
           store,
           previousResponseId,
         }),

@@ -154,6 +154,10 @@ export async function sendChatRequest({
               onReasoningChunk: options.onReasoningChunk,
               temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
               contextLength: resolvedContextLength,
+              maxTokens: resolvedMaxTokens || undefined,
+              topP: resolvedTopP,
+              repetitionPenalty: resolvedRepetitionPenalty,
+              stopSequences: resolvedStopSequences,
               onComplete: (rePromptResult) => {
                 // Mark search as done
                 useChatStore.getState().setStreamingWebSearchState({
@@ -172,6 +176,8 @@ export async function sendChatRequest({
                   conversationSummary: conversation?.conversationSummary,
                   summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
                   webSearchContextBlock: contextBlock,
+                  userPrompt: resolvedUserPrompt,
+                  reservedOutputTokens: resolvedReservedOutputTokens,
                 },
                 resolvedContextLength,
               ),
@@ -197,6 +203,12 @@ export async function sendChatRequest({
   };
 
   const resolvedContextLength = options.contextLength ?? settings.getModelSettings(options.model).contextLength;
+  const resolvedMaxTokens = options.maxTokens ?? settings.getModelSettings(options.model).maxTokens;
+  const resolvedTopP = options.topP ?? settings.getModelSettings(options.model).topP;
+  const resolvedRepetitionPenalty = options.repetitionPenalty ?? settings.getModelSettings(options.model).repetitionPenalty;
+  const resolvedStopSequences = options.stopSequences ?? settings.getModelSettings(options.model).stopSequences;
+  const resolvedReservedOutputTokens = settings.getModelSettings(options.model).reservedOutputTokens;
+  const resolvedUserPrompt = settings.getModelSettings(options.model).systemPrompt || undefined;
 
   const conversation = conversationId
     ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
@@ -211,6 +223,10 @@ export async function sendChatRequest({
     ...options,
     temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
     contextLength: resolvedContextLength,
+    maxTokens: resolvedMaxTokens || undefined,
+    topP: resolvedTopP,
+    repetitionPenalty: resolvedRepetitionPenalty,
+    stopSequences: resolvedStopSequences,
     onChunk: wrappedOnChunk,
     onComplete: wrappedOnComplete,
     messages: buildChatContext(
@@ -221,6 +237,8 @@ export async function sendChatRequest({
         summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
         toolsBlock: buildToolsBlock(webSearchEnabled),
         contextAnchoringBlock,
+        userPrompt: resolvedUserPrompt,
+        reservedOutputTokens: resolvedReservedOutputTokens,
       },
       resolvedContextLength,
     ),

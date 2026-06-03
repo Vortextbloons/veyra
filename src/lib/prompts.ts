@@ -28,12 +28,15 @@ ${trimmed}
 }
 
 export function composeMainSystemPrompt(options: {
+  userPrompt?: string;
   memoryBlock?: string;
   summaryBlock?: string;
   toolsBlock?: string;
   contextAnchoringBlock?: string;
 }): string {
-  const parts = [VEYRA_CORE_SYSTEM];
+  const parts: string[] = [];
+  if (options.userPrompt?.trim()) parts.push(options.userPrompt.trim());
+  parts.push(VEYRA_CORE_SYSTEM);
   if (options.contextAnchoringBlock?.trim()) parts.push(options.contextAnchoringBlock.trim());
   if (options.memoryBlock?.trim()) parts.push(options.memoryBlock.trim());
   if (options.summaryBlock?.trim()) parts.push(options.summaryBlock.trim());

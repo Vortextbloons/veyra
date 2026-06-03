@@ -2,8 +2,11 @@
 
 import type { MessageAttachment } from "@/lib/message-attachments";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
+import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
 
 export type ChatRole = "user" | "assistant" | "system";
+
+export type ChatMode = "chat" | "agents";
 
 export type WebSearchSource = {
   id: string;
@@ -146,6 +149,19 @@ export interface ChatPanelProps {
   sidebarsCollapsed?: number;
   onTriggerMemoryExtraction?: () => void;
   modelLoadProgress?: ModelLoadProgress;
+  mode?: ChatMode;
+  defaultMode?: ChatMode;
+  onModeChange?: (mode: ChatMode) => void;
+  agentSessions?: AgentSession[];
+  activeAgentSessionId?: string | null;
+  agentRuntimeAvailable?: boolean | null;
+  agentMode?: AgentMode;
+  agentProjectPath?: string;
+  onAgentModeChange?: (mode: AgentMode) => void;
+  onAgentProjectPathChange?: (path: string) => void;
+  onAgentRuntimeCheck?: () => void;
+  onAgentSessionSelect?: (id: string) => void;
+  onAgentSessionStop?: (id: string) => void;
 }
 
 export interface RightPanelProps {

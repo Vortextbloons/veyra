@@ -336,7 +336,7 @@ function CompactToolToggle({
         onClick={() => onChange(!on)}
         className={`grid size-8 place-items-center rounded-md transition-colors ${
           on
-            ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20 hover:bg-emerald-500/15"
+            ? "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
             : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
         }`}
       >

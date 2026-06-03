@@ -361,9 +361,19 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("schema migration failed: {}", e))?;
 
-        add_column_if_missing(conn, "memory_nodes", "priority", "TEXT NOT NULL DEFAULT 'medium'")?;
+        add_column_if_missing(
+            conn,
+            "memory_nodes",
+            "priority",
+            "TEXT NOT NULL DEFAULT 'medium'",
+        )?;
         add_column_if_missing(conn, "memory_nodes", "expires_at", "TEXT")?;
-        add_column_if_missing(conn, "memory_nodes", "source_message_ids", "TEXT NOT NULL DEFAULT '[]'")?;
+        add_column_if_missing(
+            conn,
+            "memory_nodes",
+            "source_message_ids",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
         add_column_if_missing(conn, "memory_nodes", "extraction_batch_id", "TEXT")?;
         add_column_if_missing(conn, "memory_nodes", "duplicate_of", "TEXT")?;
         add_column_if_missing(conn, "memory_nodes", "contradiction_of", "TEXT")?;
@@ -411,8 +421,11 @@ fn add_column_if_missing(
             return Ok(());
         }
     }
-    conn.execute(&format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition), [])
-        .map_err(|e| format!("add column {}.{} failed: {}", table, column, e))?;
+    conn.execute(
+        &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition),
+        [],
+    )
+    .map_err(|e| format!("add column {}.{} failed: {}", table, column, e))?;
     Ok(())
 }
 
@@ -718,8 +731,9 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
             "medium".to_string()
         }
     });
-    let source_message_ids_json = serde_json::to_string(&input.source_message_ids.unwrap_or_default())
-        .map_err(|e| format!("failed to serialize source_message_ids: {}", e))?;
+    let source_message_ids_json =
+        serde_json::to_string(&input.source_message_ids.unwrap_or_default())
+            .map_err(|e| format!("failed to serialize source_message_ids: {}", e))?;
     let use_count_val = input.use_count.unwrap_or(0);
     let content_val = input.content.unwrap_or_default();
     let summary_val = input.summary.unwrap_or_default();
@@ -1031,7 +1045,10 @@ fn search_nodes_fts(
     let project_filter = if let Some(pid) = project_id {
         let placeholder = params.len() + 1;
         params.push(Value::Text(pid));
-        format!(" AND (n.project_id IS NULL OR n.project_id = ?{})", placeholder)
+        format!(
+            " AND (n.project_id IS NULL OR n.project_id = ?{})",
+            placeholder
+        )
     } else {
         String::new()
     };

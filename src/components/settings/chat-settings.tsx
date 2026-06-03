@@ -7,6 +7,8 @@ import { useClickOutside } from "@/hooks/use-click-outside";
 import { ModelIcon } from "@/components/model-icon";
 
 export function ChatSettings() {
+  const defaultSystemPrompt = useSettingsStore((s) => s.defaultSystemPrompt);
+  const setDefaultSystemPrompt = useSettingsStore((s) => s.setDefaultSystemPrompt);
   const autoNameEnabled = useSettingsStore((s) => s.autoNameEnabled);
   const setAutoNameEnabled = useSettingsStore((s) => s.setAutoNameEnabled);
   const autoNameModel = useSettingsStore((s) => s.autoNameModel);
@@ -24,6 +26,24 @@ export function ChatSettings() {
 
   return (
     <div className="space-y-8">
+      <section>
+        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
+          System Prompt
+        </h2>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+          <textarea
+            value={defaultSystemPrompt}
+            onChange={(e) => setDefaultSystemPrompt(e.target.value)}
+            rows={6}
+            placeholder="You are a helpful assistant that..."
+            className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 font-mono text-[12px] leading-relaxed text-white placeholder:text-[var(--color-text-dim)]/50 focus:border-[var(--color-accent)]/40 focus:outline-none"
+          />
+          <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
+            Custom instructions prepended to every conversation. Leave empty to use Veyra's defaults.
+          </p>
+        </div>
+      </section>
+
       <section>
         <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
           Background Jobs

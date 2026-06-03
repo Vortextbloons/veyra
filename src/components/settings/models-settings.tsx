@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import type { ModelSettings } from "@/stores/settings-store";
 import {
   RefreshCw,
   Play,
@@ -28,6 +29,16 @@ export function ModelsSettings() {
   const setDefaultTemperature = useSettingsStore((s) => s.setDefaultTemperature);
   const defaultContextLength = useSettingsStore((s) => s.defaultContextLength);
   const setDefaultContextLength = useSettingsStore((s) => s.setDefaultContextLength);
+  const defaultMaxTokens = useSettingsStore((s) => s.defaultMaxTokens);
+  const setDefaultMaxTokens = useSettingsStore((s) => s.setDefaultMaxTokens);
+  const defaultTopP = useSettingsStore((s) => s.defaultTopP);
+  const setDefaultTopP = useSettingsStore((s) => s.setDefaultTopP);
+  const defaultRepetitionPenalty = useSettingsStore((s) => s.defaultRepetitionPenalty);
+  const setDefaultRepetitionPenalty = useSettingsStore((s) => s.setDefaultRepetitionPenalty);
+  const defaultStopSequences = useSettingsStore((s) => s.defaultStopSequences);
+  const setDefaultStopSequences = useSettingsStore((s) => s.setDefaultStopSequences);
+  const defaultReservedOutputTokens = useSettingsStore((s) => s.defaultReservedOutputTokens);
+  const setDefaultReservedOutputTokens = useSettingsStore((s) => s.setDefaultReservedOutputTokens);
 
   const currentProvider = providers.find((p) => p.id === selectedProvider);
   const isConnected = currentProvider?.status === "connected";
@@ -121,29 +132,96 @@ export function ModelsSettings() {
         <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
           Global Defaults
         </h2>
-        <div className="space-y-3">
-          <SliderControl
-            label="Temperature"
-            description="Controls randomness. Lower = more focused, higher = more creative."
-            value={defaultTemperature}
-            onChange={setDefaultTemperature}
-            min={0}
-            max={2}
-            step={0.05}
-            format={(n) => n.toFixed(2)}
-          />
-          <SliderControl
-            label="Context length"
-            description="Maximum token window for conversations. Lower values save memory."
-            value={defaultContextLength}
-            onChange={setDefaultContextLength}
-            min={512}
-            max={131072}
-            step={512}
-            format={(n) =>
-              n >= 1024 ? `${(n / 1024).toFixed(n % 1024 ? 1 : 0)}K` : `${n}`
-            }
-          />
+        <div className="space-y-6">
+          <div>
+            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)]/70">
+              Sampling
+            </h3>
+            <div className="space-y-3">
+              <SliderControl
+                label="Temperature"
+                description="Controls randomness. Lower = more focused, higher = more creative."
+                value={defaultTemperature}
+                onChange={setDefaultTemperature}
+                min={0}
+                max={2}
+                step={0.05}
+                format={(n) => n.toFixed(2)}
+              />
+              <SliderControl
+                label="Repetition Penalty"
+                description="Penalizes repeated tokens. 1.0 = no penalty, higher = less repetition."
+                value={defaultRepetitionPenalty}
+                onChange={setDefaultRepetitionPenalty}
+                min={1}
+                max={2}
+                step={0.05}
+                format={(n) => n.toFixed(2)}
+              />
+              <SliderControl
+                label="Top-p"
+                description="Nucleus sampling. Limits token selection to the most probable set. 1.0 = disabled."
+                value={defaultTopP}
+                onChange={setDefaultTopP}
+                min={0}
+                max={1}
+                step={0.05}
+                format={(n) => n.toFixed(2)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)]/70">
+              Output
+            </h3>
+            <div className="space-y-3">
+              <SliderControl
+                label="Max output tokens"
+                description="Cap on response length. 0 = unlimited."
+                value={defaultMaxTokens}
+                onChange={setDefaultMaxTokens}
+                min={0}
+                max={8192}
+                step={64}
+                format={(n) => (n === 0 ? "Unlimited" : n.toLocaleString())}
+              />
+              <StopSequencesInput
+                value={defaultStopSequences}
+                onChange={setDefaultStopSequences}
+              />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)]/70">
+              Context
+            </h3>
+            <div className="space-y-3">
+              <SliderControl
+                label="Context length"
+                description="Maximum token window for conversations. Lower values save memory."
+                value={defaultContextLength}
+                onChange={setDefaultContextLength}
+                min={512}
+                max={131072}
+                step={512}
+                format={(n) =>
+                  n >= 1024 ? `${(n / 1024).toFixed(n % 1024 ? 1 : 0)}K` : `${n}`
+                }
+              />
+              <SliderControl
+                label="Reserved output tokens"
+                description="Tokens reserved for the model's response when calculating context budget."
+                value={defaultReservedOutputTokens}
+                onChange={setDefaultReservedOutputTokens}
+                min={256}
+                max={8192}
+                step={256}
+                format={(n) => n.toLocaleString()}
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -194,33 +272,30 @@ function ModelOverrideCard({
   const modelOverrides = useSettingsStore((s) => s.modelOverrides);
   const setModelOverride = useSettingsStore((s) => s.setModelOverride);
   const clearModelOverride = useSettingsStore((s) => s.clearModelOverride);
-  const defaultTemperature = useSettingsStore((s) => s.defaultTemperature);
-  const defaultContextLength = useSettingsStore((s) => s.defaultContextLength);
   const getModelSettings = useSettingsStore((s) => s.getModelSettings);
 
   const override = modelOverrides[model.id];
   const hasOverride = !!override;
   const resolved = getModelSettings(model.id);
 
-  const handleTemperatureChange = (v: number) => {
-    setModelOverride(model.id, {
-      ...override,
-      temperature: v,
-      contextLength: override?.contextLength,
-    });
-  };
-
-  const handleContextLengthChange = (v: number) => {
-    setModelOverride(model.id, {
-      ...override,
-      temperature: override?.temperature,
-      contextLength: v,
-    });
+  const update = (patch: ModelSettings) => {
+    setModelOverride(model.id, { ...override, ...patch });
   };
 
   const handleReset = () => {
     clearModelOverride(model.id);
   };
+
+  const hasAnyCustom = hasOverride && (
+    override?.temperature != null ||
+    override?.contextLength != null ||
+    override?.maxTokens != null ||
+    override?.topP != null ||
+    override?.repetitionPenalty != null ||
+    (override?.stopSequences && override.stopSequences.length > 0) ||
+    override?.reservedOutputTokens != null ||
+    (override?.systemPrompt && override.systemPrompt.length > 0)
+  );
 
   return (
     <div
@@ -275,7 +350,7 @@ function ModelOverrideCard({
                   </span>
                 </>
               )}
-              {hasOverride && (
+              {hasAnyCustom && (
                 <>
                   <span className="opacity-50">&middot;</span>
                   <span className="text-amber-400">Custom</span>
@@ -304,7 +379,7 @@ function ModelOverrideCard({
             <span className="text-[11px] text-[var(--color-text-dim)]">
               Overrides global defaults for this model
             </span>
-            {hasOverride && (
+            {hasAnyCustom && (
               <button
                 type="button"
                 onClick={handleReset}
@@ -315,29 +390,110 @@ function ModelOverrideCard({
               </button>
             )}
           </div>
-          <div className="space-y-3">
-            <SliderControl
-              label="Temperature"
-              description={`Default: ${defaultTemperature.toFixed(2)}`}
-              value={resolved.temperature}
-              onChange={handleTemperatureChange}
-              min={0}
-              max={2}
-              step={0.05}
-              format={(n) => n.toFixed(2)}
-            />
-            <SliderControl
-              label="Context length"
-              description={`Default: ${defaultContextLength >= 1024 ? `${(defaultContextLength / 1024).toFixed(defaultContextLength % 1024 ? 1 : 0)}K` : defaultContextLength}`}
-              value={resolved.contextLength}
-              onChange={handleContextLengthChange}
-              min={512}
-              max={131072}
-              step={512}
-              format={(n) =>
-                n >= 1024 ? `${(n / 1024).toFixed(n % 1024 ? 1 : 0)}K` : `${n}`
-              }
-            />
+          <div className="space-y-6">
+            <div>
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)]/60">
+                Sampling
+              </h4>
+              <div className="space-y-3">
+                <SliderControl
+                  label="Temperature"
+                  description={`Default: ${getModelSettings(model.id).temperature.toFixed(2)}`}
+                  value={resolved.temperature}
+                  onChange={(v) => update({ temperature: v })}
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  format={(n) => n.toFixed(2)}
+                />
+                <SliderControl
+                  label="Repetition Penalty"
+                  description={`Default: ${getModelSettings(model.id).repetitionPenalty.toFixed(2)}`}
+                  value={resolved.repetitionPenalty}
+                  onChange={(v) => update({ repetitionPenalty: v })}
+                  min={1}
+                  max={2}
+                  step={0.05}
+                  format={(n) => n.toFixed(2)}
+                />
+                <SliderControl
+                  label="Top-p"
+                  description={`Default: ${getModelSettings(model.id).topP.toFixed(2)}`}
+                  value={resolved.topP}
+                  onChange={(v) => update({ topP: v })}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  format={(n) => n.toFixed(2)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)]/60">
+                Output
+              </h4>
+              <div className="space-y-3">
+                <SliderControl
+                  label="Max output tokens"
+                  description={`Default: ${getModelSettings(model.id).maxTokens === 0 ? "Unlimited" : getModelSettings(model.id).maxTokens.toLocaleString()}`}
+                  value={resolved.maxTokens}
+                  onChange={(v) => update({ maxTokens: v })}
+                  min={0}
+                  max={8192}
+                  step={64}
+                  format={(n) => (n === 0 ? "Unlimited" : n.toLocaleString())}
+                />
+                <StopSequencesInput
+                  value={resolved.stopSequences}
+                  onChange={(v) => update({ stopSequences: v })}
+                  defaultValue={getModelSettings(model.id).stopSequences}
+                />
+              </div>
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)]/60">
+                Context
+              </h4>
+              <div className="space-y-3">
+                <SliderControl
+                  label="Context length"
+                  description={`Default: ${getModelSettings(model.id).contextLength >= 1024 ? `${(getModelSettings(model.id).contextLength / 1024).toFixed(getModelSettings(model.id).contextLength % 1024 ? 1 : 0)}K` : getModelSettings(model.id).contextLength}`}
+                  value={resolved.contextLength}
+                  onChange={(v) => update({ contextLength: v })}
+                  min={512}
+                  max={131072}
+                  step={512}
+                  format={(n) =>
+                    n >= 1024 ? `${(n / 1024).toFixed(n % 1024 ? 1 : 0)}K` : `${n}`
+                  }
+                />
+                <SliderControl
+                  label="Reserved output tokens"
+                  description={`Default: ${getModelSettings(model.id).reservedOutputTokens.toLocaleString()}`}
+                  value={resolved.reservedOutputTokens}
+                  onChange={(v) => update({ reservedOutputTokens: v })}
+                  min={256}
+                  max={8192}
+                  step={256}
+                  format={(n) => n.toLocaleString()}
+                />
+              </div>
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)]/60">
+                System Prompt
+              </h4>
+              <textarea
+                value={override?.systemPrompt ?? ""}
+                onChange={(e) => update({ systemPrompt: e.target.value || undefined })}
+                rows={4}
+                placeholder={`Default: ${getModelSettings(model.id).systemPrompt || "(global setting)"}`}
+                className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 font-mono text-[11px] leading-relaxed text-white placeholder:text-[var(--color-text-dim)]/40 focus:border-[var(--color-accent)]/40 focus:outline-none"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -392,6 +548,55 @@ function SliderControl({
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         />
       </div>
+    </div>
+  );
+}
+
+function StopSequencesInput({
+  value,
+  onChange,
+  defaultValue,
+}: {
+  value: string[];
+  onChange: (s: string[]) => void;
+  defaultValue?: string[];
+}) {
+  const [draft, setDraft] = useState(value.join(", "));
+
+  const handleBlur = () => {
+    const parsed = draft
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    onChange(parsed);
+  };
+
+  const placeholder = defaultValue && defaultValue.length > 0
+    ? `Default: ${defaultValue.join(", ")}`
+    : "e.g. </s>, Human:, Assistant:";
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <div className="text-[12px] font-medium text-white">Stop sequences</div>
+        {value.length > 0 && (
+          <span className="rounded bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white">
+            {value.length}
+          </span>
+        )}
+      </div>
+      <p className="mb-2 text-[10.5px] text-[var(--color-text-dim)]">
+        Comma-separated strings that stop generation.
+      </p>
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleBlur(); } }}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 font-mono text-[11px] text-white placeholder:text-[var(--color-text-dim)]/40 focus:border-[var(--color-accent)]/40 focus:outline-none"
+      />
     </div>
   );
 }

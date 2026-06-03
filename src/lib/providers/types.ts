@@ -11,6 +11,10 @@ export type ProviderChatOptions = {
   model: string;
   temperature?: number;
   contextLength?: number;
+  maxTokens?: number;
+  topP?: number;
+  repetitionPenalty?: number;
+  stopSequences?: string[];
   previousResponseId?: string;
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
