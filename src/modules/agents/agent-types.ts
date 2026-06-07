@@ -11,7 +11,7 @@ export type AgentStatus =
 
 export type AgentRuntimeId = "opencode";
 
-export type AgentEventType = "status" | "output" | "error" | "result";
+export type AgentEventType = "status" | "reasoning" | "tool" | "output" | "error" | "result";
 
 export type AgentEvent = {
   id: string;
@@ -36,6 +36,7 @@ export type AgentSession = {
   endedAt?: number;
   events: AgentEvent[];
   exitCode?: number | null;
+  contextTokens?: number;
 };
 
 export type StartAgentSessionInput = {
@@ -43,6 +44,8 @@ export type StartAgentSessionInput = {
   projectPath: string;
   prompt: string;
   model: string;
+  contextLength?: number;
+  reservedOutputTokens?: number;
   providerId?: string;
   opencodeSessionId?: string;
 };
@@ -51,4 +54,13 @@ export type OpencodeRunResult = {
   stdout: string;
   stderr: string;
   exitCode: number | null;
+};
+
+export type OpencodeProjectSession = {
+  id: string;
+  title: string;
+  updated: number;
+  created: number;
+  projectId?: string;
+  directory?: string;
 };

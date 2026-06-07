@@ -90,8 +90,10 @@ export function ChatPanel({
   onAgentModeChange,
   onAgentProjectPathChange,
   onAgentRuntimeCheck,
+  onAgentNewSession,
   onAgentSessionSelect,
   onAgentSessionStop,
+  onAgentSessionDelete,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(defaultMemoryEnabled);
   const [showReasoning, setShowReasoning] = useState(true);
@@ -269,8 +271,10 @@ export function ChatPanel({
             onModeChange={(nextMode) => onAgentModeChange?.(nextMode)}
             onProjectPathChange={(path) => onAgentProjectPathChange?.(path)}
             onCheckRuntime={() => onAgentRuntimeCheck?.()}
+            onNewSession={() => onAgentNewSession?.()}
             onSelectSession={(id) => onAgentSessionSelect?.(id)}
             onStopSession={(id) => onAgentSessionStop?.(id)}
+            onDeleteSession={(id) => onAgentSessionDelete?.(id)}
           />
         ) : messages.length === 0 ? (
           <div className="relative z-10 flex flex-1 items-center justify-center px-6">

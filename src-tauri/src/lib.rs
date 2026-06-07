@@ -7,6 +7,7 @@ use tauri::{Manager, RunEvent, WindowEvent};
 static INITIAL_WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
 
 mod agent_commands;
+mod lm_studio_setup;
 mod memory_commands;
 mod memory_db;
 mod searxng_setup;
@@ -104,6 +105,9 @@ pub fn run() {
             app_ready,
             exit_app,
             agent_commands::check_opencode_available,
+            agent_commands::list_opencode_project_sessions,
+            agent_commands::export_opencode_session,
+            agent_commands::delete_opencode_session,
             agent_commands::run_opencode_agent,
             memory_commands::list_memory_folders,
             memory_commands::list_memory_files,
@@ -119,6 +123,8 @@ pub fn run() {
             searxng_setup::check_searxng_setup,
             searxng_setup::start_searxng_container,
             searxng_setup::stop_searxng_container,
+            lm_studio_setup::lm_studio_server_running,
+            lm_studio_setup::start_lm_studio_server,
         ])
         .setup(|app| {
             let db_state = memory_db::MemoryDbState::new(app.handle().clone());

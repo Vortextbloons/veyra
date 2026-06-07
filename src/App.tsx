@@ -6,10 +6,11 @@ import { ChatPanel } from "@/components/chat-panel";
 import { RightPanel } from "@/components/right-panel";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { executeChatSend, ensureProviderReady, triggerMemoryExtractionNow } from "@/lib/chat-actions";
+import { prepareAgentLmStudioModel } from "@/lib/lm-model-session";
 import type { ChatMessage, ChatMode, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
 import { isChatModeNav } from "@/lib/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
-import { getContextStats } from "@/lib/context";
+import { estimateTokens, getContextStats } from "@/lib/context";
 import { ShutdownOverlay } from "@/components/shutdown-overlay";
 import { registerAppShutdownHandler } from "@/lib/app-shutdown";
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/lib/startup";
 import { useChatStore } from "@/stores/chat-store";
 import { useAgentStore } from "@/modules/agents/agent-store";
+import type { AgentSession } from "@/modules/agents/agent-types";
 import { useProviderStore } from "@/stores/provider-store";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
 import {
@@ -35,6 +37,39 @@ const DEFAULT_ZOOM = 1.1;
 
 const MemoryPage = lazy(() => import("@/components/memory/memory-page"));
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
+
+const OPENCODE_AGENT_BASE_TOKENS = 9_000;
+const OPENCODE_AGENT_TOOL_OVERHEAD_TOKENS = 1_200;
+
+function getAgentContextStats(
+  session: AgentSession,
+  contextLimit: number,
+  reservedOutputTokens: number,
+): ContextStats {
+  const eventTokens = session.events.reduce((sum, item) => {
+    const detailTokens = estimateTokens([item.title, item.detail].filter(Boolean).join("\n"));
+    const multiplier = item.type === "tool" || item.type === "reasoning" ? 2 : 1;
+    return sum + detailTokens * multiplier;
+  }, 0);
+  const toolEvents = session.events.filter((item) => item.type === "tool").length;
+  const estimatedTokens = Math.max(
+    session.contextTokens ?? 0,
+    OPENCODE_AGENT_BASE_TOKENS + eventTokens + toolEvents * OPENCODE_AGENT_TOOL_OVERHEAD_TOKENS,
+  );
+
+  return {
+    estimatedTokens,
+    contextLimit,
+    percentUsed: Math.round((estimatedTokens / contextLimit) * 100),
+    includedMessages: session.events.length,
+    droppedMessages: 0,
+    reservedOutputTokens,
+    includedLabel: "agent events",
+    contextNote: session.contextTokens
+      ? "Uses OpenCode-reported tokens when available."
+      : "Includes estimated OpenCode system, tool, repo, and reasoning overhead.",
+  };
+}
 
 function clampZoom(z: number) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
@@ -112,6 +147,9 @@ function App() {
   const recentChatsCollapsed = useSettingsStore((state) => state.recentChatsCollapsed);
   const rightPanelCollapsed = useSettingsStore((state) => state.rightPanelCollapsed);
   const favoriteModels = useSettingsStore((state) => state.favoriteModels);
+  const defaultContextLength = useSettingsStore((state) => state.defaultContextLength);
+  const defaultReservedOutputTokens = useSettingsStore((state) => state.defaultReservedOutputTokens);
+  const modelOverrides = useSettingsStore((state) => state.modelOverrides);
   const getModelSettings = useSettingsStore((state) => state.getModelSettings);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
@@ -229,8 +267,12 @@ function App() {
     );
   }, [activeConversation?.id, activeConversation?.messages, streamingBuffer]);
 
-  const resolvedContextLength = getModelSettings(selectedModel).contextLength;
-  const resolvedReservedOutputTokens = getModelSettings(selectedModel).reservedOutputTokens;
+  const selectedModelSettings = useMemo(
+    () => getModelSettings(selectedModel),
+    [defaultContextLength, defaultReservedOutputTokens, getModelSettings, modelOverrides, selectedModel],
+  );
+  const resolvedContextLength = selectedModelSettings.contextLength;
+  const resolvedReservedOutputTokens = selectedModelSettings.reservedOutputTokens;
 
   const chatContextStats: ContextStats | undefined = useMemo(
     () =>
@@ -300,8 +342,12 @@ function App() {
   const setAgentProjectPath = useAgentStore((state) => state.setProjectPath);
   const setActiveAgentSessionId = useAgentStore((state) => state.setActiveSessionId);
   const checkAgentRuntime = useAgentStore((state) => state.checkRuntime);
+  const loadAgentProjectSessions = useAgentStore((state) => state.loadProjectSessions);
+  const loadOpencodeSession = useAgentStore((state) => state.loadOpencodeSession);
+  const newAgentSession = useAgentStore((state) => state.newSession);
   const startAgentSession = useAgentStore((state) => state.startSession);
   const stopAgentSession = useAgentStore((state) => state.stopSession);
+  const deleteAgentSession = useAgentStore((state) => state.deleteSession);
   const clearAgentSessions = useAgentStore((state) => state.clearSessions);
 
   const activeAgentSession = useMemo(
@@ -314,36 +360,11 @@ function App() {
 
   const agentContextStats: ContextStats | undefined = useMemo(() => {
     if (!activeAgentSession) return undefined;
-    const messages: ChatMessage[] = [];
-    for (const item of activeAgentSession.events) {
-      if (item.title === "Prompt" && item.detail?.trim()) {
-        messages.push({
-          id: item.id,
-          role: "user",
-          content: item.detail.trim(),
-          timestamp: item.at,
-        });
-      }
-      if (item.type === "output" && item.detail?.trim()) {
-        messages.push({
-          id: item.id,
-          role: "assistant",
-          content: item.detail.trim(),
-          timestamp: item.at,
-        });
-      }
-    }
-
-    if (messages.length === 0 && activeAgentSession.prompt.trim()) {
-      messages.push({
-        id: `${activeAgentSession.id}:prompt`,
-        role: "user",
-        content: activeAgentSession.prompt.trim(),
-        timestamp: activeAgentSession.startedAt,
-      });
-    }
-
-    return getContextStats(messages, resolvedContextLength, resolvedReservedOutputTokens);
+    return getAgentContextStats(
+      activeAgentSession,
+      resolvedContextLength,
+      resolvedReservedOutputTokens,
+    );
   }, [activeAgentSession, resolvedContextLength, resolvedReservedOutputTokens]);
 
   const displayContextStats = chatMode === "agents" ? agentContextStats : chatContextStats;
@@ -353,6 +374,24 @@ function App() {
       void checkAgentRuntime();
     }
   }, [agentRuntimeAvailable, chatMode, checkAgentRuntime]);
+
+  useEffect(() => {
+    if (chatMode !== "agents" || agentRuntimeAvailable === false) return;
+    void loadAgentProjectSessions(agentProjectPath);
+  }, [agentProjectPath, agentRuntimeAvailable, chatMode, loadAgentProjectSessions]);
+
+  const handleAgentSessionSelect = useCallback(
+    (id: string) => {
+      setActiveAgentSessionId(id);
+      void loadOpencodeSession(id);
+    },
+    [loadOpencodeSession, setActiveAgentSessionId],
+  );
+
+  useEffect(() => {
+    if (chatMode !== "agents" || !activeAgentSessionId) return;
+    void loadOpencodeSession(activeAgentSessionId);
+  }, [activeAgentSessionId, chatMode, loadOpencodeSession]);
 
   const handleSend = useCallback(
     (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
@@ -375,11 +414,25 @@ function App() {
           model: selectedModel,
           run: async (signal) => {
             if (signal.aborted) throw new DOMException("Agent job aborted", "AbortError");
+            if (selectedProvider === "lm-studio") {
+              await prepareAgentLmStudioModel(
+                selectedModel,
+                resolvedContextLength,
+                signal,
+                (phase: string, percent?: number) => {
+                  setModelLoadProgress(
+                    phase === "ready" ? null : { phase: phase as "unloading" | "loading", percent },
+                  );
+                },
+              );
+            }
             const sessionId = await startAgentSession({
               mode: agentMode,
               projectPath: agentProjectPath,
               prompt: trimmed,
               model: selectedModel,
+              contextLength: resolvedContextLength,
+              reservedOutputTokens: resolvedReservedOutputTokens,
               providerId: selectedProvider,
             });
             const session = useAgentStore.getState().sessions.find((item) => item.id === sessionId);
@@ -519,6 +572,8 @@ function App() {
       clearStreamingBufferUnlessSkipped,
       commitAssistantMessage,
       createConversation,
+      resolvedContextLength,
+      resolvedReservedOutputTokens,
       setModelLoadProgress,
       selectedModel,
       selectedProvider,
@@ -604,8 +659,10 @@ function App() {
             onAgentModeChange={setAgentMode}
             onAgentProjectPathChange={setAgentProjectPath}
             onAgentRuntimeCheck={() => void checkAgentRuntime()}
-            onAgentSessionSelect={setActiveAgentSessionId}
+            onAgentNewSession={newAgentSession}
+            onAgentSessionSelect={handleAgentSessionSelect}
             onAgentSessionStop={stopAgentSession}
+            onAgentSessionDelete={(id) => void deleteAgentSession(id)}
           />
         )}
         <RightPanel

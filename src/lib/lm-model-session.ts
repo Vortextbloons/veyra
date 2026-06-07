@@ -27,6 +27,14 @@ async function loadDirect(modelId: string): Promise<void> {
   loadedModelId = id;
 }
 
+async function loadDirectWithContext(modelId: string, contextLength: number): Promise<void> {
+  const id = modelId.trim();
+  if (!id) return;
+  const result = await loadLmStudioModelDirect(id, { contextLength });
+  if (!result.success) throw new Error(result.message);
+  loadedModelId = id;
+}
+
 async function unloadDirect(instanceId: string): Promise<void> {
   const id = instanceId.trim();
   if (!id) return;
@@ -66,6 +74,7 @@ export async function ensureLmStudioModel(
   modelId: string,
   signal?: AbortSignal,
   onProgress?: (phase: string, percent?: number) => void,
+  options?: { forceReload?: boolean; contextLength?: number },
 ): Promise<void> {
   return runLmStudioExclusive(async () => {
     if (signal?.aborted) return;
@@ -76,11 +85,24 @@ export async function ensureLmStudioModel(
     const actualTargetLoaded = actualLoadedInstances.some((instance) =>
       sameLmStudioModel(instance.modelId, next),
     );
+    const forceReloadTarget = options?.forceReload && actualTargetLoaded;
     const instancesToUnload = actualLoadedInstances.length > 0
       ? actualLoadedInstances.filter((instance) => !sameLmStudioModel(instance.modelId, next))
       : loadedModelId && !sameLmStudioModel(loadedModelId, next)
         ? [{ modelId: loadedModelId, instanceId: loadedModelId }]
         : [];
+
+    if (forceReloadTarget) {
+      const targetInstances = actualLoadedInstances.filter((instance) => sameLmStudioModel(instance.modelId, next));
+      if (targetInstances.length > 0) onProgress?.("unloading");
+      for (const loadedInstance of targetInstances) {
+        await unloadDirect(loadedInstance.instanceId);
+      }
+      onProgress?.("loading");
+      await loadDirectWithContext(next, options.contextLength ?? contextLengthFor(next));
+      onProgress?.("ready");
+      return;
+    }
 
     if (instancesToUnload.length === 0 && actualTargetLoaded) {
       loadedModelId = next;
@@ -110,6 +132,18 @@ export async function ensureLmStudioModel(
     onProgress?.("loading");
     await loadDirect(next);
     onProgress?.("ready");
+  });
+}
+
+export async function prepareAgentLmStudioModel(
+  chatModel: string,
+  contextLength: number,
+  signal?: AbortSignal,
+  onProgress?: (phase: string, percent?: number) => void,
+): Promise<void> {
+  await ensureLmStudioModel(chatModel, signal, onProgress, {
+    forceReload: true,
+    contextLength,
   });
 }
 

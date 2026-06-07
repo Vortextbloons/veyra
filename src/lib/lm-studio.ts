@@ -10,7 +10,7 @@ import {
 } from "@/lib/performance";
 import { runLmStudioExclusive } from "@/lib/lm-studio-session";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { Command } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
 
 const DEFAULT_BASE_URL = "http://localhost:1234";
 const DEFAULT_TEMPERATURE = 0.7;
@@ -295,33 +295,12 @@ export async function isServerRunning(baseUrl?: string): Promise<boolean> {
   }
 }
 
-export async function startServer(): Promise<{ success: boolean; message: string }> {
+export async function startServer(baseUrl?: string): Promise<{ success: boolean; message: string }> {
   try {
-    const lmsCheck = await Command.create("lms", ["--version"]).execute();
-    if (lmsCheck.code !== 0) {
-      return {
-        success: false,
-        message: "LM Studio CLI (lms) not found. Install LM Studio and ensure 'lms' is in your PATH.",
-      };
-    }
-
-    const daemonResult = await Command.create("lms", ["daemon", "up"]).execute();
-    if (daemonResult.code !== 0) {
-      return {
-        success: false,
-        message: `Failed to start daemon: ${daemonResult.stderr || daemonResult.stdout}`,
-      };
-    }
-
-    const serverResult = await Command.create("lms", ["server", "start"]).execute();
-    if (serverResult.code !== 0) {
-      return {
-        success: false,
-        message: `Failed to start server: ${serverResult.stderr || serverResult.stdout}`,
-      };
-    }
-
-    return { success: true, message: "Server started successfully" };
+    const endpoint = await invoke<string>("start_lm_studio_server", {
+      baseUrl: baseUrl?.trim() || null,
+    });
+    return { success: true, message: `Server ready at ${endpoint}` };
   } catch (err) {
     return {
       success: false,
@@ -331,22 +310,16 @@ export async function startServer(): Promise<{ success: boolean; message: string
 }
 
 export async function ensureServerRunning(baseUrl?: string): Promise<boolean> {
-  const running = await isServerRunning(baseUrl);
-  if (running) return true;
+  const url = baseUrl?.trim() || DEFAULT_BASE_URL;
+  if (await isServerRunning(url)) return true;
 
-  const result = await startServer();
+  const result = await startServer(url);
   if (!result.success) {
     console.error("[LM Studio]", result.message);
     return false;
   }
 
-  for (let i = 0; i < 20; i++) {
-    await new Promise((r) => setTimeout(r, 500));
-    if (await isServerRunning(baseUrl)) return true;
-  }
-
-  console.error("[LM Studio] Server started but not responding");
-  return false;
+  return isServerRunning(url);
 }
 
 type LmStudioModelEntry = {

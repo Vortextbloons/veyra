@@ -82,6 +82,8 @@ export interface ContextStats {
   includedMessages: number;
   droppedMessages: number;
   reservedOutputTokens: number;
+  includedLabel?: string;
+  contextNote?: string;
 }
 
 // ── Provider & model types ──────────────────────────────────────────────────
@@ -160,8 +162,10 @@ export interface ChatPanelProps {
   onAgentModeChange?: (mode: AgentMode) => void;
   onAgentProjectPathChange?: (path: string) => void;
   onAgentRuntimeCheck?: () => void;
+  onAgentNewSession?: () => void;
   onAgentSessionSelect?: (id: string) => void;
   onAgentSessionStop?: (id: string) => void;
+  onAgentSessionDelete?: (id: string) => void;
 }
 
 export interface RightPanelProps {

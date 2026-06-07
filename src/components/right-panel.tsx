@@ -212,7 +212,12 @@ function ContextDetails({
     includedMessages,
     droppedMessages,
     reservedOutputTokens,
+    includedLabel = "messages",
+    contextNote,
   } = stats;
+  const includedText = includedLabel === "messages"
+    ? `${includedMessages} message${includedMessages !== 1 ? "s" : ""}`
+    : `${includedMessages} ${includedLabel}`;
 
   return (
     <div className={`space-y-1.5 text-center ${className}`}>
@@ -224,7 +229,7 @@ function ContextDetails({
         {contextLimit.toLocaleString()} tokens
       </p>
       <p className="text-[12px] text-[var(--color-text-dim)]">
-        {includedMessages} message{includedMessages !== 1 ? "s" : ""} included
+        {includedText} included
       </p>
       {droppedMessages > 0 && (
         <p className="text-[12px] text-amber-400">
@@ -234,6 +239,11 @@ function ContextDetails({
       <p className="text-[11px] text-[var(--color-text-dim)]">
         {reservedOutputTokens} tokens reserved for output
       </p>
+      {contextNote && (
+        <p className="text-[10.5px] leading-snug text-[var(--color-text-dim)]/80">
+          {contextNote}
+        </p>
+      )}
     </div>
   );
 }
@@ -275,7 +285,8 @@ function ContextRing({
   const stroke = compact ? Math.max(3, Math.round(size / 11)) : 8;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (percent / 100) * circumference;
+  const displayPercent = Math.max(0, Math.min(100, percent));
+  const offset = circumference - (displayPercent / 100) * circumference;
 
   return (
     <div

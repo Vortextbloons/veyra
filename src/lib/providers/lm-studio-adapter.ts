@@ -45,7 +45,7 @@ export const lmStudioAdapter: ProviderAdapter = {
       success,
       message: success
         ? undefined
-        : "Could not start LM Studio. Install LM Studio and ensure the `lms` CLI is in your PATH.",
+        : "Could not start LM Studio. Install LM Studio, open it once, then try again (Veyra will use the lms CLI from ~/.lmstudio/bin).",
     };
   },
 };
