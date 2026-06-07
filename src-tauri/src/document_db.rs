@@ -13,6 +13,7 @@ pub struct DocumentRow {
     pub id: String,
     pub project_id: Option<String>,
     pub conversation_id: Option<String>,
+    pub is_global: bool,
     pub title: String,
     #[serde(rename = "type")]
     pub doc_type: String,
@@ -45,6 +46,7 @@ pub struct DocumentCreateInput {
     pub id: String,
     pub project_id: Option<String>,
     pub conversation_id: Option<String>,
+    pub is_global: Option<bool>,
     pub title: String,
     #[serde(rename = "type")]
     pub doc_type: String,
@@ -63,6 +65,7 @@ pub struct DocumentUpdateInput {
     pub id: String,
     pub project_id: Option<String>,
     pub conversation_id: Option<String>,
+    pub is_global: Option<bool>,
     pub title: Option<String>,
     #[serde(rename = "type")]
     pub doc_type: Option<String>,
@@ -92,6 +95,7 @@ CREATE TABLE IF NOT EXISTS documents (
   id TEXT PRIMARY KEY,
   project_id TEXT,
   conversation_id TEXT,
+  is_global INTEGER NOT NULL DEFAULT 0,
   title TEXT NOT NULL,
   type TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -204,6 +208,12 @@ impl DocumentDb {
         .map_err(|e| format!("failed to set pragmas: {}", e))?;
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("document schema migration failed: {}", e))?;
+        // Migration: add is_global column if missing (existing databases), then index it.
+        let _ = conn.execute_batch(
+            "ALTER TABLE documents ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0;",
+        );
+        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_documents_global ON documents(is_global);")
+            .map_err(|e| format!("document is_global index migration failed: {}", e))?;
         if cfg!(debug_assertions) {
             log::info!(
                 "DocumentDb::init completed in {}ms",
@@ -272,20 +282,21 @@ fn parse_json_array(s: &str) -> Vec<String> {
 }
 
 fn row_to_document(row: &rusqlite::Row) -> rusqlite::Result<DocumentRow> {
-    let tags_str: String = row.get(8)?;
+    let tags_str: String = row.get(9)?;
     Ok(DocumentRow {
         id: row.get(0)?,
         project_id: row.get(1)?,
         conversation_id: row.get(2)?,
-        title: row.get(3)?,
-        doc_type: row.get(4)?,
-        status: row.get(5)?,
-        editor_format: row.get(6)?,
-        content_markdown: row.get(7)?,
+        is_global: row.get::<_, i64>(3)? != 0,
+        title: row.get(4)?,
+        doc_type: row.get(5)?,
+        status: row.get(6)?,
+        editor_format: row.get(7)?,
+        content_markdown: row.get(8)?,
         tags: parse_json_array(&tags_str),
-        created_at: row.get(9)?,
-        updated_at: row.get(10)?,
-        last_exported_at: row.get(11)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+        last_exported_at: row.get(12)?,
     })
 }
 
@@ -322,19 +333,22 @@ pub fn create_document(conn: &Connection, input_json: String) -> Result<Document
     let content_val = input.content_markdown.unwrap_or_default();
     validate_content(&content_val)?;
 
+    let is_global_val = input.is_global.unwrap_or(false) as i64;
+
     let tx = conn
         .unchecked_transaction()
         .map_err(|e| format!("begin create_document transaction failed: {}", e))?;
 
     tx.execute(
         "INSERT INTO documents
-           (id, project_id, conversation_id, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at)
+           (id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             input.id,
             input.project_id,
             input.conversation_id,
+            is_global_val,
             input.title,
             input.doc_type,
             input.status,
@@ -350,7 +364,7 @@ pub fn create_document(conn: &Connection, input_json: String) -> Result<Document
 
     let created = tx
         .query_row(
-            "SELECT id, project_id, conversation_id, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
+            "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
              FROM documents WHERE id = ?1",
             [&input.id],
             row_to_document,
@@ -365,7 +379,7 @@ pub fn create_document(conn: &Connection, input_json: String) -> Result<Document
 
 pub fn get_document(conn: &Connection, id: String) -> Result<DocumentRow, String> {
     conn.query_row(
-        "SELECT id, project_id, conversation_id, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
+        "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
          FROM documents WHERE id = ?1",
         [&id],
         row_to_document,
@@ -390,6 +404,10 @@ pub fn update_document(conn: &Connection, input_json: String) -> Result<Document
     if let Some(v) = input.conversation_id {
         sets.push(format!("conversation_id = ?{}", params.len() + 1));
         params.push(Value::Text(v));
+    }
+    if let Some(v) = input.is_global {
+        sets.push(format!("is_global = ?{}", params.len() + 1));
+        params.push(Value::Integer(if v { 1 } else { 0 }));
     }
     if let Some(v) = input.title {
         validate_title(&v)?;
@@ -449,7 +467,7 @@ pub fn update_document(conn: &Connection, input_json: String) -> Result<Document
 
     let updated = conn
         .query_row(
-            "SELECT id, project_id, conversation_id, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
+            "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
              FROM documents WHERE id = ?1",
             [&input.id],
             row_to_document,
@@ -462,37 +480,51 @@ pub fn update_document(conn: &Connection, input_json: String) -> Result<Document
 pub fn list_documents(
     conn: &Connection,
     project_id: Option<String>,
+    conversation_id: Option<String>,
 ) -> Result<Vec<DocumentRow>, String> {
     let mut out = Vec::new();
-    if let Some(pid) = project_id {
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, project_id, conversation_id, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
-                 FROM documents
-                 WHERE project_id = ?1
-                 ORDER BY updated_at DESC",
-            )
-            .map_err(|e| format!("prepare list_documents failed: {}", e))?;
-        let rows = stmt
-            .query_map([&pid], row_to_document)
-            .map_err(|e| format!("query list_documents failed: {}", e))?;
-        for r in rows {
-            out.push(r.map_err(|e| format!("row error in list_documents: {}", e))?);
-        }
-    } else {
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, project_id, conversation_id, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
-                 FROM documents
-                 ORDER BY updated_at DESC",
-            )
-            .map_err(|e| format!("prepare list_documents failed: {}", e))?;
-        let rows = stmt
-            .query_map([], row_to_document)
-            .map_err(|e| format!("query list_documents failed: {}", e))?;
-        for r in rows {
-            out.push(r.map_err(|e| format!("row error in list_documents: {}", e))?);
-        }
+
+    let base_cols = "id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at";
+
+    let (sql, param_values): (String, Vec<Value>) = match (project_id, conversation_id) {
+        (Some(pid), Some(cid)) => (
+            format!(
+                "SELECT {} FROM documents WHERE (project_id = ?1 OR is_global = 1) AND (conversation_id = ?2 OR is_global = 1) ORDER BY updated_at DESC",
+                base_cols
+            ),
+            vec![Value::Text(pid), Value::Text(cid)],
+        ),
+        (Some(pid), None) => (
+            format!(
+                "SELECT {} FROM documents WHERE project_id = ?1 ORDER BY updated_at DESC",
+                base_cols
+            ),
+            vec![Value::Text(pid)],
+        ),
+        (None, Some(cid)) => (
+            format!(
+                "SELECT {} FROM documents WHERE conversation_id = ?1 OR is_global = 1 ORDER BY updated_at DESC",
+                base_cols
+            ),
+            vec![Value::Text(cid)],
+        ),
+        (None, None) => (
+            format!(
+                "SELECT {} FROM documents ORDER BY updated_at DESC",
+                base_cols
+            ),
+            vec![],
+        ),
+    };
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("prepare list_documents failed: {}", e))?;
+    let rows = stmt
+        .query_map(params_from_iter(param_values), row_to_document)
+        .map_err(|e| format!("query list_documents failed: {}", e))?;
+    for r in rows {
+        out.push(r.map_err(|e| format!("row error in list_documents: {}", e))?);
     }
     Ok(out)
 }

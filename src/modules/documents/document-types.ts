@@ -28,6 +28,7 @@ export interface DocumentRecord {
   id: string;
   projectId?: string;
   conversationId?: string;
+  isGlobal: boolean;
   title: string;
   type: DocumentType;
   status: DocumentStatus;
@@ -74,6 +75,7 @@ export interface CreateDocumentInput {
   contentMarkdown?: string;
   projectId?: string;
   conversationId?: string;
+  isGlobal?: boolean;
   tags?: string[];
 }
 
@@ -83,6 +85,7 @@ export interface UpdateDocumentInput {
   type?: DocumentType;
   status?: DocumentStatus;
   contentMarkdown?: string;
+  isGlobal?: boolean;
   tags?: string[];
   lastExportedAt?: string;
 }

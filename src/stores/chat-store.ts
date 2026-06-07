@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, Conversation, ModelLoadProgress, WebSearchState } from "@/lib/chat-types";
+import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchState } from "@/lib/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 
 export type ConversationHydrationState = "loading" | "ready";
@@ -10,6 +10,7 @@ type StreamingBuffer = {
   content: string;
   reasoning: string;
   webSearchState?: WebSearchState;
+  toolStates?: ToolCallState[];
 } | null;
 
 type ChatStore = {
@@ -39,6 +40,7 @@ type ChatStore = {
   resetAfterRePrompt: () => void;
   setModelLoadProgress: (progress: ModelLoadProgress) => void;
   setStreamingWebSearchState: (state: WebSearchState) => void;
+  setStreamingToolState: (state: ToolCallState) => void;
   commitAssistantMessage: (
     conversationId: string,
     messageId: string,
@@ -184,6 +186,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       return { streamingBuffer: { ...state.streamingBuffer, webSearchState } };
     });
   },
+  setStreamingToolState: (toolState) => {
+    set((state) => {
+      const buffer = state.streamingBuffer;
+      if (!buffer) return state;
+      const existing = buffer.toolStates ?? [];
+      const next = existing.some((item) => item.id === toolState.id)
+        ? existing.map((item) => item.id === toolState.id ? { ...item, ...toolState } : item)
+        : [...existing, toolState];
+      return { streamingBuffer: { ...buffer, toolStates: next } };
+    });
+  },
   commitAssistantMessage: (conversationId, messageId, patch = {}) => {
     set((state) => {
       const buffer =
@@ -204,6 +217,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                   content: patch.content ?? buffer?.content ?? message.content,
                   reasoning: patch.reasoning ?? buffer?.reasoning ?? message.reasoning,
                   webSearchState: patch.webSearchState ?? buffer?.webSearchState ?? message.webSearchState,
+                  toolStates: patch.toolStates ?? buffer?.toolStates ?? message.toolStates,
                 }
               : message,
           ),

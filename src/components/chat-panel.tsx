@@ -26,8 +26,10 @@ import {
   ImageIcon,
   Search,
   ExternalLink,
+  FileText,
+  Wrench,
 } from "lucide-react";
-import type { ChatMessage, ChatMode, ChatPanelProps, MessagePerformance, WebSearchState } from "@/lib/chat-types";
+import type { ChatMessage, ChatMode, ChatPanelProps, MessagePerformance, ToolCallState, WebSearchState } from "@/lib/chat-types";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import {
   fileToAttachment,
@@ -432,8 +434,12 @@ const MessageBubble = memo(function MessageBubble({
             messageTextClass={layout.messageText}
           />
         )}
-        {message.webSearchState && (
-          <WebSearchToolCallBlock state={message.webSearchState} />
+        {message.toolStates?.map((toolState) =>
+          toolState.name === "web_search" && message.webSearchState ? (
+            <WebSearchToolCallBlock key={toolState.id} toolState={toolState} state={message.webSearchState} />
+          ) : (
+            <ToolCallBlock key={toolState.id} state={toolState} />
+          ),
         )}
         {showReplyBubble && (
         <div
@@ -728,7 +734,66 @@ function MemoryUsedBadge({
   );
 }
 
-function WebSearchToolCallBlock({ state }: { state: WebSearchState }) {
+function ToolCallBlock({ state }: { state: ToolCallState }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const isRunning = state.phase === "running" || state.phase === "retrying";
+  const isError = state.phase === "error";
+  const isDocument = state.name.startsWith("doc_");
+  const phaseLabel = state.phase === "retrying"
+    ? `Retrying${state.attempts ? ` (${state.attempts}/2)` : ""}…`
+    : state.phase === "running"
+      ? "Running…"
+      : state.phase === "error"
+        ? "Failed"
+        : "Completed";
+  const borderClass = isError
+    ? "border-red-500/20 bg-red-500/[0.06] hover:border-red-500/30 hover:bg-red-500/[0.09]"
+    : isDocument
+      ? "border-emerald-500/20 bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:bg-emerald-500/[0.09]"
+      : "border-violet-500/20 bg-violet-500/[0.06] hover:border-violet-500/30 hover:bg-violet-500/[0.09]";
+  const textClass = isError ? "text-red-300" : isDocument ? "text-emerald-300" : "text-violet-300";
+  const iconBgClass = isError ? "bg-red-500/20" : isDocument ? "bg-emerald-500/20" : "bg-violet-500/20";
+  const Icon = isDocument ? FileText : Wrench;
+
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${borderClass}`}
+      >
+        <div className={`flex size-5 shrink-0 items-center justify-center rounded ${iconBgClass}`}>
+          {isRunning ? (
+            <Loader2 className={`size-3 animate-spin ${textClass}`} />
+          ) : isError ? (
+            <X className="size-3 text-red-400" />
+          ) : (
+            <Icon className={`size-3 ${textClass}`} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className={`text-[11.5px] font-medium ${textClass}`}>{state.label}</span>
+          <span className="mx-1.5 text-[10px] text-[var(--color-text-dim)]/40">·</span>
+          <span className="text-[11.5px] text-[var(--color-text-dim)]">{phaseLabel}</span>
+        </div>
+        {(state.input || state.detail) && (
+          <span className="max-w-[240px] shrink-0 truncate text-[10.5px] text-[var(--color-text-dim)]/60">
+            {state.input || state.detail}
+          </span>
+        )}
+        <ChevronDown className={`size-3 shrink-0 text-[var(--color-text-dim)]/50 transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      {expanded && (state.detail || state.error) && (
+        <div className={`mt-1 rounded-lg border px-3 py-2 text-[11.5px] ${isError ? "border-red-500/20 bg-red-500/[0.06] text-red-300" : "border-[var(--color-border)] bg-[var(--color-panel)]/50 text-[var(--color-text-dim)]"}`}>
+          {state.error || state.detail}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WebSearchToolCallBlock({ toolState, state }: { toolState: ToolCallState; state: WebSearchState }) {
   const [expanded, setExpanded] = useState(false);
 
   const isSearching = state.phase === "searching";
@@ -750,7 +815,7 @@ function WebSearchToolCallBlock({ state }: { state: WebSearchState }) {
         className="flex w-full items-center gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/[0.06] px-3 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/[0.09]"
       >
         <div className="flex size-5 shrink-0 items-center justify-center rounded bg-cyan-500/20">
-          {isSearching ? (
+          {isSearching || toolState.phase === "retrying" ? (
             <Loader2 className="size-3 animate-spin text-cyan-400" />
           ) : isError ? (
             <X className="size-3 text-red-400" />
@@ -764,7 +829,7 @@ function WebSearchToolCallBlock({ state }: { state: WebSearchState }) {
           </span>
           <span className="mx-1.5 text-[10px] text-[var(--color-text-dim)]/40">·</span>
           <span className="text-[11.5px] text-[var(--color-text-dim)]">
-            {phaseLabel}
+            {toolState.phase === "retrying" && toolState.attempts ? `Retrying (${toolState.attempts}/2)…` : phaseLabel}
           </span>
         </div>
         <span className="shrink-0 text-[10.5px] text-[var(--color-text-dim)]/60 truncate max-w-[200px]">

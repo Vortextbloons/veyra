@@ -2,6 +2,21 @@ import type { ChatMessage, ModelInfo } from "@/lib/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
 import type { MemoryPack } from "@/lib/memory-types";
 
+export type ProviderToolCall = {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+};
+
+export type ProviderToolDefinition = {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+};
+
 export interface ProviderCompleteContext {
   memoryPack?: MemoryPack | null;
 }
@@ -16,6 +31,8 @@ export type ProviderChatOptions = {
   repetitionPenalty?: number;
   stopSequences?: string[];
   previousResponseId?: string;
+  tools?: ProviderToolDefinition[];
+  toolChoice?: "auto" | "none";
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;

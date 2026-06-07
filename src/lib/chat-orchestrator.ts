@@ -8,11 +8,18 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { buildMemoryPackWithInfo } from "@/lib/memory-retrieval";
 import type { MemoryRetrievalInfo } from "@/lib/memory-types";
-import { parseWebSearchToolCall, stripWebSearchToolCall } from "@/modules/web-search/tools/webSearchTool";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
-import { buildToolsBlock } from "@/lib/tool-registry";
+import {
+  DOC_CREATE_TOOL_NAME,
+  DOC_UPDATE_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+  buildProviderTools,
+} from "@/lib/tool-registry";
 import { buildContextAnchoringBlock, buildDocumentInstructionsBlock } from "@/lib/prompts";
 import { useDocumentStore } from "@/modules/documents/document-store";
+import { executeDocCreation, executeDocUpdate } from "@/modules/documents/document-runtime";
+import type { DocCreateIntent, DocUpdateIntent, DocumentType } from "@/modules/documents/document-types";
+import type { ProviderToolCall } from "@/lib/providers/types";
 
 /**
  * Optional context threaded through to the chat consumer's onComplete
@@ -48,6 +55,30 @@ function latestUserMessageText(messages: ChatMessage[]): string {
   return "";
 }
 
+function stringArg(args: Record<string, unknown>, key: string): string {
+  const value = args[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function docCreateIntentFromToolCall(call: ProviderToolCall): DocCreateIntent | null {
+  const title = stringArg(call.arguments, "title");
+  const documentType = stringArg(call.arguments, "documentType") as DocumentType;
+  const contentMarkdown = stringArg(call.arguments, "contentMarkdown");
+  if (!title || !documentType || !contentMarkdown) return null;
+  return { type: "doc.create", title, documentType, contentMarkdown };
+}
+
+function docUpdateIntentFromToolCall(call: ProviderToolCall): DocUpdateIntent | null {
+  const documentId = stringArg(call.arguments, "documentId");
+  const mode = stringArg(call.arguments, "mode") as DocUpdateIntent["mode"];
+  const contentMarkdown = stringArg(call.arguments, "contentMarkdown");
+  const target = stringArg(call.arguments, "target");
+  if (!documentId || !mode || !contentMarkdown) return null;
+  return { type: "doc.update", documentId, mode, contentMarkdown, target: target || undefined };
+}
+
+const TOOL_RETRY_LIMIT = 2;
+
 export async function sendChatRequest({
   providerId,
   messages,
@@ -77,140 +108,6 @@ export async function sendChatRequest({
 
   const userOnComplete = options.onComplete;
 
-  let accumulatedContent = "";
-  const wrappedOnChunk = (content: string, done: boolean) => {
-    accumulatedContent += content;
-    options.onChunk(content, done);
-  };
-
-  let isRePrompt = false;
-
-  const wrappedOnComplete: ProviderChatOptions["onComplete"] = (result) => {
-    if (webSearchEnabled && !isRePrompt) {
-      const toolCall = parseWebSearchToolCall(accumulatedContent);
-
-      if (toolCall) {
-        isRePrompt = true;
-        const chatStore = useChatStore.getState();
-
-        // Prevent the App.tsx finally block from clearing the buffer
-        chatStore.skipNextBufferClear();
-
-        // Strip tool call JSON from accumulated content for re-prompt context
-        const strippedContent = stripWebSearchToolCall(accumulatedContent);
-        accumulatedContent = strippedContent;
-
-        // Show web search UI in the existing buffer (preserves reasoning and prior content)
-        chatStore.setStreamingWebSearchState({
-          query: toolCall.args.query,
-          phase: "searching",
-          sources: [],
-        });
-
-        void (async () => {
-          try {
-            if (options.signal?.aborted) return;
-
-            const searchBundle = await runSearch(toolCall.args.query, options.signal);
-            if (options.signal?.aborted) return;
-
-            const contextBlock = buildSearchContextBlock(searchBundle);
-
-            const searchSources: WebSearchSource[] = searchBundle.sources.map((s) => ({
-              id: s.id,
-              title: s.title,
-              url: s.url,
-              snippet: s.snippet,
-            }));
-
-            // Update to reading phase with sources
-            chatStore.setStreamingWebSearchState({
-              query: toolCall.args.query,
-              phase: "reading",
-              sources: searchSources,
-            });
-
-            const rePromptMessages: ChatMessage[] = [
-              ...messages,
-              {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                content: accumulatedContent,
-                timestamp: Date.now(),
-              },
-              {
-                id: crypto.randomUUID(),
-                role: "user",
-                content: `Here are the web search results for "${toolCall.args.query}". Answer using this information. Sources are displayed separately — do not list or cite URLs.`,
-                timestamp: Date.now(),
-              },
-            ];
-
-            const resolvedContextLength = options.contextLength ?? settings.getModelSettings(options.model).contextLength;
-            const conversation = conversationId
-              ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
-              : undefined;
-
-            // Re-prompt — chunks stream into the same buffer
-            if (options.signal?.aborted) return;
-
-            await provider.sendChat({
-              ...options,
-              previousResponseId: undefined,
-              onChunk: options.onChunk,
-              onReasoningChunk: options.onReasoningChunk,
-              temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
-              contextLength: resolvedContextLength,
-              maxTokens: resolvedMaxTokens || undefined,
-              topP: resolvedTopP,
-              repetitionPenalty: resolvedRepetitionPenalty,
-              stopSequences: resolvedStopSequences,
-              onComplete: (rePromptResult) => {
-                // Mark search as done
-                useChatStore.getState().setStreamingWebSearchState({
-                  query: toolCall.args.query,
-                  phase: "done",
-                  sources: searchSources,
-                });
-                userOnComplete?.(rePromptResult, { memoryPack, memoryRetrieval, webSearchSources: searchSources });
-                // Clean up streaming state after re-prompt completes
-                useChatStore.getState().resetAfterRePrompt();
-              },
-              messages: buildChatContext(
-                rePromptMessages,
-                {
-                  memoryPack: memoryPack ?? null,
-                  conversationSummary: conversation?.conversationSummary,
-                  summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
-                  webSearchContextBlock: contextBlock,
-                  documentInstructionsBlock,
-                  userPrompt: resolvedUserPrompt,
-                  reservedOutputTokens: resolvedReservedOutputTokens,
-                },
-                resolvedContextLength,
-              ),
-            });
-          } catch (searchError) {
-            if (options.signal?.aborted) return;
-            console.error("[WebSearch] Search failed:", searchError);
-            useChatStore.getState().setStreamingWebSearchState({
-              query: toolCall.args.query,
-              phase: "error",
-              sources: [],
-              error: searchError instanceof Error ? searchError.message : String(searchError),
-            });
-            userOnComplete?.(result, { memoryPack, memoryRetrieval });
-            // Clean up streaming state after error
-            useChatStore.getState().resetAfterRePrompt();
-          }
-        })();
-        return;
-      }
-    }
-
-    userOnComplete?.(result, { memoryPack, memoryRetrieval });
-  };
-
   const resolvedContextLength = options.contextLength ?? settings.getModelSettings(options.model).contextLength;
   const resolvedMaxTokens = options.maxTokens ?? settings.getModelSettings(options.model).maxTokens;
   const resolvedTopP = options.topP ?? settings.getModelSettings(options.model).topP;
@@ -238,6 +135,317 @@ export async function sendChatRequest({
           : undefined,
       )
     : undefined;
+  const providerTools = buildProviderTools({
+    webSearchEnabled,
+    documentToolsEnabled: settings.documentPanelEnabled,
+    activeDocumentId: activeDocument?.id,
+  });
+
+  let accumulatedContent = "";
+  const wrappedOnChunk = (content: string, done: boolean) => {
+    accumulatedContent += content;
+    options.onChunk(content, done);
+  };
+
+  let isRePrompt = false;
+  let toolCompletion: Promise<void> = Promise.resolve();
+
+  const wrappedOnComplete: ProviderChatOptions["onComplete"] = (result) => {
+    const toolCalls = result.toolCalls ?? [];
+    const webSearchCall = toolCalls.find((call) => call.name === WEB_SEARCH_TOOL_NAME);
+    const documentCalls = toolCalls.filter(
+      (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
+    );
+
+    if (documentCalls.length > 0 && !isRePrompt) {
+      toolCompletion = (async () => {
+        const chatStore = useChatStore.getState();
+        const results: string[] = [];
+        let callsToProcess = documentCalls;
+
+        for (let attempt = 0; attempt <= TOOL_RETRY_LIMIT; attempt += 1) {
+          const failed: string[] = [];
+          results.length = 0;
+
+          for (const call of callsToProcess) {
+            const label = call.name === DOC_CREATE_TOOL_NAME ? "Create Document" : "Update Document";
+            chatStore.setStreamingToolState({
+              id: call.id,
+              name: call.name,
+              label,
+              phase: attempt > 0 ? "retrying" : "running",
+              attempts: attempt > 0 ? attempt : undefined,
+              input: stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId"),
+            });
+
+            if (call.name === DOC_CREATE_TOOL_NAME) {
+              const intent = docCreateIntentFromToolCall(call);
+              if (!intent) {
+                const error = "Invalid doc_create tool arguments.";
+                failed.push(error);
+                chatStore.setStreamingToolState({ id: call.id, name: call.name, label, phase: "error", error });
+                continue;
+              }
+              const docResult = await executeDocCreation(intent, conversationId);
+              if (!docResult.applied) {
+                failed.push(docResult.error ?? docResult.sanitizedText);
+                chatStore.setStreamingToolState({ id: call.id, name: call.name, label, phase: "error", error: docResult.error ?? docResult.sanitizedText });
+                continue;
+              }
+              chatStore.setStreamingToolState({ id: call.id, name: call.name, label, phase: "done", detail: docResult.sanitizedText, input: intent.title });
+              results.push(docResult.sanitizedText);
+            } else {
+              const intent = docUpdateIntentFromToolCall(call);
+              if (!intent) {
+                const error = "Invalid doc_update tool arguments.";
+                failed.push(error);
+                chatStore.setStreamingToolState({ id: call.id, name: call.name, label, phase: "error", error });
+                continue;
+              }
+              const docResult = await executeDocUpdate(intent, conversationId);
+              if (!docResult.applied) {
+                failed.push(docResult.error ?? docResult.sanitizedText);
+                chatStore.setStreamingToolState({ id: call.id, name: call.name, label, phase: "error", error: docResult.error ?? docResult.sanitizedText });
+                continue;
+              }
+              chatStore.setStreamingToolState({ id: call.id, name: call.name, label, phase: "done", detail: docResult.sanitizedText, input: intent.documentId });
+              results.push(docResult.sanitizedText);
+            }
+          }
+
+          if (failed.length === 0 || attempt >= TOOL_RETRY_LIMIT) break;
+
+          let retryToolCalls: ProviderToolCall[] = [];
+          await provider.sendChat({
+            ...options,
+            previousResponseId: undefined,
+            tools: providerTools,
+            toolChoice: "auto",
+            onChunk: () => {},
+            onReasoningChunk: () => {},
+            onComplete: (nextResult) => {
+              retryToolCalls = nextResult.toolCalls ?? [];
+            },
+            messages: buildChatContext(
+              [
+                ...messages,
+                { id: crypto.randomUUID(), role: "assistant", content: accumulatedContent, timestamp: Date.now() },
+                {
+                  id: crypto.randomUUID(),
+                  role: "user",
+                  content: `Your previous document tool call failed. Failure reason: ${failed.join("; ")}. Retry by calling exactly one corrected document tool. Do not answer in prose.`,
+                  timestamp: Date.now(),
+                },
+              ],
+              { documentInstructionsBlock, userPrompt: resolvedUserPrompt, reservedOutputTokens: resolvedReservedOutputTokens },
+              resolvedContextLength,
+            ),
+          });
+          const nextCalls = retryToolCalls.filter(
+            (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
+          );
+          if (nextCalls.length === 0) break;
+          callsToProcess = nextCalls;
+        }
+
+        if (results.length === 0) {
+          const failureText = "Document tool failed after retrying.";
+          results.push(failureText);
+          for (const call of callsToProcess) {
+            chatStore.setStreamingToolState({
+              id: call.id,
+              name: call.name,
+              label: call.name === DOC_CREATE_TOOL_NAME ? "Create Document" : "Update Document",
+              phase: "error",
+              error: failureText,
+            });
+          }
+        }
+
+        const documentText = results.filter(Boolean).join("\n\n");
+        if (documentText) {
+          accumulatedContent = accumulatedContent
+            ? `${accumulatedContent}\n\n${documentText}`
+            : documentText;
+          options.onChunk(documentText, false);
+        }
+        userOnComplete?.(result, { memoryPack, memoryRetrieval });
+      })().catch((error) => {
+        options.onError(error instanceof Error ? error.message : String(error));
+      });
+      return;
+    }
+
+    if (webSearchEnabled && webSearchCall && !isRePrompt) {
+      isRePrompt = true;
+      const chatStore = useChatStore.getState();
+
+      // Prevent the App.tsx finally block from clearing the buffer
+      chatStore.skipNextBufferClear();
+      const query = stringArg(webSearchCall.arguments, "query");
+      if (!query) {
+        options.onError("Web search failed: invalid tool arguments.");
+        return;
+      }
+
+      // Show web search UI in the existing buffer (preserves reasoning and prior content)
+      chatStore.setStreamingWebSearchState({
+        query,
+        phase: "searching",
+        sources: [],
+      });
+      chatStore.setStreamingToolState({
+        id: webSearchCall.id,
+        name: WEB_SEARCH_TOOL_NAME,
+        label: "Web Search",
+        phase: "running",
+        input: query,
+      });
+
+      toolCompletion = (async () => {
+          try {
+            if (options.signal?.aborted) return;
+
+            let searchBundle: Awaited<ReturnType<typeof runSearch>> | null = null;
+            let lastSearchError: unknown = null;
+            for (let attempt = 0; attempt <= TOOL_RETRY_LIMIT; attempt += 1) {
+              try {
+                chatStore.setStreamingToolState({
+                  id: webSearchCall.id,
+                  name: WEB_SEARCH_TOOL_NAME,
+                  label: "Web Search",
+                  phase: attempt > 0 ? "retrying" : "running",
+                  input: query,
+                  attempts: attempt > 0 ? attempt : undefined,
+                });
+                searchBundle = await runSearch(query, options.signal);
+                lastSearchError = null;
+                break;
+              } catch (error) {
+                lastSearchError = error;
+                if (attempt >= TOOL_RETRY_LIMIT) throw error;
+              }
+            }
+            if (!searchBundle) throw lastSearchError ?? new Error("Search failed");
+            if (options.signal?.aborted) return;
+
+            const contextBlock = buildSearchContextBlock(searchBundle);
+
+            const searchSources: WebSearchSource[] = searchBundle.sources.map((s) => ({
+              id: s.id,
+              title: s.title,
+              url: s.url,
+              snippet: s.snippet,
+            }));
+
+            // Update to reading phase with sources
+            chatStore.setStreamingWebSearchState({
+              query,
+              phase: "reading",
+              sources: searchSources,
+            });
+            chatStore.setStreamingToolState({
+              id: webSearchCall.id,
+              name: WEB_SEARCH_TOOL_NAME,
+              label: "Web Search",
+              phase: "done",
+              input: query,
+              detail: `${searchSources.length} source${searchSources.length !== 1 ? "s" : ""} found`,
+            });
+
+            const rePromptMessages: ChatMessage[] = [
+              ...messages,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: accumulatedContent,
+                timestamp: Date.now(),
+              },
+              {
+                id: crypto.randomUUID(),
+                role: "user",
+                content: `Tool result for ${WEB_SEARCH_TOOL_NAME}(${JSON.stringify({ query })}):\n\n${contextBlock}\n\nAnswer using this information. Sources are displayed separately; do not list or cite URLs.`,
+                timestamp: Date.now(),
+              },
+            ];
+
+            const resolvedContextLength = options.contextLength ?? settings.getModelSettings(options.model).contextLength;
+            const conversation = conversationId
+              ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
+              : undefined;
+
+            // Re-prompt — chunks stream into the same buffer
+            if (options.signal?.aborted) return;
+
+            await provider.sendChat({
+              ...options,
+              previousResponseId: undefined,
+              onChunk: options.onChunk,
+              onReasoningChunk: options.onReasoningChunk,
+              temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
+              contextLength: resolvedContextLength,
+              maxTokens: resolvedMaxTokens || undefined,
+              topP: resolvedTopP,
+              repetitionPenalty: resolvedRepetitionPenalty,
+              stopSequences: resolvedStopSequences,
+              tools: [],
+              toolChoice: "none",
+              onComplete: (rePromptResult) => {
+                // Mark search as done
+                const chatStore = useChatStore.getState();
+                chatStore.setStreamingWebSearchState({
+                  query,
+                  phase: "done",
+                  sources: searchSources,
+                });
+                // Allow App.tsx's completion handler to commit the streamed buffer.
+                chatStore.clearStreamingBufferUnlessSkipped();
+                userOnComplete?.(rePromptResult, { memoryPack, memoryRetrieval, webSearchSources: searchSources });
+                // Clean up streaming state after re-prompt completes
+                useChatStore.getState().resetAfterRePrompt();
+              },
+              messages: buildChatContext(
+                rePromptMessages,
+                {
+                  memoryPack: memoryPack ?? null,
+                  conversationSummary: conversation?.conversationSummary,
+                  summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
+                  webSearchContextBlock: contextBlock,
+                  documentInstructionsBlock,
+                  userPrompt: resolvedUserPrompt,
+                  reservedOutputTokens: resolvedReservedOutputTokens,
+                },
+                resolvedContextLength,
+              ),
+            });
+          } catch (searchError) {
+            if (options.signal?.aborted) return;
+            console.error("[WebSearch] Search failed:", searchError);
+            useChatStore.getState().setStreamingWebSearchState({
+              query,
+              phase: "error",
+              sources: [],
+              error: searchError instanceof Error ? searchError.message : String(searchError),
+            });
+            useChatStore.getState().setStreamingToolState({
+              id: webSearchCall.id,
+              name: WEB_SEARCH_TOOL_NAME,
+              label: "Web Search",
+              phase: "error",
+              input: query,
+              error: searchError instanceof Error ? searchError.message : String(searchError),
+            });
+            useChatStore.getState().clearStreamingBufferUnlessSkipped();
+            userOnComplete?.(result, { memoryPack, memoryRetrieval });
+            // Clean up streaming state after error
+            useChatStore.getState().resetAfterRePrompt();
+          }
+      })();
+      return;
+    }
+
+    userOnComplete?.(result, { memoryPack, memoryRetrieval });
+  };
 
   await provider.sendChat({
     ...options,
@@ -247,6 +455,8 @@ export async function sendChatRequest({
     topP: resolvedTopP,
     repetitionPenalty: resolvedRepetitionPenalty,
     stopSequences: resolvedStopSequences,
+    tools: providerTools,
+    toolChoice: providerTools.length > 0 ? "auto" : "none",
     onChunk: wrappedOnChunk,
     onComplete: wrappedOnComplete,
     messages: buildChatContext(
@@ -255,7 +465,6 @@ export async function sendChatRequest({
         memoryPack: memoryPack ?? null,
         conversationSummary: conversation?.conversationSummary,
         summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
-        toolsBlock: buildToolsBlock(webSearchEnabled),
         contextAnchoringBlock,
         documentInstructionsBlock,
         userPrompt: resolvedUserPrompt,
@@ -264,5 +473,6 @@ export async function sendChatRequest({
       resolvedContextLength,
     ),
   });
+  await toolCompletion;
 
 }

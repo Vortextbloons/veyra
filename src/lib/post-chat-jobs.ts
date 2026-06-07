@@ -85,12 +85,6 @@ export function queuePostChatJobs(options: PostChatJobOptions): void {
   const { conversationId, chatModel, providerId, userMessage, assistantMessage } = options;
   if (!assistantMessage.trim()) return;
 
-  queueDocumentDetection({
-    conversationId,
-    assistantMessage,
-    assistantMessageId: options.assistantMessageId,
-  });
-
   if (!settings.backgroundJobsEnabled) return;
   if (!chatModel.trim()) return;
   if (settings.memoryExtractionEnabled) {
@@ -166,38 +160,6 @@ export function queuePostChatJobs(options: PostChatJobOptions): void {
           return result;
         },
       });
-    },
-  });
-}
-
-export function queueDocumentDetection(options: {
-  conversationId: string;
-  assistantMessage: string;
-  assistantMessageId?: string;
-}): void {
-  const { conversationId, assistantMessage, assistantMessageId } = options;
-
-  if (!assistantMessage.trim()) return;
-
-  // Skip if document feature is disabled
-  const settings = useSettingsStore.getState();
-  if (!settings.documentPanelEnabled) return;
-
-  aiScheduler.enqueueAiJob({
-    type: "maintenance",
-    priority: 4,
-    title: "Document detection",
-    description: "Checking for document creation intents",
-    conversationId,
-    run: async () => {
-      const { handleDocumentOperations } = await import("@/modules/documents/document-runtime");
-      const result = await handleDocumentOperations(assistantMessage, conversationId);
-      if (result?.sanitizedText && assistantMessageId) {
-        useChatStore.getState().commitAssistantMessage(conversationId, assistantMessageId, {
-          content: result.sanitizedText,
-        });
-      }
-      return { output: "Document detection complete" };
     },
   });
 }

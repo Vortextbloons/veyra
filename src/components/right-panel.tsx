@@ -32,6 +32,8 @@ export function RightPanel({
     onCollapsedChange?.(value);
     if (collapsedProp === undefined) setCollapsedInternal(value);
   };
+  const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
+  const setDocumentPanelEnabled = useSettingsStore((s) => s.setDocumentPanelEnabled);
 
   return (
     <aside
@@ -69,6 +71,12 @@ export function RightPanel({
               label="Web Search"
               on={webSearchEnabled}
               onChange={(on) => onWebSearchChange?.(on)}
+            />
+            <CompactToolToggle
+              icon={<FileText className="size-3.5" />}
+              label="Doc Editor"
+              on={documentPanelEnabled}
+              onChange={setDocumentPanelEnabled}
             />
           </div>
         </div>
@@ -424,11 +432,17 @@ function CompactToolToggle({
         onClick={() => onChange(!on)}
         className={`grid size-8 place-items-center rounded-md transition-colors ${
           on
-            ? "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
+            ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20 hover:bg-emerald-500/15"
             : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
         }`}
       >
-        {icon}
+        <span
+          className={`grid place-items-center transition-colors ${
+            on ? "text-emerald-300" : "text-[var(--color-text-dim)]"
+          }`}
+        >
+          {icon}
+        </span>
       </button>
 
       <div
@@ -514,7 +528,12 @@ function DocumentsPanel() {
           >
             <FileText className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
             <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{doc.title}</p>
+              <div className="flex items-center gap-1">
+                <p className="truncate font-medium">{doc.title}</p>
+                {doc.isGlobal && (
+                  <Globe className="size-3 shrink-0 text-amber-400" />
+                )}
+              </div>
               <p className="text-[10px] text-[var(--color-text-dim)]">
                 {formatDocumentType(doc.type)}
               </p>

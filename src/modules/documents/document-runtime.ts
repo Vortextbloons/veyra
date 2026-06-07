@@ -1,59 +1,12 @@
-import type { DocCreateIntent, DocUpdateIntent, DocumentType } from "./document-types";
+import type { DocCreateIntent, DocUpdateIntent } from "./document-types";
 import { useDocumentStore } from "./document-store";
-import { generateTemplateMarkdown } from "./document-templates";
 import { replaceMarkdownSection, insertAfterSection } from "./document-markdown";
 
 export type DocumentOperationResult = {
   applied: boolean;
   sanitizedText: string;
+  error?: string;
 };
-
-function stripDocJsonBlocks(assistantText: string): string {
-  let stripped = assistantText.replace(/```json\s*\n[\s\S]*?"type"\s*:\s*"doc\.(?:create|update)"[\s\S]*?\n```/g, "").trim();
-  stripped = stripped.replace(/\{\s*"type"\s*:\s*"doc\.(?:create|update)"[\s\S]*?\}/g, "").trim();
-  return stripped.replace(/\n{3,}/g, "\n\n").trim();
-}
-
-export function detectDocCreateIntent(assistantText: string): DocCreateIntent | null {
-  const jsonBlockRegex = /```json\s*\n([\s\S]*?)\n```/g;
-  let match;
-
-  while ((match = jsonBlockRegex.exec(assistantText)) !== null) {
-    try {
-      const json = JSON.parse(match[1]);
-      if (json.type === "doc.create" && json.title && json.documentType) {
-        return {
-          type: "doc.create",
-          title: json.title,
-          documentType: json.documentType as DocumentType,
-          contentMarkdown: json.contentMarkdown || generateTemplateMarkdown(json.documentType, json.title),
-        };
-      }
-    } catch {
-      // Not valid JSON, continue searching
-    }
-  }
-
-  const inlineJsonRegex = /\{\s*"type"\s*:\s*"doc\.create"[\s\S]*?\}/;
-  const inlineMatch = assistantText.match(inlineJsonRegex);
-  if (inlineMatch) {
-    try {
-      const json = JSON.parse(inlineMatch[0]);
-      if (json.type === "doc.create" && json.title && json.documentType) {
-        return {
-          type: "doc.create",
-          title: json.title,
-          documentType: json.documentType as DocumentType,
-          contentMarkdown: json.contentMarkdown || generateTemplateMarkdown(json.documentType, json.title),
-        };
-      }
-    } catch {
-      // Not valid JSON
-    }
-  }
-
-  return null;
-}
 
 export async function executeDocCreation(
   intent: DocCreateIntent,
@@ -82,61 +35,12 @@ export async function executeDocCreation(
     };
   } catch (error) {
     console.error("[Document] Failed to create document:", error);
-    return { applied: false, sanitizedText: "" };
+    return {
+      applied: false,
+      sanitizedText: `Document creation failed: ${error instanceof Error ? error.message : String(error)}`,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
-}
-
-export function detectDocUpdateIntent(assistantText: string): DocUpdateIntent | null {
-  const jsonBlockRegex = /```json\s*\n([\s\S]*?)\n```/g;
-  let match;
-
-  while ((match = jsonBlockRegex.exec(assistantText)) !== null) {
-    try {
-      const json = JSON.parse(match[1]);
-      if (
-        json.type === "doc.update" &&
-        json.documentId &&
-        json.mode &&
-        json.contentMarkdown
-      ) {
-        return {
-          type: "doc.update",
-          documentId: json.documentId,
-          mode: json.mode,
-          target: json.target,
-          contentMarkdown: json.contentMarkdown,
-        };
-      }
-    } catch {
-      // Not valid JSON, continue searching
-    }
-  }
-
-  const inlineJsonRegex = /\{\s*"type"\s*:\s*"doc\.update"[\s\S]*?\}/;
-  const inlineMatch = assistantText.match(inlineJsonRegex);
-  if (inlineMatch) {
-    try {
-      const json = JSON.parse(inlineMatch[0]);
-      if (
-        json.type === "doc.update" &&
-        json.documentId &&
-        json.mode &&
-        json.contentMarkdown
-      ) {
-        return {
-          type: "doc.update",
-          documentId: json.documentId,
-          mode: json.mode,
-          target: json.target,
-          contentMarkdown: json.contentMarkdown,
-        };
-      }
-    } catch {
-      // Not valid JSON
-    }
-  }
-
-  return null;
 }
 
 export async function executeDocUpdate(
@@ -148,7 +52,11 @@ export async function executeDocUpdate(
 
   if (!doc) {
     console.error(`[Document] Document not found: ${intent.documentId}`);
-    return { applied: false, sanitizedText: "" };
+    return {
+      applied: false,
+      sanitizedText: `Document update failed: document not found (${intent.documentId}).`,
+      error: `Document not found: ${intent.documentId}`,
+    };
   }
 
   if (intent.mode === "replace_all") {
@@ -166,7 +74,11 @@ export async function executeDocUpdate(
       case "replace_section":
         if (!intent.target) {
           console.error("[Document] replace_section requires target");
-          return { applied: false, sanitizedText: "" };
+          return {
+            applied: false,
+            sanitizedText: "Document update failed: replace_section requires target.",
+            error: "replace_section requires target",
+          };
         }
         newContent = replaceMarkdownSection(
           doc.contentMarkdown,
@@ -178,7 +90,11 @@ export async function executeDocUpdate(
       case "insert_after_section":
         if (!intent.target) {
           console.error("[Document] insert_after_section requires target");
-          return { applied: false, sanitizedText: "" };
+          return {
+            applied: false,
+            sanitizedText: "Document update failed: insert_after_section requires target.",
+            error: "insert_after_section requires target",
+          };
         }
         newContent = insertAfterSection(
           doc.contentMarkdown,
@@ -189,7 +105,11 @@ export async function executeDocUpdate(
 
       default:
         console.error(`[Document] Unknown update mode: ${intent.mode}`);
-        return { applied: false, sanitizedText: "" };
+        return {
+          applied: false,
+          sanitizedText: `Document update failed: unknown mode ${intent.mode}.`,
+          error: `Unknown update mode: ${intent.mode}`,
+        };
     }
 
     if (newContent === doc.contentMarkdown) {
@@ -198,6 +118,9 @@ export async function executeDocUpdate(
         sanitizedText: intent.target
           ? `I could not find the "${intent.target}" section in "${doc.title}", so no document changes were applied.`
           : `No document changes were applied to "${doc.title}".`,
+        error: intent.target
+          ? `Section not found: ${intent.target}`
+          : "No document changes were applied",
       };
     }
 
@@ -229,31 +152,10 @@ export async function executeDocUpdate(
     };
   } catch (error) {
     console.error("[Document] Failed to update document:", error);
-    return { applied: false, sanitizedText: "" };
-  }
-}
-
-export async function handleDocumentOperations(
-  assistantText: string,
-  conversationId: string
-): Promise<DocumentOperationResult | null> {
-  const createIntent = detectDocCreateIntent(assistantText);
-  if (createIntent) {
-    const result = await executeDocCreation(createIntent, conversationId);
     return {
-      ...result,
-      sanitizedText: stripDocJsonBlocks(assistantText) || result.sanitizedText,
+      applied: false,
+      sanitizedText: `Document update failed: ${error instanceof Error ? error.message : String(error)}`,
+      error: error instanceof Error ? error.message : String(error),
     };
   }
-
-  const updateIntent = detectDocUpdateIntent(assistantText);
-  if (updateIntent) {
-    const result = await executeDocUpdate(updateIntent, conversationId);
-    return {
-      ...result,
-      sanitizedText: stripDocJsonBlocks(assistantText) || result.sanitizedText,
-    };
-  }
-
-  return null;
 }

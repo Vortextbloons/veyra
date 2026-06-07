@@ -25,6 +25,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 type DocumentStore = {
   documents: DocumentRecord[];
   activeDocumentId: string | null;
+  activeConversationId: string | null;
   versions: DocumentVersion[];
   isLoading: boolean;
   error: string | null;
@@ -33,11 +34,13 @@ type DocumentStore = {
   _lastSavedContent: string | null;
 
   hydrateDocuments: () => Promise<void>;
+  setActiveConversationId: (id: string | null) => void;
 
   createDocument: (input: CreateDocumentInput) => Promise<DocumentRecord>;
   updateDocument: (input: UpdateDocumentInput) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   renameDocument: (id: string, title: string) => Promise<void>;
+  toggleGlobal: (id: string) => Promise<void>;
 
   openDocument: (id: string) => Promise<void>;
   closeDocument: () => Promise<void>;
@@ -70,6 +73,7 @@ let hydrationPromise: Promise<void> | null = null;
 export const useDocumentStore = create<DocumentStore>((set, get) => ({
   documents: [],
   activeDocumentId: null,
+  activeConversationId: null,
   versions: [],
   isLoading: false,
   error: null,
@@ -82,7 +86,8 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     hydrationPromise ??= (async () => {
       set({ isLoading: true, error: null });
       try {
-        const documents = await ipcListDocuments();
+        const conversationId = get().activeConversationId ?? undefined;
+        const documents = await ipcListDocuments(undefined, conversationId);
         set({ documents, isLoading: false });
       } catch (error) {
         set({ error: String(error), isLoading: false });
@@ -91,9 +96,16 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     return hydrationPromise;
   },
 
+  setActiveConversationId: (id) => {
+    set({ activeConversationId: id });
+    hydrationPromise = null;
+    void get().hydrateDocuments();
+  },
+
   createDocument: async (input) => {
     try {
-      const doc = await ipcCreateDocument(input);
+      const conversationId = input.conversationId ?? get().activeConversationId ?? undefined;
+      const doc = await ipcCreateDocument({ ...input, conversationId });
       const shouldOpen = useSettingsStore.getState().documentAutoOpenOnCreate;
       set((state) => ({
         documents: [doc, ...state.documents],
@@ -140,6 +152,12 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
 
   renameDocument: async (id, title) => {
     await get().updateDocument({ id, title });
+  },
+
+  toggleGlobal: async (id) => {
+    const doc = get().documents.find((d) => d.id === id);
+    if (!doc) return;
+    await get().updateDocument({ id, isGlobal: !doc.isGlobal });
   },
 
   openDocument: async (id) => {
@@ -315,3 +333,14 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     return ipcExportTxt(activeId, `${safeName}.txt`);
   },
 }));
+
+// Sync active conversation from chat store → document store for per-session filtering
+import { useChatStore } from "@/stores/chat-store";
+let _lastSyncedConversationId: string | null | undefined;
+useChatStore.subscribe((state) => {
+  const cid = state.activeConversationId;
+  if (cid !== _lastSyncedConversationId) {
+    _lastSyncedConversationId = cid;
+    useDocumentStore.getState().setActiveConversationId(cid);
+  }
+});

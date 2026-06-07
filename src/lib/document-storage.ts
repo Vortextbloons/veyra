@@ -19,8 +19,8 @@ function newId(): string {
   return `doc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export async function listDocuments(projectId?: string): Promise<DocumentRecord[]> {
-  return invoke<DocumentRecord[]>("list_documents", { projectId: projectId ?? null });
+export async function listDocuments(projectId?: string, conversationId?: string): Promise<DocumentRecord[]> {
+  return invoke<DocumentRecord[]>("list_documents", { projectId: projectId ?? null, conversationId: conversationId ?? null });
 }
 
 export async function getDocument(id: string): Promise<DocumentRecord> {
@@ -36,6 +36,7 @@ export async function createDocument(
     id,
     projectId: input.projectId ?? null,
     conversationId: input.conversationId ?? null,
+    isGlobal: input.isGlobal ?? false,
     title: input.title,
     type: input.type,
     status: "draft",

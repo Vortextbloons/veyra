@@ -3,6 +3,7 @@ import type {
   MessagePerformance,
   ModelInfo,
 } from "@/lib/chat-types";
+import type { ProviderToolCall, ProviderToolDefinition } from "@/lib/providers/types";
 import { buildLmStudioInput, inferSupportsImages } from "@/lib/message-attachments";
 import {
   buildMessagePerformance,
@@ -19,15 +20,26 @@ const DEFAULT_TEMPERATURE = 0.7;
 
 /** LM Studio 0.4+ native chat — accurate `stats` on `chat.end` when streaming. */
 const CHAT_PATH = "/api/v1/chat";
+const OPENAI_CHAT_PATH = "/v1/chat/completions";
 
 export interface LmChatCompleteResult {
   performance: MessagePerformance;
   responseId?: string;
+  toolCalls?: ProviderToolCall[];
 }
 
 type V1OutputItem =
-  | { type: "message"; content: string }
+  | { type: "message"; content: string; tool_calls?: unknown }
   | { type: "reasoning"; content: string }
+  | {
+      type: "tool_call" | "function_call";
+      id?: string;
+      call_id?: string;
+      name?: string;
+      arguments?: unknown;
+      args?: unknown;
+      function?: { name?: string; arguments?: unknown };
+    }
   | { type: string; content?: string };
 
 type StreamState = {
@@ -36,7 +48,9 @@ type StreamState = {
   accumulatedReasoning: string;
   stats?: LmChatStats;
   responseId?: string;
+  toolCalls?: ProviderToolCall[];
 };
+
 
 function extractMessageText(output: V1OutputItem[] | undefined): string {
   if (!output?.length) return "";
@@ -54,6 +68,93 @@ function extractReasoningText(output: V1OutputItem[] | undefined): string {
     .join("");
 }
 
+function parseToolArguments(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function extractToolCalls(output: V1OutputItem[] | undefined): ProviderToolCall[] {
+  if (!output?.length) return [];
+  const calls: ProviderToolCall[] = [];
+
+  const pushCall = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    const fn = record.function && typeof record.function === "object"
+      ? record.function as Record<string, unknown>
+      : undefined;
+    const name = typeof record.name === "string"
+      ? record.name.trim()
+      : typeof fn?.name === "string"
+        ? fn.name.trim()
+        : "";
+    if (!name) return;
+    calls.push({
+      id: typeof record.id === "string" ? record.id : typeof record.call_id === "string" ? record.call_id : crypto.randomUUID(),
+      name,
+      arguments: parseToolArguments(record.arguments ?? record.args ?? fn?.arguments),
+    });
+  };
+
+  for (const item of output) {
+    if ("tool_calls" in item && Array.isArray(item.tool_calls)) {
+      for (const call of item.tool_calls) pushCall(call);
+    }
+
+    if (item.type !== "tool_call" && item.type !== "function_call") continue;
+    pushCall(item);
+  }
+
+  return calls;
+}
+
+function buildOpenAiMessage(message: ChatMessage): Record<string, unknown> {
+  return {
+    role: message.role,
+    content: message.content,
+  };
+}
+
+function buildOpenAiChatBody(options: {
+  model: string;
+  messages: ChatMessage[];
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  stopSequences?: string[];
+  tools?: ProviderToolDefinition[];
+  toolChoice?: "auto" | "none";
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: options.model,
+    messages: options.messages.map(buildOpenAiMessage),
+    stream: false,
+    temperature: options.temperature ?? DEFAULT_TEMPERATURE,
+  };
+
+  if (options.maxTokens != null && options.maxTokens > 0) body.max_tokens = options.maxTokens;
+  if (options.topP != null && options.topP < 1) body.top_p = options.topP;
+  if (options.stopSequences && options.stopSequences.length > 0) body.stop = options.stopSequences;
+  if (options.tools && options.tools.length > 0) {
+    body.tools = options.tools;
+    body.tool_choice = options.toolChoice ?? "auto";
+  }
+
+  return body;
+}
+
 function buildV1ChatBody(options: {
   model: string;
   messages: ChatMessage[];
@@ -65,6 +166,8 @@ function buildV1ChatBody(options: {
   repetitionPenalty?: number;
   stopSequences?: string[];
   store?: boolean;
+  tools?: ProviderToolDefinition[];
+  toolChoice?: "auto" | "none";
 }): Record<string, unknown> {
   const {
     model,
@@ -76,6 +179,8 @@ function buildV1ChatBody(options: {
     repetitionPenalty,
     stopSequences,
     store = true,
+    tools,
+    toolChoice,
   } = options;
   const systemPrompt = messages
     .filter((m) => m.role === "system" && m.content.trim())
@@ -106,6 +211,11 @@ function buildV1ChatBody(options: {
     body.stop = stopSequences;
   }
 
+  if (tools && tools.length > 0) {
+    body.tools = tools;
+    body.tool_choice = toolChoice ?? "auto";
+  }
+
   if (systemPrompt) {
     body.system_prompt = systemPrompt;
   }
@@ -124,6 +234,13 @@ function buildV1ChatBody(options: {
       body.input = buildLmStudioInput(lastUser.content, lastUser.attachments);
     } else {
       body.input = formatTranscript(dialogue);
+    }
+  }
+
+  if (typeof body.input === "string" && !body.input.trim()) {
+    const lastUser = [...dialogue].reverse().find((m) => m.role === "user" && m.content.trim());
+    if (lastUser) {
+      body.input = buildLmStudioInput(lastUser.content.trim(), lastUser.attachments);
     }
   }
 
@@ -191,6 +308,9 @@ function processV1StreamEvent(
       if (parsed.result.stats) state.stats = parsed.result.stats;
       if (parsed.result.response_id) state.responseId = parsed.result.response_id;
 
+      const toolCalls = extractToolCalls(parsed.result.output);
+      if (toolCalls.length > 0) state.toolCalls = toolCalls;
+
       const finalReasoning = extractReasoningText(parsed.result.output);
       if (finalReasoning.length > state.accumulatedReasoning.length) {
         const reasoningRemainder = finalReasoning.slice(state.accumulatedReasoning.length);
@@ -221,6 +341,11 @@ function processV1StreamEvent(
   return "continue";
 }
 
+function isClosedTauriResourceError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /resource id \d+ is invalid/i.test(message);
+}
+
 async function readV1SseStream(
   body: ReadableStream<Uint8Array>,
   onEvent: (eventType: string, data: string) => "continue" | "done",
@@ -233,11 +358,18 @@ async function readV1SseStream(
   try {
     while (true) {
       if (signal?.aborted) {
-        await reader.cancel();
+        await reader.cancel().catch((error: unknown) => {
+          if (!isClosedTauriResourceError(error)) throw error;
+        });
         return;
       }
 
-      const { done, value } = await reader.read();
+      const { done, value } = await reader.read().catch((error: unknown) => {
+        if (signal?.aborted || isClosedTauriResourceError(error)) {
+          return { done: true, value: undefined } as ReadableStreamReadResult<Uint8Array>;
+        }
+        throw error;
+      });
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -273,7 +405,11 @@ async function readV1SseStream(
       if (data) onEvent(eventType, data);
     }
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch (error) {
+      if (!isClosedTauriResourceError(error)) throw error;
+    }
   }
 }
 
@@ -499,6 +635,8 @@ export async function sendLmStudioChat(options: {
   stopSequences?: string[];
   store?: boolean;
   previousResponseId?: string;
+  tools?: ProviderToolDefinition[];
+  toolChoice?: "auto" | "none";
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
@@ -521,6 +659,8 @@ async function sendLmStudioChatImpl(options: {
   stopSequences?: string[];
   store?: boolean;
   previousResponseId?: string;
+  tools?: ProviderToolDefinition[];
+  toolChoice?: "auto" | "none";
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
@@ -540,6 +680,8 @@ async function sendLmStudioChatImpl(options: {
     stopSequences,
     store,
     previousResponseId,
+    tools,
+    toolChoice,
     signal,
     onChunk,
     onReasoningChunk,
@@ -553,6 +695,27 @@ async function sendLmStudioChatImpl(options: {
     accumulatedContent: "",
     accumulatedReasoning: "",
   };
+
+  if (tools && tools.length > 0) {
+    await sendOpenAiCompatibleChat({
+      messages,
+      model,
+      baseUrl,
+      temperature,
+      maxTokens,
+      topP,
+      stopSequences,
+      tools,
+      toolChoice,
+      signal,
+      startedAt,
+      onChunk,
+      onReasoningChunk,
+      onComplete,
+      onError,
+    });
+    return;
+  }
 
   try {
     const { signal: fetchSignal, cleanup: cleanupFetchTimeout } = withFetchTimeout(signal);
@@ -572,6 +735,8 @@ async function sendLmStudioChatImpl(options: {
             stopSequences,
             store,
             previousResponseId,
+            tools,
+            toolChoice,
           }),
         ),
         signal: fetchSignal,
@@ -600,6 +765,8 @@ async function sendLmStudioChatImpl(options: {
       };
       streamState.stats = json.stats;
       streamState.responseId = json.response_id;
+      const toolCalls = extractToolCalls(json.output);
+      if (toolCalls.length > 0) streamState.toolCalls = toolCalls;
       const reasoning = extractReasoningText(json.output);
       if (reasoning) {
         streamState.accumulatedReasoning = reasoning;
@@ -624,6 +791,7 @@ async function sendLmStudioChatImpl(options: {
         stats: streamState.stats,
       }),
       responseId: streamState.responseId,
+      toolCalls: streamState.toolCalls,
     });
     } finally {
       cleanupFetchTimeout();
@@ -633,6 +801,112 @@ async function sendLmStudioChatImpl(options: {
       onError("Request aborted");
     } else {
       onError(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+}
+
+async function sendOpenAiCompatibleChat(options: {
+  messages: ChatMessage[];
+  model: string;
+  baseUrl?: string;
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  stopSequences?: string[];
+  tools?: ProviderToolDefinition[];
+  toolChoice?: "auto" | "none";
+  signal?: AbortSignal;
+  startedAt: number;
+  onChunk: (content: string, done: boolean) => void;
+  onReasoningChunk?: (content: string, done: boolean) => void;
+  onComplete?: (result: LmChatCompleteResult) => void;
+  onError: (error: string) => void;
+}): Promise<void> {
+  const streamState: StreamState = {
+    accumulatedContent: "",
+    accumulatedReasoning: "",
+  };
+
+  try {
+    const { signal: fetchSignal, cleanup: cleanupFetchTimeout } = withFetchTimeout(options.signal);
+    try {
+      const res = await tauriFetch(`${options.baseUrl || DEFAULT_BASE_URL}${OPENAI_CHAT_PATH}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildOpenAiChatBody(options)),
+        signal: fetchSignal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        options.onError(
+          text
+            ? `Request failed (${res.status}): ${text.slice(0, 200)}`
+            : `Request failed with status ${res.status}`,
+        );
+        return;
+      }
+
+      const json = await res.json() as {
+        id?: string;
+        choices?: Array<{
+          message?: {
+            content?: string | null;
+            reasoning_content?: string | null;
+            tool_calls?: unknown;
+          };
+          finish_reason?: string;
+        }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+      };
+      const choice = json.choices?.[0];
+      const message = choice?.message;
+      streamState.responseId = json.id;
+      const reasoning = message?.reasoning_content?.trim() ?? "";
+      if (reasoning) {
+        streamState.accumulatedReasoning = reasoning;
+        options.onReasoningChunk?.(reasoning, false);
+      }
+      const content = message?.content ?? "";
+      if (content) {
+        streamState.firstTokenAt = Date.now();
+        streamState.accumulatedContent = content;
+        options.onChunk(content, false);
+      }
+      if (json.usage) {
+        streamState.stats = {
+          tokens_per_second: 0,
+          time_to_first_token: 0,
+          generation_time: 0,
+          stop_reason: choice?.finish_reason,
+          input_tokens: json.usage.prompt_tokens,
+          total_output_tokens: json.usage.completion_tokens,
+        } as LmChatStats;
+      }
+      streamState.toolCalls = extractToolCalls([
+        { type: "message", content, tool_calls: message?.tool_calls },
+      ]);
+      options.onReasoningChunk?.("", true);
+      options.onChunk("", true);
+      options.onComplete?.({
+        performance: buildMessagePerformance({
+          content: streamState.accumulatedContent,
+          startedAt: options.startedAt,
+          completedAt: Date.now(),
+          firstTokenAt: streamState.firstTokenAt,
+          stats: streamState.stats,
+        }),
+        responseId: streamState.responseId,
+        toolCalls: streamState.toolCalls,
+      });
+    } finally {
+      cleanupFetchTimeout();
+    }
+  } catch (err: unknown) {
+    if (options.signal?.aborted) {
+      options.onError("Request aborted");
+    } else {
+      options.onError(err instanceof Error ? err.message : "Unknown error");
     }
   }
 }

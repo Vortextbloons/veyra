@@ -24,6 +24,19 @@ export type WebSearchState = {
   error?: string;
 };
 
+export type ToolCallPhase = "running" | "retrying" | "done" | "error";
+
+export type ToolCallState = {
+  id: string;
+  name: string;
+  label: string;
+  phase: ToolCallPhase;
+  input?: string;
+  detail?: string;
+  error?: string;
+  attempts?: number;
+};
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
@@ -42,6 +55,8 @@ export interface ChatMessage {
   webSearchSources?: WebSearchSource[];
   /** Live web search state for rendering tool call UI during/after search. */
   webSearchState?: WebSearchState;
+  /** Live/generic tool call state for rendering tool activity. */
+  toolStates?: ToolCallState[];
 }
 
 export interface MessagePerformance {

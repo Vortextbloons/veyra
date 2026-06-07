@@ -1,16 +1,25 @@
+import { Children, isValidElement, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 import { CodeBlock, InlineCode } from "@/components/ui/code-block";
+
+function nodeToText(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeToText).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return nodeToText(node.props.children);
+  return "";
+}
 
 export const MARKDOWN_COMPONENTS: Components = {
   code({ className: codeClassName, children: codeChildren }) {
     const match = /language-(\w+)/.exec(codeClassName || "");
-    const isInline = !codeClassName && !String(codeChildren).includes("\n");
+    const rawCode = nodeToText(Children.toArray(codeChildren)).replace(/\n$/, "");
+    const isInline = !codeClassName && !rawCode.includes("\n");
 
     if (isInline) {
       return <InlineCode>{codeChildren}</InlineCode>;
     }
 
-    const rawCode = String(codeChildren).replace(/\n$/, "");
     return (
       <CodeBlock language={match?.[1]} rawCode={rawCode}>
         <code className={codeClassName}>{rawCode}</code>

@@ -23,6 +23,8 @@ export const lmStudioAdapter: ProviderAdapter = {
       repetitionPenalty: options.repetitionPenalty,
       stopSequences: options.stopSequences,
       previousResponseId: options.previousResponseId,
+      tools: options.tools,
+      toolChoice: options.toolChoice,
       signal: options.signal,
       onChunk: options.onChunk,
       onReasoningChunk: options.onReasoningChunk,

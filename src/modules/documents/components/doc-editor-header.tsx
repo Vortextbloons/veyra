@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Edit2, Check } from "lucide-react";
+import { X, Edit2, Check, Globe } from "lucide-react";
 import { useDocumentStore } from "../document-store";
 import { DocumentExportMenu } from "./document-export-menu";
 import { formatDocumentStatus } from "../document-export";
@@ -9,6 +9,7 @@ export function DocEditorHeader() {
   const documents = useDocumentStore((s) => s.documents);
   const renameDocument = useDocumentStore((s) => s.renameDocument);
   const closeDocument = useDocumentStore((s) => s.closeDocument);
+  const toggleGlobal = useDocumentStore((s) => s.toggleGlobal);
 
   const doc = documents.find((d) => d.id === activeDocumentId);
   const [editing, setEditing] = useState(false);
@@ -88,6 +89,18 @@ export function DocEditorHeader() {
         )}
       </div>
       <div className="flex items-center gap-1 ml-2">
+        <button
+          type="button"
+          title={doc.isGlobal ? "Global document (click to make session-only)" : "Session document (click to make global)"}
+          onClick={() => void toggleGlobal(doc.id)}
+          className={`grid size-7 place-items-center rounded transition-colors ${
+            doc.isGlobal
+              ? "text-amber-400 bg-amber-400/10 hover:bg-amber-400/20"
+              : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+          }`}
+        >
+          <Globe className="size-3.5" />
+        </button>
         <DocumentExportMenu />
         <button
           type="button"

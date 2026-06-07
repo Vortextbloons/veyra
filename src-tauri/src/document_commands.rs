@@ -39,9 +39,10 @@ pub async fn update_document(
 #[tauri::command]
 pub async fn list_documents(
     project_id: Option<String>,
+    conversation_id: Option<String>,
     state: State<'_, DocumentDbState>,
 ) -> Result<Vec<document_db::DocumentRow>, String> {
-    run_db(state.inner(), move |conn| document_db::list_documents(conn, project_id)).await
+    run_db(state.inner(), move |conn| document_db::list_documents(conn, project_id, conversation_id)).await
 }
 
 #[tauri::command]

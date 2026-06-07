@@ -1,49 +1,111 @@
-export interface ToolDefinition {
-  id: string;
-  name: string;
-  enabled: boolean;
-  description: string;
-  promptContent: string;
-}
+import type { ProviderToolDefinition } from "@/lib/providers/types";
 
-const WEB_SEARCH_TOOL: ToolDefinition = {
-  id: "web-search",
-  name: "web.search",
-  enabled: false,
-  description: "Search the web for current information",
-  promptContent: `When the user's question requires current information
-you do not have, emit a tool call in this exact JSON format:
+export const WEB_SEARCH_TOOL_NAME = "web_search";
+export const DOC_CREATE_TOOL_NAME = "doc_create";
+export const DOC_UPDATE_TOOL_NAME = "doc_update";
 
-{"tool": "web.search", "args": {"query": "your search query here"}}
+const DOCUMENT_TYPES = [
+  "document",
+  "technical_spec",
+  "essay",
+  "report",
+  "proposal",
+  "readme",
+  "notes",
+  "prompt",
+  "project_plan",
+  "meeting_notes",
+  "research_brief",
+  "agent_instruction",
+] as const;
 
-Do NOT answer from the search results yourself — the app will handle the search and
-return results to you. Use web search only when genuinely needed. Do not search for
-trivial or timeless questions.`,
-};
+export function buildProviderTools(options: {
+  webSearchEnabled: boolean;
+  documentToolsEnabled: boolean;
+  activeDocumentId?: string;
+}): ProviderToolDefinition[] {
+  const tools: ProviderToolDefinition[] = [];
 
-const ALL_TOOLS: ToolDefinition[] = [WEB_SEARCH_TOOL];
+  if (options.webSearchEnabled) {
+    tools.push({
+      type: "function",
+      function: {
+        name: WEB_SEARCH_TOOL_NAME,
+        description: "Search the web for current information when the answer needs up-to-date facts.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "A focused search query.",
+            },
+          },
+          required: ["query"],
+          additionalProperties: false,
+        },
+      },
+    });
+  }
 
-export function getEnabledTools(webSearchEnabled: boolean): ToolDefinition[] {
-  return ALL_TOOLS.map((tool) => ({
-    ...tool,
-    enabled: tool.id === "web-search" ? webSearchEnabled : false,
-  })).filter((tool) => tool.enabled);
-}
+  if (options.documentToolsEnabled) {
+    tools.push({
+      type: "function",
+      function: {
+        name: DOC_CREATE_TOOL_NAME,
+        description: "Create a markdown document in Veyra's document editor for long-form content.",
+        parameters: {
+          type: "object",
+          properties: {
+            title: { type: "string", description: "Document title." },
+            documentType: {
+              type: "string",
+              enum: DOCUMENT_TYPES,
+              description: "Document category.",
+            },
+            contentMarkdown: {
+              type: "string",
+              description: "Complete markdown content for the document.",
+            },
+          },
+          required: ["title", "documentType", "contentMarkdown"],
+          additionalProperties: false,
+        },
+      },
+    });
 
-export function buildToolsBlock(webSearchEnabled: boolean): string {
-  const enabled = getEnabledTools(webSearchEnabled);
-  if (enabled.length === 0) return "";
+    tools.push({
+      type: "function",
+      function: {
+        name: DOC_UPDATE_TOOL_NAME,
+        description: options.activeDocumentId
+          ? `Update an existing markdown document. The active document id is ${options.activeDocumentId}.`
+          : "Update an existing markdown document by id.",
+        parameters: {
+          type: "object",
+          properties: {
+            documentId: {
+              type: "string",
+              description: "Document id to update. Use the active document id when editing the active document.",
+            },
+            mode: {
+              type: "string",
+              enum: ["replace_section", "insert_after_section", "replace_all"],
+            },
+            target: {
+              type: "string",
+              description: "Section title for replace_section or insert_after_section.",
+            },
+            contentMarkdown: {
+              type: "string",
+              description: "Markdown content to insert or use as replacement.",
+            },
+          },
+          required: ["documentId", "mode", "contentMarkdown"],
+          additionalProperties: false,
+        },
+      },
+    });
+  }
 
-  const toolEntries = enabled
-    .map(
-      (tool) =>
-        `<tool name="${tool.name}">\n${tool.promptContent}\n</tool>`,
-    )
-    .join("\n\n");
-
-  return `<veyra_tools>
-Available tools — use only when genuinely needed.
-
-${toolEntries}
-</veyra_tools>`;
+  return tools;
 }
