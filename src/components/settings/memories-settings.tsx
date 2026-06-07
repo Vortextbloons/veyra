@@ -3,6 +3,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import type { MemoryMode } from "@/lib/memory-types";
 import { Toggle } from "@/components/toggle";
 import { ModelDropdown } from "@/components/settings/model-dropdown";
+import { SliderControl } from "@/components/ui/slider-control";
 
 const MEMORY_MODES: { value: MemoryMode; label: string; description: string }[] = [
   {
@@ -143,7 +144,8 @@ export function MemoriesSettings() {
           Limits
         </h2>
         <div className="space-y-3">
-          <LimitControl
+          <SliderControl
+            variant="card"
             label="Max memory tokens"
             description="Token budget for memory context injected into chats"
             value={maxMemoryTokens}
@@ -151,9 +153,10 @@ export function MemoriesSettings() {
             min={100}
             max={4000}
             step={100}
-            format={formatLabel}
+            formatValue={formatLabel}
           />
-          <LimitControl
+          <SliderControl
+            variant="card"
             label="Max memory nodes"
             description="Maximum number of memory nodes retrieved per query"
             value={maxMemoryNodes}
@@ -161,9 +164,10 @@ export function MemoriesSettings() {
             min={1}
             max={50}
             step={1}
-            format={(n) => `${n}`}
+            formatValue={(n) => `${n}`}
           />
-          <LimitControl
+          <SliderControl
+            variant="card"
             label="Max memory files"
             description="Maximum number of memory files to search"
             value={maxMemoryFiles}
@@ -171,9 +175,10 @@ export function MemoriesSettings() {
             min={1}
             max={20}
             step={1}
-            format={(n) => `${n}`}
+            formatValue={(n) => `${n}`}
           />
-          <LimitControl
+          <SliderControl
+            variant="card"
             label="Max graph depth"
             description="How many hops to follow in the memory graph"
             value={maxGraphDepth}
@@ -181,63 +186,10 @@ export function MemoriesSettings() {
             min={0}
             max={5}
             step={1}
-            format={(n) => `${n}`}
+            formatValue={(n) => `${n}`}
           />
         </div>
       </section>
-    </div>
-  );
-}
-
-function LimitControl({
-  label,
-  description,
-  value,
-  onChange,
-  min,
-  max,
-  step,
-  format,
-}: {
-  label: string;
-  description: string;
-  value: number;
-  onChange: (n: number) => void;
-  min: number;
-  max: number;
-  step: number;
-  format: (n: number) => string;
-}) {
-  const percent = ((value - min) / (max - min)) * 100;
-
-  return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-      <div className="mb-2 flex items-center justify-between">
-        <div>
-          <div className="text-[12.5px] font-medium text-white">{label}</div>
-          <div className="text-[11px] text-[var(--color-text-dim)]">{description}</div>
-        </div>
-        <span className="shrink-0 rounded bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white">
-          {format(value)}
-        </span>
-      </div>
-      <div className="relative">
-        <div className="h-1.5 rounded-full bg-white/[0.06]">
-          <div
-            className="h-full rounded-full bg-[var(--color-accent)]"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </div>
     </div>
   );
 }

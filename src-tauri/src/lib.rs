@@ -2,11 +2,36 @@ use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Manager, RunEvent, WindowEvent};
 
-/// Ensures `app_ready` only reveals/focuses the window once per process (avoids
-/// stealing focus on Vite HMR remounts during `tauri dev`).
+/// Ensures the main window is only revealed once per process (avoids stealing
+/// focus on Vite HMR remounts during `tauri dev`).
 static INITIAL_WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
 
+fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
+    if INITIAL_WINDOW_SHOWN.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    match app.get_webview_window("main") {
+        Some(window) => {
+            if let Err(error) = window.show() {
+                eprintln!("[veyra] failed to show main window: {error}");
+            } else if focus && !cfg!(debug_assertions) {
+                let _ = window.set_focus();
+            }
+        }
+        None => {
+            eprintln!("[veyra] main webview window not found");
+            for (label, _) in app.webview_windows() {
+                eprintln!("[veyra] available window: {label}");
+            }
+            INITIAL_WINDOW_SHOWN.store(false, Ordering::SeqCst);
+        }
+    }
+}
+
 mod agent_commands;
+mod constants;
+mod db_utils;
 mod document_commands;
 mod document_db;
 mod lm_studio_setup;
@@ -88,16 +113,7 @@ fn exit_app(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn app_ready(app: tauri::AppHandle) {
-    if INITIAL_WINDOW_SHOWN.swap(true, Ordering::SeqCst) {
-        return;
-    }
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        // Dev: never steal OS focus on show/HMR. Release: focus on first real launch.
-        if !cfg!(debug_assertions) {
-            let _ = window.set_focus();
-        }
-    }
+    reveal_main_window(&app, true);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -180,13 +196,21 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            if let RunEvent::ExitRequested { .. } = event {
-                if let Some(state) = app_handle.try_state::<searxng_setup::SearxngState>() {
-                    if state.was_started_by_us() {
-                        searxng_setup::stop_container();
-                        state.clear_started();
+            match event {
+                RunEvent::Ready => {
+                    // Do not rely on the frontend to reveal the window — if JS fails to
+                    // boot or invoke app_ready, the app would stay invisible forever.
+                    reveal_main_window(&app_handle, false);
+                }
+                RunEvent::ExitRequested { .. } => {
+                    if let Some(state) = app_handle.try_state::<searxng_setup::SearxngState>() {
+                        if state.was_started_by_us() {
+                            searxng_setup::stop_container();
+                            state.clear_started();
+                        }
                     }
                 }
+                _ => {}
             }
         });
 }

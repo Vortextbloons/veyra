@@ -336,7 +336,10 @@ fn wait_for_searxng_health() -> Result<(), String> {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
-    Err("SearXNG container started but did not respond to HTTP health checks within 30 seconds.".into())
+    Err(
+        "SearXNG container started but did not respond to HTTP health checks within 30 seconds."
+            .into(),
+    )
 }
 
 /// Check Docker + container status. Non-blocking — just reads state.

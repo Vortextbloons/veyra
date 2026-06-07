@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { ProviderIcon } from "@/components/provider-icon";
 import { ModelIcon } from "@/components/model-icon";
+import { SliderControl } from "@/components/ui/slider-control";
 
 export function ModelsSettings() {
   const providers = useProviderStore((s) => s.providers);
@@ -146,7 +147,7 @@ export function ModelsSettings() {
                 min={0}
                 max={2}
                 step={0.05}
-                format={(n) => n.toFixed(2)}
+                formatValue={(n) => n.toFixed(2)}
               />
               <SliderControl
                 label="Repetition Penalty"
@@ -156,7 +157,7 @@ export function ModelsSettings() {
                 min={1}
                 max={2}
                 step={0.05}
-                format={(n) => n.toFixed(2)}
+                formatValue={(n) => n.toFixed(2)}
               />
               <SliderControl
                 label="Top-p"
@@ -166,7 +167,7 @@ export function ModelsSettings() {
                 min={0}
                 max={1}
                 step={0.05}
-                format={(n) => n.toFixed(2)}
+                formatValue={(n) => n.toFixed(2)}
               />
             </div>
           </div>
@@ -184,7 +185,7 @@ export function ModelsSettings() {
                 min={0}
                 max={8192}
                 step={64}
-                format={(n) => (n === 0 ? "Unlimited" : n.toLocaleString())}
+                formatValue={(n) => (n === 0 ? "Unlimited" : n.toLocaleString())}
               />
               <StopSequencesInput
                 value={defaultStopSequences}
@@ -206,7 +207,7 @@ export function ModelsSettings() {
                 min={512}
                 max={131072}
                 step={512}
-                format={(n) =>
+                formatValue={(n) =>
                   n >= 1024 ? `${(n / 1024).toFixed(n % 1024 ? 1 : 0)}K` : `${n}`
                 }
               />
@@ -218,7 +219,7 @@ export function ModelsSettings() {
                 min={256}
                 max={8192}
                 step={256}
-                format={(n) => n.toLocaleString()}
+                formatValue={(n) => n.toLocaleString()}
               />
             </div>
           </div>
@@ -404,7 +405,7 @@ function ModelOverrideCard({
                   min={0}
                   max={2}
                   step={0.05}
-                  format={(n) => n.toFixed(2)}
+                  formatValue={(n) => n.toFixed(2)}
                 />
                 <SliderControl
                   label="Repetition Penalty"
@@ -414,7 +415,7 @@ function ModelOverrideCard({
                   min={1}
                   max={2}
                   step={0.05}
-                  format={(n) => n.toFixed(2)}
+                  formatValue={(n) => n.toFixed(2)}
                 />
                 <SliderControl
                   label="Top-p"
@@ -424,7 +425,7 @@ function ModelOverrideCard({
                   min={0}
                   max={1}
                   step={0.05}
-                  format={(n) => n.toFixed(2)}
+                  formatValue={(n) => n.toFixed(2)}
                 />
               </div>
             </div>
@@ -442,7 +443,7 @@ function ModelOverrideCard({
                   min={0}
                   max={8192}
                   step={64}
-                  format={(n) => (n === 0 ? "Unlimited" : n.toLocaleString())}
+                  formatValue={(n) => (n === 0 ? "Unlimited" : n.toLocaleString())}
                 />
                 <StopSequencesInput
                   value={resolved.stopSequences}
@@ -465,7 +466,7 @@ function ModelOverrideCard({
                   min={512}
                   max={131072}
                   step={512}
-                  format={(n) =>
+                  formatValue={(n) =>
                     n >= 1024 ? `${(n / 1024).toFixed(n % 1024 ? 1 : 0)}K` : `${n}`
                   }
                 />
@@ -477,7 +478,7 @@ function ModelOverrideCard({
                   min={256}
                   max={8192}
                   step={256}
-                  format={(n) => n.toLocaleString()}
+                  formatValue={(n) => n.toLocaleString()}
                 />
               </div>
             </div>
@@ -497,57 +498,6 @@ function ModelOverrideCard({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function SliderControl({
-  label,
-  description,
-  value,
-  onChange,
-  min,
-  max,
-  step,
-  format,
-}: {
-  label: string;
-  description: string;
-  value: number;
-  onChange: (n: number) => void;
-  min: number;
-  max: number;
-  step: number;
-  format: (n: number) => string;
-}) {
-  const percent = ((value - min) / (max - min)) * 100;
-
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between">
-        <div className="text-[12px] font-medium text-white">{label}</div>
-        <span className="rounded bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white">
-          {format(value)}
-        </span>
-      </div>
-      <p className="mb-2 text-[10.5px] text-[var(--color-text-dim)]">{description}</p>
-      <div className="relative">
-        <div className="h-1.5 rounded-full bg-white/[0.06]">
-          <div
-            className="h-full rounded-full bg-[var(--color-accent)]"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </div>
     </div>
   );
 }

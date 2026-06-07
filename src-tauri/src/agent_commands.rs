@@ -16,7 +16,7 @@ static RUNNING_AGENT_PIDS: LazyLock<Mutex<HashMap<String, u32>>> =
 const AGENT_PROCESS_TIMEOUT: Duration = Duration::from_secs(2 * 60 * 60);
 const AGENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-const LM_STUDIO_OPENAI_BASE_URL: &str = "http://localhost:1234/v1";
+use crate::constants::LM_STUDIO_OPENAI_BASE_URL;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -659,9 +659,9 @@ fn cmd_arg_quote(value: &str) -> String {
         return "\"\"".to_string();
     }
 
-    let is_safe = value.chars().all(|ch| {
-        ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | '\\' | ':')
-    });
+    let is_safe = value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | '\\' | ':'));
     if is_safe {
         return value.to_string();
     }

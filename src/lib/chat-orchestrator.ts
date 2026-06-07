@@ -15,6 +15,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
   buildProviderTools,
 } from "@/lib/tool-registry";
+import { getToolCallUi } from "@/lib/tool-call-ui";
 import { buildContextAnchoringBlock, buildDocumentInstructionsBlock } from "@/lib/prompts";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import { executeDocCreation, executeDocUpdate } from "@/modules/documents/document-runtime";
@@ -78,6 +79,31 @@ function docUpdateIntentFromToolCall(call: ProviderToolCall): DocUpdateIntent | 
 }
 
 const TOOL_RETRY_LIMIT = 2;
+
+function registerStreamingToolCall(
+  call: Pick<ProviderToolCall, "id" | "name">,
+  phase: "pending" | "running",
+  input?: string,
+) {
+  const meta = getToolCallUi(call.name);
+  useChatStore.getState().setStreamingToolState({
+    id: call.id,
+    name: call.name,
+    label: meta.label,
+    phase,
+    input,
+  });
+}
+
+function registerStreamingToolCalls(
+  calls: ProviderToolCall[],
+  phase: "pending" | "running",
+  inputForCall?: (call: ProviderToolCall) => string | undefined,
+) {
+  for (const call of calls) {
+    registerStreamingToolCall(call, phase, inputForCall?.(call));
+  }
+}
 
 export async function sendChatRequest({
   providerId,
@@ -150,6 +176,10 @@ export async function sendChatRequest({
   let isRePrompt = false;
   let toolCompletion: Promise<void> = Promise.resolve();
 
+  const handleToolCallDetected = (call: Pick<ProviderToolCall, "id" | "name">) => {
+    registerStreamingToolCall(call, "pending");
+  };
+
   const wrappedOnComplete: ProviderChatOptions["onComplete"] = (result) => {
     const toolCalls = result.toolCalls ?? [];
     const webSearchCall = toolCalls.find((call) => call.name === WEB_SEARCH_TOOL_NAME);
@@ -158,6 +188,10 @@ export async function sendChatRequest({
     );
 
     if (documentCalls.length > 0 && !isRePrompt) {
+      registerStreamingToolCalls(documentCalls, "running", (call) =>
+        stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId"),
+      );
+
       toolCompletion = (async () => {
         const chatStore = useChatStore.getState();
         const results: string[] = [];
@@ -294,13 +328,7 @@ export async function sendChatRequest({
         phase: "searching",
         sources: [],
       });
-      chatStore.setStreamingToolState({
-        id: webSearchCall.id,
-        name: WEB_SEARCH_TOOL_NAME,
-        label: "Web Search",
-        phase: "running",
-        input: query,
-      });
+      registerStreamingToolCall(webSearchCall, "running", query);
 
       toolCompletion = (async () => {
           try {
@@ -332,10 +360,8 @@ export async function sendChatRequest({
             const contextBlock = buildSearchContextBlock(searchBundle);
 
             const searchSources: WebSearchSource[] = searchBundle.sources.map((s) => ({
-              id: s.id,
-              title: s.title,
-              url: s.url,
-              snippet: s.snippet,
+              ...s,
+              snippet: s.snippet ?? "",
             }));
 
             // Update to reading phase with sources
@@ -458,6 +484,7 @@ export async function sendChatRequest({
     tools: providerTools,
     toolChoice: providerTools.length > 0 ? "auto" : "none",
     onChunk: wrappedOnChunk,
+    onToolCallDetected: handleToolCallDetected,
     onComplete: wrappedOnComplete,
     messages: buildChatContext(
       messages,

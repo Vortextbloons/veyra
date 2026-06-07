@@ -209,6 +209,10 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Window starts hidden in tauri.conf.json — reveal as soon as React mounts
+    // so a slow hydration path never leaves the app invisible.
+    void emitAppReady();
+
     void (async () => {
       await ensureSettingsHydrated();
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
@@ -217,7 +221,6 @@ function App() {
       markStartup("veyra:hydration-ready");
       logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
       initializeProvider();
-      await emitAppReady();
     })();
 
     return deferUntilIdle(() => {
@@ -271,6 +274,7 @@ function App() {
             content: streamingBuffer.content,
             reasoning: streamingBuffer.reasoning || message.reasoning,
             webSearchState: streamingBuffer.webSearchState ?? message.webSearchState,
+            toolStates: streamingBuffer.toolStates ?? message.toolStates,
           }
         : message,
     );

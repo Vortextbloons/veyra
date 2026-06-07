@@ -3,15 +3,13 @@
 import type { MessageAttachment } from "@/lib/message-attachments";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
+import type { SearchResult } from "@/modules/web-search/types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
 export type ChatMode = "chat" | "agents";
 
-export type WebSearchSource = {
-  id: string;
-  title: string;
-  url: string;
+export type WebSearchSource = Pick<SearchResult, "id" | "title" | "url"> & {
   snippet: string;
 };
 
@@ -24,7 +22,7 @@ export type WebSearchState = {
   error?: string;
 };
 
-export type ToolCallPhase = "running" | "retrying" | "done" | "error";
+export type ToolCallPhase = "pending" | "running" | "retrying" | "done" | "error";
 
 export type ToolCallState = {
   id: string;

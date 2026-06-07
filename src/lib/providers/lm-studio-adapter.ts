@@ -12,6 +12,17 @@ export const lmStudioAdapter: ProviderAdapter = {
   icon: "lm-studio",
   isAvailable: () => isServerRunning(),
   fetchModels: () => fetchModels(),
+  prepareModel: async (modelId, options) => {
+    const { ensureLmStudioModel } = await import("@/lib/lm-model-session");
+    await ensureLmStudioModel(modelId, options?.signal, options?.onProgress, {
+      forceReload: options?.forceReload,
+      contextLength: options?.contextLength,
+    });
+  },
+  unloadAllModels: async () => {
+    const { unloadAllLmStudioModels } = await import("@/lib/lm-model-session");
+    await unloadAllLmStudioModels();
+  },
   sendChat: (options) =>
     sendLmStudioChat({
       messages: options.messages,
@@ -29,6 +40,7 @@ export const lmStudioAdapter: ProviderAdapter = {
       onChunk: options.onChunk,
       onReasoningChunk: options.onReasoningChunk,
       onModelLoadProgress: options.onModelLoadProgress,
+      onToolCallDetected: options.onToolCallDetected,
       onComplete: options.onComplete,
       onError: options.onError,
     }),

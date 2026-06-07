@@ -1,9 +1,9 @@
 use parking_lot::Mutex;
 use rusqlite::{params_from_iter, types::Value, Connection};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::sync::Arc;
-use tauri::Manager;
+
+use crate::db_utils::parse_json_array;
 
 pub struct DocumentDb(pub Mutex<Connection>);
 
@@ -137,9 +137,10 @@ const MAX_TAGS: usize = 50;
 
 fn validate_document_type(value: &str) -> Result<(), String> {
     match value {
-        "document" | "technical_spec" | "essay" | "report" | "proposal" | "readme"
-        | "notes" | "prompt" | "project_plan" | "meeting_notes" | "research_brief"
-        | "agent_instruction" => Ok(()),
+        "document" | "technical_spec" | "essay" | "report" | "proposal" | "readme" | "notes"
+        | "prompt" | "project_plan" | "meeting_notes" | "research_brief" | "agent_instruction" => {
+            Ok(())
+        }
         _ => Err(format!("invalid document type: {value}")),
     }
 }
@@ -165,7 +166,9 @@ fn validate_title(value: &str) -> Result<(), String> {
         return Err("document title is required".to_string());
     }
     if trimmed.chars().count() > MAX_TITLE_CHARS {
-        return Err(format!("document title exceeds {MAX_TITLE_CHARS} characters"));
+        return Err(format!(
+            "document title exceeds {MAX_TITLE_CHARS} characters"
+        ));
     }
     Ok(())
 }
@@ -190,30 +193,17 @@ fn validate_tags(tags: &[String]) -> Result<(), String> {
 impl DocumentDb {
     pub fn init(app: &tauri::AppHandle) -> Result<Self, String> {
         let start = std::time::Instant::now();
-        let dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("failed to resolve app data dir: {}", e))?;
-        fs::create_dir_all(&dir)
-            .map_err(|e| format!("failed to create app data dir {:?}: {}", dir, e))?;
-        let db_path = dir.join("veyra.sqlite");
-        let conn = Connection::open(&db_path)
-            .map_err(|e| format!("failed to open sqlite at {:?}: {}", db_path, e))?;
-        conn.execute_batch(
-            "PRAGMA journal_mode = WAL;
-             PRAGMA foreign_keys = ON;
-             PRAGMA cache_size = -64000;
-             PRAGMA mmap_size = 268435456;",
-        )
-        .map_err(|e| format!("failed to set pragmas: {}", e))?;
+        let conn = crate::db_utils::open_app_sqlite(app, "veyra.sqlite")?;
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("document schema migration failed: {}", e))?;
         // Migration: add is_global column if missing (existing databases), then index it.
         let _ = conn.execute_batch(
             "ALTER TABLE documents ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0;",
         );
-        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_documents_global ON documents(is_global);")
-            .map_err(|e| format!("document is_global index migration failed: {}", e))?;
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_documents_global ON documents(is_global);",
+        )
+        .map_err(|e| format!("document is_global index migration failed: {}", e))?;
         if cfg!(debug_assertions) {
             log::info!(
                 "DocumentDb::init completed in {}ms",
@@ -247,15 +237,12 @@ impl DocumentDbState {
     }
 
     pub fn spawn_background_init(&self) {
-        let app = self.app.clone();
-        let db = Arc::clone(&self.db);
-        std::thread::spawn(move || {
-            let result = DocumentDb::init(&app).map(Arc::new);
-            if let Err(error) = &result {
-                log::error!("DocumentDb background init failed: {error}");
-            }
-            *db.lock() = Some(result);
-        });
+        crate::db_utils::spawn_lazy_db_init(
+            self.app.clone(),
+            Arc::clone(&self.db),
+            DocumentDb::init,
+            "DocumentDb",
+        );
     }
 
     pub fn with_connection<F, T>(&self, f: F) -> Result<T, String>
@@ -277,40 +264,45 @@ impl DocumentDbState {
     }
 }
 
-fn parse_json_array(s: &str) -> Vec<String> {
-    serde_json::from_str::<Vec<String>>(s).unwrap_or_default()
+impl crate::db_utils::DbConnectionState for DocumentDbState {
+    fn with_db_connection<F, T>(&self, f: F) -> Result<T, String>
+    where
+        F: FnOnce(&Connection) -> Result<T, String>,
+    {
+        self.with_connection(f)
+    }
 }
 
 fn row_to_document(row: &rusqlite::Row) -> rusqlite::Result<DocumentRow> {
-    let tags_str: String = row.get(9)?;
+    let tags_str: String = row.get("tags")?;
     Ok(DocumentRow {
-        id: row.get(0)?,
-        project_id: row.get(1)?,
-        conversation_id: row.get(2)?,
-        is_global: row.get::<_, i64>(3)? != 0,
-        title: row.get(4)?,
-        doc_type: row.get(5)?,
-        status: row.get(6)?,
-        editor_format: row.get(7)?,
-        content_markdown: row.get(8)?,
+        id: row.get("id")?,
+        project_id: row.get("project_id")?,
+        conversation_id: row.get("conversation_id")?,
+        is_global: row.get::<_, i64>("is_global")? != 0,
+        title: row.get("title")?,
+        doc_type: row.get("doc_type")?,
+        status: row.get("status")?,
+        editor_format: row.get("editor_format")?,
+        content_markdown: row.get("content_markdown")?,
         tags: parse_json_array(&tags_str),
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
-        last_exported_at: row.get(12)?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        last_exported_at: row.get("last_exported_at")?,
     })
 }
 
 fn row_to_version(row: &rusqlite::Row) -> rusqlite::Result<DocumentVersionRow> {
     Ok(DocumentVersionRow {
-        id: row.get(0)?,
-        document_id: row.get(1)?,
-        version_number: row.get(2)?,
-        content_markdown: row.get(3)?,
-        change_source: row.get(4)?,
-        change_summary: row.get(5)?,
-        source_conversation_id: row.get(6)?,
-        source_message_id: row.get(7)?,
-        created_at: row.get(8)?,
+        id: row.get("id")?,
+        document_id: row.get("document_id")?,
+        version_number: row.get("version_number")?,
+        content_markdown: row.get("content_markdown")?,
+        change_source: row.get("change_source")?,
+        change_summary: row.get("change_summary")?,
+        source_conversation_id: row.get("source_conversation_id")?,
+        source_message_id: row.get("source_message_id")?,
+        created_at: row.get("created_at")?,
     })
 }
 
@@ -326,9 +318,11 @@ pub fn create_document(conn: &Connection, input_json: String) -> Result<Document
 
     let tags = input.tags.unwrap_or_default();
     validate_tags(&tags)?;
-    let tags_json = serde_json::to_string(&tags)
-        .map_err(|e| format!("failed to serialize tags: {}", e))?;
-    let editor_format_val = input.editor_format.unwrap_or_else(|| "markdown".to_string());
+    let tags_json =
+        serde_json::to_string(&tags).map_err(|e| format!("failed to serialize tags: {}", e))?;
+    let editor_format_val = input
+        .editor_format
+        .unwrap_or_else(|| "markdown".to_string());
     validate_editor_format(&editor_format_val)?;
     let content_val = input.content_markdown.unwrap_or_default();
     validate_content(&content_val)?;
@@ -535,10 +529,7 @@ pub fn delete_document(conn: &Connection, id: String) -> Result<(), String> {
     Ok(())
 }
 
-pub fn create_version(
-    conn: &Connection,
-    input_json: String,
-) -> Result<DocumentVersionRow, String> {
+pub fn create_version(conn: &Connection, input_json: String) -> Result<DocumentVersionRow, String> {
     let input: DocumentVersionCreateInput = serde_json::from_str(&input_json)
         .map_err(|e| format!("invalid create_version input: {}", e))?;
     if input.id.is_empty() {

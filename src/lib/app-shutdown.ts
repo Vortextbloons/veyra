@@ -2,7 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { flushConversationSave, saveConversationSnapshot } from "@/lib/conversation-storage";
-import { unloadAllLmStudioModels } from "@/lib/lm-model-session";
+import { unloadAllProviderModels } from "@/lib/providers";
+import { useProviderStore } from "@/stores/provider-store";
 import { clearAllDelayedMemoryTimers } from "@/lib/post-chat-jobs";
 import { terminateDecryptWorker } from "@/lib/conversation-storage";
 import { invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
@@ -158,7 +159,10 @@ export async function runAppShutdown(): Promise<void> {
   await withTimeout(persistConversations(), "Save conversations");
 
   setShutdownStep("unloading_models");
-  await withTimeout(unloadAllLmStudioModels(), "Unload LM Studio models");
+  await withTimeout(
+    unloadAllProviderModels(useProviderStore.getState().selectedProvider),
+    "Unload provider models",
+  );
 
   setShutdownStep("stopping_search");
   await withTimeout(invokeStopSearxngContainer(), "Stop SearXNG container");

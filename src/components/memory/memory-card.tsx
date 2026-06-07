@@ -1,6 +1,6 @@
 import { Pin, Tag } from "lucide-react";
 import type { MemoryNode } from "@/lib/memory-types";
-import { useMemoryStore } from "@/stores/memory-store";
+import { useMemoryUi } from "./memory-ui-context";
 
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
@@ -35,8 +35,7 @@ function priorityClass(priority: MemoryNode["priority"]): string {
 }
 
 export function MemoryCard({ node }: { node: MemoryNode }) {
-  const selectedNodeId = useMemoryStore((s) => s.selectedNodeId);
-  const selectNode = useMemoryStore((s) => s.selectNode);
+  const { selectedNodeId, selectNode } = useMemoryUi();
   const active = selectedNodeId === node.id;
 
   return (

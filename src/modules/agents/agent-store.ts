@@ -15,6 +15,7 @@ import {
   runOpencodeAgent,
   stopOpencodeAgent,
 } from "@/modules/agents/opencode-runtime";
+import { asRecord } from "@/lib/utils";
 
 const sessionAbortControllers = new Map<string, AbortController>();
 let startSessionChain: Promise<void> = Promise.resolve();
@@ -83,10 +84,6 @@ type OpencodeLiveEvent = {
   stream: "stdout" | "stderr";
   line: string;
 };
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
-}
 
 function stringField(record: Record<string, unknown> | null, key: string): string | undefined {
   const value = record?.[key];

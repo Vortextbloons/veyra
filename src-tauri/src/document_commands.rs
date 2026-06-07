@@ -1,23 +1,16 @@
+use crate::db_utils::run_db_command;
 use crate::document_db::{self, DocumentDbState};
 use tauri::State;
-
-async fn run_db<T, F>(state: &DocumentDbState, f: F) -> Result<T, String>
-where
-    T: Send + 'static,
-    F: FnOnce(&rusqlite::Connection) -> Result<T, String> + Send + 'static,
-{
-    let state = state.clone();
-    tauri::async_runtime::spawn_blocking(move || state.with_connection(f))
-        .await
-        .map_err(|error| format!("document db task failed: {error}"))?
-}
 
 #[tauri::command]
 pub async fn create_document(
     input: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<document_db::DocumentRow, String> {
-    run_db(state.inner(), move |conn| document_db::create_document(conn, input)).await
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::create_document(conn, input)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -25,7 +18,10 @@ pub async fn get_document(
     id: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<document_db::DocumentRow, String> {
-    run_db(state.inner(), move |conn| document_db::get_document(conn, id)).await
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::get_document(conn, id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -33,7 +29,10 @@ pub async fn update_document(
     input: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<document_db::DocumentRow, String> {
-    run_db(state.inner(), move |conn| document_db::update_document(conn, input)).await
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::update_document(conn, input)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -42,15 +41,18 @@ pub async fn list_documents(
     conversation_id: Option<String>,
     state: State<'_, DocumentDbState>,
 ) -> Result<Vec<document_db::DocumentRow>, String> {
-    run_db(state.inner(), move |conn| document_db::list_documents(conn, project_id, conversation_id)).await
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::list_documents(conn, project_id, conversation_id)
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn delete_document(
-    id: String,
-    state: State<'_, DocumentDbState>,
-) -> Result<(), String> {
-    run_db(state.inner(), move |conn| document_db::delete_document(conn, id)).await
+pub async fn delete_document(id: String, state: State<'_, DocumentDbState>) -> Result<(), String> {
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::delete_document(conn, id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -58,7 +60,10 @@ pub async fn create_document_version(
     input: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<document_db::DocumentVersionRow, String> {
-    run_db(state.inner(), move |conn| document_db::create_version(conn, input)).await
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::create_version(conn, input)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -66,7 +71,10 @@ pub async fn list_document_versions(
     document_id: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<Vec<document_db::DocumentVersionRow>, String> {
-    run_db(state.inner(), move |conn| document_db::list_versions(conn, document_id)).await
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::list_versions(conn, document_id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -74,7 +82,10 @@ pub async fn get_document_version(
     id: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<document_db::DocumentVersionRow, String> {
-    run_db(state.inner(), move |conn| document_db::get_version(conn, id)).await
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::get_version(conn, id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -82,7 +93,10 @@ pub async fn restore_document_version(
     version_id: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<document_db::DocumentRow, String> {
-    run_db(state.inner(), move |conn| document_db::restore_version(conn, version_id)).await
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::restore_version(conn, version_id)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -91,7 +105,7 @@ pub async fn export_document_markdown(
     target_path: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<(), String> {
-    run_db(state.inner(), move |conn| {
+    run_db_command(state.inner(), "document", move |conn| {
         let doc = document_db::get_document(conn, document_id.clone())?;
         std::fs::write(&target_path, &doc.content_markdown)
             .map_err(|e| format!("failed to write markdown file: {}", e))?;
@@ -108,7 +122,7 @@ pub async fn export_document_txt(
     target_path: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<(), String> {
-    run_db(state.inner(), move |conn| {
+    run_db_command(state.inner(), "document", move |conn| {
         let doc = document_db::get_document(conn, document_id.clone())?;
         let plain = strip_markdown(&doc.content_markdown);
         std::fs::write(&target_path, &plain)
@@ -252,7 +266,12 @@ fn strip_markdown(input: &str) -> String {
                         break;
                     }
                 }
-                if is_hr && peek_count >= 2 && (saved.get(peek_count) == Some(&'\n') || saved.get(peek_count).is_none() || saved.get(peek_count) == Some(&' ')) {
+                if is_hr
+                    && peek_count >= 2
+                    && (saved.get(peek_count) == Some(&'\n')
+                        || saved.get(peek_count).is_none()
+                        || saved.get(peek_count) == Some(&' '))
+                {
                     for _ in 0..peek_count {
                         chars.next();
                     }

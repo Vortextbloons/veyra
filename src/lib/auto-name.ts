@@ -1,5 +1,5 @@
-import { sendLmStudioChat } from "@/lib/lm-studio";
 import { AUTO_NAME_SYSTEM, buildAutoNameUserMessage } from "@/lib/prompts";
+import { getProviderAdapter } from "@/lib/providers";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -99,6 +99,10 @@ export async function generateConversationTitle(options: {
   const { model, userMessage, assistantMessage, signal } = options;
   if (!model.trim()) return { prompt: "", title: "" };
 
+  const providerId = useProviderStore.getState().selectedProvider;
+  const adapter = getProviderAdapter(providerId);
+  if (!adapter) return { prompt: "", title: "" };
+
   const userContent = buildAutoNameUserMessage({
     userSnippet: truncateSnippet(userMessage),
     assistantSnippet: truncateSnippet(assistantMessage),
@@ -108,38 +112,39 @@ export async function generateConversationTitle(options: {
   let message = "";
   let reasoning = "";
 
-  await sendLmStudioChat({
-    model,
-    messages: [
-      {
-        id: "auto-name-system",
-        role: "system",
-        content: AUTO_NAME_SYSTEM,
-        timestamp: 0,
+  await adapter
+    .sendChat({
+      model,
+      messages: [
+        {
+          id: "auto-name-system",
+          role: "system",
+          content: AUTO_NAME_SYSTEM,
+          timestamp: 0,
+        },
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: userContent,
+          timestamp: Date.now(),
+        },
+      ],
+      temperature: 0.2,
+      contextLength: TITLE_CONTEXT_LENGTH,
+      maxTokens: TITLE_MAX_OUTPUT_TOKENS,
+      signal,
+      onChunk: (chunk) => {
+        if (chunk) message += chunk;
       },
-      {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: userContent,
-        timestamp: Date.now(),
+      onReasoningChunk: (chunk) => {
+        if (chunk) reasoning += chunk;
       },
-    ],
-    temperature: 0.2,
-    contextLength: TITLE_CONTEXT_LENGTH,
-    maxTokens: TITLE_MAX_OUTPUT_TOKENS,
-    store: false,
-    signal,
-    onChunk: (chunk) => {
-      if (chunk) message += chunk;
-    },
-    onReasoningChunk: (chunk) => {
-      if (chunk) reasoning += chunk;
-    },
-    onError: () => {},
-    onComplete: () => {},
-  }).catch((error) => {
-    console.warn("[auto-name] Title generation failed:", error);
-  });
+      onError: () => {},
+      onComplete: () => {},
+    })
+    .catch((error) => {
+      console.warn("[auto-name] Title generation failed:", error);
+    });
 
   const llmTitle = cleanGeneratedTitle(message, reasoning);
   if (llmTitle) return { prompt: fullPrompt, title: llmTitle };

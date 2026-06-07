@@ -1,5 +1,5 @@
 import { listMemoryNodes, updateMemoryNode } from "@/lib/memory-storage";
-import type { MemoryNode } from "@/lib/memory-types";
+import { isProtectedMemory, type MemoryNode } from "@/lib/memory-types";
 
 const EPHEMERAL_TTL_DAYS = 7;
 const LOW_PRIORITY_MIN_AGE_DAYS = 14;
@@ -22,16 +22,6 @@ function timeValue(iso?: string): number {
   return Number.isFinite(value) ? value : 0;
 }
 
-function isProtected(node: MemoryNode): boolean {
-  return (
-    node.isPinned ||
-    node.priority === "permanent" ||
-    node.importance >= 5 ||
-    node.origin === "explicit_user_save" ||
-    node.origin === "manual_user_edit"
-  );
-}
-
 function isLive(node: MemoryNode): boolean {
   return node.status !== "archived" && node.status !== "rejected";
 }
@@ -49,7 +39,7 @@ function isOldEnoughForLowCleanup(node: MemoryNode): boolean {
 }
 
 function shouldExpire(node: MemoryNode): boolean {
-  if (isProtected(node) || !isLive(node)) return false;
+  if (isProtectedMemory(node) || !isLive(node)) return false;
   if (node.expiresAt && timeValue(node.expiresAt) > 0) return timeValue(node.expiresAt) <= Date.now();
   if (node.priority === "ephemeral" || node.type === "temporary_context") {
     return timeValue(node.createdAt) <= daysAgo(EPHEMERAL_TTL_DAYS);
@@ -100,7 +90,7 @@ export async function runMemoryRetentionCleanup(): Promise<MemoryRetentionResult
   const lowCandidates = nodes.filter(
     (node) =>
       !protectedIds.has(node.id) &&
-      !isProtected(node) &&
+      !isProtectedMemory(node) &&
       isNotArchived(node) &&
       isLowPriority(node) &&
       isOldEnoughForLowCleanup(node),

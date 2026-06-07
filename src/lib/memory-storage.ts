@@ -8,6 +8,7 @@
 // implementation in src-tauri/src/memory_db.rs.
 
 import { invoke } from "@tauri-apps/api/core";
+import { newId, nowIso } from "@/lib/id";
 import type {
   CreateMemoryNode,
   MemoryFile,
@@ -17,17 +18,6 @@ import type {
   MemorySearchOptions,
   UpdateMemoryNode,
 } from "@/lib/memory-types";
-
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
-function newId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `mem-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 export async function listMemoryFolders(): Promise<MemoryFolder[]> {
   return invoke<MemoryFolder[]>("list_memory_folders");
@@ -51,7 +41,7 @@ export async function createMemoryNode(
   input: Omit<CreateMemoryNode, "id"> & { id?: string },
 ): Promise<MemoryNode> {
   const now = nowIso();
-  const id = input.id ?? newId();
+  const id = input.id ?? newId("mem");
   const payload = {
     id,
     folderId: input.folderId,

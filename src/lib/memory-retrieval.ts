@@ -7,7 +7,13 @@
 import type { ChatMessage } from "@/lib/chat-types";
 import { estimateTokens } from "@/lib/context";
 import { listMemoryNodes, searchMemory, updateMemoryNode } from "@/lib/memory-storage";
-import type { MemoryMode, MemoryNode, MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
+import {
+  isProtectedMemory,
+  type MemoryMode,
+  type MemoryNode,
+  type MemoryPack,
+  type MemoryRetrievalInfo,
+} from "@/lib/memory-types";
 import {
   buildRetrievalQuery,
   isManualOnlyOrigin,
@@ -104,13 +110,7 @@ function isDurableSeed(node: MemoryNode, mode: MemoryMode): boolean {
   if (mode === "manual_only") {
     return isManualOnlyOrigin(node);
   }
-  return (
-    node.isPinned ||
-    node.priority === "permanent" ||
-    node.importance >= 5 ||
-    node.origin === "explicit_user_save" ||
-    node.origin === "manual_user_edit"
-  );
+  return isProtectedMemory(node);
 }
 
 function allowNode(node: MemoryNode, mode: MemoryMode, projectId?: string): boolean {

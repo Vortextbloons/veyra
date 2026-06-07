@@ -6,7 +6,10 @@ export function useClickOutside<T extends HTMLElement>(
   onClose: () => void,
 ): void {
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!active) return;

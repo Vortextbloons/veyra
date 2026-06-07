@@ -1,9 +1,9 @@
 use parking_lot::Mutex;
 use rusqlite::{params_from_iter, types::Value, Connection};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::sync::Arc;
-use tauri::Manager;
+
+use crate::db_utils::parse_json_array;
 
 pub struct MemoryDb(pub Mutex<Connection>);
 
@@ -264,25 +264,26 @@ CREATE TRIGGER IF NOT EXISTS memory_nodes_au AFTER UPDATE ON memory_nodes BEGIN
     COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(new.tags) THEN new.tags ELSE '[]' END) je), ''));
 END;
 
-CREATE TABLE IF NOT EXISTS memory_events (
-  id          TEXT PRIMARY KEY,
-  event_type  TEXT NOT NULL,
-  node_id     TEXT,
-  payload     TEXT NOT NULL DEFAULT '{}',
-  created_at  TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS memory_extraction_batches (
-  id                  TEXT PRIMARY KEY,
-  conversation_id     TEXT NOT NULL,
-  start_message_index INTEGER NOT NULL,
-  end_message_index   INTEGER NOT NULL,
-  status              TEXT NOT NULL,
-  created_at          TEXT NOT NULL,
-  completed_at        TEXT,
-  model               TEXT,
-  error               TEXT
-);
+-- Reserved for future event sourcing / extraction batch tracking (not yet used):
+-- CREATE TABLE IF NOT EXISTS memory_events (
+--   id          TEXT PRIMARY KEY,
+--   event_type  TEXT NOT NULL,
+--   node_id     TEXT,
+--   payload     TEXT NOT NULL DEFAULT '{}',
+--   created_at  TEXT NOT NULL
+-- );
+--
+-- CREATE TABLE IF NOT EXISTS memory_extraction_batches (
+--   id                  TEXT PRIMARY KEY,
+--   conversation_id     TEXT NOT NULL,
+--   start_message_index INTEGER NOT NULL,
+--   end_message_index   INTEGER NOT NULL,
+--   status              TEXT NOT NULL,
+--   created_at          TEXT NOT NULL,
+--   completed_at        TEXT,
+--   model               TEXT,
+--   error               TEXT
+-- );
 "#;
 
 const SCHEMA_VERSION: i64 = 2;
@@ -290,22 +291,7 @@ const SCHEMA_VERSION: i64 = 2;
 impl MemoryDb {
     pub fn init(app: &tauri::AppHandle) -> Result<Self, String> {
         let start = std::time::Instant::now();
-        let dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("failed to resolve app data dir: {}", e))?;
-        fs::create_dir_all(&dir)
-            .map_err(|e| format!("failed to create app data dir {:?}: {}", dir, e))?;
-        let db_path = dir.join("veyra.sqlite");
-        let conn = Connection::open(&db_path)
-            .map_err(|e| format!("failed to open sqlite at {:?}: {}", db_path, e))?;
-        conn.execute_batch(
-            "PRAGMA journal_mode = WAL;
-             PRAGMA foreign_keys = ON;
-             PRAGMA cache_size = -64000;
-             PRAGMA mmap_size = 268435456;",
-        )
-        .map_err(|e| format!("failed to set pragmas: {}", e))?;
+        let conn = crate::db_utils::open_app_sqlite(app, "veyra.sqlite")?;
         run_migrations(&conn)?;
         if cfg!(debug_assertions) {
             log::info!(
@@ -319,14 +305,14 @@ impl MemoryDb {
 
 pub struct MemoryDbState {
     app: tauri::AppHandle,
-    db: Mutex<Option<Result<Arc<MemoryDb>, String>>>,
+    db: Arc<Mutex<Option<Result<Arc<MemoryDb>, String>>>>,
 }
 
 impl Clone for MemoryDbState {
     fn clone(&self) -> Self {
         Self {
             app: self.app.clone(),
-            db: Mutex::new(self.db.lock().clone()),
+            db: Arc::clone(&self.db),
         }
     }
 }
@@ -335,17 +321,17 @@ impl MemoryDbState {
     pub fn new(app: tauri::AppHandle) -> Self {
         Self {
             app,
-            db: Mutex::new(None),
+            db: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn spawn_background_init(&self) {
-        let app = self.app.clone();
-        std::thread::spawn(move || {
-            if let Err(error) = MemoryDb::init(&app) {
-                log::error!("MemoryDb background init failed: {error}");
-            }
-        });
+        crate::db_utils::spawn_lazy_db_init(
+            self.app.clone(),
+            Arc::clone(&self.db),
+            MemoryDb::init,
+            "MemoryDb",
+        );
     }
 
     pub fn with_connection<F, T>(&self, f: F) -> Result<T, String>
@@ -364,6 +350,15 @@ impl MemoryDbState {
         };
         let guard = db.0.lock();
         f(&guard)
+    }
+}
+
+impl crate::db_utils::DbConnectionState for MemoryDbState {
+    fn with_db_connection<F, T>(&self, f: F) -> Result<T, String>
+    where
+        F: FnOnce(&Connection) -> Result<T, String>,
+    {
+        self.with_connection(f)
     }
 }
 
@@ -489,10 +484,6 @@ fn escape_like_pattern(value: &str) -> String {
         .replace('_', "\\_")
 }
 
-fn parse_json_array(s: &str) -> Vec<String> {
-    serde_json::from_str::<Vec<String>>(s).unwrap_or_default()
-}
-
 fn fts_query(input: &str) -> Option<String> {
     let terms: Vec<String> = input
         .split(|c: char| !c.is_alphanumeric())
@@ -508,38 +499,38 @@ fn fts_query(input: &str) -> Option<String> {
 }
 
 fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<MemoryNodeRow> {
-    let tags_str: String = row.get(10)?;
-    let source_message_ids_str: String = row.get(15)?;
-    let is_pinned: i64 = row.get(21)?;
-    let user_editable: i64 = row.get(22)?;
+    let tags_str: String = row.get("tags")?;
+    let source_message_ids_str: String = row.get("source_message_ids")?;
+    let is_pinned: i64 = row.get("is_pinned")?;
+    let user_editable: i64 = row.get("user_editable")?;
     Ok(MemoryNodeRow {
-        id: row.get(0)?,
-        folder_id: row.get(1)?,
-        file_id: row.get(2)?,
-        project_id: row.get(3)?,
-        conversation_id: row.get(4)?,
-        title: row.get(5)?,
-        content: row.get(6)?,
-        summary: row.get(7)?,
-        node_type: row.get(8)?,
-        scope: row.get(9)?,
+        id: row.get("id")?,
+        folder_id: row.get("folder_id")?,
+        file_id: row.get("file_id")?,
+        project_id: row.get("project_id")?,
+        conversation_id: row.get("conversation_id")?,
+        title: row.get("title")?,
+        content: row.get("content")?,
+        summary: row.get("summary")?,
+        node_type: row.get("node_type")?,
+        scope: row.get("scope")?,
         tags: parse_json_array(&tags_str),
-        importance: row.get(11)?,
-        confidence: row.get(12)?,
-        priority: row.get(13)?,
-        expires_at: row.get(14)?,
+        importance: row.get("importance")?,
+        confidence: row.get("confidence")?,
+        priority: row.get("priority")?,
+        expires_at: row.get("expires_at")?,
         source_message_ids: parse_json_array(&source_message_ids_str),
-        extraction_batch_id: row.get(16)?,
-        duplicate_of: row.get(17)?,
-        contradiction_of: row.get(18)?,
-        origin: row.get(19)?,
-        status: row.get(20)?,
+        extraction_batch_id: row.get("extraction_batch_id")?,
+        duplicate_of: row.get("duplicate_of")?,
+        contradiction_of: row.get("contradiction_of")?,
+        origin: row.get("origin")?,
+        status: row.get("status")?,
         is_pinned: is_pinned != 0,
         user_editable: user_editable != 0,
-        created_at: row.get(23)?,
-        updated_at: row.get(24)?,
-        last_used_at: row.get(25)?,
-        use_count: row.get(26)?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        last_used_at: row.get("last_used_at")?,
+        use_count: row.get("use_count")?,
     })
 }
 
@@ -554,16 +545,16 @@ pub fn list_folders(conn: &Connection) -> Result<Vec<MemoryFolderRow>, String> {
     let rows = stmt
         .query_map([], |row| {
             Ok(MemoryFolderRow {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                parent_id: row.get(2)?,
-                project_id: row.get(3)?,
-                folder_type: row.get(4)?,
-                description: row.get(5)?,
-                summary: row.get(6)?,
-                sort_order: row.get(7)?,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
+                id: row.get("id")?,
+                name: row.get("name")?,
+                parent_id: row.get("parent_id")?,
+                project_id: row.get("project_id")?,
+                folder_type: row.get("folder_type")?,
+                description: row.get("description")?,
+                summary: row.get("summary")?,
+                sort_order: row.get("sort_order")?,
+                created_at: row.get("created_at")?,
+                updated_at: row.get("updated_at")?,
             })
         })
         .map_err(|e| format!("query list_folders failed: {}", e))?;
@@ -578,63 +569,58 @@ pub fn list_files(
     conn: &Connection,
     folder_id: Option<String>,
 ) -> Result<Vec<MemoryFileRow>, String> {
-    let row_mapper = |row: &rusqlite::Row| -> rusqlite::Result<MemoryFileRow> {
-        let key_points_str: String = row.get(7)?;
-        let tags_str: String = row.get(9)?;
-        Ok(MemoryFileRow {
-            id: row.get(0)?,
-            folder_id: row.get(1)?,
-            project_id: row.get(2)?,
-            title: row.get(3)?,
-            slug: row.get(4)?,
-            summary: row.get(5)?,
-            purpose: row.get(6)?,
-            key_points: parse_json_array(&key_points_str),
-            status: row.get(8)?,
-            tags: parse_json_array(&tags_str),
-            importance: row.get(10)?,
-            confidence: row.get(11)?,
-            created_at: row.get(12)?,
-            updated_at: row.get(13)?,
-            node_count: row.get(14)?,
-            chunk_count: row.get(15)?,
-        })
+    const COLS: &str =
+        "id, folder_id, project_id, title, slug, summary, purpose, key_points, status, tags, \
+                        importance, confidence, created_at, updated_at, node_count, chunk_count";
+
+    let (sql, params): (String, Vec<Value>) = match folder_id {
+        Some(fid) => (
+            format!(
+                "SELECT {COLS} FROM memory_files WHERE folder_id = ?1 ORDER BY updated_at DESC"
+            ),
+            vec![Value::Text(fid)],
+        ),
+        None => (
+            format!("SELECT {COLS} FROM memory_files ORDER BY updated_at DESC"),
+            vec![],
+        ),
     };
 
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("prepare list_files failed: {}", e))?;
+    let rows = stmt
+        .query_map(params_from_iter(params.iter()), map_memory_file_row)
+        .map_err(|e| format!("query list_files failed: {}", e))?;
+
     let mut out = Vec::new();
-    if let Some(fid) = folder_id {
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, folder_id, project_id, title, slug, summary, purpose, key_points, status, tags,
-                        importance, confidence, created_at, updated_at, node_count, chunk_count
-                 FROM memory_files
-                 WHERE folder_id = ?1
-                 ORDER BY updated_at DESC",
-            )
-            .map_err(|e| format!("prepare list_files failed: {}", e))?;
-        let rows = stmt
-            .query_map([fid], row_mapper)
-            .map_err(|e| format!("query list_files failed: {}", e))?;
-        for r in rows {
-            out.push(r.map_err(|e| format!("row error in list_files: {}", e))?);
-        }
-    } else {
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, folder_id, project_id, title, slug, summary, purpose, key_points, status, tags,
-                        importance, confidence, created_at, updated_at, node_count, chunk_count
-                 FROM memory_files
-                 ORDER BY updated_at DESC",
-            )
-            .map_err(|e| format!("prepare list_files failed: {}", e))?;
-        let rows = stmt
-            .query_map([], row_mapper)
-            .map_err(|e| format!("query list_files failed: {}", e))?;
-        for r in rows {
-            out.push(r.map_err(|e| format!("row error in list_files: {}", e))?);
-        }
+    for r in rows {
+        out.push(r.map_err(|e| format!("row error in list_files: {}", e))?);
     }
     Ok(out)
+}
+
+fn map_memory_file_row(row: &rusqlite::Row) -> rusqlite::Result<MemoryFileRow> {
+    let key_points_str: String = row.get("key_points")?;
+    let tags_str: String = row.get("tags")?;
+    Ok(MemoryFileRow {
+        id: row.get("id")?,
+        folder_id: row.get("folder_id")?,
+        project_id: row.get("project_id")?,
+        title: row.get("title")?,
+        slug: row.get("slug")?,
+        summary: row.get("summary")?,
+        purpose: row.get("purpose")?,
+        key_points: parse_json_array(&key_points_str),
+        status: row.get("status")?,
+        tags: parse_json_array(&tags_str),
+        importance: row.get("importance")?,
+        confidence: row.get("confidence")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        node_count: row.get("node_count")?,
+        chunk_count: row.get("chunk_count")?,
+    })
 }
 
 pub fn list_nodes(conn: &Connection, filter_json: String) -> Result<Vec<MemoryNodeRow>, String> {

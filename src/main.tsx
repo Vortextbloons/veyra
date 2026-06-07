@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
-import { markStartup } from "@/lib/startup";
+import { emitAppReady, markStartup } from "@/lib/startup";
 
 markStartup("veyra:main-start");
 
@@ -14,3 +14,5 @@ if (import.meta.env.DEV && import.meta.env.VITE_STRICT_MODE === "true") {
 } else {
   root.render(app);
 }
+
+void emitAppReady();

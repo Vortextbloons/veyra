@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Download, FileText, FileType } from "lucide-react";
+import { useClickOutside } from "@/hooks/use-click-outside";
 import { useDocumentStore } from "../document-store";
 
 export function DocumentExportMenu() {
@@ -11,16 +12,7 @@ export function DocumentExportMenu() {
   const [exporting, setExporting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+  useClickOutside(menuRef, open, () => setOpen(false));
 
   const handleExport = async (format: "md" | "txt") => {
     setExporting(true);

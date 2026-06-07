@@ -186,3 +186,16 @@ export interface MemorySearchOptions {
   limit?: number;
   projectId?: string;
 }
+
+/** Memories that must not be auto-archived or evicted by retention policy. */
+export function isProtectedMemory(
+  node: Pick<MemoryNode, "isPinned" | "priority" | "importance" | "origin">,
+): boolean {
+  return (
+    node.isPinned ||
+    node.priority === "permanent" ||
+    node.importance >= 5 ||
+    node.origin === "explicit_user_save" ||
+    node.origin === "manual_user_edit"
+  );
+}

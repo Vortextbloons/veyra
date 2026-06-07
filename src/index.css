@@ -39,6 +39,8 @@
   --color-accent: #6366f1;
   --color-accent-soft: #1d1f3a;
   --color-success: #34d399;
+  --color-scrollbar: #1f2230;
+  --color-scrollbar-hover: #2a2e3f;
 }
 
 html,
@@ -88,11 +90,11 @@ textarea {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1f2230;
+  background: var(--color-scrollbar);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a2e3f;
+  background: var(--color-scrollbar-hover);
 }
 
 @keyframes slideIn {

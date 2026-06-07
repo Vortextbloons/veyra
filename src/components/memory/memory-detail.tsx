@@ -1,13 +1,14 @@
 import { Edit3, Pin, Archive, Check, X, Trash2, Sparkles } from "lucide-react";
 import type { MemoryNode } from "@/lib/memory-types";
 import { useMemoryStore } from "@/stores/memory-store";
+import { useMemoryUi } from "./memory-ui-context";
 
 type Props = {
   onEdit: (node: MemoryNode) => void;
 };
 
 export function MemoryDetail({ onEdit }: Props) {
-  const selectedNodeId = useMemoryStore((s) => s.selectedNodeId);
+  const { selectedNodeId, selectNode } = useMemoryUi();
   const nodes = useMemoryStore((s) => s.nodes);
   const pinNode = useMemoryStore((s) => s.pinNode);
   const archiveNode = useMemoryStore((s) => s.archiveNode);
@@ -52,7 +53,10 @@ export function MemoryDetail({ onEdit }: Props) {
           <IconButton
             title="Delete"
             onClick={() => {
-              if (window.confirm(`Delete "${node.title}"?`)) deleteNode(node.id);
+              if (window.confirm(`Delete "${node.title}"?`)) {
+                void deleteNode(node.id);
+                selectNode(null);
+              }
             }}
             danger
           >

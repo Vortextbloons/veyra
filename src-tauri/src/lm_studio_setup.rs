@@ -3,7 +3,7 @@ use std::process::Command;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-const DEFAULT_BASE_URL: &str = "http://localhost:1234";
+use crate::constants::LM_STUDIO_DEFAULT_BASE_URL;
 const SERVER_READY_WAIT_SECS: u64 = 30;
 const SERVER_POLL_MS: u64 = 500;
 
@@ -151,7 +151,7 @@ async fn wait_for_server(base_url: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn lm_studio_server_running(base_url: Option<String>) -> Result<bool, String> {
-    let base = base_url.unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+    let base = base_url.unwrap_or_else(|| LM_STUDIO_DEFAULT_BASE_URL.to_string());
     Ok(is_server_responding(base.trim_end_matches('/')).await)
 }
 
@@ -159,7 +159,7 @@ pub async fn lm_studio_server_running(base_url: Option<String>) -> Result<bool, 
 pub async fn start_lm_studio_server(base_url: Option<String>) -> Result<String, String> {
     let base = base_url
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+        .unwrap_or_else(|| LM_STUDIO_DEFAULT_BASE_URL.to_string());
     let base = base.trim_end_matches('/').to_string();
 
     if is_server_responding(&base).await {

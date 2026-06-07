@@ -135,6 +135,16 @@ export async function ensureLmStudioModel(
   });
 }
 
+/** Before user chat: load the selected chat model if needed. */
+export async function prepareUserChatModel(
+  chatModel: string,
+  signal?: AbortSignal,
+  onProgress?: (phase: string, percent?: number) => void,
+): Promise<void> {
+  await ensureLmStudioModel(chatModel, signal, onProgress);
+}
+
+/** Before agent chat: force-reload the selected model with agent context length. */
 export async function prepareAgentLmStudioModel(
   chatModel: string,
   contextLength: number,
@@ -145,15 +155,6 @@ export async function prepareAgentLmStudioModel(
     forceReload: true,
     contextLength,
   });
-}
-
-/** Before user chat: load the selected chat model if needed. */
-export async function prepareUserChatModel(
-  chatModel: string,
-  signal?: AbortSignal,
-  onProgress?: (phase: string, percent?: number) => void,
-): Promise<void> {
-  await ensureLmStudioModel(chatModel, signal, onProgress);
 }
 
 export type PostChatPipelineOptions = {

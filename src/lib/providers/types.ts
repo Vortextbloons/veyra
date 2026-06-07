@@ -37,6 +37,7 @@ export type ProviderChatOptions = {
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
   onModelLoadProgress?: (phase: string, percent?: number) => void;
+  onToolCallDetected?: (call: Pick<ProviderToolCall, "id" | "name">) => void;
   onComplete?: (result: LmChatCompleteResult, context?: ProviderCompleteContext) => void;
   onError: (error: string) => void;
 };
@@ -44,6 +45,13 @@ export type ProviderChatOptions = {
 export type ProviderConnectResult = {
   success: boolean;
   message?: string;
+};
+
+export type ProviderPrepareModelOptions = {
+  signal?: AbortSignal;
+  onProgress?: (phase: string, percent?: number) => void;
+  contextLength?: number;
+  forceReload?: boolean;
 };
 
 export interface ProviderAdapter {
@@ -54,6 +62,10 @@ export interface ProviderAdapter {
   isAvailable: () => Promise<boolean>;
   fetchModels: () => Promise<ModelInfo[]>;
   sendChat: (options: ProviderChatOptions) => Promise<void>;
+  /** Load or swap to the given model before a chat request. */
+  prepareModel?: (modelId: string, options?: ProviderPrepareModelOptions) => Promise<void>;
+  /** Unload all loaded model instances (e.g. on app shutdown). */
+  unloadAllModels?: () => Promise<void>;
   /** Re-check availability without starting external processes. */
   reconnect?: () => Promise<ProviderConnectResult>;
   /** Start the provider's local server (e.g. LM Studio via `lms`). */

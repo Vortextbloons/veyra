@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from "react";
-import { X, Edit2, Check, Globe } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Bookmark, Trash2, X, Edit2, Check, Globe } from "lucide-react";
 import { useDocumentStore } from "../document-store";
+import { useMemoryStore } from "@/stores/memory-store";
 import { DocumentExportMenu } from "./document-export-menu";
 import { formatDocumentStatus } from "../document-export";
 
@@ -10,6 +11,8 @@ export function DocEditorHeader() {
   const renameDocument = useDocumentStore((s) => s.renameDocument);
   const closeDocument = useDocumentStore((s) => s.closeDocument);
   const toggleGlobal = useDocumentStore((s) => s.toggleGlobal);
+  const deleteDocument = useDocumentStore((s) => s.deleteDocument);
+  const createMemoryNode = useMemoryStore((s) => s.createNode);
 
   const doc = documents.find((d) => d.id === activeDocumentId);
   const [editing, setEditing] = useState(false);
@@ -44,6 +47,34 @@ export function DocEditorHeader() {
       setEditing(false);
     }
   };
+
+  const handleDelete = useCallback(() => {
+    if (!doc) return;
+    if (window.confirm(`Delete "${doc.title}"?`)) {
+      void deleteDocument(doc.id);
+    }
+  }, [doc, deleteDocument]);
+
+  const handleSaveToMemories = useCallback(() => {
+    if (!doc) return;
+    void createMemoryNode({
+      folderId: "default",
+      conversationId: doc.conversationId,
+      projectId: doc.projectId,
+      title: doc.title,
+      content: doc.contentMarkdown,
+      summary: doc.contentMarkdown.length > 180 ? `${doc.contentMarkdown.slice(0, 177)}…` : doc.contentMarkdown,
+      type: "file_reference",
+      scope: doc.isGlobal ? "global" : "conversation",
+      tags: ["document", doc.type],
+      importance: 4,
+      confidence: 1,
+      priority: "high",
+      origin: "explicit_user_save",
+      status: "active",
+      isPinned: true,
+    });
+  }, [doc, createMemoryNode]);
 
   if (!doc) return null;
 
@@ -102,6 +133,22 @@ export function DocEditorHeader() {
           <Globe className="size-3.5" />
         </button>
         <DocumentExportMenu />
+        <button
+          type="button"
+          title="Save to memories"
+          onClick={handleSaveToMemories}
+          className="grid size-7 place-items-center rounded text-[var(--color-text-dim)] transition-colors hover:bg-amber-400/10 hover:text-amber-300"
+        >
+          <Bookmark className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          title="Delete document"
+          onClick={handleDelete}
+          className="grid size-7 place-items-center rounded text-[var(--color-text-dim)] transition-colors hover:bg-red-400/10 hover:text-red-300"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
         <button
           type="button"
           title="Close document"

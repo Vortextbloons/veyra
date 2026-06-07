@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import type { CreateMemoryNode, MemoryPriority, MemoryScope, MemoryStatus } from "@/lib/memory-types";
 import { useMemoryStore } from "@/stores/memory-store";
@@ -32,6 +32,7 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [content, setContent] = useState(initial?.content ?? "");
   const [summary, setSummary] = useState(initial?.summary ?? "");
+  const [summaryEdited, setSummaryEdited] = useState(Boolean(initial?.summary?.trim()));
   const [type, setType] = useState<CreateMemoryNode["type"]>(initial?.type ?? "instruction");
   const [scope, setScope] = useState<MemoryScope>(initial?.scope ?? "global");
   const [folderId, setFolderId] = useState(initial?.folderId ?? folders[0]?.id ?? "default");
@@ -44,12 +45,12 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
   const [priority, setPriority] = useState<MemoryPriority>(initial?.priority ?? (mode === "create" ? "permanent" : "medium"));
   const [isPinned, setIsPinned] = useState<boolean>(initial?.isPinned ?? mode === "create");
 
-  useEffect(() => {
-    if (mode === "create" && !summary && content) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSummary(deriveSummary(content));
+  const handleContentChange = (next: string) => {
+    setContent(next);
+    if (mode === "create" && !summaryEdited) {
+      setSummary(deriveSummary(next));
     }
-  }, [content, mode, summary]);
+  };
 
   const handleSave = async () => {
     if (!title.trim() || !content.trim() || isSaving) return;
@@ -135,7 +136,7 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
             <textarea
               rows={6}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => handleContentChange(e.target.value)}
               placeholder="The full body of this memory…"
               className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2 leading-snug text-white placeholder:text-[var(--color-text-dim)]/70 focus:border-[var(--color-accent)]/40 focus:outline-none"
             />
@@ -144,7 +145,10 @@ export function MemoryEditor({ mode, initial, onSave, onCancel }: Props) {
             <textarea
               rows={2}
               value={summary}
-              onChange={(e) => setSummary(e.target.value)}
+              onChange={(e) => {
+                setSummaryEdited(true);
+                setSummary(e.target.value);
+              }}
               placeholder="Auto-derived from content if left blank"
               className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2 text-white placeholder:text-[var(--color-text-dim)]/70 focus:border-[var(--color-accent)]/40 focus:outline-none"
             />

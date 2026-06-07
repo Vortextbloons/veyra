@@ -6,6 +6,7 @@ import { MemorySidebar } from "./memory-sidebar";
 import { MemoryList } from "./memory-list";
 import { MemoryDetail } from "./memory-detail";
 import { MemoryEditor } from "./memory-editor";
+import { MemoryUiProvider } from "./memory-ui-context";
 
 export function MemoryPage() {
   const hydrate = useMemoryStore((s) => s.hydrateMemory);
@@ -22,6 +23,7 @@ export function MemoryPage() {
   const defaultFolderId = folders[0]?.id ?? "default";
 
   return (
+    <MemoryUiProvider>
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
         <div className="flex items-center gap-2.5">
@@ -72,6 +74,7 @@ export function MemoryPage() {
         />
       )}
     </main>
+    </MemoryUiProvider>
   );
 }
 

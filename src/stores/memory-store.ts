@@ -1,8 +1,7 @@
 // Memory store — the central Zustand state for the Memory feature.
 //
 // All Tauri IPC for memory goes through @/lib/memory-storage, never directly
-// through @tauri-apps/api/core. The store hydrates from the backend on mount
-// and exposes view / selection / mutation actions for the UI to call.
+// through @tauri-apps/api/core. UI selection state lives in memory-ui-context.
 
 import { create } from "zustand";
 import type {
@@ -22,29 +21,20 @@ import {
   pinMemoryNode as ipcPin,
   updateMemoryNode as ipcUpdate,
 } from "@/lib/memory-storage";
+import type { MemoryView } from "@/components/memory/memory-ui-context";
 
 const pendingCreateIds = new Set<string>();
 
-export type MemoryView = "all" | "inbox" | "pinned" | "permanent" | "low_priority" | "recent" | "archived";
+export type { MemoryView };
 
 export type MemoryStore = {
   folders: MemoryFolder[];
   files: MemoryFile[];
   nodes: MemoryNode[];
-  selectedFolderId: string | null;
-  selectedFileId: string | null;
-  selectedNodeId: string | null;
-  activeView: MemoryView;
-  query: string;
   isLoading: boolean;
   error: string | null;
 
   hydrateMemory: () => Promise<void>;
-  selectFolder: (id: string | null) => void;
-  selectFile: (id: string | null) => void;
-  selectNode: (id: string | null) => void;
-  setQuery: (query: string) => void;
-  setActiveView: (view: MemoryView) => void;
 
   createNode: (input: Omit<CreateMemoryNode, "id"> & { id?: string }) => Promise<void>;
   updateNode: (input: UpdateMemoryNode) => Promise<void>;
@@ -77,11 +67,6 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
   folders: [],
   files: [],
   nodes: [],
-  selectedFolderId: null,
-  selectedFileId: null,
-  selectedNodeId: null,
-  activeView: "all",
-  query: "",
   isLoading: false,
   error: null,
 
@@ -101,12 +86,6 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
       });
     }
   },
-
-  selectFolder: (selectedFolderId) => set({ selectedFolderId }),
-  selectFile: (selectedFileId) => set({ selectedFileId }),
-  selectNode: (selectedNodeId) => set({ selectedNodeId }),
-  setQuery: (query) => set({ query }),
-  setActiveView: (activeView) => set({ activeView }),
 
   createNode: async (input) => {
     const id = input.id ?? crypto.randomUUID();
@@ -151,7 +130,6 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
       await ipcDelete(id);
       set((state) => ({
         nodes: state.nodes.filter((n) => n.id !== id),
-        selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
       }));
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
@@ -180,9 +158,6 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
   },
 }));
 
-/**
- * Pure selectors (not store members) for the UI to filter the node list.
- */
 export function selectVisibleNodes(
   state: Pick<MemoryStore, "nodes">,
   view: MemoryView,
@@ -213,10 +188,8 @@ export function selectVisibleNodes(
           node.status !== "archived" &&
           node.status !== "rejected"
         );
-      case "recent": {
-        // caller will sort + slice; we just exclude archived here
+      case "recent":
         return node.status !== "archived";
-      }
       case "archived":
         return node.status === "archived";
     }
@@ -228,7 +201,6 @@ export function selectVisibleNodes(
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, 30);
   }
-  // Default sort: pinned first, then importance desc, then updatedAt desc
   return filtered
     .slice()
     .sort((a, b) => {

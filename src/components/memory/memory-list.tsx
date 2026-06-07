@@ -1,17 +1,13 @@
 import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMemoryStore, selectVisibleNodes } from "@/stores/memory-store";
-import type { MemoryView } from "@/stores/memory-store";
+import { useMemoryUi, type MemoryView } from "./memory-ui-context";
 import { MemoryCard } from "./memory-card";
 import { MemoryGraph } from "./memory-graph";
 
 export function MemoryList() {
-  const query = useMemoryStore((s) => s.query);
-  const setQuery = useMemoryStore((s) => s.setQuery);
-  const activeView = useMemoryStore((s) => s.activeView);
+  const { query, setQuery, activeView, selectedNodeId, selectNode } = useMemoryUi();
   const nodes = useMemoryStore((s) => s.nodes);
-  const selectedNodeId = useMemoryStore((s) => s.selectedNodeId);
-  const selectNode = useMemoryStore((s) => s.selectNode);
   const [displayMode, setDisplayMode] = useState<"list" | "graph">("list");
   const visible = useMemo(
     () => selectVisibleNodes({ nodes }, activeView, query),

@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { Database, Inbox, Pin, Clock, Archive, Globe, Folder, Shield, Hourglass } from "lucide-react";
 import { useMemoryStore, selectVisibleNodes } from "@/stores/memory-store";
-import type { MemoryView } from "@/stores/memory-store";
+import { useMemoryUi, type MemoryView } from "./memory-ui-context";
 
 const VIEWS: { id: MemoryView; label: string; icon: ReactNode }[] = [
   { id: "all", label: "All", icon: <Database className="size-3.5" /> },
@@ -14,9 +14,7 @@ const VIEWS: { id: MemoryView; label: string; icon: ReactNode }[] = [
 ];
 
 export function MemorySidebar() {
-  const activeView = useMemoryStore((s) => s.activeView);
-  const setActiveView = useMemoryStore((s) => s.setActiveView);
-  const query = useMemoryStore((s) => s.query);
+  const { activeView, setActiveView, query } = useMemoryUi();
   const nodes = useMemoryStore((s) => s.nodes);
   const folders = useMemoryStore((s) => s.folders);
 

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
+import { newId, nowIso } from "@/lib/id";
 import type {
   DocumentRecord,
   DocumentVersion,
@@ -7,17 +8,6 @@ import type {
   UpdateDocumentInput,
   CreateVersionInput,
 } from "@/modules/documents/document-types";
-
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
-function newId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `doc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 export async function listDocuments(projectId?: string, conversationId?: string): Promise<DocumentRecord[]> {
   return invoke<DocumentRecord[]>("list_documents", { projectId: projectId ?? null, conversationId: conversationId ?? null });
@@ -31,7 +21,7 @@ export async function createDocument(
   input: Omit<CreateDocumentInput, "id"> & { id?: string },
 ): Promise<DocumentRecord> {
   const now = nowIso();
-  const id = input.id ?? newId();
+  const id = input.id ?? newId("doc");
   const payload = {
     id,
     projectId: input.projectId ?? null,
@@ -63,7 +53,7 @@ export async function createDocumentVersion(
   input: Omit<CreateVersionInput, "id"> & { id?: string },
 ): Promise<DocumentVersion> {
   const now = nowIso();
-  const id = input.id ?? newId();
+  const id = input.id ?? newId("doc");
   const payload = {
     id,
     documentId: input.documentId,

@@ -1,4 +1,5 @@
 import { useSettingsStore } from "@/stores/settings-store";
+import { estimateTokens } from "@/lib/context";
 import { SearXNGProvider } from "../providers/SearXNGProvider";
 import type { SearchContextBundle, SearXNGProviderConfig } from "../types";
 
@@ -82,7 +83,7 @@ export async function runSearch(query: string, signal?: AbortSignal): Promise<Se
         )
         .join("\n\n");
 
-    const tokenCount = Math.ceil(fullText.length / 4);
+    const tokenCount = estimateTokens(fullText);
 
     return {
       query,
@@ -103,7 +104,7 @@ export function buildSearchContextBlock(bundle: SearchContextBundle): string {
   const header = `<veyra_web_search>\nSearch results for: "${bundle.query}"\n\n`;
   const footer = `\n</veyra_web_search>`;
 
-  const maxContentTokens = MAX_CONTEXT_TOKENS - Math.ceil((header.length + footer.length) / 4);
+  const maxContentTokens = MAX_CONTEXT_TOKENS - estimateTokens(header + footer);
 
   const lines: string[] = [];
   let usedTokens = 0;
@@ -111,7 +112,7 @@ export function buildSearchContextBlock(bundle: SearchContextBundle): string {
   for (let i = 0; i < bundle.sources.length; i++) {
     const source = bundle.sources[i];
     const block = `Source ${i + 1}: ${source.title}\nURL: ${source.url}\nSnippet: ${source.snippet}`;
-    const blockTokens = Math.ceil(block.length / 4);
+    const blockTokens = estimateTokens(block);
 
     if (usedTokens + blockTokens > maxContentTokens) {
       const remaining = maxContentTokens - usedTokens;
