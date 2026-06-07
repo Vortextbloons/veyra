@@ -15,9 +15,16 @@ mod web_search_commands;
 
 const CONVERSATIONS_FILE: &str = "conversations.json";
 const CONVERSATION_KEY_FILE: &str = "conversation.key";
+const MAX_CONVERSATIONS_JSON_BYTES: usize = 50 * 1024 * 1024;
 
 #[tauri::command]
 fn save_conversations(app: tauri::AppHandle, conversations_json: String) -> Result<(), String> {
+    if conversations_json.len() > MAX_CONVERSATIONS_JSON_BYTES {
+        return Err(format!(
+            "conversations payload exceeds {} MB limit",
+            MAX_CONVERSATIONS_JSON_BYTES / (1024 * 1024)
+        ));
+    }
     serde_json::from_str::<serde_json::Value>(&conversations_json)
         .map_err(|error| error.to_string())?;
     let dir = app
@@ -109,6 +116,7 @@ pub fn run() {
             agent_commands::export_opencode_session,
             agent_commands::delete_opencode_session,
             agent_commands::run_opencode_agent,
+            agent_commands::stop_opencode_agent,
             memory_commands::list_memory_folders,
             memory_commands::list_memory_files,
             memory_commands::list_memory_nodes,

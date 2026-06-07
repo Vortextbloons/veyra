@@ -213,6 +213,14 @@ function clearDelayedMemoryTimer(conversationId: string): void {
   }
 }
 
+/** Cancel all pending delayed memory extraction timers (call on app shutdown). */
+export function clearAllDelayedMemoryTimers(): void {
+  for (const timer of delayedMemoryTimers.values()) {
+    window.clearTimeout(timer);
+  }
+  delayedMemoryTimers.clear();
+}
+
 function scheduleDelayedMemoryExtraction(options: {
   conversationId: string;
   chatModel: string;

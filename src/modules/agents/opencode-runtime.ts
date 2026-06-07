@@ -25,6 +25,13 @@ type OpencodeRunEvent = {
   line: string;
 };
 
+export type RunOpencodeAgentOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
+const DEFAULT_AGENT_EVENT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
 export async function checkOpencodeAvailable(): Promise<boolean> {
   try {
     return await invoke<boolean>("check_opencode_available");
@@ -38,8 +45,12 @@ export async function listOpencodeProjectSessions(
 ): Promise<OpencodeProjectSession[]> {
   const raw = await invoke<string>("list_opencode_project_sessions", { projectPath });
   if (!raw.trim()) return [];
-  const parsed = JSON.parse(raw) as OpencodeProjectSession[];
-  return Array.isArray(parsed) ? parsed : [];
+  try {
+    const parsed = JSON.parse(raw) as OpencodeProjectSession[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function exportOpencodeSession(
@@ -48,7 +59,11 @@ export async function exportOpencodeSession(
 ): Promise<unknown> {
   const raw = await invoke<string>("export_opencode_session", { projectPath, sessionId });
   if (!raw.trim()) return null;
-  return JSON.parse(raw) as unknown;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteOpencodeSession(
@@ -58,32 +73,93 @@ export async function deleteOpencodeSession(
   await invoke<void>("delete_opencode_session", { projectPath, sessionId });
 }
 
+export async function stopOpencodeAgent(sessionId: string): Promise<void> {
+  await invoke<void>("stop_opencode_agent", { sessionId });
+}
+
 export async function runOpencodeAgent(
   input: StartOpencodeAgentInput,
   onEvent?: (event: OpencodeRunEvent) => void,
+  options?: RunOpencodeAgentOptions,
 ): Promise<OpencodeRunResult> {
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_AGENT_EVENT_TIMEOUT_MS;
+  const signal = options?.signal;
+
+  let settled = false;
+  let cleanedUp = false;
   let resolveResult: (result: OpencodeRunResult) => void = () => undefined;
-  const eventPromise = new Promise<OpencodeRunResult>((resolve) => {
+  let rejectResult: (error: Error) => void = () => undefined;
+  const eventPromise = new Promise<OpencodeRunResult>((resolve, reject) => {
     resolveResult = resolve;
+    rejectResult = reject;
   });
-  const unlisten = await listen<OpencodeRunFinishedEvent>("agent://run-finished", (event) => {
-    if (event.payload.sessionId !== input.sessionId) return;
+
+  const finish = (result: OpencodeRunResult) => {
+    if (settled) return;
+    settled = true;
+    resolveResult(result);
+  };
+
+  const fail = (error: Error) => {
+    if (settled) return;
+    settled = true;
+    rejectResult(error);
+  };
+
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  let unlisten = () => undefined;
+  let unlistenEvent = () => undefined;
+
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
     unlisten();
-    resolveResult(event.payload.result);
+    unlistenEvent();
+    signal?.removeEventListener("abort", onAbort);
+  };
+
+  const onAbort = () => {
+    cleanup();
+    void stopOpencodeAgent(input.sessionId).catch(() => undefined);
+    finish({
+      stdout: "",
+      stderr: "Agent run aborted",
+      exitCode: 1,
+    });
+  };
+
+  unlisten = await listen<OpencodeRunFinishedEvent>("agent://run-finished", (event) => {
+    if (event.payload.sessionId !== input.sessionId) return;
+    cleanup();
+    finish(event.payload.result);
   });
-  const unlistenEvent = await listen<OpencodeRunEvent>("agent://run-event", (event) => {
+  unlistenEvent = await listen<OpencodeRunEvent>("agent://run-event", (event) => {
     if (event.payload.sessionId !== input.sessionId) return;
     onEvent?.(event.payload);
   });
 
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  timeoutTimer = setTimeout(() => {
+    cleanup();
+    void stopOpencodeAgent(input.sessionId).catch(() => undefined);
+    fail(new Error(`Agent run timed out after ${timeoutMs}ms`));
+  }, timeoutMs);
+
   try {
     await invoke<void>("run_opencode_agent", { input });
   } catch (error) {
-    unlisten();
-    unlistenEvent();
+    cleanup();
     throw error;
   }
-  const result = await eventPromise;
-  unlistenEvent();
-  return result;
+
+  try {
+    return await eventPromise;
+  } catch (error) {
+    cleanup();
+    throw error;
+  } finally {
+    cleanup();
+  }
 }

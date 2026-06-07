@@ -4,7 +4,11 @@ import type { SearchContextBundle, SearXNGProviderConfig } from "../types";
 
 const MAX_CONTEXT_TOKENS = 2500;
 
-export async function runSearch(query: string): Promise<SearchContextBundle> {
+export async function runSearch(query: string, signal?: AbortSignal): Promise<SearchContextBundle> {
+  if (signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
+
   const settings = useSettingsStore.getState();
   const baseUrl = settings.webSearchSearxngUrl;
 
@@ -26,6 +30,10 @@ export async function runSearch(query: string): Promise<SearchContextBundle> {
 
   const provider = new SearXNGProvider(config);
   const results = await provider.search({ query, limit: 8 });
+
+  if (signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
 
   if (results.length === 0) {
     throw new Error(

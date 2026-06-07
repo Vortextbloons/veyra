@@ -389,7 +389,7 @@ const MessageBubble = memo(function MessageBubble({
           className={`flex min-w-0 flex-col items-end transition-[max-width] duration-200 ease-out ${layout.userMaxW}`}
         >
           <div
-            className={`rounded-2xl rounded-tr-md border border-indigo-400/15 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset transition-[font-size] duration-200 ease-out ${layout.messageText}`}
+            className={`rounded-2xl rounded-tr-md border border-indigo-400/15 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] transition-[font-size] duration-200 ease-out ${layout.messageText}`}
           >
             {message.attachments && message.attachments.length > 0 && (
               <MessageAttachmentsPreview attachments={message.attachments} />

@@ -1,10 +1,20 @@
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::LazyLock;
+use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
+
+static RUNNING_AGENT_PIDS: LazyLock<Mutex<HashMap<String, u32>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const AGENT_PROCESS_TIMEOUT: Duration = Duration::from_secs(2 * 60 * 60);
+const AGENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 const LM_STUDIO_OPENAI_BASE_URL: &str = "http://localhost:1234/v1";
 
@@ -162,6 +172,16 @@ pub fn run_opencode_agent(
         );
     });
 
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_opencode_agent(session_id: String) -> Result<(), String> {
+    let session_id = session_id.trim();
+    if session_id.is_empty() {
+        return Err("agent session id is required".into());
+    }
+    kill_agent_process(session_id);
     Ok(())
 }
 
@@ -344,7 +364,20 @@ fn resolve_workspace_path(project_path: &str) -> Result<PathBuf, String> {
             .map_err(|error| format!("failed to resolve default workspace: {error}"));
     }
 
-    Ok(PathBuf::from(project_path))
+    if project_path.contains('\0') {
+        return Err("workspace path is invalid".into());
+    }
+
+    let path = PathBuf::from(project_path);
+    let canonical = path
+        .canonicalize()
+        .map_err(|_| "workspace path must be an existing directory".to_string())?;
+
+    if !canonical.is_dir() {
+        return Err("workspace path must be an existing directory".into());
+    }
+
+    Ok(canonical)
 }
 
 fn normalize_path_for_compare(path: &Path) -> String {
@@ -454,6 +487,9 @@ fn run_command(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
+
+    register_agent_process(&session_id, child.id());
+
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
@@ -468,7 +504,20 @@ fn run_command(
         std::thread::spawn(move || read_stream_lines(stderr, app, session_id, "stderr"))
     });
 
-    let status = child.wait()?;
+    let status = match wait_child_with_timeout(&mut child, AGENT_PROCESS_TIMEOUT) {
+        Ok(status) => status,
+        Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
+            let _ = child.kill();
+            unregister_agent_process(&session_id);
+            return Err(error);
+        }
+        Err(error) => {
+            unregister_agent_process(&session_id);
+            return Err(error);
+        }
+    };
+
+    unregister_agent_process(&session_id);
     let stdout = stdout_handle
         .and_then(|handle| handle.join().ok())
         .unwrap_or_default()
@@ -544,9 +593,12 @@ fn shell_program() -> &'static str {
 
 fn shell_args(args: &[String]) -> Vec<String> {
     if cfg!(windows) {
-        let mut shell_args = vec!["/C".to_string(), "opencode".to_string()];
-        shell_args.extend(args.iter().map(|arg| arg.to_string()));
-        shell_args
+        let mut command = "opencode".to_string();
+        for arg in args {
+            command.push(' ');
+            command.push_str(&cmd_arg_quote(arg));
+        }
+        vec!["/C".to_string(), command]
     } else {
         let mut command = "opencode".to_string();
         for arg in args {
@@ -557,6 +609,83 @@ fn shell_args(args: &[String]) -> Vec<String> {
     }
 }
 
+fn cmd_arg_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "\"\"".to_string();
+    }
+
+    let is_safe = value.chars().all(|ch| {
+        ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | '\\' | ':')
+    });
+    if is_safe {
+        return value.to_string();
+    }
+
+    let mut quoted = String::from("\"");
+    for ch in value.chars() {
+        if ch == '"' || ch == '\\' {
+            quoted.push('\\');
+        }
+        quoted.push(ch);
+    }
+    quoted.push('"');
+    quoted
+}
+
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn register_agent_process(session_id: &str, pid: u32) {
+    RUNNING_AGENT_PIDS
+        .lock()
+        .insert(session_id.to_string(), pid);
+}
+
+fn unregister_agent_process(session_id: &str) {
+    RUNNING_AGENT_PIDS.lock().remove(session_id);
+}
+
+fn kill_agent_process(session_id: &str) {
+    if let Some(pid) = RUNNING_AGENT_PIDS.lock().remove(session_id) {
+        kill_pid(pid);
+    }
+}
+
+fn kill_pid(pid: u32) {
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+fn wait_child_with_timeout(
+    child: &mut std::process::Child,
+    timeout: Duration,
+) -> Result<std::process::ExitStatus, std::io::Error> {
+    let start = Instant::now();
+    loop {
+        match child.try_wait()? {
+            Some(status) => return Ok(status),
+            None if start.elapsed() >= timeout => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "opencode process timed out",
+                ));
+            }
+            None => std::thread::sleep(AGENT_POLL_INTERVAL),
+        }
+    }
 }

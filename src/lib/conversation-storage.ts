@@ -11,6 +11,9 @@ const KEY_BYTES = 32;
 let encryptionKeyPromise: Promise<CryptoKey> | null = null;
 let decryptWorker: Worker | null = null;
 let saveQueue: Promise<void> = Promise.resolve();
+let pendingSnapshot: Conversation[] | null = null;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+const SAVE_DEBOUNCE_MS = 500;
 
 type EncryptedSnapshot = {
   version: number;
@@ -192,16 +195,35 @@ async function writeConversationSnapshot(conversations: Conversation[]) {
 }
 
 export function saveConversationSnapshot(conversations: Conversation[]) {
-  const snapshot = conversations.map((conversation) => ({
-    ...conversation,
-    messages: conversation.messages.map((message) => ({ ...message })),
-  }));
-  saveQueue = saveQueue.catch(() => undefined).then(() => writeConversationSnapshot(snapshot));
+  pendingSnapshot = conversations;
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+  }
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    const snapshot = pendingSnapshot;
+    pendingSnapshot = null;
+    if (!snapshot) return;
+    saveQueue = saveQueue
+      .catch(() => undefined)
+      .then(() => writeConversationSnapshot(snapshot));
+  }, SAVE_DEBOUNCE_MS);
   return saveQueue;
 }
 
 /** Wait for any in-flight conversation snapshot write (e.g. on app exit). */
 export function flushConversationSave(): Promise<void> {
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+    const snapshot = pendingSnapshot;
+    pendingSnapshot = null;
+    if (snapshot) {
+      saveQueue = saveQueue
+        .catch(() => undefined)
+        .then(() => writeConversationSnapshot(snapshot));
+    }
+  }
   return saveQueue.catch(() => undefined);
 }
 

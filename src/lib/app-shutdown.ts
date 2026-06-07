@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { flushConversationSave, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { unloadAllLmStudioModels } from "@/lib/lm-model-session";
+import { clearAllDelayedMemoryTimers } from "@/lib/post-chat-jobs";
 import { invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
 import { useChatStore } from "@/stores/chat-store";
 
@@ -149,6 +150,7 @@ export async function runAppShutdown(): Promise<void> {
 
   setShutdownStep("preparing");
   aiScheduler.shutdown();
+  clearAllDelayedMemoryTimers();
 
   setShutdownStep("saving");
   await withTimeout(persistConversations(), "Save conversations");

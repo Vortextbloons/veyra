@@ -108,7 +108,11 @@ export async function sendChatRequest({
 
         void (async () => {
           try {
-            const searchBundle = await runSearch(toolCall.args.query);
+            if (options.signal?.aborted) return;
+
+            const searchBundle = await runSearch(toolCall.args.query, options.signal);
+            if (options.signal?.aborted) return;
+
             const contextBlock = buildSearchContextBlock(searchBundle);
 
             const searchSources: WebSearchSource[] = searchBundle.sources.map((s) => ({
@@ -147,6 +151,8 @@ export async function sendChatRequest({
               : undefined;
 
             // Re-prompt — chunks stream into the same buffer
+            if (options.signal?.aborted) return;
+
             await provider.sendChat({
               ...options,
               previousResponseId: undefined,
@@ -183,6 +189,7 @@ export async function sendChatRequest({
               ),
             });
           } catch (searchError) {
+            if (options.signal?.aborted) return;
             console.error("[WebSearch] Search failed:", searchError);
             useChatStore.getState().setStreamingWebSearchState({
               query: toolCall.args.query,

@@ -37,13 +37,12 @@ impl SearxngState {
     }
 }
 
-/// Minimal SearXNG settings that enable JSON output and disable the rate
-/// limiter so the app can query the instance programmatically.
-const SEARXNG_SETTINGS_YML: &str = r#"use_default_settings: true
+/// Minimal SearXNG settings template — secret key is injected at runtime.
+const SEARXNG_SETTINGS_TEMPLATE: &str = r#"use_default_settings: true
 
 server:
   limiter: false
-  secret_key: "veyra-searxng-local"
+  secret_key: "{secret_key}"
 
 search:
   formats:
@@ -157,7 +156,11 @@ fn run_docker(args: &[&str]) -> Result<std::process::Output, String> {
     if let Some(bin_dir) = docker.parent() {
         let current_path = std::env::var("PATH").unwrap_or_default();
         let bin_str = bin_dir.to_string_lossy();
-        let new_path = format!("{bin_str};{current_path}");
+        #[cfg(windows)]
+        let separator = ";";
+        #[cfg(not(windows))]
+        let separator = ":";
+        let new_path = format!("{bin_str}{separator}{current_path}");
         cmd.env("PATH", new_path);
     }
     cmd.args(args)
@@ -345,6 +348,43 @@ pub async fn check_searxng_setup() -> Result<SearxngSetupStatus, String> {
     })
 }
 
+fn generate_searxng_secret_key() -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    use std::time::SystemTime;
+
+    let mut hasher = DefaultHasher::new();
+    SystemTime::now().hash(&mut hasher);
+    std::process::id().hash(&mut hasher);
+    format!("veyra-{:016x}", hasher.finish())
+}
+
+fn load_or_create_searxng_secret(settings_dir: &std::path::Path) -> Result<String, String> {
+    let secret_path = settings_dir.join("secret_key");
+    if secret_path.exists() {
+        let key = std::fs::read_to_string(&secret_path)
+            .map_err(|e| format!("Failed to read SearXNG secret key: {e}"))?
+            .trim()
+            .to_string();
+        if !key.is_empty() {
+            return Ok(key);
+        }
+    }
+
+    let key = generate_searxng_secret_key();
+    std::fs::write(&secret_path, &key)
+        .map_err(|e| format!("Failed to write SearXNG secret key: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("Failed to set SearXNG secret key permissions: {e}"))?;
+    }
+
+    Ok(key)
+}
+
 /// Start (or create + start) the SearXNG container. Returns the URL on success.
 ///
 /// If the container already exists we remove it first so that updated settings
@@ -359,7 +399,9 @@ fn start_searxng_container_sync() -> Result<String, String> {
     std::fs::create_dir_all(&settings_dir)
         .map_err(|e| format!("Failed to create settings dir: {e}"))?;
     let settings_path = settings_dir.join("settings.yml");
-    std::fs::write(&settings_path, SEARXNG_SETTINGS_YML)
+    let secret_key = load_or_create_searxng_secret(&settings_dir)?;
+    let settings_yml = SEARXNG_SETTINGS_TEMPLATE.replace("{secret_key}", &secret_key);
+    std::fs::write(&settings_path, settings_yml)
         .map_err(|e| format!("Failed to write SearXNG settings: {e}"))?;
 
     // Remove existing container (stopped or running) so we can recreate with

@@ -13,7 +13,17 @@ import {
   exportOpencodeSession,
   listOpencodeProjectSessions,
   runOpencodeAgent,
+  stopOpencodeAgent,
 } from "@/modules/agents/opencode-runtime";
+
+const sessionAbortControllers = new Map<string, AbortController>();
+
+function abortAgentSession(sessionId: string): void {
+  const controller = sessionAbortControllers.get(sessionId);
+  controller?.abort();
+  sessionAbortControllers.delete(sessionId);
+  void stopOpencodeAgent(sessionId).catch(() => undefined);
+}
 
 type AgentStore = {
   sessions: AgentSession[];
@@ -491,6 +501,9 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   deleteSession: async (sessionId) => {
     const current = get().sessions.find((session) => session.id === sessionId);
     if (!current) return;
+    if (current.status === "running") {
+      abortAgentSession(sessionId);
+    }
     if (current.opencodeSessionId) {
       await deleteOpencodeSession(current.projectPath || get().projectPath, current.opencodeSessionId);
     }
@@ -572,6 +585,9 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     }));
 
     try {
+      const abortController = new AbortController();
+      sessionAbortControllers.set(id, abortController);
+
       const result = await runOpencodeAgent(
         {
           sessionId: id,
@@ -597,7 +613,16 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
             };
           });
         },
+        { signal: abortController.signal },
       );
+
+      sessionAbortControllers.delete(id);
+
+      const currentSession = get().sessions.find((item) => item.id === id);
+      if (currentSession?.status === "stopped" || abortController.signal.aborted) {
+        return id;
+      }
+
       const failed = result.exitCode !== 0;
       const parsedOutput = parseOpencodeJsonOutput(result.stdout);
       const currentEvents = get().sessions.find((item) => item.id === id)!.events;
@@ -632,9 +657,15 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
         }),
       }));
     } catch (error) {
+      sessionAbortControllers.delete(id);
+      const current = get().sessions.find((item) => item.id === id);
+      if (current?.status === "stopped") {
+        return id;
+      }
       const message = error instanceof Error ? error.message : String(error);
       set((state) => {
-        const current = state.sessions.find((item) => item.id === id);
+        const failedSession = state.sessions.find((item) => item.id === id);
+        if (failedSession?.status === "stopped") return state;
         return {
           runtimeAvailable: state.runtimeAvailable,
           sessions: patchSession(state.sessions, id, {
@@ -642,7 +673,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
             summary: "Opencode could not complete the task.",
             endedAt: Date.now(),
             events: [
-              ...(current?.events ?? []),
+              ...(failedSession?.events ?? []),
               event("error", "Failed to run opencode", message),
             ],
           }),
@@ -653,6 +684,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     return id;
   },
   stopSession: (id) => {
+    abortAgentSession(id);
     set((state) => {
       const current = state.sessions.find((item) => item.id === id);
       if (!current || current.status !== "running") return state;
@@ -666,6 +698,11 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     });
   },
   clearSessions: () => {
+    for (const session of get().sessions) {
+      if (session.status === "running") {
+        abortAgentSession(session.id);
+      }
+    }
     set({ sessions: [], activeSessionId: null });
   },
 }));
