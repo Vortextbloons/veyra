@@ -37,6 +37,7 @@ export async function listOpencodeProjectSessions(
   projectPath: string,
 ): Promise<OpencodeProjectSession[]> {
   const raw = await invoke<string>("list_opencode_project_sessions", { projectPath });
+  if (!raw.trim()) return [];
   const parsed = JSON.parse(raw) as OpencodeProjectSession[];
   return Array.isArray(parsed) ? parsed : [];
 }
@@ -46,6 +47,7 @@ export async function exportOpencodeSession(
   sessionId: string,
 ): Promise<unknown> {
   const raw = await invoke<string>("export_opencode_session", { projectPath, sessionId });
+  if (!raw.trim()) return null;
   return JSON.parse(raw) as unknown;
 }
 

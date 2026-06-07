@@ -438,7 +438,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     set({ runtimeAvailable: available, runtimeStatus: available ? "idle" : "failed" });
   },
   loadProjectSessions: async (projectPath) => {
-    const sessions = await listOpencodeProjectSessions(projectPath);
+    const sessions = await listOpencodeProjectSessions(projectPath).catch(() => []);
     set((state) => {
       const existing = new Map(state.sessions.map((session) => [session.opencodeSessionId ?? session.id, session]));
       const hydrated = sessions.map((item) => {
@@ -472,7 +472,11 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   loadOpencodeSession: async (sessionId) => {
     const current = get().sessions.find((session) => session.id === sessionId);
     if (!current?.opencodeSessionId || current.events.length > 0) return;
-    const exported = await exportOpencodeSession(current.projectPath || get().projectPath, current.opencodeSessionId);
+    const exported = await exportOpencodeSession(
+      current.projectPath || get().projectPath,
+      current.opencodeSessionId,
+    ).catch(() => null);
+    if (!exported) return;
     set((state) => {
       const hydrated = sessionFromExport(current, exported);
       return {
