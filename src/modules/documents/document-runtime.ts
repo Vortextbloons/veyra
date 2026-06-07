@@ -59,18 +59,14 @@ export async function executeDocUpdate(
     };
   }
 
-  if (intent.mode === "replace_all") {
-    console.warn("[Document] Whole-document replacement requires an explicit preview/apply flow.");
-    return {
-      applied: false,
-      sanitizedText: `I prepared a whole-document rewrite for "${doc.title}", but it was not applied because full replacements require review first.`,
-    };
-  }
-
   try {
     let newContent: string;
 
     switch (intent.mode) {
+      case "replace_all":
+        newContent = intent.contentMarkdown;
+        break;
+
       case "replace_section":
         if (!intent.target) {
           console.error("[Document] replace_section requires target");

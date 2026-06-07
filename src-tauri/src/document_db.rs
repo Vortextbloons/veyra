@@ -281,7 +281,7 @@ fn row_to_document(row: &rusqlite::Row) -> rusqlite::Result<DocumentRow> {
         conversation_id: row.get("conversation_id")?,
         is_global: row.get::<_, i64>("is_global")? != 0,
         title: row.get("title")?,
-        doc_type: row.get("doc_type")?,
+        doc_type: row.get("type")?,
         status: row.get("status")?,
         editor_format: row.get("editor_format")?,
         content_markdown: row.get("content_markdown")?,

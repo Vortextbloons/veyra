@@ -70,50 +70,62 @@ export function DocumentsPanel() {
   return (
     <PanelShell title="Documents">
       <div className="space-y-1">
-        {documents.slice(0, 10).map((doc) => (
-          <div key={doc.id} className="group/doc relative">
-            <button
-              type="button"
-              onClick={() => void openDocument(doc.id)}
-              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[12px] transition-colors ${
-                doc.id === activeDocumentId
-                  ? "bg-indigo-500/10 text-indigo-300 ring-1 ring-inset ring-indigo-500/20"
-                  : "text-[var(--color-text)] hover:bg-white/[0.04]"
+        {documents.slice(0, 10).map((doc) => {
+          const isActive = doc.id === activeDocumentId;
+
+          return (
+            <div
+              key={doc.id}
+              className={`group/doc flex items-center gap-1 rounded-md transition-colors ${
+                isActive
+                  ? "bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/20"
+                  : "hover:bg-white/[0.04]"
               }`}
             >
-              <FileText className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1">
-                  <p className="truncate font-medium">{doc.title}</p>
-                  {doc.isGlobal && (
-                    <Globe className="size-3 shrink-0 text-amber-400" />
-                  )}
+              <button
+                type="button"
+                onClick={() => void openDocument(doc.id)}
+                className={`flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left text-[12px] transition-colors ${
+                  isActive ? "text-indigo-300" : "text-[var(--color-text)]"
+                }`}
+              >
+                <FileText className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-1">
+                    <p className="truncate font-medium">{doc.title}</p>
+                    {doc.isGlobal && (
+                      <Globe className="size-3 shrink-0 text-amber-400" />
+                    )}
+                  </div>
+                  <p className="truncate text-[10px] text-[var(--color-text-dim)]">
+                    {formatDocumentType(doc.type)}
+                  </p>
                 </div>
-                <p className="text-[10px] text-[var(--color-text-dim)]">
-                  {formatDocumentType(doc.type)}
-                </p>
+              </button>
+
+              <div className="flex shrink-0 items-center gap-0.5 pr-1.5 opacity-35 transition-opacity group-hover/doc:opacity-100 group-focus-within/doc:opacity-100">
+                <button
+                  type="button"
+                  title="Save to memories"
+                  aria-label={`Save "${doc.title}" to memories`}
+                  onClick={(e) => handleSaveToMemories(e, doc)}
+                  className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] transition-colors hover:bg-amber-400/10 hover:text-amber-300"
+                >
+                  <Bookmark className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Delete document"
+                  aria-label={`Delete "${doc.title}"`}
+                  onClick={(e) => handleDelete(e, doc.id)}
+                  className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] transition-colors hover:bg-red-400/10 hover:text-red-300"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
               </div>
-            </button>
-            <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover/doc:opacity-100">
-              <button
-                type="button"
-                title="Save to memories"
-                onClick={(e) => handleSaveToMemories(e, doc)}
-                className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] transition-colors hover:bg-amber-400/10 hover:text-amber-300"
-              >
-                <Bookmark className="size-3" />
-              </button>
-              <button
-                type="button"
-                title="Delete document"
-                onClick={(e) => handleDelete(e, doc.id)}
-                className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] transition-colors hover:bg-red-400/10 hover:text-red-300"
-              >
-                <Trash2 className="size-3" />
-              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {documents.length > 10 && (
           <p className="px-2.5 pt-1 text-[10px] text-[var(--color-text-dim)]">
             +{documents.length - 10} more
