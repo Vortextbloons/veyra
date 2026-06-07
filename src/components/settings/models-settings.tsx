@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { ModelSettings } from "@/stores/settings-store";
@@ -562,6 +562,10 @@ function StopSequencesInput({
   defaultValue?: string[];
 }) {
   const [draft, setDraft] = useState(value.join(", "));
+
+  useEffect(() => {
+    setDraft(value.join(", "));
+  }, [value]);
 
   const handleBlur = () => {
     const parsed = draft

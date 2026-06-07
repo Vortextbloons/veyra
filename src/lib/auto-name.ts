@@ -137,7 +137,9 @@ export async function generateConversationTitle(options: {
     },
     onError: () => {},
     onComplete: () => {},
-  }).catch(() => {});
+  }).catch((error) => {
+    console.warn("[auto-name] Title generation failed:", error);
+  });
 
   const llmTitle = cleanGeneratedTitle(message, reasoning);
   if (llmTitle) return { prompt: fullPrompt, title: llmTitle };

@@ -4,6 +4,7 @@ import { aiScheduler } from "@/lib/ai-scheduler";
 import { flushConversationSave, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { unloadAllLmStudioModels } from "@/lib/lm-model-session";
 import { clearAllDelayedMemoryTimers } from "@/lib/post-chat-jobs";
+import { terminateDecryptWorker } from "@/lib/conversation-storage";
 import { invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
 import { useChatStore } from "@/stores/chat-store";
 
@@ -151,6 +152,7 @@ export async function runAppShutdown(): Promise<void> {
   setShutdownStep("preparing");
   aiScheduler.shutdown();
   clearAllDelayedMemoryTimers();
+  terminateDecryptWorker();
 
   setShutdownStep("saving");
   await withTimeout(persistConversations(), "Save conversations");
@@ -188,12 +190,10 @@ async function finishAppExit(): Promise<void> {
 }
 
 /** Intercept window close so cleanup can finish before the process exits. */
-export function registerAppShutdownHandler(): () => void {
+export async function registerAppShutdownHandler(): Promise<() => void> {
   if (!isTauri()) return () => undefined;
 
-  let unlisten: (() => void) | undefined;
-
-  void getCurrentWindow()
+  const unlisten = await getCurrentWindow()
     .onCloseRequested(async (event) => {
       if (shutdownComplete) return;
 
@@ -210,14 +210,12 @@ export function registerAppShutdownHandler(): () => void {
 
       await finishAppExit();
     })
-    .then((fn) => {
-      unlisten = fn;
-    })
     .catch((err) => {
       console.warn("[veyra shutdown] Failed to register close handler:", err);
+      return () => undefined;
     });
 
   return () => {
-    unlisten?.();
+    unlisten();
   };
 }

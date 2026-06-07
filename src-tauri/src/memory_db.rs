@@ -245,19 +245,23 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memory_nodes_fts USING fts5(
 
 CREATE TRIGGER IF NOT EXISTS memory_nodes_ai AFTER INSERT ON memory_nodes BEGIN
   INSERT INTO memory_nodes_fts(rowid, title, content, summary, tags)
-  VALUES (new.rowid, new.title, new.content, new.summary, new.tags);
+  VALUES (new.rowid, new.title, new.content, new.summary,
+    COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(new.tags) THEN new.tags ELSE '[]' END) je), ''));
 END;
 
 CREATE TRIGGER IF NOT EXISTS memory_nodes_ad AFTER DELETE ON memory_nodes BEGIN
   INSERT INTO memory_nodes_fts(memory_nodes_fts, rowid, title, content, summary, tags)
-  VALUES('delete', old.rowid, old.title, old.content, old.summary, old.tags);
+  VALUES('delete', old.rowid, old.title, old.content, old.summary,
+    COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(old.tags) THEN old.tags ELSE '[]' END) je), ''));
 END;
 
 CREATE TRIGGER IF NOT EXISTS memory_nodes_au AFTER UPDATE ON memory_nodes BEGIN
   INSERT INTO memory_nodes_fts(memory_nodes_fts, rowid, title, content, summary, tags)
-  VALUES('delete', old.rowid, old.title, old.content, old.summary, old.tags);
+  VALUES('delete', old.rowid, old.title, old.content, old.summary,
+    COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(old.tags) THEN old.tags ELSE '[]' END) je), ''));
   INSERT INTO memory_nodes_fts(rowid, title, content, summary, tags)
-  VALUES (new.rowid, new.title, new.content, new.summary, new.tags);
+  VALUES (new.rowid, new.title, new.content, new.summary,
+    COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(new.tags) THEN new.tags ELSE '[]' END) je), ''));
 END;
 
 CREATE TABLE IF NOT EXISTS memory_events (
@@ -281,7 +285,7 @@ CREATE TABLE IF NOT EXISTS memory_extraction_batches (
 );
 "#;
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 impl MemoryDb {
     pub fn init(app: &tauri::AppHandle) -> Result<Self, String> {
@@ -318,6 +322,15 @@ pub struct MemoryDbState {
     db: Mutex<Option<Result<Arc<MemoryDb>, String>>>,
 }
 
+impl Clone for MemoryDbState {
+    fn clone(&self) -> Self {
+        Self {
+            app: self.app.clone(),
+            db: Mutex::new(self.db.lock().clone()),
+        }
+    }
+}
+
 impl MemoryDbState {
     pub fn new(app: tauri::AppHandle) -> Self {
         Self {
@@ -329,7 +342,9 @@ impl MemoryDbState {
     pub fn spawn_background_init(&self) {
         let app = self.app.clone();
         std::thread::spawn(move || {
-            let _ = MemoryDb::init(&app);
+            if let Err(error) = MemoryDb::init(&app) {
+                log::error!("MemoryDb background init failed: {error}");
+            }
         });
     }
 
@@ -383,6 +398,12 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
                 .map_err(|e| format!("fts rebuild failed: {}", e))?;
         }
 
+        if schema_version < 2 {
+            migrate_fts_tag_triggers(conn)?;
+            conn.execute_batch("INSERT INTO memory_nodes_fts(memory_nodes_fts) VALUES('rebuild');")
+                .map_err(|e| format!("fts rebuild after tag migration failed: {}", e))?;
+        }
+
         conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))
             .map_err(|e| format!("set schema version failed: {}", e))?;
     }
@@ -402,6 +423,38 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn migrate_fts_tag_triggers(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        "
+        DROP TRIGGER IF EXISTS memory_nodes_ai;
+        DROP TRIGGER IF EXISTS memory_nodes_ad;
+        DROP TRIGGER IF EXISTS memory_nodes_au;
+
+        CREATE TRIGGER memory_nodes_ai AFTER INSERT ON memory_nodes BEGIN
+          INSERT INTO memory_nodes_fts(rowid, title, content, summary, tags)
+          VALUES (new.rowid, new.title, new.content, new.summary,
+            COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(new.tags) THEN new.tags ELSE '[]' END) je), ''));
+        END;
+
+        CREATE TRIGGER memory_nodes_ad AFTER DELETE ON memory_nodes BEGIN
+          INSERT INTO memory_nodes_fts(memory_nodes_fts, rowid, title, content, summary, tags)
+          VALUES('delete', old.rowid, old.title, old.content, old.summary,
+            COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(old.tags) THEN old.tags ELSE '[]' END) je), ''));
+        END;
+
+        CREATE TRIGGER memory_nodes_au AFTER UPDATE ON memory_nodes BEGIN
+          INSERT INTO memory_nodes_fts(memory_nodes_fts, rowid, title, content, summary, tags)
+          VALUES('delete', old.rowid, old.title, old.content, old.summary,
+            COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(old.tags) THEN old.tags ELSE '[]' END) je), ''));
+          INSERT INTO memory_nodes_fts(rowid, title, content, summary, tags)
+          VALUES (new.rowid, new.title, new.content, new.summary,
+            COALESCE((SELECT group_concat(je.value, ' ') FROM json_each(CASE WHEN json_valid(new.tags) THEN new.tags ELSE '[]' END) je), ''));
+        END;
+        ",
+    )
+    .map_err(|e| format!("migrate fts tag triggers failed: {}", e))
 }
 
 fn add_column_if_missing(
@@ -427,6 +480,13 @@ fn add_column_if_missing(
     )
     .map_err(|e| format!("add column {}.{} failed: {}", table, column, e))?;
     Ok(())
+}
+
+fn escape_like_pattern(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 fn parse_json_array(s: &str) -> Vec<String> {
@@ -650,10 +710,10 @@ pub fn list_nodes(conn: &Connection, filter_json: String) -> Result<Vec<MemoryNo
     }
     if let Some(q) = &filter.query {
         if !q.is_empty() {
-            let pattern = format!("%{}%", q.to_lowercase());
+            let pattern = format!("%{}%", escape_like_pattern(&q.to_lowercase()));
             let base = params.len();
             conditions.push(format!(
-                "(LOWER(title) LIKE ?{a} OR LOWER(content) LIKE ?{b} OR LOWER(summary) LIKE ?{c} OR LOWER(tags) LIKE ?{d})",
+                "(LOWER(title) LIKE ?{a} ESCAPE '\\' OR LOWER(content) LIKE ?{b} ESCAPE '\\' OR LOWER(summary) LIKE ?{c} ESCAPE '\\' OR LOWER(tags) LIKE ?{d} ESCAPE '\\')",
                 a = base + 1,
                 b = base + 2,
                 c = base + 3,
@@ -671,7 +731,7 @@ pub fn list_nodes(conn: &Connection, filter_json: String) -> Result<Vec<MemoryNo
     } else {
         format!(" WHERE {}", conditions.join(" AND "))
     };
-    let limit = filter.limit.unwrap_or(1000);
+    let limit = filter.limit.unwrap_or(1000).clamp(1, 500);
     let limit_placeholder = params.len() + 1;
     params.push(Value::Integer(limit));
 
@@ -738,7 +798,11 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
     let content_val = input.content.unwrap_or_default();
     let summary_val = input.summary.unwrap_or_default();
 
-    conn.execute(
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("begin create_node transaction failed: {}", e))?;
+
+    tx.execute(
         "INSERT INTO memory_nodes
            (id, folder_id, file_id, project_id, conversation_id, title, content, summary,
             node_type, scope, tags, importance, confidence, priority, expires_at,
@@ -779,7 +843,7 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
     )
     .map_err(|e| format!("insert memory_node failed: {}", e))?;
 
-    let created = conn
+    let created = tx
         .query_row(
             "SELECT id, folder_id, file_id, project_id, conversation_id, title, content, summary,
                     node_type, scope, tags, importance, confidence, priority, expires_at,
@@ -791,6 +855,9 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
             row_to_node,
         )
         .map_err(|e| format!("query after insert failed: {}", e))?;
+
+    tx.commit()
+        .map_err(|e| format!("commit create_node transaction failed: {}", e))?;
 
     Ok(created)
 }

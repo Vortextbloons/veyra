@@ -323,9 +323,15 @@ export async function buildMemoryPackWithInfo(
     let tokens = estimateTokens(wrapped);
 
     if (tokens > budget) {
-      while (lines.length > 0 && estimateTokens(buildMemoryContextBlock(lines.join("\n"))) > budget) {
-        lines.pop();
+      let lo = 0;
+      let hi = lines.length;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        const candidate = lines.slice(0, mid).join("\n");
+        if (estimateTokens(buildMemoryContextBlock(candidate)) <= budget) lo = mid;
+        else hi = mid - 1;
       }
+      lines.splice(lo);
       inner = lines.join("\n");
       wrapped = buildMemoryContextBlock(inner);
       tokens = estimateTokens(wrapped);

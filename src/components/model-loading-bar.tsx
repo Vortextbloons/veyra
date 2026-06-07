@@ -7,6 +7,14 @@ const PHASE_LABEL: Record<string, string> = {
   ready: "Model ready",
 };
 
+const INDETERMINATE_STYLE = `
+  @keyframes veyra-indeterminate {
+    0% { width: 0%; margin-left: 0; }
+    50% { width: 60%; margin-left: 20%; }
+    100% { width: 0%; margin-left: 100%; }
+  }
+`;
+
 export function ModelLoadingBar({ progress }: { progress: ModelLoadProgress }) {
   if (!progress || progress.phase === "ready") return null;
 
@@ -32,18 +40,12 @@ export function ModelLoadingBar({ progress }: { progress: ModelLoadProgress }) {
             className="h-full rounded-full bg-indigo-400 transition-all duration-300 ease-out"
             style={{
               width: hasPercent ? `${Math.min(100, Math.max(0, progress.percent!))}%` : "100%",
-              animation: hasPercent ? undefined : "indeterminate 1.5s ease-in-out infinite",
+              animation: hasPercent ? undefined : "veyra-indeterminate 1.5s ease-in-out infinite",
             }}
           />
         </div>
       </div>
-      <style>{`
-        @keyframes indeterminate {
-          0% { width: 0%; margin-left: 0; }
-          50% { width: 60%; margin-left: 20%; }
-          100% { width: 0%; margin-left: 100%; }
-        }
-      `}</style>
+      {!hasPercent && <style>{INDETERMINATE_STYLE}</style>}
     </div>
   );
 }

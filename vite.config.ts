@@ -28,7 +28,7 @@ export default defineConfig({
       clientFiles: ["./src/main.tsx", "./src/App.tsx"],
     },
   },
-  envPrefix: ["VITE_", "TAURI_"],
+  envPrefix: ["VITE_"],
   build: {
     target: process.env.TAURI_PLATFORM === "macos" ? "safari14" : "chrome105",
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,

@@ -194,6 +194,43 @@ async function fetchProviderModels(providerId: string, currentModelId: string): 
   useProviderStore.setState({ models, selectedModel });
 }
 
+function applyProviderConnectionResult(
+  set: (fn: (state: ProviderStore) => Partial<ProviderStore>) => void,
+  id: string,
+  available: boolean,
+  errorMessage: string,
+) {
+  set((state) => ({
+    providers: state.providers.map((provider) =>
+      provider.id === id
+        ? { ...provider, status: available ? "connected" : "disconnected" }
+        : provider,
+    ),
+    connectionPhase: available ? "idle" : "error",
+    connectionError: available ? null : errorMessage,
+    ...(id === state.selectedProvider && !available
+      ? { models: [], selectedModel: preferredModelForProvider(id) }
+      : {}),
+  }));
+}
+
+async function loadProviderModelsIfSelected(
+  id: string,
+  requestId: number,
+  get: () => ProviderStore,
+  set: (partial: Partial<ProviderStore>) => void,
+) {
+  if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
+  const adapter = getProviderAdapter(id);
+  if (!adapter) return;
+  const models = await adapter.fetchModels();
+  if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
+  if (id === get().selectedProvider) {
+    const selectedModel = applyFetchedModels(id, models, get().selectedModel);
+    set({ models, selectedModel });
+  }
+}
+
 export const useProviderStore = create<ProviderStore>((set, get) => ({
   providers: getInitialProviders(),
   selectedProvider: initialPrefs.selectedProvider,
@@ -258,29 +295,15 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     const { available, message } = await syncProviderConnection(id, {});
     if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
 
-    set((state) => ({
-      providers: state.providers.map((provider) =>
-        provider.id === id
-          ? { ...provider, status: available ? "connected" : "disconnected" }
-          : provider,
-      ),
-      connectionPhase: available ? "idle" : "error",
-      connectionError: available
-        ? null
-        : (message ?? `${adapter.name} could not be reached.`),
-      ...(id === state.selectedProvider && !available
-        ? { models: [], selectedModel: preferredModelForProvider(id) }
-        : {}),
-    }));
-
+    applyProviderConnectionResult(
+      set,
+      id,
+      available,
+      message ?? `${adapter.name} could not be reached.`,
+    );
     if (!available) return;
 
-    const models = await adapter.fetchModels();
-    if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
-    if (id === get().selectedProvider) {
-      const selectedModel = applyFetchedModels(id, models, get().selectedModel);
-      set({ models, selectedModel });
-    }
+    await loadProviderModelsIfSelected(id, requestId, get, set);
   },
 
   startProviderServer: async (providerId) => {
@@ -299,31 +322,15 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     const { available, message } = await syncProviderConnection(id, { startServer: true });
     if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
 
-    set((state) => ({
-      providers: state.providers.map((provider) =>
-        provider.id === id
-          ? { ...provider, status: available ? "connected" : "disconnected" }
-          : provider,
-      ),
-      connectionPhase: available ? "idle" : "error",
-      connectionError: available
-        ? null
-        : (message ?? `Could not start ${adapter.name}.`),
-    }));
+    applyProviderConnectionResult(
+      set,
+      id,
+      available,
+      message ?? `Could not start ${adapter.name}.`,
+    );
+    if (!available) return;
 
-    if (!available) {
-      if (id === get().selectedProvider) {
-        set({ models: [], selectedModel: preferredModelForProvider(id) });
-      }
-      return;
-    }
-
-    const models = await adapter.fetchModels();
-    if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
-    if (id === get().selectedProvider) {
-      const selectedModel = applyFetchedModels(id, models, get().selectedModel);
-      set({ models, selectedModel });
-    }
+    await loadProviderModelsIfSelected(id, requestId, get, set);
   },
 
   setSelectedModel: (modelId) => {

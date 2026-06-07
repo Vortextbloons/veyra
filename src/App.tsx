@@ -198,7 +198,13 @@ function App() {
     logStartupDuration("veyra:main-start", "veyra:app-mounted", "main-to-mount");
   }, []);
 
-  useEffect(() => registerAppShutdownHandler(), []);
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void registerAppShutdownHandler().then((unregister) => {
+      cleanup = unregister;
+    });
+    return () => cleanup?.();
+  }, []);
 
   useEffect(() => {
     void (async () => {

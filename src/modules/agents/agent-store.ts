@@ -17,6 +17,7 @@ import {
 } from "@/modules/agents/opencode-runtime";
 
 const sessionAbortControllers = new Map<string, AbortController>();
+let startSessionChain: Promise<void> = Promise.resolve();
 
 function abortAgentSession(sessionId: string): void {
   const controller = sessionAbortControllers.get(sessionId);
@@ -264,8 +265,11 @@ function parseOpencodeJsonOutput(stdout: string): ParsedOpencodeOutput {
 }
 
 function stripAnsi(value: string) {
-  // eslint-disable-next-line no-control-regex
-  return value.replace(/\x1b\[[0-9;]*m/g, "").trim();
+  return value
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .replace(/\x1b[@-_]/g, "")
+    .trim();
 }
 
 function modelDetail(model: string) {
@@ -312,9 +316,9 @@ function appendLiveOutput(events: AgentEvent[], nextEvent: AgentEvent): AgentEve
     ? nextText
     : [currentText, nextText].filter(Boolean).join("");
 
-  return events.map((item, index) =>
-    index === lastOutputIndex ? { ...current, detail, at: nextEvent.at } : item,
-  );
+  const updated = events.slice();
+  updated[lastOutputIndex] = { ...current, detail, at: nextEvent.at };
+  return updated;
 }
 
 function placeholderFromOpencodeSession(session: OpencodeProjectSession): AgentSession {
@@ -525,6 +529,19 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     });
   },
   startSession: async (input) => {
+    const waitFor = startSessionChain;
+    let unlock = () => undefined;
+    startSessionChain = new Promise<void>((resolve) => {
+      unlock = resolve;
+    });
+    await waitFor;
+
+    try {
+    if (get().sessions.some((session) => session.status === "running")) {
+      const running = get().sessions.find((session) => session.status === "running");
+      return running?.id ?? "";
+    }
+
     const activeSession = get().activeSessionId
       ? get().sessions.find((item) => item.id === get().activeSessionId)
       : null;
@@ -682,6 +699,9 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     }
 
     return id;
+    } finally {
+      unlock();
+    }
   },
   stopSession: (id) => {
     abortAgentSession(id);

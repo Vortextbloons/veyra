@@ -62,7 +62,15 @@ export class SearXNGProvider implements SearchProvider {
       limit,
     );
 
-    return response.results.map((result, index) => ({
+    const seenUrls = new Set<string>();
+    return response.results
+      .filter((result) => {
+        const normalized = result.url.trim().toLowerCase();
+        if (!normalized || seenUrls.has(normalized)) return false;
+        seenUrls.add(normalized);
+        return true;
+      })
+      .map((result, index) => ({
       id: result.id || generateId(),
       title: result.title,
       url: stripUtmParams(result.url),

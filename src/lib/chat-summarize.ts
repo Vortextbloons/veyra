@@ -2,18 +2,12 @@ import type { ChatMessage } from "@/lib/chat-types";
 import { getContextStats } from "@/lib/context";
 import { getProviderAdapter } from "@/lib/providers";
 import { buildSummarizeUserMessage, CHAT_SUMMARIZE_SYSTEM } from "@/lib/prompts";
+import { formatTranscript } from "@/lib/transcript";
 import { useChatStore } from "@/stores/chat-store";
 
 /** Recent turns kept verbatim; older content is folded into the rolling summary. */
 const KEEP_RECENT_MESSAGES = 8;
 const SUMMARIZE_THRESHOLD_PERCENT = 55;
-
-function formatTranscript(messages: ChatMessage[]): string {
-  return messages
-    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.trim()}`)
-    .filter((line) => line.length > 12)
-    .join("\n\n");
-}
 
 export function shouldSummarizeConversation(
   messages: ChatMessage[],
@@ -93,7 +87,7 @@ export async function runSummarizeForConversation(options: {
     model,
     messages: batch,
     existingSummary: latest.conversationSummary,
-    signal: signal ?? new AbortController().signal,
+    signal: signal ?? AbortSignal.timeout(120_000),
   });
 
   if (summary && !signal?.aborted) {

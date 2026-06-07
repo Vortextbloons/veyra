@@ -9,6 +9,8 @@ import {
   type LmChatStats,
 } from "@/lib/performance";
 import { runLmStudioExclusive } from "@/lib/lm-studio-session";
+import { withFetchTimeout } from "@/lib/abort-utils";
+import { formatTranscript } from "@/lib/transcript";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -50,16 +52,6 @@ function extractReasoningText(output: V1OutputItem[] | undefined): string {
     .filter((item): item is { type: "reasoning"; content: string } => item.type === "reasoning")
     .map((item) => item.content)
     .join("");
-}
-
-function formatTranscript(messages: ChatMessage[]): string {
-  return messages
-    .map((msg) => {
-      const label =
-        msg.role === "user" ? "User" : msg.role === "assistant" ? "Assistant" : "System";
-      return `${label}: ${msg.content}`;
-    })
-    .join("\n\n");
 }
 
 function buildV1ChatBody(options: {
@@ -563,25 +555,27 @@ async function sendLmStudioChatImpl(options: {
   };
 
   try {
-    const res = await tauriFetch(`${baseUrl || DEFAULT_BASE_URL}${CHAT_PATH}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        buildV1ChatBody({
-          model,
-          messages,
-          temperature,
-          contextLength,
-          maxTokens,
-          topP,
-          repetitionPenalty,
-          stopSequences,
-          store,
-          previousResponseId,
-        }),
-      ),
-      signal,
-    });
+    const { signal: fetchSignal, cleanup: cleanupFetchTimeout } = withFetchTimeout(signal);
+    try {
+      const res = await tauriFetch(`${baseUrl || DEFAULT_BASE_URL}${CHAT_PATH}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          buildV1ChatBody({
+            model,
+            messages,
+            temperature,
+            contextLength,
+            maxTokens,
+            topP,
+            repetitionPenalty,
+            stopSequences,
+            store,
+            previousResponseId,
+          }),
+        ),
+        signal: fetchSignal,
+      });
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -631,6 +625,9 @@ async function sendLmStudioChatImpl(options: {
       }),
       responseId: streamState.responseId,
     });
+    } finally {
+      cleanupFetchTimeout();
+    }
   } catch (err: unknown) {
     if (signal?.aborted) {
       onError("Request aborted");

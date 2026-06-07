@@ -1,7 +1,24 @@
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
+use std::sync::LazyLock;
 
 const MAX_SEARCH_RESULTS: usize = 10;
+
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("Veyra/0.1")
+        .build()
+        .expect("failed to build shared HTTP client")
+});
+
+static HTTP_CLIENT_SHORT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .user_agent("Veyra/0.1")
+        .build()
+        .expect("failed to build shared HTTP client")
+});
 
 #[derive(Serialize, Deserialize)]
 pub struct TauriSearchResult {
@@ -65,13 +82,7 @@ pub async fn web_search_searxng(
         urlencoding::encode(&query)
     );
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .user_agent("Veyra/0.1")
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-
-    let response = client
+    let response = HTTP_CLIENT
         .get(&url)
         .send()
         .await
@@ -147,13 +158,7 @@ pub async fn test_searxng_connection(base_url: String) -> Result<bool, String> {
         base_url.trim_end_matches('/')
     );
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .user_agent("Veyra/0.1")
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-
-    let response = client
+    let response = HTTP_CLIENT_SHORT
         .get(&url)
         .send()
         .await

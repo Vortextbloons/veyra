@@ -96,6 +96,11 @@ function getDecryptWorker(): Worker {
   return decryptWorker;
 }
 
+export function terminateDecryptWorker(): void {
+  decryptWorker?.terminate();
+  decryptWorker = null;
+}
+
 async function decryptSnapshot(raw: string): Promise<Conversation[]> {
   try {
     const keyBytes = await getKeyBytesForWorker();

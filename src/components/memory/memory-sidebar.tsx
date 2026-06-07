@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Database, Inbox, Pin, Clock, Archive, Globe, Folder, Shield, Hourglass } from "lucide-react";
 import { useMemoryStore, selectVisibleNodes } from "@/stores/memory-store";
 import type { MemoryView } from "@/stores/memory-store";
@@ -20,7 +20,7 @@ export function MemorySidebar() {
   const nodes = useMemoryStore((s) => s.nodes);
   const folders = useMemoryStore((s) => s.folders);
 
-  const counts: Record<MemoryView, number> = {
+  const counts = useMemo<Record<MemoryView, number>>(() => ({
     all: selectVisibleNodes({ nodes }, "all", "").length,
     inbox: selectVisibleNodes({ nodes }, "inbox", "").length,
     pinned: selectVisibleNodes({ nodes }, "pinned", "").length,
@@ -28,7 +28,7 @@ export function MemorySidebar() {
     low_priority: selectVisibleNodes({ nodes }, "low_priority", "").length,
     recent: selectVisibleNodes({ nodes }, "recent", query).length,
     archived: selectVisibleNodes({ nodes }, "archived", "").length,
-  };
+  }), [nodes, query]);
 
   return (
     <aside className="flex w-[200px] shrink-0 flex-col gap-4 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3">

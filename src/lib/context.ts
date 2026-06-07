@@ -147,15 +147,20 @@ export function getContextStats(
     0,
   );
   const estimatedTokens = systemTokens + totalMessageTokens;
+  const percentUsed = Math.round((estimatedTokens / limit) * 100);
 
-  const built = buildChatContext(messages, { reservedOutputTokens: reserved }, limit);
-  const includedMessages = built.length - 1;
-  const droppedMessages = messages.length - includedMessages;
+  let includedMessages = messages.length;
+  let droppedMessages = 0;
+  if (percentUsed >= 50 || estimatedTokens > limit * 0.5) {
+    const built = buildChatContext(messages, { reservedOutputTokens: reserved }, limit);
+    includedMessages = built.length - 1;
+    droppedMessages = messages.length - includedMessages;
+  }
 
   return {
     estimatedTokens,
     contextLimit: limit,
-    percentUsed: Math.round((estimatedTokens / limit) * 100),
+    percentUsed,
     includedMessages,
     droppedMessages,
     reservedOutputTokens: reserved,

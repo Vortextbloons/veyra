@@ -1,13 +1,20 @@
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 const DEFAULT_BASE_URL: &str = "http://localhost:1234";
 const SERVER_READY_WAIT_SECS: u64 = 30;
 const SERVER_POLL_MS: u64 = 500;
 
+static LMS_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(find_lms_uncached);
+
 /// Find the `lms` CLI. Tauri often inherits a minimal PATH, so check LM Studio install dirs.
 fn find_lms() -> Option<PathBuf> {
+    LMS_PATH.clone()
+}
+
+fn find_lms_uncached() -> Option<PathBuf> {
     if let Ok(output) = Command::new("lms").arg("--version").output() {
         if output.status.success() {
             return Some(PathBuf::from("lms"));

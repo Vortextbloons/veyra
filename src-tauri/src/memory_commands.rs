@@ -1,81 +1,90 @@
 use crate::memory_db::{self, MemoryDbState};
 use tauri::State;
 
-macro_rules! with_db {
-    ($state:expr, |$conn:ident| $body:expr) => {{
-        $state.with_connection(|$conn| $body)
-    }};
+async fn run_db<T, F>(state: &MemoryDbState, f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce(&rusqlite::Connection) -> Result<T, String> + Send + 'static,
+{
+    let state = state.clone();
+    tauri::async_runtime::spawn_blocking(move || state.with_connection(f))
+        .await
+        .map_err(|error| format!("memory db task failed: {error}"))?
 }
 
 #[tauri::command]
-pub fn list_memory_folders(
+pub async fn list_memory_folders(
     state: State<'_, MemoryDbState>,
 ) -> Result<Vec<memory_db::MemoryFolderRow>, String> {
-    with_db!(state, |conn| memory_db::list_folders(conn))
+    run_db(state.inner(), |conn| memory_db::list_folders(conn)).await
 }
 
 #[tauri::command]
-pub fn list_memory_files(
+pub async fn list_memory_files(
     folder_id: Option<String>,
     state: State<'_, MemoryDbState>,
 ) -> Result<Vec<memory_db::MemoryFileRow>, String> {
-    with_db!(state, |conn| memory_db::list_files(conn, folder_id))
+    run_db(state.inner(), move |conn| memory_db::list_files(conn, folder_id)).await
 }
 
 #[tauri::command]
-pub fn list_memory_nodes(
+pub async fn list_memory_nodes(
     filter: String,
     state: State<'_, MemoryDbState>,
 ) -> Result<Vec<memory_db::MemoryNodeRow>, String> {
-    with_db!(state, |conn| memory_db::list_nodes(conn, filter))
+    run_db(state.inner(), move |conn| memory_db::list_nodes(conn, filter)).await
 }
 
 #[tauri::command]
-pub fn create_memory_node(
+pub async fn create_memory_node(
     input: String,
     state: State<'_, MemoryDbState>,
 ) -> Result<memory_db::MemoryNodeRow, String> {
-    with_db!(state, |conn| memory_db::create_node(conn, input))
+    run_db(state.inner(), move |conn| memory_db::create_node(conn, input)).await
 }
 
 #[tauri::command]
-pub fn update_memory_node(
+pub async fn update_memory_node(
     input: String,
     state: State<'_, MemoryDbState>,
 ) -> Result<memory_db::MemoryNodeRow, String> {
-    with_db!(state, |conn| memory_db::update_node(conn, input))
+    run_db(state.inner(), move |conn| memory_db::update_node(conn, input)).await
 }
 
 #[tauri::command]
-pub fn delete_memory_node(id: String, state: State<'_, MemoryDbState>) -> Result<(), String> {
-    with_db!(state, |conn| memory_db::delete_node(conn, id))
+pub async fn delete_memory_node(
+    id: String,
+    state: State<'_, MemoryDbState>,
+) -> Result<(), String> {
+    run_db(state.inner(), move |conn| memory_db::delete_node(conn, id)).await
 }
 
 #[tauri::command]
-pub fn archive_memory_node(id: String, state: State<'_, MemoryDbState>) -> Result<(), String> {
-    with_db!(state, |conn| memory_db::archive_node(conn, id))
+pub async fn archive_memory_node(
+    id: String,
+    state: State<'_, MemoryDbState>,
+) -> Result<(), String> {
+    run_db(state.inner(), move |conn| memory_db::archive_node(conn, id)).await
 }
 
 #[tauri::command]
-pub fn pin_memory_node(
+pub async fn pin_memory_node(
     id: String,
     pinned: bool,
     state: State<'_, MemoryDbState>,
 ) -> Result<(), String> {
-    with_db!(state, |conn| memory_db::pin_node(conn, id, pinned))
+    run_db(state.inner(), move |conn| memory_db::pin_node(conn, id, pinned)).await
 }
 
 #[tauri::command]
-pub fn search_memory(
+pub async fn search_memory(
     query: String,
     limit: u32,
     project_id: Option<String>,
     state: State<'_, MemoryDbState>,
 ) -> Result<Vec<memory_db::MemoryNodeRow>, String> {
-    with_db!(state, |conn| memory_db::search_nodes(
-        conn,
-        query,
-        limit as i64,
-        project_id
-    ))
+    run_db(state.inner(), move |conn| {
+        memory_db::search_nodes(conn, query, limit as i64, project_id)
+    })
+    .await
 }

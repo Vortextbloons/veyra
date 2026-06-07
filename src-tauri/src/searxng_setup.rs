@@ -318,9 +318,36 @@ fn check_container() -> Result<(bool, bool), String> {
 
 // ── commands ──────────────────────────────────────────────────────────────────
 
+fn wait_for_searxng_health() -> Result<(), String> {
+    let url = format!("http://127.0.0.1:{SEARXNG_PORT}/search?q=health&format=json&pageno=1");
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .user_agent("Veyra/0.1")
+        .build()
+        .map_err(|e| format!("Failed to create health check client: {e}"))?;
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        if let Ok(response) = client.get(&url).send() {
+            if response.status().is_success() {
+                return Ok(());
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    Err("SearXNG container started but did not respond to HTTP health checks within 30 seconds.".into())
+}
+
 /// Check Docker + container status. Non-blocking — just reads state.
 #[tauri::command]
 pub async fn check_searxng_setup() -> Result<SearxngSetupStatus, String> {
+    tauri::async_runtime::spawn_blocking(check_searxng_setup_sync)
+        .await
+        .map_err(|error| format!("SearXNG status task failed: {error}"))?
+}
+
+fn check_searxng_setup_sync() -> Result<SearxngSetupStatus, String> {
     let docker_installed = check_docker_installed()?;
     let docker_daemon_running = if docker_installed {
         check_docker_daemon()?
@@ -436,8 +463,8 @@ fn start_searxng_container_sync() -> Result<String, String> {
     ])
     .map_err(|e| format!("Failed to create SearXNG container: {e}"))?;
 
-    // Give SearXNG a moment to start listening
-    std::thread::sleep(std::time::Duration::from_secs(4));
+    // Give SearXNG a moment to start listening, then verify HTTP health.
+    wait_for_searxng_health()?;
 
     // Verify it's actually running
     let (_exists, running) = check_container()?;
@@ -472,7 +499,9 @@ pub async fn start_searxng_container(
 /// Stop the SearXNG container.
 #[tauri::command]
 pub async fn stop_searxng_container(state: tauri::State<'_, SearxngState>) -> Result<(), String> {
-    stop_container();
+    tauri::async_runtime::spawn_blocking(stop_container)
+        .await
+        .map_err(|error| format!("SearXNG stop task failed: {error}"))?;
     state.clear_started();
     Ok(())
 }

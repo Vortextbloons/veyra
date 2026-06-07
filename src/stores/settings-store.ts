@@ -208,9 +208,11 @@ export async function ensureSettingsHydrated(): Promise<void> {
 
 export const useSettingsStore = create<SettingsStore>((set, get) => {
   const apply = (patch: Partial<SettingsStoreState>) => {
-    set(patch as SettingsStore);
-    const next = { ...get(), ...patch } as SettingsStoreState;
-    persistState(next);
+    set((state) => {
+      const next = { ...state, ...patch };
+      persistState(next);
+      return next;
+    });
   };
   return {
     ...DEFAULT_STATE,

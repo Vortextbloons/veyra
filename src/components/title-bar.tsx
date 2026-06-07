@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, Square, X, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 
@@ -22,7 +22,7 @@ export function TitleBar({
   onZoomReset,
 }: TitleBarProps) {
   const showZoom = zoom !== 1;
-  const appWindow = getCurrentWindow();
+  const appWindow = useMemo(() => getCurrentWindow(), []);
 
   return (
     <div

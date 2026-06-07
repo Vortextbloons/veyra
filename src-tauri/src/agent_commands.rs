@@ -56,7 +56,18 @@ pub struct OpencodeRunEvent {
 }
 
 #[tauri::command]
-pub fn list_opencode_project_sessions(
+pub async fn list_opencode_project_sessions(
+    app: tauri::AppHandle,
+    project_path: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        list_opencode_project_sessions_sync(app, project_path)
+    })
+    .await
+    .map_err(|error| format!("opencode task failed: {error}"))?
+}
+
+fn list_opencode_project_sessions_sync(
     app: tauri::AppHandle,
     project_path: String,
 ) -> Result<String, String> {
@@ -97,7 +108,19 @@ pub fn list_opencode_project_sessions(
 }
 
 #[tauri::command]
-pub fn export_opencode_session(
+pub async fn export_opencode_session(
+    app: tauri::AppHandle,
+    project_path: String,
+    session_id: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        export_opencode_session_sync(app, project_path, session_id)
+    })
+    .await
+    .map_err(|error| format!("opencode task failed: {error}"))?
+}
+
+fn export_opencode_session_sync(
     app: tauri::AppHandle,
     project_path: String,
     session_id: String,
@@ -116,7 +139,19 @@ pub fn export_opencode_session(
 }
 
 #[tauri::command]
-pub fn delete_opencode_session(
+pub async fn delete_opencode_session(
+    app: tauri::AppHandle,
+    project_path: String,
+    session_id: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        delete_opencode_session_sync(app, project_path, session_id)
+    })
+    .await
+    .map_err(|error| format!("opencode task failed: {error}"))?
+}
+
+fn delete_opencode_session_sync(
     app: tauri::AppHandle,
     project_path: String,
     session_id: String,
@@ -139,16 +174,20 @@ pub fn delete_opencode_session(
 }
 
 #[tauri::command]
-pub fn check_opencode_available(app: tauri::AppHandle) -> bool {
-    run_opencode_command(
-        Some(&app),
-        None,
-        None,
-        &["--version".to_string()],
-        false,
-        None,
-    )
+pub async fn check_opencode_available(app: tauri::AppHandle) -> bool {
+    tauri::async_runtime::spawn_blocking(move || {
+        run_opencode_command(
+            Some(&app),
+            None,
+            None,
+            &["--version".to_string()],
+            false,
+            None,
+        )
         .is_ok_and(|output| output.status.success())
+    })
+    .await
+    .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -176,7 +215,13 @@ pub fn run_opencode_agent(
 }
 
 #[tauri::command]
-pub fn stop_opencode_agent(session_id: String) -> Result<(), String> {
+pub async fn stop_opencode_agent(session_id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || stop_opencode_agent_sync(session_id))
+        .await
+        .map_err(|error| format!("opencode stop task failed: {error}"))?
+}
+
+fn stop_opencode_agent_sync(session_id: String) -> Result<(), String> {
     let session_id = session_id.trim();
     if session_id.is_empty() {
         return Err("agent session id is required".into());
