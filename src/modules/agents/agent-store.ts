@@ -530,7 +530,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   },
   startSession: async (input) => {
     const waitFor = startSessionChain;
-    let unlock = () => undefined;
+    let unlock: () => void = () => {};
     startSessionChain = new Promise<void>((resolve) => {
       unlock = resolve;
     });

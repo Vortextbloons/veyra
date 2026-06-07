@@ -4,6 +4,7 @@ import { PrimarySidebar } from "@/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/components/chat-panel";
 import { RightPanel } from "@/components/right-panel";
+import { DocEditorPanel } from "@/modules/documents/components/doc-editor-panel";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { executeChatSend, ensureProviderReady, triggerMemoryExtractionNow } from "@/lib/chat-actions";
 import { prepareAgentLmStudioModel } from "@/lib/lm-model-session";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/startup";
 import { useChatStore } from "@/stores/chat-store";
 import { useAgentStore } from "@/modules/agents/agent-store";
+import { useDocumentStore } from "@/modules/documents/document-store";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { useProviderStore } from "@/stores/provider-store";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
@@ -211,6 +213,7 @@ function App() {
       await ensureSettingsHydrated();
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
       await useChatStore.getState().hydrateConversations();
+      void useDocumentStore.getState().hydrateDocuments();
       markStartup("veyra:hydration-ready");
       logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
       initializeProvider();
@@ -671,6 +674,7 @@ function App() {
             onAgentSessionDelete={(id) => void deleteAgentSession(id)}
           />
         )}
+        {isChatMode && <DocEditorPanel />}
         <RightPanel
           contextStats={displayContextStats}
           collapsed={rightPanelCollapsed}

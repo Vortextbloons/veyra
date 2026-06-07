@@ -87,8 +87,8 @@ export async function runOpencodeAgent(
 
   let settled = false;
   let cleanedUp = false;
-  let resolveResult: (result: OpencodeRunResult) => void = () => undefined;
-  let rejectResult: (error: Error) => void = () => undefined;
+  let resolveResult: (result: OpencodeRunResult) => void = () => {};
+  let rejectResult: (error: Error) => void = () => {};
   const eventPromise = new Promise<OpencodeRunResult>((resolve, reject) => {
     resolveResult = resolve;
     rejectResult = reject;
@@ -107,8 +107,8 @@ export async function runOpencodeAgent(
   };
 
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-  let unlisten = () => undefined;
-  let unlistenEvent = () => undefined;
+  let unlisten: () => void = () => {};
+  let unlistenEvent: () => void = () => {};
 
   const cleanup = () => {
     if (cleanedUp) return;

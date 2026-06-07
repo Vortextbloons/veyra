@@ -13,6 +13,7 @@ export type PostChatJobOptions = {
   providerId: string;
   userMessage: string;
   assistantMessage: string;
+  assistantMessageId?: string;
   /** Only the first user turn should trigger auto-naming. */
   isFirstExchange?: boolean;
 };
@@ -80,10 +81,18 @@ export async function handoffAfterUserChat(options: {
 /** One queued job: sequential model load/unload + title then summary. */
 export function queuePostChatJobs(options: PostChatJobOptions): void {
   const settings = useSettingsStore.getState();
-  if (!settings.backgroundJobsEnabled) return;
 
   const { conversationId, chatModel, providerId, userMessage, assistantMessage } = options;
-  if (!chatModel.trim() || !assistantMessage.trim()) return;
+  if (!assistantMessage.trim()) return;
+
+  queueDocumentDetection({
+    conversationId,
+    assistantMessage,
+    assistantMessageId: options.assistantMessageId,
+  });
+
+  if (!settings.backgroundJobsEnabled) return;
+  if (!chatModel.trim()) return;
   if (settings.memoryExtractionEnabled) {
     useChatStore.getState().markMemoryPending(conversationId);
   }
@@ -100,7 +109,9 @@ export function queuePostChatJobs(options: PostChatJobOptions): void {
     scheduleDelayedMemoryExtraction({ conversationId, chatModel, providerId, memoryModel: plan.memoryModel });
   }
 
-  if (!plan.willTitle && !plan.willSummarize && !plan.willExtractMemory) return;
+  if (!plan.willTitle && !plan.willSummarize && !plan.willExtractMemory) {
+    return;
+  }
 
   aiScheduler.cancelQueuedJobs({ type: "auto_name_chat", conversationId });
   aiScheduler.cancelQueuedJobs({ type: "summarize_chat", conversationId });
@@ -155,6 +166,38 @@ export function queuePostChatJobs(options: PostChatJobOptions): void {
           return result;
         },
       });
+    },
+  });
+}
+
+export function queueDocumentDetection(options: {
+  conversationId: string;
+  assistantMessage: string;
+  assistantMessageId?: string;
+}): void {
+  const { conversationId, assistantMessage, assistantMessageId } = options;
+
+  if (!assistantMessage.trim()) return;
+
+  // Skip if document feature is disabled
+  const settings = useSettingsStore.getState();
+  if (!settings.documentPanelEnabled) return;
+
+  aiScheduler.enqueueAiJob({
+    type: "maintenance",
+    priority: 4,
+    title: "Document detection",
+    description: "Checking for document creation intents",
+    conversationId,
+    run: async () => {
+      const { handleDocumentOperations } = await import("@/modules/documents/document-runtime");
+      const result = await handleDocumentOperations(assistantMessage, conversationId);
+      if (result?.sanitizedText && assistantMessageId) {
+        useChatStore.getState().commitAssistantMessage(conversationId, assistantMessageId, {
+          content: result.sanitizedText,
+        });
+      }
+      return { output: "Document detection complete" };
     },
   });
 }

@@ -115,6 +115,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
       providerId: liveProvider,
       userMessage: trimmed,
       assistantMessage: assistantText,
+      assistantMessageId: assistantMessage.id,
       isFirstExchange,
     });
   }

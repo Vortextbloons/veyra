@@ -7,6 +7,8 @@ use tauri::{Manager, RunEvent, WindowEvent};
 static INITIAL_WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
 
 mod agent_commands;
+mod document_commands;
+mod document_db;
 mod lm_studio_setup;
 mod memory_commands;
 mod memory_db;
@@ -133,11 +135,26 @@ pub fn run() {
             searxng_setup::stop_searxng_container,
             lm_studio_setup::lm_studio_server_running,
             lm_studio_setup::start_lm_studio_server,
+            document_commands::create_document,
+            document_commands::get_document,
+            document_commands::update_document,
+            document_commands::list_documents,
+            document_commands::delete_document,
+            document_commands::create_document_version,
+            document_commands::list_document_versions,
+            document_commands::get_document_version,
+            document_commands::restore_document_version,
+            document_commands::export_document_markdown,
+            document_commands::export_document_txt,
         ])
         .setup(|app| {
             let db_state = memory_db::MemoryDbState::new(app.handle().clone());
             db_state.spawn_background_init();
             app.manage(db_state);
+
+            let doc_db_state = document_db::DocumentDbState::new(app.handle().clone());
+            doc_db_state.spawn_background_init();
+            app.manage(doc_db_state);
 
             let searxng_state = searxng_setup::SearxngState::new();
             app.manage(searxng_state);

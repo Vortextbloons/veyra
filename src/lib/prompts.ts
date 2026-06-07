@@ -33,11 +33,13 @@ export function composeMainSystemPrompt(options: {
   summaryBlock?: string;
   toolsBlock?: string;
   contextAnchoringBlock?: string;
+  documentInstructionsBlock?: string;
 }): string {
   const parts: string[] = [];
   if (options.userPrompt?.trim()) parts.push(options.userPrompt.trim());
   parts.push(VEYRA_CORE_SYSTEM);
   if (options.contextAnchoringBlock?.trim()) parts.push(options.contextAnchoringBlock.trim());
+  if (options.documentInstructionsBlock?.trim()) parts.push(options.documentInstructionsBlock.trim());
   if (options.memoryBlock?.trim()) parts.push(options.memoryBlock.trim());
   if (options.summaryBlock?.trim()) parts.push(options.summaryBlock.trim());
   if (options.toolsBlock?.trim()) parts.push(options.toolsBlock.trim());
@@ -63,6 +65,60 @@ export function buildContextAnchoringBlock(): string {
 Current date/time: ${dateStr} at ${timeStr}
 Platform: ${platform}
 </veyra_context>`;
+}
+
+/** Document creation instructions for when the document feature is enabled */
+export function buildDocumentInstructionsBlock(activeDocument?: {
+  id: string;
+  title: string;
+  type: string;
+}): string {
+  const activeDocumentBlock = activeDocument
+    ? `
+
+ACTIVE DOCUMENT:
+- id: ${activeDocument.id}
+- title: ${activeDocument.title}
+- type: ${activeDocument.type}
+
+When updating the active document, use this exact documentId: ${activeDocument.id}`
+    : "";
+
+  return `<veyra_documents>
+You can create and edit documents in a side panel. When the user asks you to create a document, spec, README, proposal, essay, report, notes, or any long-form content, output a structured JSON block to create it.
+
+TO CREATE A DOCUMENT:
+Output this exact JSON structure in a code block:
+\`\`\`json
+{
+  "type": "doc.create",
+  "title": "Document Title",
+  "documentType": "technical_spec",
+  "contentMarkdown": "# Document Title\\n\\n## Section\\n\\nContent here..."
+}
+\`\`\`
+
+Document types: document, technical_spec, essay, report, proposal, readme, notes, prompt, project_plan, meeting_notes, research_brief, agent_instruction
+
+After the JSON block, write a brief summary in chat (1-2 sentences) confirming what you created. Do NOT write the full document content in chat.
+
+TO UPDATE A DOCUMENT:
+If the user asks to update or edit an existing document, output:
+\`\`\`json
+{
+  "type": "doc.update",
+  "documentId": "the-document-id",
+  "mode": "replace_section",
+  "target": "Section Name",
+  "contentMarkdown": "New section content..."
+}
+\`\`\`
+
+Modes: replace_section, insert_after_section. Do not use replace_all unless the user explicitly asks for a whole-document rewrite; Veyra will require review before applying it.
+${activeDocumentBlock}
+
+IMPORTANT: Always use the JSON structure for document creation/updates. Do not just write long markdown in chat when a document would be appropriate.
+</veyra_documents>`;
 }
 
 export const MEMORY_EXTRACTION_SYSTEM = `You extract durable memories from chat transcripts for a local assistant.

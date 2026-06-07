@@ -11,7 +11,8 @@ import type { MemoryRetrievalInfo } from "@/lib/memory-types";
 import { parseWebSearchToolCall, stripWebSearchToolCall } from "@/modules/web-search/tools/webSearchTool";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import { buildToolsBlock } from "@/lib/tool-registry";
-import { buildContextAnchoringBlock } from "@/lib/prompts";
+import { buildContextAnchoringBlock, buildDocumentInstructionsBlock } from "@/lib/prompts";
+import { useDocumentStore } from "@/modules/documents/document-store";
 
 /**
  * Optional context threaded through to the chat consumer's onComplete
@@ -182,6 +183,7 @@ export async function sendChatRequest({
                   conversationSummary: conversation?.conversationSummary,
                   summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
                   webSearchContextBlock: contextBlock,
+                  documentInstructionsBlock,
                   userPrompt: resolvedUserPrompt,
                   reservedOutputTokens: resolvedReservedOutputTokens,
                 },
@@ -226,6 +228,17 @@ export async function sendChatRequest({
     ? buildContextAnchoringBlock()
     : undefined;
 
+  const activeDocument = useDocumentStore.getState().documents.find(
+    (doc) => doc.id === useDocumentStore.getState().activeDocumentId,
+  );
+  const documentInstructionsBlock = settings.documentPanelEnabled
+    ? buildDocumentInstructionsBlock(
+        activeDocument
+          ? { id: activeDocument.id, title: activeDocument.title, type: activeDocument.type }
+          : undefined,
+      )
+    : undefined;
+
   await provider.sendChat({
     ...options,
     temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
@@ -244,6 +257,7 @@ export async function sendChatRequest({
         summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
         toolsBlock: buildToolsBlock(webSearchEnabled),
         contextAnchoringBlock,
+        documentInstructionsBlock,
         userPrompt: resolvedUserPrompt,
         reservedOutputTokens: resolvedReservedOutputTokens,
       },

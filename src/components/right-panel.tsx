@@ -1,11 +1,18 @@
 import { useState, type ReactNode } from "react";
 import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
   Globe,
   PanelRightClose,
   PanelRightOpen,
+  Settings2,
   Trash2,
 } from "lucide-react";
 import type { ContextStats, RightPanelProps } from "@/lib/chat-types";
+import { useDocumentStore } from "@/modules/documents/document-store";
+import { formatDocumentType } from "@/modules/documents/document-export";
+import { useSettingsStore } from "@/stores/settings-store";
 
 export function RightPanel({
   contextStats,
@@ -95,6 +102,10 @@ export function RightPanel({
             webSearch={webSearchEnabled}
             onWebSearchChange={(on) => onWebSearchChange?.(on)}
           />
+
+          <DocumentsPanel />
+
+          <DocumentSettingsPanel />
         </div>
       )}
     </aside>
@@ -441,6 +452,9 @@ function ToolsPanel({
   webSearch: boolean;
   onWebSearchChange: (on: boolean) => void;
 }) {
+  const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
+  const setDocumentPanelEnabled = useSettingsStore((s) => s.setDocumentPanelEnabled);
+
   return (
     <PanelShell title="Tools">
       <div className="space-y-0.5">
@@ -450,7 +464,302 @@ function ToolsPanel({
           on={webSearch}
           onChange={onWebSearchChange}
         />
+        <ToolRow
+          icon={<FileText className="size-3.5" />}
+          label="Documents"
+          on={documentPanelEnabled}
+          onChange={setDocumentPanelEnabled}
+        />
       </div>
     </PanelShell>
+  );
+}
+
+function DocumentsPanel() {
+  const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
+  const documents = useDocumentStore((s) => s.documents);
+  const activeDocumentId = useDocumentStore((s) => s.activeDocumentId);
+  const openDocument = useDocumentStore((s) => s.openDocument);
+
+  if (!documentPanelEnabled) return null;
+
+  if (documents.length === 0) {
+    return (
+      <PanelShell title="Documents">
+        <div className="rounded-lg border border-dashed border-[var(--color-border)] p-3 text-center">
+          <p className="text-[11px] text-[var(--color-text-dim)]">
+            No documents yet
+          </p>
+          <p className="mt-1 text-[10px] text-[var(--color-text-dim)]/70">
+            Ask the AI to create one
+          </p>
+        </div>
+      </PanelShell>
+    );
+  }
+
+  return (
+    <PanelShell title="Documents">
+      <div className="space-y-1">
+        {documents.slice(0, 10).map((doc) => (
+          <button
+            key={doc.id}
+            type="button"
+            onClick={() => void openDocument(doc.id)}
+            className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[12px] transition-colors ${
+              doc.id === activeDocumentId
+                ? "bg-indigo-500/10 text-indigo-300 ring-1 ring-inset ring-indigo-500/20"
+                : "text-[var(--color-text)] hover:bg-white/[0.04]"
+            }`}
+          >
+            <FileText className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{doc.title}</p>
+              <p className="text-[10px] text-[var(--color-text-dim)]">
+                {formatDocumentType(doc.type)}
+              </p>
+            </div>
+          </button>
+        ))}
+        {documents.length > 10 && (
+          <p className="px-2.5 pt-1 text-[10px] text-[var(--color-text-dim)]">
+            +{documents.length - 10} more
+          </p>
+        )}
+      </div>
+    </PanelShell>
+  );
+}
+
+function DocumentSettingsPanel() {
+  const [expanded, setExpanded] = useState(false);
+  const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
+
+  const documentAutoSaveEnabled = useSettingsStore((s) => s.documentAutoSaveEnabled);
+  const setDocumentAutoSaveEnabled = useSettingsStore((s) => s.setDocumentAutoSaveEnabled);
+  const documentAutoSaveDelay = useSettingsStore((s) => s.documentAutoSaveDelay);
+  const setDocumentAutoSaveDelay = useSettingsStore((s) => s.setDocumentAutoSaveDelay);
+  const documentDefaultType = useSettingsStore((s) => s.documentDefaultType);
+  const setDocumentDefaultType = useSettingsStore((s) => s.setDocumentDefaultType);
+  const documentWordWrap = useSettingsStore((s) => s.documentWordWrap);
+  const setDocumentWordWrap = useSettingsStore((s) => s.setDocumentWordWrap);
+  const documentFontSize = useSettingsStore((s) => s.documentFontSize);
+  const setDocumentFontSize = useSettingsStore((s) => s.setDocumentFontSize);
+  const documentTabSize = useSettingsStore((s) => s.documentTabSize);
+  const setDocumentTabSize = useSettingsStore((s) => s.setDocumentTabSize);
+  const documentSpellCheck = useSettingsStore((s) => s.documentSpellCheck);
+  const setDocumentSpellCheck = useSettingsStore((s) => s.setDocumentSpellCheck);
+  const documentAutoOpenOnCreate = useSettingsStore((s) => s.documentAutoOpenOnCreate);
+  const setDocumentAutoOpenOnCreate = useSettingsStore((s) => s.setDocumentAutoOpenOnCreate);
+
+  if (!documentPanelEnabled) return null;
+
+  return (
+    <PanelShell
+      title="Editor Settings"
+      action={
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="text-[var(--color-text-dim)] hover:text-white"
+          aria-label={expanded ? "Collapse editor settings" : "Expand editor settings"}
+        >
+          {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+        </button>
+      }
+    >
+      {!expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-[11px] text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
+        >
+          <Settings2 className="size-3.5" />
+          <span>Configure editor behavior</span>
+        </button>
+      ) : (
+        <div className="space-y-3">
+          {/* Auto-save toggle */}
+          <SettingToggle
+            label="Auto-save"
+            description="Automatically save while editing"
+            on={documentAutoSaveEnabled}
+            onChange={setDocumentAutoSaveEnabled}
+          />
+
+          {/* Auto-save delay */}
+          {documentAutoSaveEnabled && (
+            <SettingSlider
+              label="Save delay"
+              value={documentAutoSaveDelay}
+              min={200}
+              max={3000}
+              step={100}
+              formatValue={(v) => `${v}ms`}
+              onChange={setDocumentAutoSaveDelay}
+            />
+          )}
+
+          {/* Auto-open on create */}
+          <SettingToggle
+            label="Auto-open"
+            description="Open panel when AI creates a doc"
+            on={documentAutoOpenOnCreate}
+            onChange={setDocumentAutoOpenOnCreate}
+          />
+
+          {/* Default document type */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-medium text-[var(--color-text)]">
+              Default type
+            </label>
+            <select
+              value={documentDefaultType}
+              onChange={(e) => setDocumentDefaultType(e.target.value)}
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[11px] text-[var(--color-text)] outline-none focus:border-indigo-500/50"
+            >
+              <option value="document">Document</option>
+              <option value="technical_spec">Technical Spec</option>
+              <option value="essay">Essay</option>
+              <option value="report">Report</option>
+              <option value="proposal">Proposal</option>
+              <option value="readme">README</option>
+              <option value="notes">Notes</option>
+              <option value="prompt">Prompt</option>
+              <option value="project_plan">Project Plan</option>
+              <option value="meeting_notes">Meeting Notes</option>
+              <option value="research_brief">Research Brief</option>
+              <option value="agent_instruction">Agent Instruction</option>
+            </select>
+          </div>
+
+          {/* Font size */}
+          <SettingSlider
+            label="Font size"
+            value={documentFontSize}
+            min={10}
+            max={22}
+            step={1}
+            formatValue={(v) => `${v}px`}
+            onChange={setDocumentFontSize}
+          />
+
+          {/* Tab size */}
+          <div className="space-y-1">
+            <label className="block text-[11px] font-medium text-[var(--color-text)]">
+              Tab size
+            </label>
+            <div className="flex gap-1">
+              {[2, 4, 8].map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => setDocumentTabSize(size)}
+                  className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                    documentTabSize === size
+                      ? "bg-indigo-500/20 text-indigo-300 ring-1 ring-inset ring-indigo-500/30"
+                      : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Word wrap */}
+          <SettingToggle
+            label="Word wrap"
+            description="Wrap long lines in the editor"
+            on={documentWordWrap}
+            onChange={setDocumentWordWrap}
+          />
+
+          {/* Spell check */}
+          <SettingToggle
+            label="Spell check"
+            description="Browser spell check in editor"
+            on={documentSpellCheck}
+            onChange={setDocumentSpellCheck}
+          />
+        </div>
+      )}
+    </PanelShell>
+  );
+}
+
+function SettingToggle({
+  label,
+  description,
+  on,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  on: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-0.5 text-left"
+    >
+      <div className="min-w-0">
+        <span className="block text-[11px] font-medium text-[var(--color-text)]">{label}</span>
+        {description && (
+          <span className="block text-[10px] text-[var(--color-text-dim)]">{description}</span>
+        )}
+      </div>
+      <span
+        className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+          on ? "bg-emerald-500" : "bg-white/10"
+        }`}
+      >
+        <span
+          className={`inline-block size-3 rounded-full bg-white shadow-sm transition-transform ${
+            on ? "translate-x-3.5" : "translate-x-0.5"
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
+function SettingSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  formatValue,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  formatValue: (v: number) => string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-medium text-[var(--color-text)]">{label}</label>
+        <span className="text-[10px] text-[var(--color-text-dim)]">{formatValue(value)}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-indigo-500 [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-indigo-400"
+      />
+    </div>
   );
 }

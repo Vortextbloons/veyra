@@ -47,6 +47,15 @@ export type SettingsStoreState = {
   webSearchDefaultMode: "auto" | "always" | "off";
   searxngSetupError: string;
   contextAnchoringEnabled: boolean;
+  documentPanelEnabled: boolean;
+  documentAutoSaveEnabled: boolean;
+  documentAutoSaveDelay: number;
+  documentDefaultType: string;
+  documentWordWrap: boolean;
+  documentFontSize: number;
+  documentTabSize: number;
+  documentSpellCheck: boolean;
+  documentAutoOpenOnCreate: boolean;
 };
 
 export type ResolvedModelSettings = {
@@ -95,6 +104,15 @@ export type SettingsStore = SettingsStoreState & {
   setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
   setSearxngSetupError: (message: string) => void;
   setContextAnchoringEnabled: (enabled: boolean) => void;
+  setDocumentPanelEnabled: (enabled: boolean) => void;
+  setDocumentAutoSaveEnabled: (enabled: boolean) => void;
+  setDocumentAutoSaveDelay: (ms: number) => void;
+  setDocumentDefaultType: (type: string) => void;
+  setDocumentWordWrap: (enabled: boolean) => void;
+  setDocumentFontSize: (size: number) => void;
+  setDocumentTabSize: (size: number) => void;
+  setDocumentSpellCheck: (enabled: boolean) => void;
+  setDocumentAutoOpenOnCreate: (enabled: boolean) => void;
 };
 
 const DEFAULT_STATE: SettingsStoreState = {
@@ -130,6 +148,15 @@ const DEFAULT_STATE: SettingsStoreState = {
   webSearchDefaultMode: "auto",
   searxngSetupError: "",
   contextAnchoringEnabled: true,
+  documentPanelEnabled: true,
+  documentAutoSaveEnabled: true,
+  documentAutoSaveDelay: 800,
+  documentDefaultType: "document",
+  documentWordWrap: true,
+  documentFontSize: 14,
+  documentTabSize: 2,
+  documentSpellCheck: true,
+  documentAutoOpenOnCreate: true,
 };
 
 function loadState(): SettingsStoreState {
@@ -187,6 +214,15 @@ function persistState(state: SettingsStoreState) {
       webSearchDefaultMode: state.webSearchDefaultMode,
       searxngSetupError: state.searxngSetupError,
       contextAnchoringEnabled: state.contextAnchoringEnabled,
+      documentPanelEnabled: state.documentPanelEnabled,
+      documentAutoSaveEnabled: state.documentAutoSaveEnabled,
+      documentAutoSaveDelay: state.documentAutoSaveDelay,
+      documentDefaultType: state.documentDefaultType,
+      documentWordWrap: state.documentWordWrap,
+      documentFontSize: state.documentFontSize,
+      documentTabSize: state.documentTabSize,
+      documentSpellCheck: state.documentSpellCheck,
+      documentAutoOpenOnCreate: state.documentAutoOpenOnCreate,
     };
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(subset));
   } catch {
@@ -280,5 +316,14 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setWebSearchDefaultMode: (webSearchDefaultMode) => apply({ webSearchDefaultMode }),
     setSearxngSetupError: (searxngSetupError) => apply({ searxngSetupError }),
     setContextAnchoringEnabled: (contextAnchoringEnabled) => apply({ contextAnchoringEnabled }),
+    setDocumentPanelEnabled: (documentPanelEnabled) => apply({ documentPanelEnabled }),
+    setDocumentAutoSaveEnabled: (documentAutoSaveEnabled) => apply({ documentAutoSaveEnabled }),
+    setDocumentAutoSaveDelay: (documentAutoSaveDelay) => apply({ documentAutoSaveDelay }),
+    setDocumentDefaultType: (documentDefaultType) => apply({ documentDefaultType }),
+    setDocumentWordWrap: (documentWordWrap) => apply({ documentWordWrap }),
+    setDocumentFontSize: (documentFontSize) => apply({ documentFontSize }),
+    setDocumentTabSize: (documentTabSize) => apply({ documentTabSize }),
+    setDocumentSpellCheck: (documentSpellCheck) => apply({ documentSpellCheck }),
+    setDocumentAutoOpenOnCreate: (documentAutoOpenOnCreate) => apply({ documentAutoOpenOnCreate }),
   };
 });
