@@ -703,12 +703,14 @@ function App() {
           onCollapsedChange={setRecentChatsCollapsed}
           hidden={!isChatMode || activeNav === "projects"}
         />
-        <Suspense fallback={null}>
-          {activeNav === "memory" && <MemoryPage />}
-          {activeNav === "projects" && <ProjectsPage />}
-          {activeNav === "research" && <ResearchPage />}
-          {activeNav === "settings" && <SettingsPage />}
-        </Suspense>
+        <div className="flex min-w-0">
+          <Suspense fallback={null}>
+            {activeNav === "memory" && <MemoryPage />}
+            {activeNav === "projects" && <ProjectsPage />}
+            {activeNav === "research" && <ResearchPage />}
+            {activeNav === "settings" && <SettingsPage />}
+          </Suspense>
+        </div>
         {isChatMode && activeNav !== "projects" && hydrationState === "loading" && <ChatHydrationSkeleton />}
         {isChatMode && activeNav !== "projects" && hydrationState === "ready" && (
           <ChatPanel

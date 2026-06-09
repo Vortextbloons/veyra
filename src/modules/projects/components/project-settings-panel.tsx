@@ -4,6 +4,7 @@ import type { ProjectRecord, ProjectSettings } from "@/modules/projects/project-
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { MemoryMode } from "@/lib/memory-types";
+import { Toggle } from "@/components/toggle";
 
 export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
   const updateProject = useProjectStore((s) => s.updateProject);
@@ -26,7 +27,7 @@ export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-4">
       <h3 className="text-[12.5px] font-medium text-[var(--color-text)]">Project Settings</h3>
       <p className="text-[10.5px] text-[var(--color-text-dim)]">
         These override global defaults when this project is active. Leave blank to use global settings.
@@ -166,7 +167,7 @@ export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
 
 function SettingGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-3">
+    <div className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-3">
       <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
         {label}
       </h4>
@@ -194,19 +195,7 @@ function ToggleRow({
           <span className="ml-2 text-[10px] text-[var(--color-text-dim)]">{globalLabel}</span>
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => onChange(!value)}
-        className={`relative h-5 w-9 rounded-full transition-colors ${
-          value ? "bg-[var(--color-accent)]" : "bg-white/10"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 size-4 rounded-full bg-white transition-transform ${
-            value ? "left-[18px]" : "left-0.5"
-          }`}
-        />
-      </button>
+      <Toggle on={value ?? false} onChange={onChange} />
     </div>
   );
 }

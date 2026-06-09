@@ -65,21 +65,25 @@ body {
   box-sizing: border-box;
 }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  color: inherit;
+@layer base {
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    color: inherit;
+  }
 }
 
-input,
-textarea {
-  font-family: inherit;
-  color: inherit;
-  background: transparent;
-  border: 0;
-  outline: 0;
+@layer base {
+  input,
+  textarea {
+    font-family: inherit;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    outline: 0;
+  }
 }
 
 ::-webkit-scrollbar {

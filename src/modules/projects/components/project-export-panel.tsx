@@ -45,10 +45,10 @@ export function ProjectExportPanel({ project }: { project: ProjectRecord }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="w-full space-y-3">
       <h3 className="text-[12.5px] font-medium text-[var(--color-text)]">Export / Backup</h3>
 
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+      <div className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
         <div className="flex items-start gap-3">
           <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--color-accent-soft)]">
             <FileJson className="size-4 text-[var(--color-accent)]" />

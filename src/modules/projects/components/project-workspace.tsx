@@ -35,18 +35,18 @@ export function ProjectWorkspace({ project }: { project: ProjectRecord }) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full min-w-0 flex-col">
       {/* Project header */}
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
+      <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3">
         <div className="flex items-center gap-3">
-          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--color-accent-soft)]">
-            <Folder className="size-5 text-[var(--color-accent)]" />
+          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-accent-soft)]">
+            <Folder className="size-4 text-[var(--color-accent)]" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-[16px] font-semibold text-[var(--color-text)]">
+            <h1 className="text-[14px] font-semibold text-[var(--color-text)]">
               {project.name}
             </h1>
-            <p className="text-[12px] text-[var(--color-text-dim)]">
+            <p className="text-[11px] text-[var(--color-text-dim)]">
               {PROJECT_KIND_LABELS[project.kind]}
               {project.description ? ` · ${project.description}` : ""}
             </p>
@@ -54,13 +54,13 @@ export function ProjectWorkspace({ project }: { project: ProjectRecord }) {
         </div>
 
         {/* Tabs */}
-        <div className="mt-4 flex gap-1">
+        <div className="mt-2.5 flex gap-1">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-medium transition-colors ${
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                 activeTab === tab.id
                   ? "bg-[var(--color-accent-soft)] text-white"
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]"
@@ -74,7 +74,7 @@ export function ProjectWorkspace({ project }: { project: ProjectRecord }) {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {activeTab === "overview" && <OverviewTab project={project} />}
         {activeTab === "chats" && <ChatsTab project={project} />}
         {activeTab === "documents" && <DocumentsTab project={project} />}
@@ -100,9 +100,9 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
       : "—";
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="flex h-full w-full flex-col gap-3 p-4">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid w-full grid-cols-4 gap-3">
         <StatCard label="Chats" value={projectChats.length} />
         <StatCard label="Documents" value={projectDocs.length} />
         <StatCard label="Memory" value="—" />
@@ -110,7 +110,7 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
       </div>
 
       {/* Quick info */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid w-full grid-cols-2 gap-4">
         <InfoCard title="Project type" value={PROJECT_KIND_LABELS[project.kind]} />
         <InfoCard title="Status" value={project.status} />
         <InfoCard
@@ -123,12 +123,14 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
         />
       </div>
 
-      {/* Recent chats */}
-      {projectChats.length > 0 && (
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-          <h3 className="mb-3 text-[12.5px] font-medium text-[var(--color-text)]">Recent Chats</h3>
-          <div className="space-y-1">
-            {projectChats.slice(0, 5).map((chat) => (
+      {/* Recent chats — fills remaining space */}
+      <div className="flex w-full flex-1 flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+        <h3 className="mb-3 text-[12.5px] font-medium text-[var(--color-text)]">Recent Chats</h3>
+        {projectChats.length === 0 ? (
+          <p className="text-center text-[12px] text-[var(--color-text-dim)]">No chats yet</p>
+        ) : (
+          <div className="w-full flex-1 space-y-1">
+            {projectChats.map((chat) => (
               <div key={chat.id} className="flex items-center gap-2 rounded-md px-2 py-1.5">
                 <MessageSquare className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
                 <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text)]">
@@ -140,8 +142,8 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -165,8 +167,8 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="flex h-full w-full flex-col p-4">
+      <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[13px] font-medium text-[var(--color-text)]">
           Project Chats ({projectChats.length})
         </h3>
@@ -188,7 +190,7 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
           action={{ label: "New Chat", onClick: handleNewChat }}
         />
       ) : (
-        <div className="space-y-1">
+        <div className="w-full flex-1 space-y-1">
           {projectChats.map((chat) => (
             <button
               key={chat.id}
@@ -222,8 +224,8 @@ function DocumentsTab({ project }: { project: ProjectRecord }) {
   const projectDocs = documents.filter((d) => d.projectId === project.id);
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="flex h-full w-full flex-col p-4">
+      <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[13px] font-medium text-[var(--color-text)]">
           Project Documents ({projectDocs.length})
         </h3>
@@ -236,7 +238,7 @@ function DocumentsTab({ project }: { project: ProjectRecord }) {
           description="Documents created in this project's chats will appear here."
         />
       ) : (
-        <div className="space-y-1">
+        <div className="w-full flex-1 space-y-1">
           {projectDocs.map((doc) => (
             <div
               key={doc.id}
@@ -267,10 +269,10 @@ function MemoryTab({ project }: { project: ProjectRecord }) {
   const memoryMode = project.settings?.memoryMode ?? "global default";
 
   return (
-    <div className="p-6">
-      <h3 className="mb-4 text-[13px] font-medium text-[var(--color-text)]">Project Memory</h3>
+    <div className="flex h-full w-full flex-col p-4">
+      <h3 className="mb-3 text-[13px] font-medium text-[var(--color-text)]">Project Memory</h3>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid w-full grid-cols-2 gap-3">
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
           <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
             Status
@@ -314,8 +316,8 @@ function InstructionsTab({ project }: { project: ProjectRecord }) {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="flex h-full w-full flex-col p-4">
+      <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[13px] font-medium text-[var(--color-text)]">System Prompt</h3>
         {!editing && (
           <button
@@ -338,7 +340,7 @@ function InstructionsTab({ project }: { project: ProjectRecord }) {
       </p>
 
       {editing ? (
-        <div>
+        <div className="w-full">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -366,13 +368,13 @@ function InstructionsTab({ project }: { project: ProjectRecord }) {
           </div>
         </div>
       ) : project.systemPrompt ? (
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+        <div className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
           <pre className="whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--color-text)]">
             {project.systemPrompt}
           </pre>
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-[var(--color-border)] p-8 text-center">
+        <div className="w-full rounded-xl border border-dashed border-[var(--color-border)] p-8 text-center">
           <BookOpen className="mx-auto mb-2 size-8 text-[var(--color-text-dim)]" />
           <p className="text-[13px] text-[var(--color-text-dim)]">No system prompt set</p>
           <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">
@@ -386,7 +388,7 @@ function InstructionsTab({ project }: { project: ProjectRecord }) {
 
 function SettingsTab({ project }: { project: ProjectRecord }) {
   return (
-    <div className="space-y-6 p-6">
+    <div className="flex h-full w-full flex-col gap-4 p-4">
       <ProjectSettingsPanel project={project} />
       <ProjectExportPanel project={project} />
     </div>
@@ -439,7 +441,7 @@ function EmptyState({
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-[var(--color-border)] p-8 text-center">
+    <div className="w-full rounded-xl border border-dashed border-[var(--color-border)] p-8 text-center">
       <div className="mx-auto mb-2 text-[var(--color-text-dim)]">{icon}</div>
       <p className="text-[13px] font-medium text-[var(--color-text)]">{title}</p>
       <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">{description}</p>

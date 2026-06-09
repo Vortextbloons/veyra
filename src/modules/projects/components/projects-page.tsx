@@ -73,7 +73,7 @@ export function ProjectsPage() {
   const selectedProject = projects.find((p) => p.id === activeProjectId) ?? null;
 
   return (
-    <div className="flex h-full min-w-0">
+    <div className="flex h-full w-full min-w-0 flex-1">
       {/* Left: project list sidebar */}
       <div className="flex w-[260px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         {/* Header */}
