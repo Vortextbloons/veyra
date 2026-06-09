@@ -703,7 +703,7 @@ function App() {
           onCollapsedChange={setRecentChatsCollapsed}
           hidden={!isChatMode || activeNav === "projects"}
         />
-        <div className="flex min-w-0">
+        <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
           <Suspense fallback={null}>
             {activeNav === "memory" && <MemoryPage />}
             {activeNav === "projects" && <ProjectsPage />}

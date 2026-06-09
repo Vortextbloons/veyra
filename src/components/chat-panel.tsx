@@ -24,7 +24,7 @@ function chatLayoutClasses(sidebarsCollapsed: number) {
   const wide = sidebarsCollapsed >= 1;
   const widest = sidebarsCollapsed >= 2;
   return {
-    messagesPx: widest ? "pl-3 pr-4" : wide ? "pl-4 pr-6" : "pl-5 pr-8",
+    messagesPx: widest ? "px-3" : wide ? "px-4" : "px-5",
     messageText: widest ? "text-[14.5px]" : wide ? "text-[14px]" : "text-[13px]",
     userMaxW: widest ? "max-w-[92%]" : wide ? "max-w-[88%]" : "max-w-[85%]",
     composerText: widest ? "text-[15px]" : wide ? "text-[14.5px]" : "text-[14px]",
@@ -145,7 +145,7 @@ export function ChatPanel({
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] pl-4 pr-5">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
         <div className="flex min-w-0 items-center gap-2">
           <ProviderSelector
             value={selectedProvider}
@@ -210,7 +210,7 @@ export function ChatPanel({
         onStartServer={() => onProviderStartServer?.()}
       />
 
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--color-border)] pl-4 pr-5">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4">
         <h1 className="text-[14px] font-medium tracking-tight">{title}</h1>
         <div className="flex items-center gap-1">
           <button
@@ -253,7 +253,7 @@ export function ChatPanel({
             onDeleteSession={(id) => onAgentSessionDelete?.(id)}
           />
         ) : messages.length === 0 ? (
-          <div className="relative z-10 flex flex-1 items-start px-6 pt-12">
+          <div className="relative z-10 flex flex-1 items-center justify-center px-6">
             <EmptyChat />
           </div>
         ) : (
@@ -316,26 +316,28 @@ function EmptyChat() {
     "Brainstorm ideas for a project",
   ];
   return (
-    <div className="w-full">
-      <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500/25 to-violet-500/20 text-indigo-300 ring-1 ring-inset ring-indigo-400/20">
-        <Sparkles className="size-6" />
-      </div>
-      <h2 className="text-[18px] font-semibold tracking-tight text-white">
-        Start a conversation
-      </h2>
-      <p className="mt-1.5 text-[12.5px] text-[var(--color-text-dim)]">
-        Ask anything — the model will respond here.
-      </p>
-      <div className="mt-6 grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
-        {suggestions.map((s) => (
-          <button
-            key={s}
-            type="button"
-            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2.5 text-left text-[12px] leading-snug text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
-          >
-            {s}
-          </button>
-        ))}
+    <div className="grid place-items-center text-center">
+      <div>
+        <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500/25 to-violet-500/20 text-indigo-300 ring-1 ring-inset ring-indigo-400/20">
+          <Sparkles className="size-6" />
+        </div>
+        <h2 className="text-[18px] font-semibold tracking-tight text-white">
+          Start a conversation
+        </h2>
+        <p className="mt-1.5 text-[12.5px] text-[var(--color-text-dim)]">
+          Ask anything — the model will respond here.
+        </p>
+        <div className="mt-6 grid w-full max-w-md grid-cols-2 gap-2">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2.5 text-left text-[12px] leading-snug text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
