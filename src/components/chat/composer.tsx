@@ -17,7 +17,7 @@ import {
 import { Toggle } from "@/components/toggle";
 import { ModeSelector } from "@/components/chat/mode-selector";
 
-export type MessageAttachmentsPreviewProps = {
+type MessageAttachmentsPreviewProps = {
   attachments: MessageAttachment[];
   onRemove?: (id: string) => void;
 };
@@ -68,7 +68,7 @@ export function IconButton({
   );
 }
 
-export type ComposerProps = {
+type ComposerProps = {
   memory: boolean;
   onMemoryChange: (on: boolean) => void;
   onTriggerMemoryExtraction?: () => void;

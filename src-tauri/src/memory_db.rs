@@ -363,8 +363,21 @@ impl crate::db_utils::DbConnectionState for MemoryDbState {
 }
 
 fn run_migrations(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS _schema_migrations (
+            module TEXT PRIMARY KEY,
+            version INTEGER NOT NULL,
+            applied_at TEXT NOT NULL
+        );",
+    )
+    .map_err(|e| format!("create _schema_migrations table failed: {}", e))?;
+
     let schema_version: i64 = conn
-        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .query_row(
+            "SELECT version FROM _schema_migrations WHERE module = 'memory'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
     if schema_version < SCHEMA_VERSION {
@@ -399,8 +412,12 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
                 .map_err(|e| format!("fts rebuild after tag migration failed: {}", e))?;
         }
 
-        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))
-            .map_err(|e| format!("set schema version failed: {}", e))?;
+        conn.execute(
+            "INSERT INTO _schema_migrations (module, version, applied_at) VALUES ('memory', ?1, datetime('now'))
+             ON CONFLICT(module) DO UPDATE SET version = excluded.version, applied_at = excluded.applied_at",
+            [SCHEMA_VERSION],
+        )
+        .map_err(|e| format!("set schema version failed: {}", e))?;
     }
 
     // Seed a default folder so the first memory node has a valid FK target.

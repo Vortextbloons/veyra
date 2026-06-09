@@ -20,17 +20,6 @@ export function providerSupportsStartServer(providerId: string): boolean {
   return Boolean(getProviderAdapter(providerId)?.startServer);
 }
 
-export async function prepareProviderModel(
-  providerId: string,
-  modelId: string,
-  options?: import("@/lib/providers/types").ProviderPrepareModelOptions,
-): Promise<void> {
-  const adapter = getProviderAdapter(providerId);
-  if (adapter?.prepareModel) {
-    await adapter.prepareModel(modelId, options);
-  }
-}
-
 export async function unloadAllProviderModels(providerId: string): Promise<void> {
   const adapter = getProviderAdapter(providerId);
   if (adapter?.unloadAllModels) {

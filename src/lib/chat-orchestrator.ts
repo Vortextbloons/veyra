@@ -39,7 +39,7 @@ export interface SendChatCompleteContext {
   webSearchSources?: WebSearchSource[];
 }
 
-export type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
+type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
   providerId: string;
   messages: ChatMessage[];
   /** When false, no memory retrieval, no pack injection, no extraction. */

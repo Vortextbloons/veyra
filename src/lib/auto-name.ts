@@ -38,7 +38,7 @@ function fallbackTitleFromExchange(userMessage: string, assistantMessage: string
   return words.join(" ").slice(0, 80);
 }
 
-export function cleanGeneratedTitle(message: string, reasoning: string): string {
+function cleanGeneratedTitle(message: string, reasoning: string): string {
   const messageText = stripThinkBlocks(message.trim());
   const reasoningText = stripThinkBlocks(reasoning.trim());
 
@@ -90,7 +90,7 @@ export function resolveAutoNameModel(chatModel: string): {
   return { chatModel: chat, titleModel: configured, usesAlternateModel: true };
 }
 
-export async function generateConversationTitle(options: {
+async function generateConversationTitle(options: {
   model: string;
   userMessage: string;
   assistantMessage: string;

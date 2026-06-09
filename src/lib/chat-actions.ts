@@ -5,7 +5,7 @@ import { getAssistantVisibleText } from "@/lib/assistant-text";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 
-export type ChatSendParams = {
+type ChatSendParams = {
   conversationId: string;
   userMessage: ChatMessage;
   assistantMessage: ChatMessage;

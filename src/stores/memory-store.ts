@@ -6,7 +6,6 @@
 import { create } from "zustand";
 import type {
   CreateMemoryNode,
-  MemoryFile,
   MemoryFolder,
   MemoryNode,
   UpdateMemoryNode,
@@ -15,7 +14,6 @@ import {
   archiveMemoryNode as ipcArchive,
   createMemoryNode as ipcCreate,
   deleteMemoryNode as ipcDelete,
-  listMemoryFiles as ipcListFiles,
   listMemoryFolders as ipcListFolders,
   listMemoryNodes as ipcListNodes,
   pinMemoryNode as ipcPin,
@@ -25,14 +23,10 @@ import type { MemoryView } from "@/components/memory/memory-ui-context";
 
 const pendingCreateIds = new Set<string>();
 
-export type { MemoryView };
-
-export type MemoryStore = {
+type MemoryStore = {
   folders: MemoryFolder[];
-  files: MemoryFile[];
   nodes: MemoryNode[];
   isLoading: boolean;
-  error: string | null;
 
   hydrateMemory: () => Promise<void>;
 
@@ -65,25 +59,19 @@ function matchesQuery(node: MemoryNode, q: string): boolean {
 
 export const useMemoryStore = create<MemoryStore>((set, get) => ({
   folders: [],
-  files: [],
   nodes: [],
   isLoading: false,
-  error: null,
 
   hydrateMemory: async () => {
-    set({ isLoading: true, error: null });
+    set({ isLoading: true });
     try {
-      const [folders, files, nodes] = await Promise.all([
+      const [folders, nodes] = await Promise.all([
         ipcListFolders(),
-        ipcListFiles(),
         ipcListNodes({}),
       ]);
-      set({ folders, files, nodes, isLoading: false });
-    } catch (err) {
-      set({
-        error: err instanceof Error ? err.message : String(err),
-        isLoading: false,
-      });
+      set({ folders, nodes, isLoading: false });
+    } catch {
+      set({ isLoading: false });
     }
   },
 
@@ -95,7 +83,6 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
       const node = await ipcCreate({ ...input, id });
       set((state) => ({ nodes: [node, ...state.nodes] }));
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
       throw err;
     } finally {
       pendingCreateIds.delete(id);
@@ -107,7 +94,6 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
       const node = await ipcUpdate(input);
       set((state) => ({ nodes: replaceNode(state.nodes, node) }));
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
       throw err;
     }
   },
@@ -120,8 +106,8 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
           n.id === id ? { ...n, status: "archived" } : n,
         ),
       }));
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+    } catch {
+      // ignore
     }
   },
 
@@ -131,8 +117,8 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
       set((state) => ({
         nodes: state.nodes.filter((n) => n.id !== id),
       }));
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+    } catch {
+      // ignore
     }
   },
 
@@ -144,8 +130,8 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
           n.id === id ? { ...n, isPinned: pinned } : n,
         ),
       }));
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+    } catch {
+      // ignore
     }
   },
 

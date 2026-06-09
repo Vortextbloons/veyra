@@ -2,7 +2,7 @@ import type { ChatMessage } from "@/lib/chat-types";
 import { ToolCallIndicator } from "@/components/chat/tool-call-indicator";
 import { WebSearchToolCallBlock } from "@/components/chat/web-search-block";
 
-export type ToolCallListProps = {
+type ToolCallListProps = {
   message: ChatMessage;
 };
 

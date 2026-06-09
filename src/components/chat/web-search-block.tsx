@@ -4,7 +4,7 @@ import type { ToolCallState, WebSearchState } from "@/lib/chat-types";
 import { ToolCallShell } from "@/components/chat/tool-call-shell";
 import { toolCallPhaseLabel } from "@/lib/tool-call-ui";
 
-export type WebSearchToolCallBlockProps = {
+type WebSearchToolCallBlockProps = {
   toolState: ToolCallState;
   state: WebSearchState;
 };

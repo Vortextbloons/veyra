@@ -3,21 +3,6 @@
 import type { DocumentRecord } from "./document-types";
 
 /**
- * Build a safe filename from a document title.
- * Removes special characters and limits length.
- */
-export function buildExportFilename(doc: DocumentRecord, extension: "md" | "txt"): string {
-  const safeName = doc.title
-    .replace(/[^a-zA-Z0-9\s_-]/g, "") // remove special chars
-    .replace(/\s+/g, "_") // spaces to underscores
-    .slice(0, 60) // limit length
-    .toLowerCase();
-
-  const timestamp = new Date(doc.updatedAt).toISOString().split("T")[0]; // YYYY-MM-DD
-  return `${safeName}_${timestamp}.${extension}`;
-}
-
-/**
  * Format a document status for display.
  */
 export function formatDocumentStatus(status: DocumentRecord["status"]): string {

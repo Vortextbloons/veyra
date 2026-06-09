@@ -171,7 +171,3 @@ export const useConnectivityStore = create<ConnectivityStore>((set, get) => ({
     return null;
   },
 }));
-
-export function useEffectiveConnectivity(): EffectiveConnectivity {
-  return useConnectivityStore((s) => s.effectiveConnectivity);
-}

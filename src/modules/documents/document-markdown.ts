@@ -1,6 +1,6 @@
 // Markdown parsing and section manipulation utilities
 
-export type MarkdownSection = {
+type MarkdownSection = {
   title: string;
   level: number; // 1-6 for h1-h6
   content: string; // content including the heading line
@@ -12,7 +12,7 @@ export type MarkdownSection = {
  * Parse markdown into sections based on headings.
  * Returns an array of sections, each with title, level, content, and line range.
  */
-export function parseMarkdownSections(markdown: string): MarkdownSection[] {
+function parseMarkdownSections(markdown: string): MarkdownSection[] {
   const lines = markdown.split("\n");
   const sections: MarkdownSection[] = [];
   let currentSection: MarkdownSection | null = null;
@@ -54,13 +54,6 @@ export function parseMarkdownSections(markdown: string): MarkdownSection[] {
   }
 
   return sections;
-}
-
-/**
- * Get the outline of a markdown document (heading titles and levels).
- */
-export function getMarkdownOutline(markdown: string): Array<{ title: string; level: number }> {
-  return parseMarkdownSections(markdown).map((s) => ({ title: s.title, level: s.level }));
 }
 
 /**

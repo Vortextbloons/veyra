@@ -45,8 +45,7 @@ export default defineConfig({
           if (
             id.includes("node_modules/lucide-react") ||
             id.includes("node_modules/clsx") ||
-            id.includes("node_modules/tailwind-merge") ||
-            id.includes("node_modules/class-variance-authority")
+            id.includes("node_modules/tailwind-merge")
           ) {
             return "vendor-ui";
           }

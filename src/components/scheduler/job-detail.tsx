@@ -12,7 +12,7 @@ import {
   jobTypeIcon,
 } from "@/components/scheduler/job-row";
 
-export function CopyButton({ text }: { text: string }) {
+function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
@@ -33,7 +33,7 @@ export function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function DetailSection({
+function DetailSection({
   title,
   children,
   defaultOpen = true,
@@ -63,7 +63,7 @@ export function DetailSection({
   );
 }
 
-export function MetaRow({ label, value }: { label: string; value: ReactNode }) {
+function MetaRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-2 py-0.5">
       <span className="shrink-0 text-[10.5px] text-[var(--color-text-dim)]">{label}</span>

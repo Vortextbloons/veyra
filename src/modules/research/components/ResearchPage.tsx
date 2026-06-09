@@ -9,9 +9,13 @@ import {
   ShieldAlert,
   FileText,
   History,
+  Pause,
+  Play,
+  Loader2,
 } from "lucide-react";
 import { useResearchStore } from "../research-store";
 import { ResearchRunCard } from "./ResearchRunCard";
+import { ResearchPlanPanel } from "./ResearchPlanPanel";
 import { ResearchRunTimeline } from "./ResearchRunTimeline";
 import { ResearchSourceList } from "./ResearchSourceList";
 import { EvidenceCardsPanel } from "./EvidenceCardsPanel";
@@ -19,8 +23,11 @@ import { ContradictionsPanel } from "./ContradictionsPanel";
 import { ResearchReportViewer } from "./ResearchReportViewer";
 import { ResearchFollowUpComposer } from "./ResearchFollowUpComposer";
 import { NewResearchDialog } from "./NewResearchDialog";
+import { aiScheduler } from "@/lib/ai-scheduler";
+import { resumeResearchRun } from "../research-runtime";
 
 const TAB_ITEMS = [
+  { id: "plan", label: "Plan", icon: <LayoutList className="size-3.5" /> },
   { id: "timeline", label: "Timeline", icon: <History className="size-3.5" /> },
   { id: "sources", label: "Sources", icon: <BookOpen className="size-3.5" /> },
   { id: "evidence", label: "Evidence", icon: <ScanLine className="size-3.5" /> },
@@ -52,9 +59,12 @@ export function ResearchPage() {
   const setActiveRunId = useResearchStore((s) => s.setActiveRunId);
   const loadRun = useResearchStore((s) => s.loadRun);
   const deleteRun = useResearchStore((s) => s.deleteRun);
+  const pauseActiveResearch = useResearchStore((s) => s.pauseActiveResearch);
+  const isPausing = useResearchStore((s) => s.isPausing);
 
   const [activeTab, setActiveTab] = useState<TabId>("timeline");
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [confirmDeleteRunId, setConfirmDeleteRunId] = useState<string | null>(null);
 
   useEffect(() => {
     void hydrateRuns();
@@ -66,6 +76,12 @@ export function ResearchPage() {
       void loadRun(activeRunId);
     }
   }, [activeRunId, loadRun]);
+
+  useEffect(() => {
+    if (activeRun?.run.plan && !activeRun.run.plan.userApproved && activeRun.run.status === "paused") {
+      setActiveTab("plan");
+    }
+  }, [activeRun?.run.plan, activeRun?.run.status]);
 
 
 
@@ -79,9 +95,8 @@ export function ResearchPage() {
 
   const handleDeleteRun = useCallback(
     async (id: string) => {
-      if (window.confirm("Delete this research run? This cannot be undone.")) {
-        await deleteRun(id);
-      }
+      await deleteRun(id);
+      setConfirmDeleteRunId(null);
     },
     [deleteRun],
   );
@@ -93,6 +108,29 @@ export function ResearchPage() {
   const claims = activeRun?.claims ?? [];
   const contradictions = activeRun?.contradictions ?? [];
   const report = activeRun?.report;
+
+  const handleResume = useCallback(() => {
+    if (!run || !activeRun) return;
+    aiScheduler.enqueueAiJob({
+      type: "research_run",
+      priority: 0,
+      title: `Resume: ${run.question}`,
+      description: run.question.length > 80 ? run.question.slice(0, 80) + "..." : run.question,
+      run: async (signal) => {
+        const pauseController = new AbortController();
+        useResearchStore.getState().setActiveController(pauseController);
+        const combined = AbortSignal.any([signal, pauseController.signal]);
+        await resumeResearchRun(run, combined, () => {});
+      },
+    });
+  }, [run, activeRun]);
+
+  const handlePause = useCallback(() => {
+    pauseActiveResearch();
+  }, [pauseActiveResearch]);
+
+  const isActive = run && ["planning", "searching", "reading", "extracting", "verifying", "synthesizing"].includes(run.status);
+  const canResume = run && (run.status === "paused" || run.status === "failed");
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
@@ -150,7 +188,7 @@ export function ResearchPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => handleDeleteRun(r.id)}
+                      onClick={() => setConfirmDeleteRunId(r.id)}
                       className="absolute right-2 top-2 grid size-5 place-items-center rounded bg-red-500/10 text-red-300 opacity-0 transition-opacity hover:bg-red-500/20 group-hover:opacity-100"
                       title="Delete run"
                     >
@@ -189,6 +227,33 @@ export function ResearchPage() {
                       {DEPTH_LABELS[run.depth]}
                     </span>
                     <RunStatusBadge status={run.status} />
+                    {isActive && (
+                      <button
+                        type="button"
+                        onClick={handlePause}
+                        disabled={isPausing}
+                        className="flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+                        title="Pause research"
+                      >
+                        {isPausing ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          <Pause className="size-3" />
+                        )}
+                        {isPausing ? "Pausing…" : "Pause"}
+                      </button>
+                    )}
+                    {canResume && (
+                      <button
+                        type="button"
+                        onClick={handleResume}
+                        className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
+                        title="Resume research"
+                      >
+                        <Play className="size-3" />
+                        Resume
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -220,7 +285,7 @@ export function ResearchPage() {
               {/* Tabs */}
               <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--color-border)] px-3">
                 {TAB_ITEMS.map((tab) => {
-                  const count = getTabCount(tab.id, sources, evidence, contradictions, report);
+                  const count = getTabCount(tab.id, sources, evidence, contradictions, report, run.plan);
                   return (
                     <button
                       key={tab.id}
@@ -246,6 +311,15 @@ export function ResearchPage() {
 
               {/* Tab content */}
               <div className="flex-1 min-h-0 overflow-y-auto">
+                {activeTab === "plan" && (
+                  run.plan ? (
+                    <ResearchPlanPanel plan={run.plan} runId={run.id} />
+                  ) : (
+                    <div className="flex items-center justify-center py-12 text-[12.5px] text-[var(--color-text-dim)]">
+                      Plan not generated yet.
+                    </div>
+                  )
+                )}
                 {activeTab === "timeline" && <ResearchRunTimeline steps={steps} />}
                 {activeTab === "sources" && <ResearchSourceList sources={sources} />}
                 {activeTab === "evidence" && (
@@ -289,7 +363,49 @@ export function ResearchPage() {
       {showNewDialog && (
         <NewResearchDialog onClose={() => setShowNewDialog(false)} />
       )}
+
+      {confirmDeleteRunId && (
+        <DeleteResearchRunConfirm
+          onCancel={() => setConfirmDeleteRunId(null)}
+          onConfirm={() => void handleDeleteRun(confirmDeleteRunId)}
+        />
+      )}
     </main>
+  );
+}
+
+function DeleteResearchRunConfirm({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl">
+        <h3 className="text-[14px] font-semibold text-white">Delete research run?</h3>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-text-dim)]">
+          This will permanently delete the run, sources, evidence, claims, and report. This cannot be undone.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-lg bg-red-500/15 px-3 py-1.5 text-[12px] font-medium text-red-300 hover:bg-red-500/25"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -366,8 +482,11 @@ function getTabCount(
   evidence: unknown[],
   contradictions: unknown[],
   report: unknown,
+  plan?: unknown,
 ): number {
   switch (tabId) {
+    case "plan":
+      return plan ? 1 : 0;
     case "sources":
       return sources.length;
     case "evidence":

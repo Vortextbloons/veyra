@@ -1,4 +1,4 @@
-export type AiJobPriority = 0 | 1 | 2 | 3 | 4;
+type AiJobPriority = 0 | 1 | 2 | 3 | 4;
 
 export type AiJobType =
   | "user_chat"
@@ -306,14 +306,6 @@ class AiScheduler {
       return true;
     }
     return false;
-  }
-
-  hasUserJobQueued(): boolean {
-    return this.queue.some((j) => j.priority === 0);
-  }
-
-  isBackgroundPaused(): boolean {
-    return this.pausedBackground;
   }
 }
 

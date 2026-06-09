@@ -10,13 +10,9 @@ export type MemoryView =
   | "archived";
 
 type MemoryUiContextValue = {
-  selectedFolderId: string | null;
-  selectedFileId: string | null;
   selectedNodeId: string | null;
   activeView: MemoryView;
   query: string;
-  selectFolder: (id: string | null) => void;
-  selectFile: (id: string | null) => void;
   selectNode: (id: string | null) => void;
   setQuery: (query: string) => void;
   setActiveView: (view: MemoryView) => void;
@@ -25,26 +21,20 @@ type MemoryUiContextValue = {
 const MemoryUiContext = createContext<MemoryUiContextValue | null>(null);
 
 export function MemoryUiProvider({ children }: { children: ReactNode }) {
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<MemoryView>("all");
   const [query, setQuery] = useState("");
 
   const value = useMemo<MemoryUiContextValue>(
     () => ({
-      selectedFolderId,
-      selectedFileId,
       selectedNodeId,
       activeView,
       query,
-      selectFolder: setSelectedFolderId,
-      selectFile: setSelectedFileId,
       selectNode: setSelectedNodeId,
       setQuery,
       setActiveView,
     }),
-    [selectedFolderId, selectedFileId, selectedNodeId, activeView, query],
+    [selectedNodeId, activeView, query],
   );
 
   return <MemoryUiContext.Provider value={value}>{children}</MemoryUiContext.Provider>;

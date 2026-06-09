@@ -1,7 +1,7 @@
 /** Serializes all LM Studio HTTP work so only one request runs at a time. */
 let chain: Promise<void> = Promise.resolve();
 
-const DEFAULT_LM_STUDIO_TASK_TIMEOUT_MS = 120_000;
+const DEFAULT_LM_STUDIO_TASK_TIMEOUT_MS = 300_000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;

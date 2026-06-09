@@ -102,16 +102,6 @@ export const PROJECT_KIND_LABELS: Record<ProjectKind, string> = {
   general: "General",
 };
 
-export const PROJECT_KIND_ICONS: Record<ProjectKind, string> = {
-  app: "layout-grid",
-  class: "graduation-cap",
-  client: "briefcase",
-  codebase: "code-2",
-  creative: "palette",
-  research: "flask-conical",
-  general: "folder",
-};
-
 export const PROJECT_COLORS = [
   "indigo",
   "violet",
@@ -125,5 +115,3 @@ export const PROJECT_COLORS = [
   "pink",
   "slate",
 ] as const;
-
-export type ProjectColor = (typeof PROJECT_COLORS)[number];

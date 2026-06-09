@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { ModelIcon } from "@/components/model-icon";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
-export type ModelDropdownOption = {
+type ModelDropdownOption = {
   id: string;
   name: string;
   contextWindow?: number;

@@ -1,7 +1,7 @@
 // Memory retrieval service.
 //
 // This file is the ONLY place in the frontend that decides whether memory
-// participates in a given turn. The orchestrator imports `buildMemoryPack`
+// participates in a given turn. The orchestrator imports `buildMemoryPackWithInfo`
 // from here and never inlines the off/mode check.
 
 import type { ChatMessage } from "@/lib/chat-types";
@@ -57,7 +57,7 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-export interface BuildMemoryPackArgs {
+interface BuildMemoryPackArgs {
   enabled: boolean;
   mode: MemoryMode;
   query: string;
@@ -74,7 +74,7 @@ interface ScoredNode {
   matchedTokens: string[];
 }
 
-export interface BuildMemoryResult {
+interface BuildMemoryResult {
   pack: MemoryPack | null;
   info: MemoryRetrievalInfo;
 }
@@ -400,12 +400,6 @@ export async function buildMemoryPackWithInfo(
       },
     };
   }
-}
-
-/** Back-compat: returns only the pack (or null). */
-export async function buildMemoryPack(args: BuildMemoryPackArgs): Promise<MemoryPack | null> {
-  const { pack } = await buildMemoryPackWithInfo(args);
-  return pack;
 }
 
 function isDurableSeedQuery(query: string): boolean {

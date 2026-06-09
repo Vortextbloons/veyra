@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchState } from "@/lib/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 
-export type ConversationHydrationState = "loading" | "ready";
+type ConversationHydrationState = "loading" | "ready";
 
 type StreamingBuffer = {
   conversationId: string;

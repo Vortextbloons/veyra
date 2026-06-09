@@ -47,6 +47,12 @@ type ResearchStore = {
   error: string | null;
   hydrationState: "loading" | "ready";
 
+  // Pause control
+  activeController: AbortController | null;
+  isPausing: boolean;
+  setActiveController: (controller: AbortController | null) => void;
+  pauseActiveResearch: () => void;
+
   // Hydration
   hydrateRuns: () => Promise<void>;
 
@@ -96,6 +102,20 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
   isLoading: false,
   error: null,
   hydrationState: "loading",
+  activeController: null,
+  isPausing: false,
+
+  setActiveController: (controller) => {
+    set({ activeController: controller, isPausing: false });
+  },
+
+  pauseActiveResearch: () => {
+    const controller = get().activeController;
+    if (controller) {
+      set({ isPausing: true });
+      controller.abort("paused");
+    }
+  },
 
   hydrateRuns: async () => {
     if (get().hydrationState === "ready") return;

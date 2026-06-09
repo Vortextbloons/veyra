@@ -11,6 +11,7 @@ export function DocumentVersionList() {
 
   const [expanded, setExpanded] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [confirmRestoreId, setConfirmRestoreId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeDocumentId) {
@@ -19,10 +20,14 @@ export function DocumentVersionList() {
   }, [activeDocumentId, loadVersions]);
 
   const handleRestore = async (versionId: string) => {
-    if (!confirm("Restore this version? Current content will be replaced.")) return;
+    if (confirmRestoreId !== versionId) {
+      setConfirmRestoreId(versionId);
+      return;
+    }
     setRestoringId(versionId);
     try {
       await restoreVersion(versionId);
+      setConfirmRestoreId(null);
     } finally {
       setRestoringId(null);
     }
@@ -89,12 +94,12 @@ export function DocumentVersionList() {
               </div>
               <button
                 type="button"
-                title="Restore this version"
+                title={confirmRestoreId === version.id ? "Click again to restore" : "Restore this version"}
                 onClick={() => handleRestore(version.id)}
                 disabled={restoringId === version.id}
-                className="ml-2 grid size-6 place-items-center rounded text-[var(--color-text-dim)] transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+                className="ml-2 grid min-w-6 place-items-center rounded px-1 text-[var(--color-text-dim)] transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
               >
-                <RotateCcw className="size-3.5" />
+                {confirmRestoreId === version.id ? <span className="text-[10px] font-semibold">Confirm</span> : <RotateCcw className="size-3.5" />}
               </button>
             </div>
           ))}

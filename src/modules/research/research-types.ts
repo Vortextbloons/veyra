@@ -53,6 +53,7 @@ export type ResearchEvidenceType =
 export type ResearchClaimStatus =
   | "extracted"
   | "verified"
+  | "partially_verified"
   | "contradicted"
   | "unverified"
   | "rejected";

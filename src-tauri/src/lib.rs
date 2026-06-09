@@ -157,7 +157,6 @@ pub fn run() {
             searxng_setup::check_searxng_setup,
             searxng_setup::start_searxng_container,
             searxng_setup::stop_searxng_container,
-            lm_studio_setup::lm_studio_server_running,
             lm_studio_setup::start_lm_studio_server,
             document_commands::create_document,
             document_commands::get_document,

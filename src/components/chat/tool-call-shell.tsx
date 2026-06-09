@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { CheckCircle2, ChevronDown, Loader2, X } from "lucide-react";
 import { TOOL_CALL_ACCENT_STYLES, type ToolCallAccent } from "@/lib/tool-call-ui";
 
-export type ToolCallShellProps = {
+type ToolCallShellProps = {
   icon: ReactNode;
   label: string;
   phaseLabel: string;

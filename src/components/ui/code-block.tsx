@@ -1,7 +1,7 @@
 import { useState, useCallback, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 
-export function CodeBlockHeader({
+function CodeBlockHeader({
   language,
   rawCode,
 }: {

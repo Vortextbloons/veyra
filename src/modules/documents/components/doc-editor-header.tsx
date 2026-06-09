@@ -17,6 +17,7 @@ export function DocEditorHeader() {
   const doc = documents.find((d) => d.id === activeDocumentId);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -50,10 +51,13 @@ export function DocEditorHeader() {
 
   const handleDelete = useCallback(() => {
     if (!doc) return;
-    if (window.confirm(`Delete "${doc.title}"?`)) {
+    if (confirmDelete) {
       void deleteDocument(doc.id);
+      setConfirmDelete(false);
+      return;
     }
-  }, [doc, deleteDocument]);
+    setConfirmDelete(true);
+  }, [confirmDelete, doc, deleteDocument]);
 
   const handleSaveToMemories = useCallback(() => {
     if (!doc) return;
@@ -143,11 +147,11 @@ export function DocEditorHeader() {
         </button>
         <button
           type="button"
-          title="Delete document"
+          title={confirmDelete ? "Click again to delete" : "Delete document"}
           onClick={handleDelete}
           className="grid size-7 place-items-center rounded text-[var(--color-text-dim)] transition-colors hover:bg-red-400/10 hover:text-red-300"
         >
-          <Trash2 className="size-3.5" />
+          {confirmDelete ? <span className="text-[10px] font-semibold">Del</span> : <Trash2 className="size-3.5" />}
         </button>
         <button
           type="button"

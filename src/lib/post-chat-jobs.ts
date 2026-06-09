@@ -7,7 +7,7 @@ import { aiScheduler } from "@/lib/ai-scheduler";
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 
-export type PostChatJobOptions = {
+type PostChatJobOptions = {
   conversationId: string;
   chatModel: string;
   providerId: string;
@@ -18,7 +18,7 @@ export type PostChatJobOptions = {
   isFirstExchange?: boolean;
 };
 
-export type ManualMemoryExtractionOptions = {
+type ManualMemoryExtractionOptions = {
   conversationId: string;
   chatModel: string;
   providerId: string;
@@ -27,7 +27,7 @@ export type ManualMemoryExtractionOptions = {
 const MEMORY_BATCH_DELAY_MS = 3 * 60 * 1000;
 const delayedMemoryTimers = new Map<string, number>();
 
-export function resolvePostChatModels(chatModel: string): {
+function resolvePostChatModels(chatModel: string): {
   chatModel: string;
   titleModel: string;
   summaryModel: string;
@@ -41,7 +41,7 @@ export function resolvePostChatModels(chatModel: string): {
   return { chatModel: chat, titleModel, summaryModel, memoryModel };
 }
 
-export function planPostChatWork(options: {
+function planPostChatWork(options: {
   chatModel: string;
   isFirstExchange: boolean;
   conversationId: string;

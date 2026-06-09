@@ -23,25 +23,25 @@ const DEPTH_OPTIONS: {
   {
     value: "quick",
     label: "Quick",
-    description: "1 search round, up to 5 sources",
+    description: "2 search rounds, up to 15 sources",
     icon: <Zap className="size-4" />,
   },
   {
     value: "standard",
     label: "Standard",
-    description: "2 rounds, up to 10 sources, verify",
+    description: "4 rounds, up to 36 sources, verify",
     icon: <Target className="size-4" />,
   },
   {
     value: "deep",
     label: "Deep",
-    description: "3 rounds, up to 20 sources, verify",
+    description: "6 rounds, up to 75 sources, verify + gap analysis",
     icon: <Telescope className="size-4" />,
   },
   {
     value: "exhaustive",
     label: "Exhaustive",
-    description: "4 rounds, up to 30 sources, verify + follow-up",
+    description: "8 rounds, up to 120 sources, full analysis",
     icon: <InfinityIcon className="size-4" />,
   },
 ];
@@ -99,9 +99,10 @@ export function NewResearchDialog({ onClose }: Props) {
             ? run.question.slice(0, 80) + "..."
             : run.question,
         run: async (signal) => {
-          await executeResearchRun(run, signal, () => {
-            // Store is already updated inside executeResearchRun
-          });
+          const pauseController = new AbortController();
+          useResearchStore.getState().setActiveController(pauseController);
+          const combined = AbortSignal.any([signal, pauseController.signal]);
+          await executeResearchRun(run, combined, () => {});
         },
       });
 

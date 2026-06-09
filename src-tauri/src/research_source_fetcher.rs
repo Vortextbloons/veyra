@@ -32,8 +32,44 @@ pub struct FetchedSourceResult {
     pub error: Option<String>,
 }
 
-pub async fn fetch_source_url(url: String) -> Result<FetchedSource, String> {
-    let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?;
+fn is_private_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_multicast()
+                || matches!(v4.octets(), [127, ..])
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || matches!(v6.segments(), [0xfd00..=0xfdff, ..] | [0xfe80..=0xfebf, ..])
+        }
+    }
+}
+
+fn is_blocked_host(host: &str) -> bool {
+    let lower = host.to_lowercase();
+    // Block localhost variants
+    if lower == "localhost" || lower == "127.0.0.1" || lower == "::1" || lower == "0.0.0.0" {
+        return true;
+    }
+    // Block cloud metadata endpoints
+    if lower == "169.254.169.254" || lower.starts_with("metadata.") || lower == "metadata.google.internal" {
+        return true;
+    }
+    // Try to resolve as IP
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_private_ip(&ip);
+    }
+    false
+}
+
+fn validate_url_safety(url: &str) -> Result<url::Url, String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
     match parsed.scheme() {
         "http" | "https" => {}
         other => {
@@ -42,6 +78,17 @@ pub async fn fetch_source_url(url: String) -> Result<FetchedSource, String> {
             ))
         }
     }
+    let host = parsed.host_str().ok_or("URL has no host")?;
+    if is_blocked_host(host) {
+        return Err(format!(
+            "URL points to a private or internal address: {host}. Research fetching is restricted to public internet sources only."
+        ));
+    }
+    Ok(parsed)
+}
+
+pub async fn fetch_source_url(url: String) -> Result<FetchedSource, String> {
+    let parsed = validate_url_safety(&url)?;
 
     let response = HTTP_CLIENT
         .get(&url)

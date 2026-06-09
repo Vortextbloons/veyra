@@ -71,6 +71,17 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
 
   const handleExportToMemory = async () => {
     try {
+      // Ensure memory folders are loaded and find the first available folder
+      const memoryStore = useMemoryStore.getState();
+      if (memoryStore.folders.length === 0) {
+        await memoryStore.hydrateMemory();
+      }
+      const firstFolder = memoryStore.folders[0];
+      if (!firstFolder) {
+        console.error("No memory folders available for export");
+        return;
+      }
+
       const memoryId = crypto.randomUUID();
       const summaryText = `Research report: ${report.title} (${report.wordCount} words, ${report.sourceIds.length} sources)`;
       const contentText =
@@ -80,7 +91,7 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
 
       await createMemoryNode({
         id: memoryId,
-        folderId: "default",
+        folderId: firstFolder.id,
         title: report.title,
         content: contentText,
         summary: summaryText,

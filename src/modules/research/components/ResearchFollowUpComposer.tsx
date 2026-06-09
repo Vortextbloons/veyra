@@ -25,7 +25,7 @@ export function ResearchFollowUpComposer({ previousRun }: Props) {
     try {
       const run = await createRun({
         projectId: previousRun.projectId,
-        question: text,
+        question: `${text}\n\n(Previous research: ${previousRun.question})`,
         depth: previousRun.depth,
         modelUsed: previousRun.modelUsed,
         providerId: previousRun.providerId,
@@ -34,13 +34,14 @@ export function ResearchFollowUpComposer({ previousRun }: Props) {
       aiScheduler.enqueueAiJob({
         type: "research_run",
         priority: 0,
-        title: `Research: ${run.question}`,
+        title: `Follow-up: ${run.question}`,
         description:
           run.question.length > 80 ? run.question.slice(0, 80) + "..." : run.question,
         run: async (signal) => {
-          await executeResearchRun(run, signal, () => {
-            // Store is already updated inside executeResearchRun
-          });
+          const pauseController = new AbortController();
+          useResearchStore.getState().setActiveController(pauseController);
+          const combined = AbortSignal.any([signal, pauseController.signal]);
+          await executeResearchRun(run, combined, () => {});
         },
       });
 

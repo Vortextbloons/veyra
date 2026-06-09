@@ -12,7 +12,7 @@ import { MessageAttachmentsPreview } from "@/components/chat/composer";
 import { ToolCallList } from "@/components/chat/tool-call-list";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
-export type ChatMessageLayout = {
+type ChatMessageLayout = {
   messagesPx: string;
   messageText: string;
   userMaxW: string;
@@ -20,7 +20,7 @@ export type ChatMessageLayout = {
   footerPx: string;
 };
 
-export type MessageBubbleProps = {
+type MessageBubbleProps = {
   message: ChatMessage;
   isStreaming: boolean;
   showReasoning: boolean;
@@ -117,13 +117,13 @@ export const MessageBubble = memo(function MessageBubble({
   );
 });
 
-export type ReasoningBlockProps = {
+type ReasoningBlockProps = {
   content: string;
   isStreaming: boolean;
   messageTextClass: string;
 };
 
-export function ReasoningBlock({
+function ReasoningBlock({
   content,
   isStreaming,
   messageTextClass,
@@ -146,11 +146,11 @@ export function ReasoningBlock({
   );
 }
 
-export type MessagePerformanceBarProps = {
+type MessagePerformanceBarProps = {
   performance: MessagePerformance;
 };
 
-export function MessagePerformanceBar({
+function MessagePerformanceBar({
   performance,
 }: MessagePerformanceBarProps) {
   const items = [
@@ -217,13 +217,13 @@ export function MessagePerformanceBar({
   );
 }
 
-export type MemoryRetrievalBadgeProps = {
+type MemoryRetrievalBadgeProps = {
   memoryPack?: MemoryPack;
   memoryRetrieval?: MemoryRetrievalInfo;
   nodeTitleLookup?: (id: string) => string | undefined;
 };
 
-export function MemoryRetrievalBadge({
+function MemoryRetrievalBadge({
   memoryPack,
   memoryRetrieval,
   nodeTitleLookup,
@@ -260,12 +260,12 @@ export function MemoryRetrievalBadge({
   );
 }
 
-export type MemoryUsedBadgeProps = {
+type MemoryUsedBadgeProps = {
   memoryPack: MemoryPack;
   nodeTitleLookup?: (id: string) => string | undefined;
 };
 
-export function MemoryUsedBadge({
+function MemoryUsedBadge({
   memoryPack,
   nodeTitleLookup,
 }: MemoryUsedBadgeProps) {

@@ -176,7 +176,6 @@ function buildV1ChatBody(options: {
     messages,
     temperature,
     previousResponseId,
-    maxTokens,
     topP,
     repetitionPenalty,
     stopSequences,
@@ -197,9 +196,8 @@ function buildV1ChatBody(options: {
     temperature: temperature ?? DEFAULT_TEMPERATURE,
   };
 
-  if (maxTokens != null && maxTokens > 0) {
-    body.max_tokens = maxTokens;
-  }
+  // NOTE: LM Studio's /api/v1/chat endpoint does not accept `max_tokens`.
+  // Token limits should be managed via the OpenAI-compatible endpoint if needed.
 
   if (topP != null && topP < 1) {
     body.top_p = topP;

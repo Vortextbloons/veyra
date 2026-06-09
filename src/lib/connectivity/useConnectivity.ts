@@ -67,8 +67,3 @@ export function useIsFeatureAvailable(feature: FeatureKey) {
     [feature, effectiveConnectivity, localServiceReady],
   );
 }
-
-export function useEffectiveWebSearchEnabled(perChatEnabled: boolean): boolean {
-  const effectiveConnectivity = useConnectivityStore((s) => s.effectiveConnectivity);
-  return effectiveConnectivity === "online" && perChatEnabled;
-}

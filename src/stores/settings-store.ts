@@ -2,8 +2,6 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ConnectivityPreference } from "@/lib/connectivity/connectivity-types";
 import type { MemoryMode } from "@/lib/memory-types";
-import type { ResearchDepth } from "@/modules/research/research-types";
-
 const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 
 export interface ModelSettings {
@@ -17,7 +15,7 @@ export interface ModelSettings {
   systemPrompt?: string;
 }
 
-export type SettingsStoreState = {
+type SettingsStoreState = {
   activeNav: string;
   recentChatsCollapsed: boolean;
   rightPanelCollapsed: boolean;
@@ -44,7 +42,6 @@ export type SettingsStoreState = {
   summaryModel: string;
   memoryExtractionEnabled: boolean;
   memoryExtractionModel: string;
-  schedulerPanelCollapsed: boolean;
   defaultWebSearchEnabled: boolean;
   webSearchSearxngUrl: string;
   webSearchDefaultMode: "auto" | "always" | "off";
@@ -65,14 +62,9 @@ export type SettingsStoreState = {
   documentSpellCheck: boolean;
   documentAutoOpenOnCreate: boolean;
   connectivityPreference: ConnectivityPreference;
-  researchEnabled: boolean;
-  researchDefaultDepth: ResearchDepth;
-  researchDefaultModel: string;
-  researchMaxTokens: number;
-  researchCitationStyle: "numbered" | "inline";
 };
 
-export type ResolvedModelSettings = {
+type ResolvedModelSettings = {
   temperature: number;
   contextLength: number;
   maxTokens: number;
@@ -83,7 +75,7 @@ export type ResolvedModelSettings = {
   systemPrompt: string;
 };
 
-export type SettingsStore = SettingsStoreState & {
+type SettingsStore = SettingsStoreState & {
   setActiveNav: (id: string) => void;
   setRecentChatsCollapsed: (collapsed: boolean) => void;
   setRightPanelCollapsed: (collapsed: boolean) => void;
@@ -112,7 +104,6 @@ export type SettingsStore = SettingsStoreState & {
   setSummaryModel: (modelId: string) => void;
   setMemoryExtractionEnabled: (enabled: boolean) => void;
   setMemoryExtractionModel: (modelId: string) => void;
-  setSchedulerPanelCollapsed: (collapsed: boolean) => void;
   setDefaultWebSearchEnabled: (enabled: boolean) => void;
   setWebSearchSearxngUrl: (url: string) => void;
   setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
@@ -133,11 +124,6 @@ export type SettingsStore = SettingsStoreState & {
   setDocumentSpellCheck: (enabled: boolean) => void;
   setDocumentAutoOpenOnCreate: (enabled: boolean) => void;
   setConnectivityPreference: (preference: ConnectivityPreference) => void;
-  setResearchEnabled: (enabled: boolean) => void;
-  setResearchDefaultDepth: (depth: ResearchDepth) => void;
-  setResearchDefaultModel: (modelId: string) => void;
-  setResearchMaxTokens: (n: number) => void;
-  setResearchCitationStyle: (style: "numbered" | "inline") => void;
 };
 
 const DEFAULT_STATE: SettingsStoreState = {
@@ -167,7 +153,6 @@ const DEFAULT_STATE: SettingsStoreState = {
   summaryModel: "",
   memoryExtractionEnabled: true,
   memoryExtractionModel: "",
-  schedulerPanelCollapsed: false,
   defaultWebSearchEnabled: false,
   webSearchSearxngUrl: "",
   webSearchDefaultMode: "auto",
@@ -188,11 +173,6 @@ const DEFAULT_STATE: SettingsStoreState = {
   documentSpellCheck: true,
   documentAutoOpenOnCreate: true,
   connectivityPreference: "auto",
-  researchEnabled: true,
-  researchDefaultDepth: "standard",
-  researchDefaultModel: "",
-  researchMaxTokens: 4000,
-  researchCitationStyle: "numbered",
 };
 
 function partializeSettings(state: SettingsStore): SettingsStoreState {
@@ -223,7 +203,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     summaryModel: state.summaryModel,
     memoryExtractionEnabled: state.memoryExtractionEnabled,
     memoryExtractionModel: state.memoryExtractionModel,
-    schedulerPanelCollapsed: state.schedulerPanelCollapsed,
     defaultWebSearchEnabled: state.defaultWebSearchEnabled,
     webSearchSearxngUrl: state.webSearchSearxngUrl,
     webSearchDefaultMode: state.webSearchDefaultMode,
@@ -244,11 +223,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     documentSpellCheck: state.documentSpellCheck,
     documentAutoOpenOnCreate: state.documentAutoOpenOnCreate,
     connectivityPreference: state.connectivityPreference,
-    researchEnabled: state.researchEnabled,
-    researchDefaultDepth: state.researchDefaultDepth,
-    researchDefaultModel: state.researchDefaultModel,
-    researchMaxTokens: state.researchMaxTokens,
-    researchCitationStyle: state.researchCitationStyle,
   };
 }
 
@@ -321,7 +295,6 @@ export const useSettingsStore = create<SettingsStore>()(
       setSummaryModel: (summaryModel) => set({ summaryModel }),
       setMemoryExtractionEnabled: (memoryExtractionEnabled) => set({ memoryExtractionEnabled }),
       setMemoryExtractionModel: (memoryExtractionModel) => set({ memoryExtractionModel }),
-      setSchedulerPanelCollapsed: (schedulerPanelCollapsed) => set({ schedulerPanelCollapsed }),
       setDefaultWebSearchEnabled: (defaultWebSearchEnabled) => set({ defaultWebSearchEnabled }),
       setWebSearchSearxngUrl: (webSearchSearxngUrl) => set({ webSearchSearxngUrl }),
       setWebSearchDefaultMode: (webSearchDefaultMode) => set({ webSearchDefaultMode }),
@@ -342,11 +315,6 @@ export const useSettingsStore = create<SettingsStore>()(
       setDocumentSpellCheck: (documentSpellCheck) => set({ documentSpellCheck }),
       setDocumentAutoOpenOnCreate: (documentAutoOpenOnCreate) => set({ documentAutoOpenOnCreate }),
       setConnectivityPreference: (connectivityPreference) => set({ connectivityPreference }),
-      setResearchEnabled: (researchEnabled) => set({ researchEnabled }),
-      setResearchDefaultDepth: (researchDefaultDepth) => set({ researchDefaultDepth }),
-      setResearchDefaultModel: (researchDefaultModel) => set({ researchDefaultModel }),
-      setResearchMaxTokens: (researchMaxTokens) => set({ researchMaxTokens }),
-      setResearchCitationStyle: (researchCitationStyle) => set({ researchCitationStyle }),
     }),
     {
       name: SETTINGS_STORAGE_KEY,

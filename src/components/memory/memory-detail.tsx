@@ -1,4 +1,5 @@
 import { Edit3, Pin, Archive, Check, X, Trash2, Sparkles } from "lucide-react";
+import { useState } from "react";
 import type { MemoryNode } from "@/lib/memory-types";
 import { useMemoryStore } from "@/stores/memory-store";
 import { useMemoryUi } from "./memory-ui-context";
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export function MemoryDetail({ onEdit }: Props) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { selectedNodeId, selectNode } = useMemoryUi();
   const nodes = useMemoryStore((s) => s.nodes);
   const pinNode = useMemoryStore((s) => s.pinNode);
@@ -53,14 +55,17 @@ export function MemoryDetail({ onEdit }: Props) {
           <IconButton
             title="Delete"
             onClick={() => {
-              if (window.confirm(`Delete "${node.title}"?`)) {
+              if (confirmDeleteId === node.id) {
                 void deleteNode(node.id);
                 selectNode(null);
+                setConfirmDeleteId(null);
+                return;
               }
+              setConfirmDeleteId(node.id);
             }}
             danger
           >
-            <Trash2 className="size-3.5" />
+            {confirmDeleteId === node.id ? <span className="text-[10px] font-semibold">Del</span> : <Trash2 className="size-3.5" />}
           </IconButton>
         </div>
       </div>

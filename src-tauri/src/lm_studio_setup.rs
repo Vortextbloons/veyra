@@ -150,12 +150,6 @@ async fn wait_for_server(base_url: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn lm_studio_server_running(base_url: Option<String>) -> Result<bool, String> {
-    let base = base_url.unwrap_or_else(|| LM_STUDIO_DEFAULT_BASE_URL.to_string());
-    Ok(is_server_responding(base.trim_end_matches('/')).await)
-}
-
-#[tauri::command]
 pub async fn start_lm_studio_server(base_url: Option<String>) -> Result<String, String> {
     let base = base_url
         .filter(|s| !s.trim().is_empty())

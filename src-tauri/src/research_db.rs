@@ -586,43 +586,35 @@ impl crate::db_utils::DbConnectionState for ResearchDbState {
 // ── Migrations ─────────────────────────────────────────────────────────────────
 
 fn run_migrations(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS _schema_migrations (
+            module TEXT PRIMARY KEY,
+            version INTEGER NOT NULL,
+            applied_at TEXT NOT NULL
+        );",
+    )
+    .map_err(|e| format!("create _schema_migrations table failed: {}", e))?;
+
     let schema_version: i64 = conn
-        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .query_row(
+            "SELECT version FROM _schema_migrations WHERE module = 'research'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
 
     if schema_version < SCHEMA_VERSION {
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("research schema migration failed: {}", e))?;
 
-        conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))
-            .map_err(|e| format!("set schema version failed: {}", e))?;
+        conn.execute(
+            "INSERT INTO _schema_migrations (module, version, applied_at) VALUES ('research', ?1, datetime('now'))
+             ON CONFLICT(module) DO UPDATE SET version = excluded.version, applied_at = excluded.applied_at",
+            [SCHEMA_VERSION],
+        )
+        .map_err(|e| format!("set schema version failed: {}", e))?;
     }
 
-    Ok(())
-}
-
-fn add_column_if_missing(
-    conn: &Connection,
-    table: &str,
-    column: &str,
-    definition: &str,
-) -> Result<(), String> {
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info({})", table))
-        .map_err(|e| format!("prepare table_info failed: {}", e))?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| format!("query table_info failed: {}", e))?;
-    for row in rows {
-        if row.map_err(|e| format!("table_info row failed: {}", e))? == column {
-            return Ok(());
-        }
-    }
-    conn.execute(
-        &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition),
-        [],
-    )
-    .map_err(|e| format!("add column {}.{} failed: {}", table, column, e))?;
     Ok(())
 }
 
@@ -1224,15 +1216,6 @@ pub fn list_sources_for_run(conn: &Connection, run_id: String) -> Result<Vec<Res
     Ok(out)
 }
 
-pub fn get_source(conn: &Connection, id: String) -> Result<ResearchSourceRow, String> {
-    conn.query_row(
-        &format!("SELECT {} FROM research_sources WHERE id = ?1", SOURCE_SELECT_COLS),
-        [&id],
-        row_to_source,
-    )
-    .map_err(|e| format!("get_source failed: {}", e))
-}
-
 // ── Evidence ───────────────────────────────────────────────────────────────────
 
 const EVIDENCE_SELECT_COLS: &str = "id, run_id, source_id, step_id, type, content, context, page_number, confidence, tags, created_at";
@@ -1302,23 +1285,6 @@ pub fn list_evidence_for_run(conn: &Connection, run_id: String) -> Result<Vec<Re
     let mut out = Vec::new();
     for r in rows {
         out.push(r.map_err(|e| format!("row error in list_evidence_for_run: {}", e))?);
-    }
-    Ok(out)
-}
-
-pub fn list_evidence_for_source(conn: &Connection, source_id: String) -> Result<Vec<ResearchEvidenceRow>, String> {
-    let mut stmt = conn
-        .prepare(&format!(
-            "SELECT {} FROM research_evidence WHERE source_id = ?1 ORDER BY created_at ASC",
-            EVIDENCE_SELECT_COLS
-        ))
-        .map_err(|e| format!("prepare list_evidence_for_source failed: {}", e))?;
-    let rows = stmt
-        .query_map([&source_id], row_to_evidence)
-        .map_err(|e| format!("query list_evidence_for_source failed: {}", e))?;
-    let mut out = Vec::new();
-    for r in rows {
-        out.push(r.map_err(|e| format!("row error in list_evidence_for_source: {}", e))?);
     }
     Ok(out)
 }

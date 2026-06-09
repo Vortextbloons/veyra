@@ -170,10 +170,6 @@ export async function runAppShutdown(): Promise<void> {
   setShutdownStep("done");
 }
 
-export function isAppShuttingDown(): boolean {
-  return shuttingDown;
-}
-
 async function finishAppExit(): Promise<void> {
   shutdownComplete = true;
   const window = getCurrentWindow();
