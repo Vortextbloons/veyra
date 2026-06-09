@@ -15,6 +15,7 @@ export type ChatSendParams = {
   selectedModel: string;
   memoryEnabled: boolean;
   webSearchEnabled: boolean;
+  projectId?: string;
   signal: AbortSignal;
   onChunk: (chunk: string) => void;
   onReasoningChunk: (chunk: string) => void;
@@ -47,6 +48,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     selectedModel,
     memoryEnabled,
     webSearchEnabled,
+    projectId,
     signal,
     onChunk,
     onReasoningChunk,
@@ -56,7 +58,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
   } = params;
 
   if (memoryEnabled) {
-    void trySaveExplicitMemory(trimmed, { conversationId });
+    void trySaveExplicitMemory(trimmed, { conversationId, projectId });
   }
 
   await prepareUserChatModel(selectedModel, signal, onModelLoadProgress);
@@ -85,7 +87,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     memoryEnabled,
     webSearchEnabled,
     conversationId,
-    projectId: undefined,
+    projectId: projectId ?? undefined,
     onChunk,
     onReasoningChunk,
     onError,

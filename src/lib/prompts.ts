@@ -27,8 +27,28 @@ ${trimmed}
 </veyra_conversation_summary>`;
 }
 
+export function buildProjectContextBlock(options: {
+  name: string;
+  kind?: string;
+  description?: string;
+  systemPrompt?: string;
+}): string {
+  const parts: string[] = [];
+  parts.push(`Name: ${options.name}`);
+  if (options.kind) parts.push(`Kind: ${options.kind}`);
+  if (options.description?.trim()) parts.push(`Description: ${options.description.trim()}`);
+  if (options.systemPrompt?.trim()) parts.push(`Instructions:\n${options.systemPrompt.trim()}`);
+
+  return `<veyra_project>
+Project context. These are the user's project-level instructions.
+
+${parts.join("\n")}
+</veyra_project>`;
+}
+
 export function composeMainSystemPrompt(options: {
   userPrompt?: string;
+  projectPromptBlock?: string;
   memoryBlock?: string;
   summaryBlock?: string;
   toolsBlock?: string;
@@ -38,6 +58,7 @@ export function composeMainSystemPrompt(options: {
   const parts: string[] = [];
   if (options.userPrompt?.trim()) parts.push(options.userPrompt.trim());
   parts.push(VEYRA_CORE_SYSTEM);
+  if (options.projectPromptBlock?.trim()) parts.push(options.projectPromptBlock.trim());
   if (options.contextAnchoringBlock?.trim()) parts.push(options.contextAnchoringBlock.trim());
   if (options.documentInstructionsBlock?.trim()) parts.push(options.documentInstructionsBlock.trim());
   if (options.memoryBlock?.trim()) parts.push(options.memoryBlock.trim());

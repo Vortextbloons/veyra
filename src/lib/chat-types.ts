@@ -74,6 +74,8 @@ export interface Conversation {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  /** Project this conversation belongs to. undefined = no project (global chat). */
+  projectId?: string;
   /** LM Studio `/api/v1/chat` response id for multi-turn continuity */
   lmResponseId?: string;
   /** Rolling summary of older turns (see auto-summarize setting) */

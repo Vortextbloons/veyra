@@ -22,7 +22,7 @@ type ChatStore = {
   _skipNextClear: boolean;
   hydrateConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
-  createConversation: () => string;
+  createConversation: (projectId?: string) => string;
   deleteConversation: (id: string) => void;
   deleteAllConversations: () => void;
   addMessagePair: (
@@ -56,7 +56,7 @@ type ChatStore = {
   setMemoryProcessed: (id: string, processedMessageCount: number) => void;
 };
 
-function newConversation(): Conversation {
+function newConversation(projectId?: string): Conversation {
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
@@ -64,6 +64,7 @@ function newConversation(): Conversation {
     messages: [],
     createdAt: now,
     updatedAt: now,
+    projectId,
   };
 }
 
@@ -91,8 +92,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     await hydratePromise;
   },
   setActiveConversationId: (id) => set({ activeConversationId: id }),
-  createConversation: () => {
-    const conversation = newConversation();
+  createConversation: (projectId?: string) => {
+    const conversation = newConversation(projectId);
     set((state) => {
       const conversations = [conversation, ...state.conversations];
       void saveConversationSnapshot(conversations);

@@ -2,6 +2,7 @@ import type { DocCreateIntent, DocReadIntent, DocUpdateIntent } from "./document
 import { useDocumentStore } from "./document-store";
 import { replaceMarkdownSection, insertAfterSection } from "./document-markdown";
 import { getDocument } from "@/lib/document-storage";
+import { useProjectStore } from "@/modules/projects/project-store";
 
 export type DocumentOperationResult = {
   applied: boolean;
@@ -45,11 +46,13 @@ export async function executeDocCreation(
   conversationId?: string
 ): Promise<DocumentOperationResult> {
   try {
+    const activeProjectId = useProjectStore.getState().activeProjectId ?? undefined;
     const doc = await useDocumentStore.getState().createDocument({
       title: intent.title,
       type: intent.documentType,
       contentMarkdown: intent.contentMarkdown,
       conversationId,
+      projectId: activeProjectId,
     });
 
     await useDocumentStore.getState().createVersionSnapshot({

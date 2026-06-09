@@ -32,6 +32,8 @@ export interface BuildChatContextOptions {
   contextAnchoringBlock?: string | null;
   /** Document creation instructions when the feature is enabled. */
   documentInstructionsBlock?: string | null;
+  /** Project-level instructions and context. */
+  projectPromptBlock?: string | null;
   /** Custom user system prompt prepended before the core prompt. */
   userPrompt?: string | null;
   /** Number of tokens reserved for the model's response. */
@@ -72,9 +74,10 @@ function buildSystemContent(options: BuildChatContextOptions): string {
 
   const contextAnchoringBlock = options.contextAnchoringBlock?.trim() || undefined;
   const documentInstructionsBlock = options.documentInstructionsBlock?.trim() || undefined;
+  const projectPromptBlock = options.projectPromptBlock?.trim() || undefined;
   const userPrompt = options.userPrompt?.trim() || undefined;
 
-  return composeMainSystemPrompt({ userPrompt, memoryBlock, summaryBlock, toolsBlock: webSearchBlock, contextAnchoringBlock, documentInstructionsBlock });
+  return composeMainSystemPrompt({ userPrompt, projectPromptBlock, memoryBlock, summaryBlock, toolsBlock: webSearchBlock, contextAnchoringBlock, documentInstructionsBlock });
 }
 
 /**

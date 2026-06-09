@@ -25,6 +25,7 @@ import { useAgentStore } from "@/modules/agents/agent-store";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { useProviderStore } from "@/stores/provider-store";
+import { useProjectStore } from "@/modules/projects/project-store";
 import { ConnectivityToastHost } from "@/components/connectivity/connectivity-toast";
 import { useIsFeatureAvailable } from "@/lib/connectivity/useConnectivity";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
@@ -42,6 +43,7 @@ const DEFAULT_ZOOM = 1.1;
 
 const MemoryPage = lazy(() => import("@/components/memory/memory-page"));
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
+const ProjectsPage = lazy(() => import("@/modules/projects/components/projects-page").then(m => ({ default: m.ProjectsPage })));
 
 const OPENCODE_AGENT_BASE_TOKENS = 9_000;
 const OPENCODE_AGENT_TOOL_OVERHEAD_TOKENS = 1_200;
@@ -136,6 +138,8 @@ function App() {
   const commitAssistantMessage = useChatStore((state) => state.commitAssistantMessage);
   const setModelLoadProgress = useChatStore((state) => state.setModelLoadProgress);
 
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+
   const providers = useProviderStore((state) => state.providers);
   const selectedProvider = useProviderStore((state) => state.selectedProvider);
   const models = useProviderStore((state) => state.models);
@@ -228,6 +232,7 @@ function App() {
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
       await useChatStore.getState().hydrateConversations();
       void useDocumentStore.getState().hydrateDocuments();
+      void useProjectStore.getState().hydrateProjects();
       markStartup("veyra:hydration-ready");
       logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
       initializeProvider();
@@ -340,15 +345,17 @@ function App() {
     [activeConversation, resolvedContextLength, resolvedReservedOutputTokens],
   );
 
-  const recentChats: RecentChatsItem[] = useMemo(
-    () =>
-      conversations.map((conversation) => ({
-        id: conversation.id,
-        title: conversation.title,
-        meta: new Date(conversation.updatedAt).toLocaleDateString(),
-      })),
-    [conversations],
-  );
+  const recentChats: RecentChatsItem[] = useMemo(() => {
+    const scoped = activeProjectId
+      ? conversations.filter((conversation) => conversation.projectId === activeProjectId)
+      : conversations;
+
+    return scoped.map((conversation) => ({
+      id: conversation.id,
+      title: conversation.title,
+      meta: new Date(conversation.updatedAt).toLocaleDateString(),
+    }));
+  }, [activeProjectId, conversations]);
 
   const handleNewChat = useCallback(() => {
     if (activeChatJobIdRef.current) aiScheduler.cancelAiJob(activeChatJobIdRef.current);
@@ -357,8 +364,8 @@ function App() {
     clearStreamingBuffer();
     setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
     setActiveNav("chat");
-    createConversation();
-  }, [clearStreamingBuffer, createConversation, setActiveNav]);
+    createConversation(activeProjectId ?? undefined);
+  }, [activeProjectId, clearStreamingBuffer, createConversation, setActiveNav]);
 
   const handleDeleteChat = useCallback(
     (id: string) => {
@@ -509,7 +516,7 @@ function App() {
 
       let conversationId = activeConversationId;
       if (!conversationId) {
-        conversationId = createConversation();
+        conversationId = createConversation(activeProjectId ?? undefined);
       }
 
       const userMessage: ChatMessage = {
@@ -561,6 +568,7 @@ function App() {
               selectedModel,
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
+              projectId: activeProjectId ?? undefined,
               signal,
               onChunk: (chunk) => {
                 if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
@@ -620,6 +628,7 @@ function App() {
     },
     [
       activeConversationId,
+      activeProjectId,
       addMessagePair,
       agentMode,
       agentProjectPath,
@@ -689,14 +698,15 @@ function App() {
           onDeleteAll={handleDeleteAllChats}
           collapsed={recentChatsCollapsed}
           onCollapsedChange={setRecentChatsCollapsed}
-          hidden={!isChatMode}
+          hidden={!isChatMode || activeNav === "projects"}
         />
         <Suspense fallback={null}>
           {activeNav === "memory" && <MemoryPage />}
+          {activeNav === "projects" && <ProjectsPage />}
           {activeNav === "settings" && <SettingsPage />}
         </Suspense>
-        {isChatMode && hydrationState === "loading" && <ChatHydrationSkeleton />}
-        {isChatMode && hydrationState === "ready" && (
+        {isChatMode && activeNav !== "projects" && hydrationState === "loading" && <ChatHydrationSkeleton />}
+        {isChatMode && activeNav !== "projects" && hydrationState === "ready" && (
           <ChatPanel
             title={activeConversation?.title}
             messages={visibleMessages}
@@ -736,12 +746,12 @@ function App() {
             onAgentSessionDelete={(id) => void deleteAgentSession(id)}
           />
         )}
-        {isChatMode && <DocEditorPanel />}
+        {isChatMode && activeNav !== "projects" && <DocEditorPanel />}
         <RightPanel
           contextStats={displayContextStats}
           collapsed={rightPanelCollapsed}
           onCollapsedChange={setRightPanelCollapsed}
-          hidden={!isChatMode && chatMode !== "agents"}
+          hidden={!isChatMode && chatMode !== "agents" && activeNav !== "projects"}
           webSearchEnabled={webSearchEnabled}
           onWebSearchChange={setWebSearchEnabled}
           webSearchDisabled={webSearchDisabled}

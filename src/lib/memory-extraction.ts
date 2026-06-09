@@ -139,7 +139,7 @@ async function isLikelyDuplicate(candidate: ExtractedCandidate): Promise<boolean
 
 function toCreateNode(
   candidate: ExtractedCandidate,
-  options: { conversationId: string; sourceMessageIds: string[]; extractionBatchId: string },
+  options: { conversationId: string; projectId?: string; sourceMessageIds: string[]; extractionBatchId: string },
 ): Omit<CreateMemoryNode, "id"> | null {
   const title = candidate.title?.trim();
   const content = candidate.content?.trim();
@@ -156,15 +156,20 @@ function toCreateNode(
     importance >= 4;
 
   const type = validType(candidate.type);
+  const scope = validScope(candidate.scope);
+
+  // If scope is "project" and we have a projectId, use project scope; otherwise use the candidate's scope
+  const effectiveScope = scope === "project" && options.projectId ? "project" : scope;
 
   return {
     folderId: "default",
     conversationId: options.conversationId,
+    projectId: effectiveScope === "project" ? options.projectId : undefined,
     title,
     content,
     summary: candidate.summary?.trim() || content.slice(0, 180),
     type,
-    scope: validScope(candidate.scope),
+    scope: effectiveScope,
     tags: Array.isArray(candidate.tags) ? candidate.tags.filter((tag) => typeof tag === "string").slice(0, 8) : [],
     importance,
     confidence,
@@ -243,6 +248,7 @@ export async function runMemoryExtractionBatch(options: {
     if (options.signal?.aborted) return;
     const node = toCreateNode(candidate, {
       conversationId: options.conversationId,
+      projectId: conversation.projectId,
       sourceMessageIds,
       extractionBatchId,
     });
@@ -257,6 +263,7 @@ export async function runMemoryExtractionBatch(options: {
     await createMemoryNode({
       folderId: "default",
       conversationId: options.conversationId,
+      projectId: conversation.projectId,
       title: `Conversation memory: ${conversation.title}`.slice(0, 80),
       content: summaryFallback,
       summary: summaryFallback.slice(0, 180),

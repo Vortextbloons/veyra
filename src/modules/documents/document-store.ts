@@ -26,6 +26,7 @@ type DocumentStore = {
   documents: DocumentRecord[];
   activeDocumentId: string | null;
   activeConversationId: string | null;
+  activeProjectId: string | null;
   versions: DocumentVersion[];
   isLoading: boolean;
   error: string | null;
@@ -35,6 +36,7 @@ type DocumentStore = {
 
   hydrateDocuments: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
+  setActiveProjectId: (id: string | null) => void;
 
   createDocument: (input: CreateDocumentInput) => Promise<DocumentRecord>;
   updateDocument: (input: UpdateDocumentInput) => Promise<void>;
@@ -74,6 +76,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   documents: [],
   activeDocumentId: null,
   activeConversationId: null,
+  activeProjectId: null,
   versions: [],
   isLoading: false,
   error: null,
@@ -87,7 +90,8 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       set({ isLoading: true, error: null });
       try {
         const conversationId = get().activeConversationId ?? undefined;
-        const documents = await ipcListDocuments(undefined, conversationId);
+        const projectId = get().activeProjectId ?? undefined;
+        const documents = await ipcListDocuments(projectId, conversationId);
         set({ documents, isLoading: false });
       } catch (error) {
         set({ error: String(error), isLoading: false });
@@ -98,6 +102,12 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
 
   setActiveConversationId: (id) => {
     set({ activeConversationId: id });
+    hydrationPromise = null;
+    void get().hydrateDocuments();
+  },
+
+  setActiveProjectId: (id) => {
+    set({ activeProjectId: id });
     hydrationPromise = null;
     void get().hydrateDocuments();
   },
@@ -342,5 +352,16 @@ useChatStore.subscribe((state) => {
   if (cid !== _lastSyncedConversationId) {
     _lastSyncedConversationId = cid;
     useDocumentStore.getState().setActiveConversationId(cid);
+  }
+});
+
+// Sync active project from project store → document store for per-project filtering
+import { useProjectStore } from "@/modules/projects/project-store";
+let _lastSyncedProjectId: string | null | undefined;
+useProjectStore.subscribe((state) => {
+  const pid = state.activeProjectId;
+  if (pid !== _lastSyncedProjectId) {
+    _lastSyncedProjectId = pid;
+    useDocumentStore.getState().setActiveProjectId(pid);
   }
 });

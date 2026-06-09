@@ -38,6 +38,8 @@ mod document_db;
 mod lm_studio_setup;
 mod memory_commands;
 mod memory_db;
+mod project_commands;
+mod project_db;
 mod searxng_setup;
 mod web_search_commands;
 
@@ -164,6 +166,12 @@ pub fn run() {
             document_commands::restore_document_version,
             document_commands::export_document_markdown,
             document_commands::export_document_txt,
+            project_commands::create_project,
+            project_commands::get_project,
+            project_commands::update_project,
+            project_commands::list_projects,
+            project_commands::delete_project,
+            project_commands::export_project_manifest,
         ])
         .setup(|app| {
             let db_state = memory_db::MemoryDbState::new(app.handle().clone());
@@ -173,6 +181,10 @@ pub fn run() {
             let doc_db_state = document_db::DocumentDbState::new(app.handle().clone());
             doc_db_state.spawn_background_init();
             app.manage(doc_db_state);
+
+            let project_db_state = project_db::ProjectDbState::new(app.handle().clone());
+            project_db_state.spawn_background_init();
+            app.manage(project_db_state);
 
             let searxng_state = searxng_setup::SearxngState::new();
             app.manage(searxng_state);

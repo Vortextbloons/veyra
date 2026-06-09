@@ -17,11 +17,12 @@ import {
   buildProviderTools,
 } from "@/lib/tool-registry";
 import { getToolCallUi } from "@/lib/tool-call-ui";
-import { buildContextAnchoringBlock, buildDocumentInstructionsBlock } from "@/lib/prompts";
+import { buildContextAnchoringBlock, buildDocumentInstructionsBlock, buildProjectContextBlock } from "@/lib/prompts";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { useDocumentStore } from "@/modules/documents/document-store";
+import { useProjectStore } from "@/modules/projects/project-store";
 import { executeDocCreation, executeDocRead, executeDocUpdate } from "@/modules/documents/document-runtime";
 import type { DocCreateIntent, DocReadIntent, DocUpdateIntent, DocumentType } from "@/modules/documents/document-types";
 import type { ProviderToolCall } from "@/lib/providers/types";
@@ -151,6 +152,19 @@ export async function sendChatRequest({
   const resolvedStopSequences = options.stopSequences ?? settings.getModelSettings(options.model).stopSequences;
   const resolvedReservedOutputTokens = settings.getModelSettings(options.model).reservedOutputTokens;
   const resolvedUserPrompt = settings.getModelSettings(options.model).systemPrompt || undefined;
+
+  // Build project prompt block when a project is active
+  const projectRecord = projectId
+    ? useProjectStore.getState().projects.find((p) => p.id === projectId)
+    : undefined;
+  const projectPromptBlock = projectRecord?.systemPrompt?.trim()
+    ? buildProjectContextBlock({
+        name: projectRecord.name,
+        kind: projectRecord.kind,
+        description: projectRecord.description,
+        systemPrompt: projectRecord.systemPrompt,
+      })
+    : undefined;
 
   const conversation = conversationId
     ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
@@ -290,6 +304,7 @@ export async function sendChatRequest({
                 conversationSummary: conversation?.conversationSummary,
                 summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
                 documentInstructionsBlock,
+                projectPromptBlock,
                 userPrompt: resolvedUserPrompt,
                 reservedOutputTokens: resolvedReservedOutputTokens,
               },
@@ -392,7 +407,7 @@ export async function sendChatRequest({
                   timestamp: Date.now(),
                 },
               ],
-              { documentInstructionsBlock, userPrompt: resolvedUserPrompt, reservedOutputTokens: resolvedReservedOutputTokens },
+              { documentInstructionsBlock, projectPromptBlock, userPrompt: resolvedUserPrompt, reservedOutputTokens: resolvedReservedOutputTokens },
               resolvedContextLength,
             ),
           });
@@ -566,6 +581,7 @@ export async function sendChatRequest({
                   summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
                   webSearchContextBlock: contextBlock,
                   documentInstructionsBlock,
+                  projectPromptBlock,
                   userPrompt: resolvedUserPrompt,
                   reservedOutputTokens: resolvedReservedOutputTokens,
                 },
@@ -622,6 +638,7 @@ export async function sendChatRequest({
         summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
         contextAnchoringBlock,
         documentInstructionsBlock,
+        projectPromptBlock,
         userPrompt: resolvedUserPrompt,
         reservedOutputTokens: resolvedReservedOutputTokens,
       },
