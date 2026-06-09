@@ -40,6 +40,10 @@ mod memory_commands;
 mod memory_db;
 mod project_commands;
 mod project_db;
+mod research_commands;
+mod research_db;
+mod research_html_parser;
+mod research_source_fetcher;
 mod searxng_setup;
 mod web_search_commands;
 
@@ -172,6 +176,24 @@ pub fn run() {
             project_commands::list_projects,
             project_commands::delete_project,
             project_commands::export_project_manifest,
+            research_commands::create_research_run,
+            research_commands::get_research_run,
+            research_commands::update_research_run,
+            research_commands::list_research_runs,
+            research_commands::delete_research_run,
+            research_commands::create_research_step,
+            research_commands::update_research_step,
+            research_commands::create_research_source,
+            research_commands::update_research_source,
+            research_commands::create_research_evidence,
+            research_commands::create_research_claim,
+            research_commands::update_research_claim,
+            research_commands::create_research_contradiction,
+            research_commands::create_research_report,
+            research_commands::update_research_report,
+            research_commands::fetch_research_source,
+            research_commands::fetch_research_sources_bulk,
+            research_commands::update_research_source_after_fetch,
         ])
         .setup(|app| {
             let db_state = memory_db::MemoryDbState::new(app.handle().clone());
@@ -185,6 +207,10 @@ pub fn run() {
             let project_db_state = project_db::ProjectDbState::new(app.handle().clone());
             project_db_state.spawn_background_init();
             app.manage(project_db_state);
+
+            let research_db_state = research_db::ResearchDbState::new(app.handle().clone());
+            research_db_state.spawn_background_init();
+            app.manage(research_db_state);
 
             let searxng_state = searxng_setup::SearxngState::new();
             app.manage(searxng_state);

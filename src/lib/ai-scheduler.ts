@@ -7,7 +7,8 @@ export type AiJobType =
   | "summarize_chat"
   | "extract_memory"
   | "compress_context"
-  | "maintenance";
+  | "maintenance"
+  | "research_run";
 
 export type AiJobStatus =
   | "queued"
@@ -326,4 +327,5 @@ export const JOB_LABELS: Record<AiJobType, string> = {
   extract_memory: "Extracting memories",
   compress_context: "Compressing context",
   maintenance: "Maintenance",
+  research_run: "Research run",
 };

@@ -30,6 +30,7 @@ import { ConnectivityToastHost } from "@/components/connectivity/connectivity-to
 import { useIsFeatureAvailable } from "@/lib/connectivity/useConnectivity";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
 import { useConnectivityStore } from "@/stores/connectivity-store";
+import { useResearchStore } from "@/modules/research/research-store";
 import {
   invokeCheckSearxngSetup,
   runSearxngAutoSetup,
@@ -44,6 +45,7 @@ const DEFAULT_ZOOM = 1.1;
 const MemoryPage = lazy(() => import("@/components/memory/memory-page"));
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
 const ProjectsPage = lazy(() => import("@/modules/projects/components/projects-page").then(m => ({ default: m.ProjectsPage })));
+const ResearchPage = lazy(() => import("@/modules/research/components/ResearchPage").then(m => ({ default: m.ResearchPage })));
 
 const OPENCODE_AGENT_BASE_TOKENS = 9_000;
 const OPENCODE_AGENT_TOOL_OVERHEAD_TOKENS = 1_200;
@@ -233,6 +235,7 @@ function App() {
       await useChatStore.getState().hydrateConversations();
       void useDocumentStore.getState().hydrateDocuments();
       void useProjectStore.getState().hydrateProjects();
+      void useResearchStore.getState().hydrateRuns();
       markStartup("veyra:hydration-ready");
       logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
       initializeProvider();
@@ -703,6 +706,7 @@ function App() {
         <Suspense fallback={null}>
           {activeNav === "memory" && <MemoryPage />}
           {activeNav === "projects" && <ProjectsPage />}
+          {activeNav === "research" && <ResearchPage />}
           {activeNav === "settings" && <SettingsPage />}
         </Suspense>
         {isChatMode && activeNav !== "projects" && hydrationState === "loading" && <ChatHydrationSkeleton />}
