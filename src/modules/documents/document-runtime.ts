@@ -1,12 +1,44 @@
-import type { DocCreateIntent, DocUpdateIntent } from "./document-types";
+import type { DocCreateIntent, DocReadIntent, DocUpdateIntent } from "./document-types";
 import { useDocumentStore } from "./document-store";
 import { replaceMarkdownSection, insertAfterSection } from "./document-markdown";
+import { getDocument } from "@/lib/document-storage";
 
 export type DocumentOperationResult = {
   applied: boolean;
   sanitizedText: string;
   error?: string;
 };
+
+export type DocumentReadResult = DocumentOperationResult & {
+  documentContent?: string;
+};
+
+export async function executeDocRead(
+  intent: DocReadIntent,
+): Promise<DocumentReadResult> {
+  const store = useDocumentStore.getState();
+  let doc = store.documents.find((d) => d.id === intent.documentId);
+
+  try {
+    if (!doc) {
+      doc = await getDocument(intent.documentId);
+    }
+
+    console.log(`[Document] Read: ${doc.title} (${doc.id})`);
+    return {
+      applied: true,
+      sanitizedText: `Read "${doc.title}" from the document editor.`,
+      documentContent: `# ${doc.title}\n\nDocument id: ${doc.id}\nType: ${doc.type}\nUpdated: ${doc.updatedAt}\n\n${doc.contentMarkdown}`,
+    };
+  } catch (error) {
+    console.error("[Document] Failed to read document:", error);
+    return {
+      applied: false,
+      sanitizedText: `Document read failed: ${error instanceof Error ? error.message : String(error)}`,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
 export async function executeDocCreation(
   intent: DocCreateIntent,
@@ -97,6 +129,25 @@ export async function executeDocUpdate(
           intent.target,
           intent.contentMarkdown
         );
+        break;
+
+      case "replace_text":
+        if (!intent.target) {
+          console.error("[Document] replace_text requires target");
+          return {
+            applied: false,
+            sanitizedText: "Document update failed: replace_text requires target.",
+            error: "replace_text requires target",
+          };
+        }
+        if (!doc.contentMarkdown.includes(intent.target)) {
+          return {
+            applied: false,
+            sanitizedText: `I could not find the selected text in "${doc.title}", so no document changes were applied.`,
+            error: "Selected text not found",
+          };
+        }
+        newContent = doc.contentMarkdown.replace(intent.target, intent.contentMarkdown);
         break;
 
       default:

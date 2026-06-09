@@ -12,6 +12,7 @@ import { ChatSettings } from "./chat-settings";
 import { MemoriesSettings } from "./memories-settings";
 import { ModelsSettings } from "./models-settings";
 import { WebSearchSettings } from "./web-search-settings";
+import { DocumentSettings } from "./document-settings";
 
 type SettingsTab = "general" | "chat" | "memories" | "models" | "tools";
 
@@ -65,7 +66,13 @@ export function SettingsPage() {
           {activeTab === "chat" && <ChatSettings />}
           {activeTab === "memories" && <MemoriesSettings />}
           {activeTab === "models" && <ModelsSettings />}
-          {activeTab === "tools" && <WebSearchSettings />}
+          {activeTab === "tools" && (
+            <>
+              <WebSearchSettings />
+              <div className="my-8 border-t border-[var(--color-border)]" />
+              <DocumentSettings />
+            </>
+          )}
         </div>
       </div>
     </main>

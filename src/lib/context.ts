@@ -141,7 +141,9 @@ export function getContextStats(
   messages: ChatMessage[],
   contextLimit?: number,
   reservedOutputTokens?: number,
-): ContextStats {
+): ContextStats | undefined {
+  if (messages.length === 0) return undefined;
+
   const limit = contextLimit ?? DEFAULT_CONTEXT_LIMIT;
   const reserved = reservedOutputTokens ?? DEFAULT_RESERVED_OUTPUT_TOKENS;
   const systemTokens = estimateTokens(VEYRA_CORE_SYSTEM);

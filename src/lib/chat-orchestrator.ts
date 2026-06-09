@@ -11,6 +11,7 @@ import type { MemoryRetrievalInfo } from "@/lib/memory-types";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import {
   DOC_CREATE_TOOL_NAME,
+  DOC_READ_TOOL_NAME,
   DOC_UPDATE_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   buildProviderTools,
@@ -18,8 +19,8 @@ import {
 import { getToolCallUi } from "@/lib/tool-call-ui";
 import { buildContextAnchoringBlock, buildDocumentInstructionsBlock } from "@/lib/prompts";
 import { useDocumentStore } from "@/modules/documents/document-store";
-import { executeDocCreation, executeDocUpdate } from "@/modules/documents/document-runtime";
-import type { DocCreateIntent, DocUpdateIntent, DocumentType } from "@/modules/documents/document-types";
+import { executeDocCreation, executeDocRead, executeDocUpdate } from "@/modules/documents/document-runtime";
+import type { DocCreateIntent, DocReadIntent, DocUpdateIntent, DocumentType } from "@/modules/documents/document-types";
 import type { ProviderToolCall } from "@/lib/providers/types";
 
 /**
@@ -76,6 +77,12 @@ function docUpdateIntentFromToolCall(call: ProviderToolCall): DocUpdateIntent | 
   const target = stringArg(call.arguments, "target");
   if (!documentId || !mode || !contentMarkdown) return null;
   return { type: "doc.update", documentId, mode, contentMarkdown, target: target || undefined };
+}
+
+function docReadIntentFromToolCall(call: ProviderToolCall): DocReadIntent | null {
+  const documentId = stringArg(call.arguments, "documentId");
+  if (!documentId) return null;
+  return { type: "doc.read", documentId };
 }
 
 const TOOL_RETRY_LIMIT = 2;
@@ -184,8 +191,105 @@ export async function sendChatRequest({
     const toolCalls = result.toolCalls ?? [];
     const webSearchCall = toolCalls.find((call) => call.name === WEB_SEARCH_TOOL_NAME);
     const documentCalls = toolCalls.filter(
-      (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
+      (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME || call.name === DOC_READ_TOOL_NAME,
     );
+
+    const documentReadCalls = documentCalls.filter((call) => call.name === DOC_READ_TOOL_NAME);
+
+    if (documentReadCalls.length > 0 && !isRePrompt) {
+      isRePrompt = true;
+      const documentReadCall = documentReadCalls[0];
+      const chatStore = useChatStore.getState();
+      const documentId = stringArg(documentReadCall.arguments, "documentId");
+
+      chatStore.skipNextBufferClear();
+      registerStreamingToolCall(documentReadCall, "running", documentId);
+
+      toolCompletion = (async () => {
+        try {
+          if (options.signal?.aborted) return;
+
+          const label = "Read Document";
+          const intent = docReadIntentFromToolCall(documentReadCall);
+          if (!intent) {
+            const error = "Invalid doc_read tool arguments.";
+            chatStore.setStreamingToolState({ id: documentReadCall.id, name: documentReadCall.name, label, phase: "error", error });
+            options.onError(error);
+            return;
+          }
+
+          const docResult = await executeDocRead(intent);
+          if (!docResult.applied || !docResult.documentContent) {
+            const error = docResult.error ?? docResult.sanitizedText;
+            chatStore.setStreamingToolState({ id: documentReadCall.id, name: documentReadCall.name, label, phase: "error", error });
+            options.onError(error);
+            return;
+          }
+
+          chatStore.setStreamingToolState({
+            id: documentReadCall.id,
+            name: documentReadCall.name,
+            label,
+            phase: "done",
+            input: intent.documentId,
+            detail: docResult.sanitizedText,
+          });
+
+          const rePromptMessages: ChatMessage[] = [
+            ...messages,
+            { id: crypto.randomUUID(), role: "assistant", content: accumulatedContent, timestamp: Date.now() },
+            {
+              id: crypto.randomUUID(),
+              role: "user",
+              content: `Tool result for ${DOC_READ_TOOL_NAME}(${JSON.stringify({ documentId: intent.documentId })}):\n\n${docResult.documentContent}\n\nAnswer using this document content.`,
+              timestamp: Date.now(),
+            },
+          ];
+
+          if (options.signal?.aborted) return;
+
+          await provider.sendChat({
+            ...options,
+            previousResponseId: undefined,
+            onChunk: options.onChunk,
+            onReasoningChunk: options.onReasoningChunk,
+            temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
+            contextLength: resolvedContextLength,
+            maxTokens: resolvedMaxTokens || undefined,
+            topP: resolvedTopP,
+            repetitionPenalty: resolvedRepetitionPenalty,
+            stopSequences: resolvedStopSequences,
+            tools: [],
+            toolChoice: "none",
+            onComplete: (rePromptResult) => {
+              chatStore.clearStreamingBufferUnlessSkipped();
+              userOnComplete?.(rePromptResult, { memoryPack, memoryRetrieval });
+              useChatStore.getState().resetAfterRePrompt();
+            },
+            messages: buildChatContext(
+              rePromptMessages,
+              {
+                memoryPack: memoryPack ?? null,
+                conversationSummary: conversation?.conversationSummary,
+                summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
+                documentInstructionsBlock,
+                userPrompt: resolvedUserPrompt,
+                reservedOutputTokens: resolvedReservedOutputTokens,
+              },
+              resolvedContextLength,
+            ),
+          });
+        } catch (error) {
+          if (options.signal?.aborted) return;
+          const message = error instanceof Error ? error.message : String(error);
+          chatStore.setStreamingToolState({ id: documentReadCall.id, name: documentReadCall.name, label: "Read Document", phase: "error", input: documentId, error: message });
+          chatStore.clearStreamingBufferUnlessSkipped();
+          userOnComplete?.(result, { memoryPack, memoryRetrieval });
+          useChatStore.getState().resetAfterRePrompt();
+        }
+      })();
+      return;
+    }
 
     if (documentCalls.length > 0 && !isRePrompt) {
       registerStreamingToolCalls(documentCalls, "running", (call) =>

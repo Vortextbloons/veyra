@@ -15,6 +15,7 @@ export function shouldSummarizeConversation(
 ): boolean {
   if (messages.length <= KEEP_RECENT_MESSAGES + 2) return false;
   const stats = getContextStats(messages, contextLimit);
+  if (!stats) return false;
   return stats.percentUsed >= SUMMARIZE_THRESHOLD_PERCENT || stats.droppedMessages > 0;
 }
 

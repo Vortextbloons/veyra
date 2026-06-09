@@ -3,6 +3,7 @@ import { FileText, Search, Wrench } from "lucide-react";
 import type { ToolCallPhase } from "@/lib/chat-types";
 import {
   DOC_CREATE_TOOL_NAME,
+  DOC_READ_TOOL_NAME,
   DOC_UPDATE_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
 } from "@/lib/tool-registry";
@@ -28,6 +29,11 @@ export const TOOL_CALL_UI: Record<string, ToolCallUiMeta> = {
   },
   [DOC_UPDATE_TOOL_NAME]: {
     label: "Update Document",
+    icon: FileText,
+    accent: "emerald",
+  },
+  [DOC_READ_TOOL_NAME]: {
+    label: "Read Document",
     icon: FileText,
     accent: "emerald",
   },

@@ -9,7 +9,7 @@ import {
 import type { RightPanelProps } from "@/lib/chat-types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { ContextPanel, ContextRingCompact } from "@/components/right-panel/context-ring";
-import { DocumentsPanel, DocumentSettingsPanel } from "@/components/right-panel/documents-panel";
+import { DocumentsPanel } from "@/components/right-panel/documents-panel";
 import { CompactToolToggle, ToolsPanel } from "@/components/right-panel/tools-panel";
 
 export function PanelShell({
@@ -132,8 +132,6 @@ export function RightPanel({
           />
 
           <DocumentsPanel />
-
-          <DocumentSettingsPanel />
         </div>
       )}
     </aside>

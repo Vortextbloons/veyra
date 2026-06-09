@@ -110,9 +110,14 @@ export interface DocCreateIntent {
 export interface DocUpdateIntent {
   type: "doc.update";
   documentId: string;
-  mode: "replace_all" | "replace_section" | "insert_after_section";
-  target?: string; // section title for section operations
+  mode: "replace_all" | "replace_section" | "insert_after_section" | "replace_text";
+  target?: string; // section title for section operations, exact text for replace_text
   contentMarkdown: string;
 }
 
-export type DocOperationIntent = DocCreateIntent | DocUpdateIntent;
+export interface DocReadIntent {
+  type: "doc.read";
+  documentId: string;
+}
+
+export type DocOperationIntent = DocCreateIntent | DocUpdateIntent | DocReadIntent;

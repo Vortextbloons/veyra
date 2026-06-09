@@ -2,6 +2,7 @@ import type { ProviderToolDefinition } from "@/lib/providers/types";
 
 export const WEB_SEARCH_TOOL_NAME = "web_search";
 export const DOC_CREATE_TOOL_NAME = "doc_create";
+export const DOC_READ_TOOL_NAME = "doc_read";
 export const DOC_UPDATE_TOOL_NAME = "doc_update";
 
 const DOCUMENT_TYPES = [
@@ -89,11 +90,11 @@ export function buildProviderTools(options: {
             },
             mode: {
               type: "string",
-              enum: ["replace_section", "insert_after_section", "replace_all"],
+              enum: ["replace_section", "insert_after_section", "replace_all", "replace_text"],
             },
             target: {
               type: "string",
-              description: "Section title for replace_section or insert_after_section.",
+              description: "Section title for replace_section or insert_after_section. Exact text to replace for replace_text.",
             },
             contentMarkdown: {
               type: "string",
@@ -101,6 +102,27 @@ export function buildProviderTools(options: {
             },
           },
           required: ["documentId", "mode", "contentMarkdown"],
+          additionalProperties: false,
+        },
+      },
+    });
+
+    tools.push({
+      type: "function",
+      function: {
+        name: DOC_READ_TOOL_NAME,
+        description: options.activeDocumentId
+          ? `Read an existing markdown document so you can answer questions about it or edit it accurately. The active document id is ${options.activeDocumentId}.`
+          : "Read an existing markdown document by id so you can answer questions about it or edit it accurately.",
+        parameters: {
+          type: "object",
+          properties: {
+            documentId: {
+              type: "string",
+              description: "Document id to read. Use the active document id when reading the active document.",
+            },
+          },
+          required: ["documentId"],
           additionalProperties: false,
         },
       },

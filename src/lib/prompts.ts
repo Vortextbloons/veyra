@@ -85,11 +85,13 @@ When updating the active document, use this exact documentId: ${activeDocument.i
     : "";
 
   return `<veyra_documents>
-You can create and edit documents in a side panel using available function tools.
+You can create, read, and edit documents in a side panel using available function tools.
 
 When the user asks you to create a document, spec, README, proposal, essay, report, notes, or other long-form content, call the doc_create tool. Do not print tool JSON in chat.
 
-When the user asks to edit an existing document, call the doc_update tool. Use replace_section or insert_after_section for targeted edits. Use replace_all only when the user explicitly asks for a whole-document rewrite.
+When the user asks to edit an existing document, call the doc_update tool. Use replace_text for inline edits to highlighted text, replace_section or insert_after_section for targeted section edits, and replace_all only when the user explicitly asks for a whole-document rewrite.
+
+When the user asks about the contents of an existing document, or an edit requires knowing the current contents, call the doc_read tool first.
 
 Document types: document, technical_spec, essay, report, proposal, readme, notes, prompt, project_plan, meeting_notes, research_brief, agent_instruction
 ${activeDocumentBlock}
