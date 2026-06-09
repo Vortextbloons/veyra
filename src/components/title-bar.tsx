@@ -8,6 +8,12 @@ const SchedulerPopover = lazy(() =>
   })),
 );
 
+const ConnectivityPopover = lazy(() =>
+  import("@/components/connectivity/connectivity-popover").then((module) => ({
+    default: module.ConnectivityPopover,
+  })),
+);
+
 type TitleBarProps = {
   zoom?: number;
   onZoomIn?: () => void;
@@ -56,6 +62,9 @@ export function TitleBar({
       </div>
 
       <div className="flex flex-1 items-center justify-center gap-2 self-stretch">
+        <Suspense fallback={<span className="size-5" aria-hidden="true" />}>
+          <ConnectivityPopover />
+        </Suspense>
         <Suspense fallback={<span className="size-5" aria-hidden="true" />}>
           <SchedulerPopover />
         </Suspense>

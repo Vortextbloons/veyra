@@ -35,3 +35,4 @@ Desktop.ini
 *.pdb
 *.exe
 !src-tauri/icons/**
+.AGENTS.md

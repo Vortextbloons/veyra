@@ -6,18 +6,21 @@ import {
   Boxes,
   Sliders,
   Wrench,
+  Shield,
 } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
+import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
 import { ChatSettings } from "./chat-settings";
 import { MemoriesSettings } from "./memories-settings";
 import { ModelsSettings } from "./models-settings";
 import { WebSearchSettings } from "./web-search-settings";
 import { DocumentSettings } from "./document-settings";
 
-type SettingsTab = "general" | "chat" | "memories" | "models" | "tools";
+type SettingsTab = "general" | "privacy" | "chat" | "memories" | "models" | "tools";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <Settings className="size-4" /> },
+  { id: "privacy", label: "Privacy", icon: <Shield className="size-4" /> },
   { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" /> },
   { id: "memories", label: "Memories", icon: <Database className="size-4" /> },
   { id: "models", label: "Models", icon: <Boxes className="size-4" /> },
@@ -63,6 +66,7 @@ export function SettingsPage() {
 
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === "general" && <GeneralSettings />}
+          {activeTab === "privacy" && <PrivacyConnectivitySettings />}
           {activeTab === "chat" && <ChatSettings />}
           {activeTab === "memories" && <MemoriesSettings />}
           {activeTab === "models" && <ModelsSettings />}

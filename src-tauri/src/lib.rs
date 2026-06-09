@@ -30,6 +30,7 @@ fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
 }
 
 mod agent_commands;
+mod connectivity_commands;
 mod constants;
 mod db_utils;
 mod document_commands;
@@ -144,6 +145,7 @@ pub fn run() {
             memory_commands::archive_memory_node,
             memory_commands::pin_memory_node,
             memory_commands::search_memory,
+            connectivity_commands::probe_internet_connectivity,
             web_search_commands::web_search_searxng,
             web_search_commands::test_searxng_connection,
             searxng_setup::check_searxng_setup,

@@ -188,6 +188,8 @@ export interface RightPanelProps {
   hidden?: boolean;
   webSearchEnabled?: boolean;
   onWebSearchChange?: (enabled: boolean) => void;
+  webSearchDisabled?: boolean;
+  webSearchDisabledReason?: string;
   isAgentsMode?: boolean;
   agentSessionCount?: number;
   agentActiveCount?: number;

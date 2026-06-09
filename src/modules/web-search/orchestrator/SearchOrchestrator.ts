@@ -1,3 +1,4 @@
+import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { estimateTokens } from "@/lib/context";
 import { SearXNGProvider } from "../providers/SearXNGProvider";
@@ -29,6 +30,10 @@ function validateSearchBaseUrl(baseUrl: string): void {
 export async function runSearch(query: string, signal?: AbortSignal): Promise<SearchContextBundle> {
   if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
+  }
+
+  if (useConnectivityStore.getState().effectiveConnectivity === "offline") {
+    throw new Error("Web search is unavailable in Offline mode.");
   }
 
   const settings = useSettingsStore.getState();

@@ -41,6 +41,8 @@ export function RightPanel({
   hidden,
   webSearchEnabled = false,
   onWebSearchChange,
+  webSearchDisabled = false,
+  webSearchDisabledReason,
   isAgentsMode = false,
   agentSessionCount = 0,
   agentActiveCount = 0,
@@ -89,8 +91,10 @@ export function RightPanel({
             <CompactToolToggle
               icon={<Globe className="size-3.5" />}
               label="Web Search"
-              on={webSearchEnabled}
+              on={webSearchDisabled ? false : webSearchEnabled}
               onChange={(on) => onWebSearchChange?.(on)}
+              disabled={webSearchDisabled}
+              disabledReason={webSearchDisabledReason}
             />
             <CompactToolToggle
               icon={<FileText className="size-3.5" />}
@@ -129,6 +133,8 @@ export function RightPanel({
           <ToolsPanel
             webSearch={webSearchEnabled}
             onWebSearchChange={(on) => onWebSearchChange?.(on)}
+            webSearchDisabled={webSearchDisabled}
+            webSearchDisabledReason={webSearchDisabledReason}
           />
 
           <DocumentsPanel />

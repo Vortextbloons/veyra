@@ -25,7 +25,10 @@ import { useAgentStore } from "@/modules/agents/agent-store";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { useProviderStore } from "@/stores/provider-store";
+import { ConnectivityToastHost } from "@/components/connectivity/connectivity-toast";
+import { useIsFeatureAvailable } from "@/lib/connectivity/useConnectivity";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
+import { useConnectivityStore } from "@/stores/connectivity-store";
 import {
   invokeCheckSearxngSetup,
   runSearxngAutoSetup,
@@ -160,6 +163,13 @@ function App() {
     (state) => state.defaultWebSearchEnabled,
   );
   const [webSearchEnabled, setWebSearchEnabled] = useState(defaultWebSearchEnabled);
+  const effectiveConnectivity = useConnectivityStore((state) => state.effectiveConnectivity);
+  const startProbeListener = useConnectivityStore((state) => state.startProbeListener);
+  const webSearchAvailability = useIsFeatureAvailable("webSearch");
+  const webSearchDisabled = !webSearchAvailability.available;
+  const effectiveWebSearchEnabled =
+    effectiveConnectivity === "online" && webSearchEnabled && !webSearchDisabled;
+  const prevEffectiveConnectivityRef = useRef(effectiveConnectivity);
 
   const sidebarsCollapsed =
     (recentChatsCollapsed ? 1 : 0) + (rightPanelCollapsed ? 1 : 0);
@@ -223,10 +233,41 @@ function App() {
       initializeProvider();
     })();
 
+    const stopProbeListener = startProbeListener();
+
+    return () => {
+      stopProbeListener();
+    };
+  }, [initializeProvider, startProbeListener]);
+
+  useEffect(() => {
     return deferUntilIdle(() => {
       void ensureProviderReady();
     }, 3000);
-  }, [initializeProvider]);
+  }, []);
+
+  useEffect(() => {
+    const prev = prevEffectiveConnectivityRef.current;
+    prevEffectiveConnectivityRef.current = effectiveConnectivity;
+    if (prev === "offline" && effectiveConnectivity === "online") {
+      setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
+    }
+  }, [effectiveConnectivity]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod || !event.shiftKey || event.key.toLowerCase() !== "o") return;
+      event.preventDefault();
+      const current = useSettingsStore.getState().connectivityPreference;
+      useSettingsStore
+        .getState()
+        .setConnectivityPreference(current === "offline" ? "auto" : "offline");
+      useConnectivityStore.getState().recomputeEffective();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Auto-setup SearXNG via Docker — deferred so it does not compete with first paint.
   useEffect(() => {
@@ -234,6 +275,10 @@ function App() {
 
     const cancelIdle = deferUntilIdle(() => {
       void (async () => {
+        if (useConnectivityStore.getState().effectiveConnectivity !== "online") {
+          return;
+        }
+
         const { setSearxngSetupError, setWebSearchSearxngUrl } = useSettingsStore.getState();
         setSearxngSetupError("");
 
@@ -515,7 +560,7 @@ function App() {
               selectedProvider,
               selectedModel,
               memoryEnabled,
-              webSearchEnabled,
+              webSearchEnabled: effectiveWebSearchEnabled,
               signal,
               onChunk: (chunk) => {
                 if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
@@ -592,7 +637,7 @@ function App() {
       selectedProvider,
       startAgentSession,
       supportsImages,
-      webSearchEnabled,
+      effectiveWebSearchEnabled,
     ],
   );
 
@@ -623,6 +668,7 @@ function App() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--color-bg)]">
       <ShutdownOverlay />
+      <ConnectivityToastHost />
       <TitleBar
         zoom={zoom}
         onZoomIn={() => setZoom((z) => clampZoom(+(z + ZOOM_STEP).toFixed(2)))}
@@ -698,6 +744,8 @@ function App() {
           hidden={!isChatMode && chatMode !== "agents"}
           webSearchEnabled={webSearchEnabled}
           onWebSearchChange={setWebSearchEnabled}
+          webSearchDisabled={webSearchDisabled}
+          webSearchDisabledReason={webSearchAvailability.reason}
           isAgentsMode={chatMode === "agents"}
           agentSessionCount={agentSessions.length}
           agentActiveCount={agentSessions.filter((s) => s.status === "running").length}

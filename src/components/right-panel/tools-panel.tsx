@@ -8,19 +8,32 @@ export function ToolRow({
   label,
   on,
   onChange,
+  disabled = false,
+  disabledReason,
 }: {
   icon: ReactNode;
   label: string;
   on: boolean;
   onChange: (on: boolean) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={on}
-      onClick={() => onChange(!on)}
-      className={`flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-[12px] transition-colors ${
+      aria-disabled={disabled}
+      title={disabled ? disabledReason : undefined}
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) onChange(!on);
+      }}
+      className={`flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[12px] transition-colors ${
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "cursor-pointer"
+      } ${
         on
           ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20 hover:bg-emerald-500/15"
           : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
@@ -43,11 +56,15 @@ export function CompactToolToggle({
   label,
   on,
   onChange,
+  disabled = false,
+  disabledReason,
 }: {
   icon: ReactNode;
   label: string;
   on: boolean;
   onChange: (on: boolean) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   return (
     <div className="group/tool relative">
@@ -55,9 +72,15 @@ export function CompactToolToggle({
         type="button"
         role="switch"
         aria-checked={on}
+        aria-disabled={disabled}
         aria-label={`${label}: ${on ? "on" : "off"}`}
-        onClick={() => onChange(!on)}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onChange(!on);
+        }}
         className={`grid size-8 place-items-center rounded-md transition-colors ${
+          disabled ? "cursor-not-allowed opacity-50" : ""
+        } ${
           on
             ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20 hover:bg-emerald-500/15"
             : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
@@ -79,8 +102,13 @@ export function CompactToolToggle({
         <span className="font-medium">{label}</span>
         <span className="text-[var(--color-text-dim)]">
           {" "}
-          · {on ? "On" : "Off"}
+          · {disabled ? "Unavailable" : on ? "On" : "Off"}
         </span>
+        {disabled && disabledReason && (
+          <span className="mt-0.5 block max-w-[220px] whitespace-normal text-[10px] text-[var(--color-text-dim)]">
+            {disabledReason}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -89,9 +117,13 @@ export function CompactToolToggle({
 export function ToolsPanel({
   webSearch,
   onWebSearchChange,
+  webSearchDisabled = false,
+  webSearchDisabledReason,
 }: {
   webSearch: boolean;
   onWebSearchChange: (on: boolean) => void;
+  webSearchDisabled?: boolean;
+  webSearchDisabledReason?: string;
 }) {
   const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
   const setDocumentPanelEnabled = useSettingsStore((s) => s.setDocumentPanelEnabled);
@@ -102,8 +134,10 @@ export function ToolsPanel({
         <ToolRow
           icon={<Globe className="size-3.5" />}
           label="Web Search"
-          on={webSearch}
+          on={webSearchDisabled ? false : webSearch}
           onChange={onWebSearchChange}
+          disabled={webSearchDisabled}
+          disabledReason={webSearchDisabledReason}
         />
         <ToolRow
           icon={<FileText className="size-3.5" />}

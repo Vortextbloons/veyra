@@ -73,7 +73,12 @@ pub async fn web_search_searxng(
     base_url: String,
     query: String,
     limit: usize,
+    allow_external: Option<bool>,
 ) -> Result<TauriSearchResponse, String> {
+    if allow_external == Some(false) {
+        return Err("Web search is unavailable in Offline mode.".into());
+    }
+
     validate_searxng_url(&base_url)?;
 
     let url = format!(

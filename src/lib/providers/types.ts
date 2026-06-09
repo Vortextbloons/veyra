@@ -54,11 +54,14 @@ export type ProviderPrepareModelOptions = {
   forceReload?: boolean;
 };
 
+export type ProviderConnectivityRequirement = "local" | "internet";
+
 export interface ProviderAdapter {
   id: string;
   name: string;
   /** Provider identifier — used to render the matching logo in ProviderIcon */
   icon: string;
+  connectivityRequirement: ProviderConnectivityRequirement;
   isAvailable: () => Promise<boolean>;
   fetchModels: () => Promise<ModelInfo[]>;
   sendChat: (options: ProviderChatOptions) => Promise<void>;

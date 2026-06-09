@@ -4,6 +4,7 @@ import type {
   SearchResult,
   SearXNGProviderConfig,
 } from "../types";
+import { useConnectivityStore } from "@/stores/connectivity-store";
 import { invokeSearchSearxng, invokeTestSearxngConnection } from "../tauri-commands";
 
 function generateId(): string {
@@ -56,10 +57,12 @@ export class SearXNGProvider implements SearchProvider {
 
   async search(input: SearchInput): Promise<SearchResult[]> {
     const limit = input.limit ?? this.config.maxResults;
+    const allowExternal = useConnectivityStore.getState().effectiveConnectivity === "online";
     const response = await invokeSearchSearxng(
       this.config.baseUrl,
       input.query,
       limit,
+      allowExternal,
     );
 
     const seenUrls = new Set<string>();

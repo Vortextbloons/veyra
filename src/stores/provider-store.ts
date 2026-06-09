@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ModelInfo, ProviderInfo } from "@/lib/chat-types";
+import { isProviderAllowedForConnectivity } from "@/lib/connectivity/provider-connectivity";
 import { getInitialProviders, getProviderAdapter } from "@/lib/providers";
 
 export type ProviderConnectionPhase = "idle" | "connecting" | "error";
@@ -244,6 +245,10 @@ export const useProviderStore = create<ProviderStore>()(
       },
 
       selectProvider: async (providerId) => {
+        if (!isProviderAllowedForConnectivity(providerId)) {
+          return;
+        }
+
         providerRequestSeq += 1;
         const cached = loadCachedModels(providerId);
         const preferred = preferredModelForProvider(get(), providerId);

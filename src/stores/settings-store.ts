@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import type { ConnectivityPreference } from "@/lib/connectivity/connectivity-types";
 import type { MemoryMode } from "@/lib/memory-types";
 
 const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
@@ -57,6 +58,7 @@ export type SettingsStoreState = {
   documentTabSize: number;
   documentSpellCheck: boolean;
   documentAutoOpenOnCreate: boolean;
+  connectivityPreference: ConnectivityPreference;
 };
 
 export type ResolvedModelSettings = {
@@ -114,6 +116,7 @@ export type SettingsStore = SettingsStoreState & {
   setDocumentTabSize: (size: number) => void;
   setDocumentSpellCheck: (enabled: boolean) => void;
   setDocumentAutoOpenOnCreate: (enabled: boolean) => void;
+  setConnectivityPreference: (preference: ConnectivityPreference) => void;
 };
 
 const DEFAULT_STATE: SettingsStoreState = {
@@ -158,6 +161,7 @@ const DEFAULT_STATE: SettingsStoreState = {
   documentTabSize: 2,
   documentSpellCheck: true,
   documentAutoOpenOnCreate: true,
+  connectivityPreference: "auto",
 };
 
 function partializeSettings(state: SettingsStore): SettingsStoreState {
@@ -203,6 +207,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     documentTabSize: state.documentTabSize,
     documentSpellCheck: state.documentSpellCheck,
     documentAutoOpenOnCreate: state.documentAutoOpenOnCreate,
+    connectivityPreference: state.connectivityPreference,
   };
 }
 
@@ -290,6 +295,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setDocumentTabSize: (documentTabSize) => set({ documentTabSize }),
       setDocumentSpellCheck: (documentSpellCheck) => set({ documentSpellCheck }),
       setDocumentAutoOpenOnCreate: (documentAutoOpenOnCreate) => set({ documentAutoOpenOnCreate }),
+      setConnectivityPreference: (connectivityPreference) => set({ connectivityPreference }),
     }),
     {
       name: SETTINGS_STORAGE_KEY,

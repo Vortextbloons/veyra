@@ -18,6 +18,9 @@ import {
 } from "@/lib/tool-registry";
 import { getToolCallUi } from "@/lib/tool-call-ui";
 import { buildContextAnchoringBlock, buildDocumentInstructionsBlock } from "@/lib/prompts";
+import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
+import { useConnectivityStore } from "@/stores/connectivity-store";
+import { useProviderStore } from "@/stores/provider-store";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import { executeDocCreation, executeDocRead, executeDocUpdate } from "@/modules/documents/document-runtime";
 import type { DocCreateIntent, DocReadIntent, DocUpdateIntent, DocumentType } from "@/modules/documents/document-types";
@@ -168,8 +171,22 @@ export async function sendChatRequest({
           : undefined,
       )
     : undefined;
+
+  const effectiveConnectivity = useConnectivityStore.getState().effectiveConnectivity;
+  const localServiceReady = useProviderStore.getState().providers.some(
+    (provider) =>
+      provider.id === useProviderStore.getState().selectedProvider &&
+      provider.status === "connected",
+  );
+  const webSearchAvailability = isFeatureAvailable(
+    "webSearch",
+    effectiveConnectivity,
+    localServiceReady,
+  );
+  const effectiveWebSearchEnabled = webSearchEnabled && webSearchAvailability.available;
+
   const providerTools = buildProviderTools({
-    webSearchEnabled,
+    webSearchEnabled: effectiveWebSearchEnabled,
     documentToolsEnabled: settings.documentPanelEnabled,
     activeDocumentId: activeDocument?.id,
   });
@@ -414,7 +431,14 @@ export async function sendChatRequest({
       return;
     }
 
-    if (webSearchEnabled && webSearchCall && !isRePrompt) {
+    if (webSearchCall && !effectiveWebSearchEnabled && !isRePrompt) {
+      options.onError(
+        webSearchAvailability.reason ?? "Web search is unavailable in Offline mode.",
+      );
+      return;
+    }
+
+    if (effectiveWebSearchEnabled && webSearchCall && !isRePrompt) {
       isRePrompt = true;
       const chatStore = useChatStore.getState();
 

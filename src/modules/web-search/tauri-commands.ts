@@ -20,11 +20,13 @@ export async function invokeSearchSearxng(
   baseUrl: string,
   query: string,
   limit: number,
+  allowExternal = true,
 ): Promise<TauriSearchResponse> {
   return invoke<TauriSearchResponse>("web_search_searxng", {
     baseUrl,
     query,
     limit,
+    allowExternal,
   });
 }
 

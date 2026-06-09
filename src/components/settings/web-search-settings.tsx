@@ -8,7 +8,8 @@ import {
   invokeStopSearxngContainer,
   type SearxngSetupStatus,
 } from "@/modules/web-search/searxng-setup";
-import { CheckCircle, XCircle, Loader2, Container } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Container, Shield } from "lucide-react";
+import { useConnectivity } from "@/lib/connectivity/useConnectivity";
 
 type TestStatus = "idle" | "testing" | "success" | "error";
 
@@ -90,9 +91,24 @@ export function WebSearchSettings() {
   const dockerDaemonRunning = setupStatus?.docker_daemon_running ?? false;
   const containerRunning = setupStatus?.container_running ?? false;
   const setupError = containerError || searxngSetupError;
+  const { effectiveConnectivity } = useConnectivity();
+  const isConnectivityOffline = effectiveConnectivity === "offline";
 
   return (
     <div className="space-y-8">
+      {isConnectivityOffline && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+          <Shield className="mt-0.5 size-4 shrink-0 text-amber-300" />
+          <div>
+            <p className="text-[12.5px] font-medium text-amber-100">Offline mode is active</p>
+            <p className="mt-1 text-[11.5px] leading-relaxed text-amber-100/80">
+              Web search is disabled while offline. You can still configure SearXNG manually, but
+              searches will not run until connectivity is restored.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Docker / SearXNG Status ──────────────────────────────────────── */}
       <section>
         <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">

@@ -10,6 +10,7 @@ export const lmStudioAdapter: ProviderAdapter = {
   id: "lm-studio",
   name: "LM Studio",
   icon: "lm-studio",
+  connectivityRequirement: "local",
   isAvailable: () => isServerRunning(),
   fetchModels: () => fetchModels(),
   prepareModel: async (modelId, options) => {
