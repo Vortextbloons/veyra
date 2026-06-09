@@ -74,6 +74,10 @@ pub async fn web_search_searxng(
     query: String,
     limit: usize,
     allow_external: Option<bool>,
+    time_range: Option<String>,
+    categories: Option<String>,
+    safe_search: Option<u8>,
+    language: Option<String>,
 ) -> Result<TauriSearchResponse, String> {
     if allow_external == Some(false) {
         return Err("Web search is unavailable in Offline mode.".into());
@@ -81,11 +85,32 @@ pub async fn web_search_searxng(
 
     validate_searxng_url(&base_url)?;
 
-    let url = format!(
+    let effective_limit = limit.clamp(1, MAX_SEARCH_RESULTS);
+
+    let mut url = format!(
         "{}/search?q={}&format=json&pageno=1",
         base_url.trim_end_matches('/'),
         urlencoding::encode(&query)
     );
+
+    if let Some(ref tr) = time_range {
+        if !tr.is_empty() {
+            url.push_str(&format!("&time_range={}", urlencoding::encode(tr)));
+        }
+    }
+    if let Some(ref cats) = categories {
+        if !cats.is_empty() {
+            url.push_str(&format!("&categories={}", urlencoding::encode(cats)));
+        }
+    }
+    if let Some(ss) = safe_search {
+        url.push_str(&format!("&safesearch={}", ss.clamp(0, 2)));
+    }
+    if let Some(ref lang) = language {
+        if !lang.is_empty() {
+            url.push_str(&format!("&language={}", urlencoding::encode(lang)));
+        }
+    }
 
     let response = HTTP_CLIENT
         .get(&url)
@@ -110,7 +135,7 @@ pub async fn web_search_searxng(
         .and_then(|r| r.as_array())
         .map(|arr| {
             arr.iter()
-                .take(limit.clamp(1, MAX_SEARCH_RESULTS))
+                .take(effective_limit)
                 .enumerate()
                 .map(|(i, item)| TauriSearchResult {
                     id: item

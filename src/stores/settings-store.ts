@@ -47,6 +47,11 @@ export type SettingsStoreState = {
   defaultWebSearchEnabled: boolean;
   webSearchSearxngUrl: string;
   webSearchDefaultMode: "auto" | "always" | "off";
+  webSearchMaxResults: number;
+  webSearchTimeRange: "" | "day" | "week" | "month" | "year";
+  webSearchCategories: string;
+  webSearchSafeSearch: 0 | 1 | 2;
+  webSearchContextTokenLimit: number;
   searxngSetupError: string;
   contextAnchoringEnabled: boolean;
   documentPanelEnabled: boolean;
@@ -105,6 +110,11 @@ export type SettingsStore = SettingsStoreState & {
   setDefaultWebSearchEnabled: (enabled: boolean) => void;
   setWebSearchSearxngUrl: (url: string) => void;
   setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
+  setWebSearchMaxResults: (n: number) => void;
+  setWebSearchTimeRange: (range: "" | "day" | "week" | "month" | "year") => void;
+  setWebSearchCategories: (categories: string) => void;
+  setWebSearchSafeSearch: (level: 0 | 1 | 2) => void;
+  setWebSearchContextTokenLimit: (n: number) => void;
   setSearxngSetupError: (message: string) => void;
   setContextAnchoringEnabled: (enabled: boolean) => void;
   setDocumentPanelEnabled: (enabled: boolean) => void;
@@ -150,6 +160,11 @@ const DEFAULT_STATE: SettingsStoreState = {
   defaultWebSearchEnabled: false,
   webSearchSearxngUrl: "",
   webSearchDefaultMode: "auto",
+  webSearchMaxResults: 8,
+  webSearchTimeRange: "",
+  webSearchCategories: "",
+  webSearchSafeSearch: 0,
+  webSearchContextTokenLimit: 2500,
   searxngSetupError: "",
   contextAnchoringEnabled: true,
   documentPanelEnabled: true,
@@ -196,6 +211,11 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     defaultWebSearchEnabled: state.defaultWebSearchEnabled,
     webSearchSearxngUrl: state.webSearchSearxngUrl,
     webSearchDefaultMode: state.webSearchDefaultMode,
+    webSearchMaxResults: state.webSearchMaxResults,
+    webSearchTimeRange: state.webSearchTimeRange,
+    webSearchCategories: state.webSearchCategories,
+    webSearchSafeSearch: state.webSearchSafeSearch,
+    webSearchContextTokenLimit: state.webSearchContextTokenLimit,
     searxngSetupError: state.searxngSetupError,
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     documentPanelEnabled: state.documentPanelEnabled,
@@ -284,6 +304,11 @@ export const useSettingsStore = create<SettingsStore>()(
       setDefaultWebSearchEnabled: (defaultWebSearchEnabled) => set({ defaultWebSearchEnabled }),
       setWebSearchSearxngUrl: (webSearchSearxngUrl) => set({ webSearchSearxngUrl }),
       setWebSearchDefaultMode: (webSearchDefaultMode) => set({ webSearchDefaultMode }),
+      setWebSearchMaxResults: (webSearchMaxResults) => set({ webSearchMaxResults }),
+      setWebSearchTimeRange: (webSearchTimeRange) => set({ webSearchTimeRange }),
+      setWebSearchCategories: (webSearchCategories) => set({ webSearchCategories }),
+      setWebSearchSafeSearch: (webSearchSafeSearch) => set({ webSearchSafeSearch }),
+      setWebSearchContextTokenLimit: (webSearchContextTokenLimit) => set({ webSearchContextTokenLimit }),
       setSearxngSetupError: (searxngSetupError) => set({ searxngSetupError }),
       setContextAnchoringEnabled: (contextAnchoringEnabled) => set({ contextAnchoringEnabled }),
       setDocumentPanelEnabled: (documentPanelEnabled) => set({ documentPanelEnabled }),

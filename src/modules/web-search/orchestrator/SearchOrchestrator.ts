@@ -4,7 +4,6 @@ import { estimateTokens } from "@/lib/context";
 import { SearXNGProvider } from "../providers/SearXNGProvider";
 import type { SearchContextBundle, SearXNGProviderConfig } from "../types";
 
-const MAX_CONTEXT_TOKENS = 2500;
 const ALLOWED_SEARCH_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 let activeSearch: Promise<SearchContextBundle> | null = null;
@@ -48,6 +47,7 @@ export async function runSearch(query: string, signal?: AbortSignal): Promise<Se
   validateSearchBaseUrl(baseUrl);
 
   const run = async (): Promise<SearchContextBundle> => {
+    const maxResults = settings.webSearchMaxResults ?? 8;
     const config: SearXNGProviderConfig = {
       id: "searxng-default",
       name: "SearXNG",
@@ -55,11 +55,16 @@ export async function runSearch(query: string, signal?: AbortSignal): Promise<Se
       enabled: true,
       jsonEnabled: true,
       timeoutMs: 10000,
-      maxResults: 8,
+      maxResults,
     };
 
     const provider = new SearXNGProvider(config);
-    const results = await provider.search({ query, limit: 8 });
+    const results = await provider.search({
+      query,
+      limit: maxResults,
+      timeRange: settings.webSearchTimeRange || undefined,
+      categories: settings.webSearchCategories || undefined,
+    });
 
     if (signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
@@ -106,10 +111,13 @@ export async function runSearch(query: string, signal?: AbortSignal): Promise<Se
 }
 
 export function buildSearchContextBlock(bundle: SearchContextBundle): string {
+  const settings = useSettingsStore.getState();
+  const maxContextTokens = settings.webSearchContextTokenLimit ?? 2500;
+
   const header = `<veyra_web_search>\nSearch results for: "${bundle.query}"\n\n`;
   const footer = `\n</veyra_web_search>`;
 
-  const maxContentTokens = MAX_CONTEXT_TOKENS - estimateTokens(header + footer);
+  const maxContentTokens = maxContextTokens - estimateTokens(header + footer);
 
   const lines: string[] = [];
   let usedTokens = 0;

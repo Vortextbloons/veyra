@@ -21,12 +21,22 @@ export async function invokeSearchSearxng(
   query: string,
   limit: number,
   allowExternal = true,
+  options?: {
+    timeRange?: string;
+    categories?: string;
+    safeSearch?: number;
+    language?: string;
+  },
 ): Promise<TauriSearchResponse> {
   return invoke<TauriSearchResponse>("web_search_searxng", {
     baseUrl,
     query,
     limit,
     allowExternal,
+    timeRange: options?.timeRange || null,
+    categories: options?.categories || null,
+    safeSearch: options?.safeSearch ?? null,
+    language: options?.language || null,
   });
 }
 

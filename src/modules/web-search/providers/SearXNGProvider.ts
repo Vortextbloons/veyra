@@ -63,6 +63,11 @@ export class SearXNGProvider implements SearchProvider {
       input.query,
       limit,
       allowExternal,
+      {
+        timeRange: input.timeRange,
+        categories: input.categories,
+        language: input.language,
+      },
     );
 
     const seenUrls = new Set<string>();
