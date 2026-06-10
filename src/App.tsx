@@ -46,6 +46,7 @@ const MemoryPage = lazy(() => import("@/components/memory/memory-page"));
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
 const ProjectsPage = lazy(() => import("@/modules/projects/components/projects-page").then(m => ({ default: m.ProjectsPage })));
 const ResearchPage = lazy(() => import("@/modules/research/components/ResearchPage").then(m => ({ default: m.ResearchPage })));
+const EmailPage = lazy(() => import("@/modules/email/components/EmailPage").then(m => ({ default: m.EmailPage })));
 
 const OPENCODE_AGENT_BASE_TOKENS = 9_000;
 const OPENCODE_AGENT_TOOL_OVERHEAD_TOKENS = 1_200;
@@ -1081,6 +1082,7 @@ function App() {
             {activeNav === "memory" && <MemoryPage />}
             {activeNav === "projects" && <ProjectsPage />}
             {activeNav === "research" && <ResearchPage />}
+            {activeNav === "email" && <EmailPage />}
             {activeNav === "settings" && <SettingsPage />}
           </Suspense>
         </div>

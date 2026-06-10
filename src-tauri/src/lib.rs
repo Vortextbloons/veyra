@@ -35,6 +35,8 @@ mod constants;
 mod db_utils;
 mod document_commands;
 mod document_db;
+mod email_commands;
+mod email_db;
 mod lm_studio_setup;
 mod memory_commands;
 mod memory_db;
@@ -170,6 +172,19 @@ pub fn run() {
             document_commands::restore_document_version,
             document_commands::export_document_markdown,
             document_commands::export_document_txt,
+            email_commands::email_list_accounts,
+            email_commands::email_add_account,
+            email_commands::email_configure_gmail_oauth,
+            email_commands::email_connect_gmail,
+            email_commands::email_sync_account,
+            email_commands::email_remove_account,
+            email_commands::email_list_threads,
+            email_commands::email_get_thread,
+            email_commands::email_send_message,
+            email_commands::email_save_draft,
+            email_commands::email_archive_thread,
+            email_commands::email_mark_read,
+            email_commands::email_mark_unread,
             project_commands::create_project,
             project_commands::get_project,
             project_commands::update_project,
@@ -203,6 +218,10 @@ pub fn run() {
             let doc_db_state = document_db::DocumentDbState::new(app.handle().clone());
             doc_db_state.spawn_background_init();
             app.manage(doc_db_state);
+
+            let email_db_state = email_db::EmailDbState::new(app.handle().clone());
+            email_db_state.spawn_background_init();
+            app.manage(email_db_state);
 
             let project_db_state = project_db::ProjectDbState::new(app.handle().clone());
             project_db_state.spawn_background_init();

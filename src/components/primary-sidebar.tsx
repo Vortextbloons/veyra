@@ -3,6 +3,7 @@ import {
   Database,
   FlaskConical,
   Folder,
+  Mail,
   MessageSquare,
   Settings,
   Sparkles,
@@ -19,6 +20,7 @@ const NAV: NavItem[] = [
   { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" /> },
   { id: "projects", label: "Projects", icon: <Folder className="size-4" /> },
   { id: "research", label: "Research", icon: <FlaskConical className="size-4" /> },
+  { id: "email", label: "Email", icon: <Mail className="size-4" /> },
   { id: "memory", label: "Memory", icon: <Database className="size-4" /> },
   { id: "settings", label: "Settings", icon: <Settings className="size-4" /> },
 ];
