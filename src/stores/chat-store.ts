@@ -54,6 +54,11 @@ type ChatStore = {
   ) => void;
   markMemoryPending: (id: string, pendingSince?: number) => void;
   setMemoryProcessed: (id: string, processedMessageCount: number) => void;
+  updateMessage: (conversationId: string, messageId: string, content: string) => void;
+  truncateAfterMessage: (conversationId: string, messageId: string) => void;
+  removeLastMessagePair: (conversationId: string) => void;
+  deleteMessage: (conversationId: string, messageId: string) => void;
+  forkConversation: (conversationId: string, upToMessageId: string) => string;
 };
 
 function newConversation(projectId?: string): Conversation {
@@ -288,5 +293,98 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       void saveConversationSnapshot(conversations);
       return { conversations };
     });
+  },
+  updateMessage: (conversationId, messageId, content) => {
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        return {
+          ...conversation,
+          messages: conversation.messages.map((message) =>
+            message.id === messageId ? { ...message, content } : message,
+          ),
+          updatedAt: Date.now(),
+        };
+      });
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  truncateAfterMessage: (conversationId, messageId) => {
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        const idx = conversation.messages.findIndex((m) => m.id === messageId);
+        if (idx < 0) return conversation;
+        const truncated = conversation.messages.slice(0, idx + 1);
+        return {
+          ...conversation,
+          messages: truncated,
+          updatedAt: Date.now(),
+        };
+      });
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  removeLastMessagePair: (conversationId) => {
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        const messages = conversation.messages;
+        if (messages.length < 2) return conversation;
+        const last = messages[messages.length - 1];
+        const secondLast = messages[messages.length - 2];
+        const isPair =
+          (last.role === "assistant" && secondLast.role === "user") ||
+          (last.role === "user" && secondLast.role === "assistant");
+        const sliced = isPair ? messages.slice(0, -2) : messages.slice(0, -1);
+        return {
+          ...conversation,
+          messages: sliced,
+          updatedAt: Date.now(),
+        };
+      });
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  deleteMessage: (conversationId, messageId) => {
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        return {
+          ...conversation,
+          messages: conversation.messages.filter((m) => m.id !== messageId),
+          updatedAt: Date.now(),
+        };
+      });
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  forkConversation: (conversationId, upToMessageId) => {
+    let newId = "";
+    set((state) => {
+      const source = state.conversations.find((c) => c.id === conversationId);
+      if (!source) return state;
+      const idx = source.messages.findIndex((m) => m.id === upToMessageId);
+      if (idx < 0) return state;
+      const forkedMessages = source.messages.slice(0, idx + 1);
+      const now = Date.now();
+      const forked: Conversation = {
+        id: crypto.randomUUID(),
+        title: `${source.title} (fork)`,
+        messages: forkedMessages.map((m) => ({ ...m, id: crypto.randomUUID(), timestamp: now })),
+        createdAt: now,
+        updatedAt: now,
+        projectId: source.projectId,
+      };
+      newId = forked.id;
+      const conversations = [forked, ...state.conversations];
+      void saveConversationSnapshot(conversations);
+      return { conversations, activeConversationId: forked.id };
+    });
+    return newId;
   },
 }));

@@ -70,6 +70,16 @@ export function ChatPanel({
   onAgentSessionSelect,
   onAgentSessionStop,
   onAgentSessionDelete,
+  onEditMessage,
+  onRegenerate,
+  onRetry,
+  onCopyMessage,
+  onForkMessage,
+  onDeleteMessage,
+  editingMessageId,
+  editInitialValue,
+  onEditCancel,
+  onEditSave,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(defaultMemoryEnabled);
   const [showReasoning, setShowReasoning] = useState(true);
@@ -142,6 +152,13 @@ export function ChatPanel({
     },
     [controlledMode, onModeChange],
   );
+
+  const lastAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return messages[i].id;
+    }
+    return null;
+  }, [messages]);
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
@@ -267,6 +284,13 @@ export function ChatPanel({
                 isStreaming={m.id === streamingMessageId}
                 showReasoning={showReasoning}
                 layout={layout}
+                isLastAssistant={m.id === lastAssistantId}
+                onEdit={onEditMessage}
+                onRegenerate={onRegenerate}
+                onRetry={onRetry}
+                onCopy={onCopyMessage}
+                onFork={onForkMessage}
+                onDelete={onDeleteMessage}
               />
             ))}
           </div>
@@ -281,11 +305,11 @@ export function ChatPanel({
             <ModelLoadingBar progress={modelLoadProgress} />
           </div>
         )}
-            <Composer
-              memory={memory}
-              onMemoryChange={setMemory}
-              onTriggerMemoryExtraction={onTriggerMemoryExtraction}
-              showReasoning={showReasoning}
+        <Composer
+          memory={memory}
+          onMemoryChange={setMemory}
+          onTriggerMemoryExtraction={onTriggerMemoryExtraction}
+          showReasoning={showReasoning}
           onShowReasoningChange={setShowReasoning}
           mode={mode}
           onModeChange={handleModeChange}
@@ -293,6 +317,10 @@ export function ChatPanel({
           disabled={isStreaming}
           supportsImages={supportsImages}
           composerTextClass={layout.composerText}
+          editMessageId={editingMessageId}
+          editInitialValue={editInitialValue}
+          onEditCancel={onEditCancel}
+          onEditSave={onEditSave}
         />
         <div className="mt-2.5 flex items-center justify-center gap-4 text-[11px] text-[var(--color-text-dim)]">
           <span>

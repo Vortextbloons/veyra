@@ -181,6 +181,16 @@ export interface ChatPanelProps {
   onAgentSessionSelect?: (id: string) => void;
   onAgentSessionStop?: (id: string) => void;
   onAgentSessionDelete?: (id: string) => void;
+  onEditMessage?: (messageId: string) => void;
+  onRegenerate?: (messageId: string) => void;
+  onRetry?: (messageId: string) => void;
+  onCopyMessage?: (messageId: string) => void;
+  onForkMessage?: (messageId: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
+  editingMessageId?: string | null;
+  editInitialValue?: string;
+  onEditCancel?: () => void;
+  onEditSave?: (messageId: string, newContent: string) => void;
 }
 
 export interface RightPanelProps {

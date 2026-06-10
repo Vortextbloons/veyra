@@ -122,6 +122,7 @@ function App() {
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("idle");
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [chatMode, setChatMode] = useState<ChatMode>("chat");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const activeChatJobIdRef = useRef<string | null>(null);
 
   const conversations = useChatStore((state) => state.conversations);
@@ -139,6 +140,11 @@ function App() {
   const clearStreamingBufferUnlessSkipped = useChatStore((state) => state.clearStreamingBufferUnlessSkipped);
   const commitAssistantMessage = useChatStore((state) => state.commitAssistantMessage);
   const setModelLoadProgress = useChatStore((state) => state.setModelLoadProgress);
+  const updateMessage = useChatStore((state) => state.updateMessage);
+  const truncateAfterMessage = useChatStore((state) => state.truncateAfterMessage);
+  const removeLastMessagePair = useChatStore((state) => state.removeLastMessagePair);
+  const deleteMessage = useChatStore((state) => state.deleteMessage);
+  const forkConversation = useChatStore((state) => state.forkConversation);
 
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
 
@@ -677,6 +683,362 @@ function App() {
     });
   }, [activeConversationId]);
 
+  const handleEditMessage = useCallback(
+    (messageId: string) => {
+      if (!activeConversationId) return;
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === activeConversationId);
+      const message = conversation?.messages.find((m) => m.id === messageId);
+      if (!message || message.role !== "user") return;
+      setEditingMessageId(messageId);
+    },
+    [activeConversationId],
+  );
+
+  const handleEditCancel = useCallback(() => {
+    setEditingMessageId(null);
+  }, []);
+
+  const handleEditSave = useCallback(
+    (messageId: string, newContent: string) => {
+      if (!activeConversationId) return;
+      const trimmed = newContent.trim();
+      if (!trimmed) return;
+
+      updateMessage(activeConversationId, messageId, trimmed);
+      truncateAfterMessage(activeConversationId, messageId);
+      setEditingMessageId(null);
+
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === activeConversationId);
+      if (!conversation) return;
+
+      const lastMsg = conversation.messages[conversation.messages.length - 1];
+      if (lastMsg?.role !== "user") return;
+
+      const assistantMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "",
+        timestamp: Date.now(),
+      };
+
+      const liveConversation = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === activeConversationId);
+      if (!liveConversation) return;
+
+      const updatedMessages = [...liveConversation.messages, assistantMessage];
+      useChatStore.setState((state) => ({
+        conversations: state.conversations.map((c) =>
+          c.id === activeConversationId
+            ? { ...c, messages: updatedMessages, updatedAt: Date.now() }
+            : c,
+        ),
+        streamingBuffer: {
+          conversationId: activeConversationId,
+          messageId: assistantMessage.id,
+          content: "",
+          reasoning: "",
+        },
+      }));
+      void import("@/lib/conversation-storage").then(({ saveConversationSnapshot }) =>
+        saveConversationSnapshot(useChatStore.getState().conversations),
+      );
+
+      const previousResponseId = liveConversation.lmResponseId;
+      setStreamingMessageId(assistantMessage.id);
+      setRequestStatus("streaming");
+
+      aiScheduler.abortActiveBackgroundJob();
+
+      const memoryEnabled = useSettingsStore.getState().defaultMemoryEnabled;
+
+      const jobId = aiScheduler.enqueueAiJob({
+        type: "user_chat",
+        priority: 0,
+        title: "Regenerating response",
+        description: trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed,
+        prompt: trimmed,
+        conversationId: activeConversationId,
+        model: selectedModel,
+        run: async (signal) => {
+          try {
+            await ensureProviderReady();
+
+            return await executeChatSend({
+              conversationId: activeConversationId,
+              userMessage: lastMsg,
+              assistantMessage,
+              trimmed,
+              previousResponseId,
+              selectedProvider,
+              selectedModel,
+              memoryEnabled,
+              webSearchEnabled: effectiveWebSearchEnabled,
+              projectId: activeProjectId ?? undefined,
+              signal,
+              onChunk: (chunk) => {
+                if (chunk) appendStreamingContent(activeConversationId, assistantMessage.id, chunk);
+              },
+              onReasoningChunk: (chunk) => {
+                if (chunk) appendStreamingReasoning(activeConversationId, assistantMessage.id, chunk);
+              },
+              onModelLoadProgress: (phase: string, percent?: number) => {
+                setModelLoadProgress(
+                  phase === "ready" ? null : { phase: phase as "unloading" | "loading", percent },
+                );
+              },
+              onError: (error) => {
+                commitAssistantMessage(activeConversationId, assistantMessage.id, {
+                  content: `Error: ${error}`,
+                });
+                clearStreamingBuffer();
+                setModelLoadProgress(null);
+                setRequestStatus("error");
+                setStreamingMessageId(null);
+              },
+              onComplete: (result, context) => {
+                if (useChatStore.getState().isBufferClearSkipped()) return;
+                setModelLoadProgress(null);
+                const memoryPack = context?.memoryPack ?? null;
+                const memoryRetrieval = context?.memoryRetrieval;
+                const webSearchSources = context?.webSearchSources;
+                commitAssistantMessage(activeConversationId, assistantMessage.id, {
+                  performance: result.performance,
+                  lmResponseId: result.responseId,
+                  ...(memoryPack ? { memoryPack } : {}),
+                  ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
+                  ...(webSearchSources ? { webSearchSources } : {}),
+                });
+              },
+            });
+          } catch (error) {
+            if (!signal.aborted) {
+              commitAssistantMessage(activeConversationId, assistantMessage.id, {
+                content: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+              });
+              setRequestStatus("error");
+            }
+          } finally {
+            clearStreamingBufferUnlessSkipped();
+            if (!useChatStore.getState().isBufferClearSkipped()) {
+              setStreamingMessageId(null);
+              setRequestStatus((status) => (status === "error" ? "error" : "idle"));
+            }
+            setModelLoadProgress(null);
+            if (activeChatJobIdRef.current === jobId) activeChatJobIdRef.current = null;
+          }
+        },
+      });
+      activeChatJobIdRef.current = jobId;
+    },
+    [
+      activeConversationId,
+      activeProjectId,
+      appendStreamingContent,
+      appendStreamingReasoning,
+      clearStreamingBuffer,
+      clearStreamingBufferUnlessSkipped,
+      commitAssistantMessage,
+      effectiveWebSearchEnabled,
+      selectedModel,
+      selectedProvider,
+      setModelLoadProgress,
+      truncateAfterMessage,
+      updateMessage,
+    ],
+  );
+
+  const handleRegenerate = useCallback(
+    (messageId: string) => {
+      if (!activeConversationId) return;
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === activeConversationId);
+      if (!conversation) return;
+
+      const msgIndex = conversation.messages.findIndex((m) => m.id === messageId);
+      if (msgIndex < 0 || conversation.messages[msgIndex].role !== "assistant") return;
+      if (msgIndex === 0) return;
+
+      const userMsg = conversation.messages[msgIndex - 1];
+      if (userMsg.role !== "user") return;
+
+      removeLastMessagePair(activeConversationId);
+
+      const trimmed = userMsg.content.trim();
+      const assistantMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "",
+        timestamp: Date.now(),
+      };
+
+      const liveConversation = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === activeConversationId);
+      if (!liveConversation) return;
+
+      const updatedMessages = [...liveConversation.messages, assistantMessage];
+      useChatStore.setState((state) => ({
+        conversations: state.conversations.map((c) =>
+          c.id === activeConversationId
+            ? { ...c, messages: updatedMessages, updatedAt: Date.now() }
+            : c,
+        ),
+        streamingBuffer: {
+          conversationId: activeConversationId,
+          messageId: assistantMessage.id,
+          content: "",
+          reasoning: "",
+        },
+      }));
+      void import("@/lib/conversation-storage").then(({ saveConversationSnapshot }) =>
+        saveConversationSnapshot(useChatStore.getState().conversations),
+      );
+
+      const previousResponseId = liveConversation.lmResponseId;
+      setStreamingMessageId(assistantMessage.id);
+      setRequestStatus("streaming");
+
+      aiScheduler.abortActiveBackgroundJob();
+
+      const memoryEnabled = useSettingsStore.getState().defaultMemoryEnabled;
+
+      const jobId = aiScheduler.enqueueAiJob({
+        type: "user_chat",
+        priority: 0,
+        title: "Regenerating response",
+        description: trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed,
+        prompt: trimmed,
+        conversationId: activeConversationId,
+        model: selectedModel,
+        run: async (signal) => {
+          try {
+            await ensureProviderReady();
+
+            return await executeChatSend({
+              conversationId: activeConversationId,
+              userMessage: userMsg,
+              assistantMessage,
+              trimmed,
+              previousResponseId,
+              selectedProvider,
+              selectedModel,
+              memoryEnabled,
+              webSearchEnabled: effectiveWebSearchEnabled,
+              projectId: activeProjectId ?? undefined,
+              signal,
+              onChunk: (chunk) => {
+                if (chunk) appendStreamingContent(activeConversationId, assistantMessage.id, chunk);
+              },
+              onReasoningChunk: (chunk) => {
+                if (chunk) appendStreamingReasoning(activeConversationId, assistantMessage.id, chunk);
+              },
+              onModelLoadProgress: (phase: string, percent?: number) => {
+                setModelLoadProgress(
+                  phase === "ready" ? null : { phase: phase as "unloading" | "loading", percent },
+                );
+              },
+              onError: (error) => {
+                commitAssistantMessage(activeConversationId, assistantMessage.id, {
+                  content: `Error: ${error}`,
+                });
+                clearStreamingBuffer();
+                setModelLoadProgress(null);
+                setRequestStatus("error");
+                setStreamingMessageId(null);
+              },
+              onComplete: (result, context) => {
+                if (useChatStore.getState().isBufferClearSkipped()) return;
+                setModelLoadProgress(null);
+                const memoryPack = context?.memoryPack ?? null;
+                const memoryRetrieval = context?.memoryRetrieval;
+                const webSearchSources = context?.webSearchSources;
+                commitAssistantMessage(activeConversationId, assistantMessage.id, {
+                  performance: result.performance,
+                  lmResponseId: result.responseId,
+                  ...(memoryPack ? { memoryPack } : {}),
+                  ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
+                  ...(webSearchSources ? { webSearchSources } : {}),
+                });
+              },
+            });
+          } catch (error) {
+            if (!signal.aborted) {
+              commitAssistantMessage(activeConversationId, assistantMessage.id, {
+                content: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+              });
+              setRequestStatus("error");
+            }
+          } finally {
+            clearStreamingBufferUnlessSkipped();
+            if (!useChatStore.getState().isBufferClearSkipped()) {
+              setStreamingMessageId(null);
+              setRequestStatus((status) => (status === "error" ? "error" : "idle"));
+            }
+            setModelLoadProgress(null);
+            if (activeChatJobIdRef.current === jobId) activeChatJobIdRef.current = null;
+          }
+        },
+      });
+      activeChatJobIdRef.current = jobId;
+    },
+    [
+      activeConversationId,
+      activeProjectId,
+      appendStreamingContent,
+      appendStreamingReasoning,
+      clearStreamingBuffer,
+      clearStreamingBufferUnlessSkipped,
+      commitAssistantMessage,
+      effectiveWebSearchEnabled,
+      removeLastMessagePair,
+      selectedModel,
+      selectedProvider,
+      setModelLoadProgress,
+    ],
+  );
+
+  const handleRetry = useCallback(
+    (messageId: string) => {
+      handleRegenerate(messageId);
+    },
+    [handleRegenerate],
+  );
+
+  const handleCopyMessage = useCallback(
+    (messageId: string) => {
+      if (!activeConversationId) return;
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === activeConversationId);
+      const message = conversation?.messages.find((m) => m.id === messageId);
+      if (!message) return;
+      void navigator.clipboard.writeText(message.content);
+    },
+    [activeConversationId],
+  );
+
+  const handleForkMessage = useCallback(
+    (messageId: string) => {
+      if (!activeConversationId) return;
+      forkConversation(activeConversationId, messageId);
+    },
+    [activeConversationId, forkConversation],
+  );
+
+  const handleDeleteMessage = useCallback(
+    (messageId: string) => {
+      if (!activeConversationId) return;
+      deleteMessage(activeConversationId, messageId);
+    },
+    [activeConversationId, deleteMessage],
+  );
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--color-bg)]">
       <ShutdownOverlay />
@@ -750,6 +1112,20 @@ function App() {
             onAgentSessionSelect={handleAgentSessionSelect}
             onAgentSessionStop={stopAgentSession}
             onAgentSessionDelete={(id) => void deleteAgentSession(id)}
+            onEditMessage={handleEditMessage}
+            onRegenerate={handleRegenerate}
+            onRetry={handleRetry}
+            onCopyMessage={handleCopyMessage}
+            onForkMessage={handleForkMessage}
+            onDeleteMessage={handleDeleteMessage}
+            editingMessageId={editingMessageId}
+            editInitialValue={
+              editingMessageId
+                ? activeConversation?.messages.find((m) => m.id === editingMessageId)?.content ?? ""
+                : undefined
+            }
+            onEditCancel={handleEditCancel}
+            onEditSave={handleEditSave}
           />
         )}
         {isChatMode && activeNav !== "projects" && <DocEditorPanel />}

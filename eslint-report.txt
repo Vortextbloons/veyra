@@ -1,0 +1,153 @@
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\App.tsx
+  344:5  warning  React Hook useMemo has unnecessary dependencies: 'defaultContextLength', 'defaultReservedOutputTokens', and 'modelOverrides'. Either exclude them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\components\chat\composer.tsx
+  120:24  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\components\chat\composer.tsx:120:24
+  118 |
+  119 |   const prevEditIdRef = useRef<string | null | undefined>(undefined);
+> 120 |   if (editMessageId && editMessageId !== prevEditIdRef.current && editInitialValue != null) {
+      |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  121 |     setValue(editInitialValue);
+  122 |     setTimeout(() => textareaRef.current?.focus(), 0);
+  123 |   }  react-hooks/refs
+  122:16  error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\components\chat\composer.tsx:122:16
+  120 |   if (editMessageId && editMessageId !== prevEditIdRef.current && editInitialValue != null) {
+  121 |     setValue(editInitialValue);
+> 122 |     setTimeout(() => textareaRef.current?.focus(), 0);
+      |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Passing a ref to a function may read its value during render
+  123 |   }
+  124 |   prevEditIdRef.current = editMessageId;
+  125 |                     react-hooks/refs
+  124:3   error  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\components\chat\composer.tsx:124:3
+  122 |     setTimeout(() => textareaRef.current?.focus(), 0);
+  123 |   }
+> 124 |   prevEditIdRef.current = editMessageId;
+      |   ^^^^^^^^^^^^^^^^^^^^^ Cannot update ref during render
+  125 |
+  126 |   const activeAttachments = supportsImages ? attachments : [];
+  127 |   const activeAttachError = supportsImages ? attachError : null;                                                                           react-hooks/refs
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\components\connectivity\connectivity-toast.tsx
+  25:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\components\connectivity\connectivity-toast.tsx:25:5
+  23 |
+  24 |     const id = ++toastId;
+> 25 |     setToast({ id, text });
+     |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  26 |
+  27 |     const timer = window.setTimeout(() => {
+  28 |       setToast((current) => (current?.id === id ? null : current));  react-hooks/set-state-in-effect
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\components\settings\models-settings.tsx
+  517:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\components\settings\models-settings.tsx:517:5
+  515 |
+  516 |   useEffect(() => {
+> 517 |     setDraft(value.join(", "));
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  518 |   }, [value]);
+  519 |
+  520 |   const handleBlur = () => {  react-hooks/set-state-in-effect
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\lib\lm-studio.ts
+  523:47  error  Unsafe usage of ThrowStatement  no-unsafe-finally
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\agents\agent-store.ts
+  266:14  error  Unexpected control character(s) in regular expression: \x1b, \x07, \x07, \x1b  no-control-regex
+  267:14  error  Unexpected control character(s) in regular expression: \x1b                    no-control-regex
+  268:14  error  Unexpected control character(s) in regular expression: \x1b                    no-control-regex
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\agents\components\typewriter-markdown.tsx
+  15:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\agents\components\typewriter-markdown.tsx:15:7
+  13 |     if (!enabled) {
+  14 |       visibleRef.current = content;
+> 15 |       setVisible(content);
+     |       ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  16 |       return;
+  17 |     }
+  18 |  react-hooks/set-state-in-effect
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\agents\opencode-runtime.ts
+  109:7  error  'timeoutTimer' is never reassigned. Use 'const' instead  prefer-const
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\documents\components\markdown-editor.tsx
+  78:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\documents\components\markdown-editor.tsx:78:5
+  76 |
+  77 |   useEffect(() => {
+> 78 |     setLocalContent(doc?.contentMarkdown ?? "");
+     |     ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  79 |   }, [activeDocumentId, doc?.contentMarkdown]);
+  80 |
+  81 |   const handleChange = useCallback(  react-hooks/set-state-in-effect
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\research\components\ResearchPage.tsx
+  82:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\research\components\ResearchPage.tsx:82:7
+  80 |   useEffect(() => {
+  81 |     if (activeRun?.run.plan && !activeRun.run.plan.userApproved && activeRun.run.status === "paused") {
+> 82 |       setActiveTab("plan");
+     |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  83 |     }
+  84 |   }, [activeRun?.run.plan, activeRun?.run.status]);
+  85 |  react-hooks/set-state-in-effect
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\modules\research\research-runtime.ts
+  343:7   error  'searchQueriesUsed' is never reassigned. Use 'const' instead  prefer-const
+  592:13  error  'totalDiscovered' is assigned a value but never used          @typescript-eslint/no-unused-vars
+
+C:\Users\isaac\Desktop\DevProjects\Desktop Apps\Veyra\src\stores\memory-store.ts
+  85:7  error  Unnecessary catch clause       no-useless-catch
+  93:5  error  Unnecessary try/catch wrapper  no-useless-catch
+
+✖ 18 problems (17 errors, 1 warning)
+  1 error and 0 warnings potentially fixable with the `--fix` option.

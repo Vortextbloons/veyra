@@ -9,6 +9,7 @@ import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { MessageAttachmentsPreview } from "@/components/chat/composer";
+import { MessageToolbar } from "@/components/chat/message-toolbar";
 import { ToolCallList } from "@/components/chat/tool-call-list";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
@@ -25,6 +26,13 @@ type MessageBubbleProps = {
   isStreaming: boolean;
   showReasoning: boolean;
   layout: ChatMessageLayout;
+  isLastAssistant?: boolean;
+  onEdit?: (messageId: string) => void;
+  onRegenerate?: (messageId: string) => void;
+  onRetry?: (messageId: string) => void;
+  onCopy?: (messageId: string) => void;
+  onFork?: (messageId: string) => void;
+  onDelete?: (messageId: string) => void;
 };
 
 export const MessageBubble = memo(function MessageBubble({
@@ -32,17 +40,33 @@ export const MessageBubble = memo(function MessageBubble({
   isStreaming,
   showReasoning,
   layout,
+  isLastAssistant = false,
+  onEdit,
+  onRegenerate,
+  onRetry,
+  onCopy,
+  onFork,
+  onDelete,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   if (isUser) {
     return (
-      <div className="flex flex-row-reverse gap-3">
+      <div className="group/message flex flex-row-reverse gap-3">
         <div className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-500 to-rose-500 text-[11px] font-semibold text-white shadow-[0_0_0_2px_var(--color-bg)]">
           U
         </div>
         <div
           className={`flex min-w-0 flex-col items-end transition-[max-width] duration-200 ease-out ${layout.userMaxW}`}
         >
+          <MessageToolbar
+            isUser
+            isStreaming={isStreaming}
+            isLastAssistant={isLastAssistant}
+            onEdit={() => onEdit?.(message.id)}
+            onCopy={() => onCopy?.(message.id)}
+            onFork={() => onFork?.(message.id)}
+            onDelete={() => onDelete?.(message.id)}
+          />
           <div
             className={`rounded-2xl rounded-tr-md border border-indigo-400/15 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] transition-[font-size] duration-200 ease-out ${layout.messageText}`}
           >
@@ -71,7 +95,7 @@ export const MessageBubble = memo(function MessageBubble({
   const showPulseInReply = isStreaming && !reasoningOnlyStreaming && Boolean(body);
 
   return (
-      <div className="flex items-start gap-3">
+      <div className="group/message flex items-start gap-3">
       <div className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_0_0_2px_var(--color-bg)]">
         <Sparkles className="size-3.5" />
       </div>
@@ -81,6 +105,16 @@ export const MessageBubble = memo(function MessageBubble({
           <span className="size-1 rounded-full bg-[var(--color-text-dim)]/50" />
           <span className="text-[var(--color-text-dim)]">just now</span>
         </div>
+        <MessageToolbar
+          isUser={false}
+          isStreaming={isStreaming}
+          isLastAssistant={isLastAssistant}
+          onRegenerate={() => onRegenerate?.(message.id)}
+          onRetry={() => onRetry?.(message.id)}
+          onCopy={() => onCopy?.(message.id)}
+          onFork={() => onFork?.(message.id)}
+          onDelete={() => onDelete?.(message.id)}
+        />
         {showReasoning && hasReasoning && (
           <ReasoningBlock
             content={reasoning}
