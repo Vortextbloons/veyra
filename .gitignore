@@ -28,11 +28,11 @@ src-tauri/gen/
 *.sln
 *.sw?
 .cursor/
-
+.opencode/
 # Windows / build artifacts
 Thumbs.db
 Desktop.ini
 *.pdb
 *.exe
 !src-tauri/icons/**
-.AGENTS.md
+AGENTS.md
