@@ -671,6 +671,17 @@ function App() {
     return () => window.removeEventListener("veyra:inline-document-edit", handleInlineDocumentEdit);
   }, [handleSend]);
 
+  const handleModeChange = useCallback(
+    (mode: ChatMode) => {
+      if (mode === "research") {
+        setActiveNav("research");
+        return;
+      }
+      setChatMode(mode);
+    },
+    [setActiveNav],
+  );
+
   const handleTriggerMemoryExtraction = useCallback(() => {
     if (!activeConversationId) return;
     const chatModel = useProviderStore.getState().selectedModel.trim();
@@ -1099,7 +1110,7 @@ function App() {
             sidebarsCollapsed={sidebarsCollapsed}
             modelLoadProgress={modelLoadProgress}
             mode={chatMode}
-            onModeChange={setChatMode}
+            onModeChange={handleModeChange}
             agentSessions={agentSessions}
             activeAgentSessionId={activeAgentSessionId}
             agentRuntimeAvailable={agentRuntimeAvailable}

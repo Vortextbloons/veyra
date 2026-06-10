@@ -1,5 +1,6 @@
 use crate::db_utils::run_db_command;
 use crate::document_db::{self, DocumentDbState};
+use crate::path_utils::validate_export_file_path;
 use tauri::State;
 
 #[tauri::command]
@@ -105,9 +106,10 @@ pub async fn export_document_markdown(
     target_path: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<(), String> {
+    let export_path = validate_export_file_path(&target_path, &["md"])?;
     run_db_command(state.inner(), "document", move |conn| {
         let doc = document_db::get_document(conn, document_id.clone())?;
-        std::fs::write(&target_path, &doc.content_markdown)
+        std::fs::write(&export_path, &doc.content_markdown)
             .map_err(|e| format!("failed to write markdown file: {}", e))?;
         let now = chrono::Utc::now().to_rfc3339();
         document_db::update_document_exported_at(conn, document_id, now)?;
@@ -122,10 +124,11 @@ pub async fn export_document_txt(
     target_path: String,
     state: State<'_, DocumentDbState>,
 ) -> Result<(), String> {
+    let export_path = validate_export_file_path(&target_path, &["txt"])?;
     run_db_command(state.inner(), "document", move |conn| {
         let doc = document_db::get_document(conn, document_id.clone())?;
         let plain = strip_markdown(&doc.content_markdown);
-        std::fs::write(&target_path, &plain)
+        std::fs::write(&export_path, &plain)
             .map_err(|e| format!("failed to write txt file: {}", e))?;
         let now = chrono::Utc::now().to_rfc3339();
         document_db::update_document_exported_at(conn, document_id, now)?;

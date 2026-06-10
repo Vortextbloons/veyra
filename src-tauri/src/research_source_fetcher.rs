@@ -68,7 +68,7 @@ fn is_blocked_host(host: &str) -> bool {
     false
 }
 
-fn validate_url_safety(url: &str) -> Result<url::Url, String> {
+async fn validate_url_safety(url: &str) -> Result<url::Url, String> {
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
     match parsed.scheme() {
         "http" | "https" => {}
@@ -84,11 +84,35 @@ fn validate_url_safety(url: &str) -> Result<url::Url, String> {
             "URL points to a private or internal address: {host}. Research fetching is restricted to public internet sources only."
         ));
     }
+
+    // Resolve hostnames and reject any address in private/internal ranges.
+    if host.parse::<std::net::IpAddr>().is_err() {
+        let port = parsed.port().unwrap_or(443);
+        let lookup = format!("{host}:{port}");
+        let resolved = tokio::net::lookup_host(lookup.as_str())
+            .await
+            .map_err(|error| format!("DNS resolution failed for {host}: {error}"))?;
+
+        let mut found = false;
+        for addr in resolved {
+            found = true;
+            if is_private_ip(&addr.ip()) {
+                return Err(format!(
+                    "URL resolves to a private or internal address: {}. Research fetching is restricted to public internet sources only.",
+                    addr.ip()
+                ));
+            }
+        }
+        if !found {
+            return Err(format!("DNS resolution returned no addresses for {host}"));
+        }
+    }
+
     Ok(parsed)
 }
 
 pub async fn fetch_source_url(url: String) -> Result<FetchedSource, String> {
-    let parsed = validate_url_safety(&url)?;
+    let parsed = validate_url_safety(&url).await?;
 
     let response = HTTP_CLIENT
         .get(&url)

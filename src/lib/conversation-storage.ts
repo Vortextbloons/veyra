@@ -206,12 +206,20 @@ export function saveConversationSnapshot(conversations: Conversation[]) {
   }
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
-    const snapshot = pendingSnapshot;
-    pendingSnapshot = null;
-    if (!snapshot) return;
     saveQueue = saveQueue
       .catch(() => undefined)
-      .then(() => writeConversationSnapshot(snapshot));
+      .then(async () => {
+        let snapshot = pendingSnapshot;
+        pendingSnapshot = null;
+        if (!snapshot) return;
+        await writeConversationSnapshot(snapshot);
+        // Coalesce updates that arrived while the write was in flight.
+        while (pendingSnapshot) {
+          snapshot = pendingSnapshot;
+          pendingSnapshot = null;
+          await writeConversationSnapshot(snapshot);
+        }
+      });
   }, SAVE_DEBOUNCE_MS);
   return saveQueue;
 }
@@ -221,13 +229,19 @@ export function flushConversationSave(): Promise<void> {
   if (debounceTimer !== null) {
     clearTimeout(debounceTimer);
     debounceTimer = null;
-    const snapshot = pendingSnapshot;
-    pendingSnapshot = null;
-    if (snapshot) {
-      saveQueue = saveQueue
-        .catch(() => undefined)
-        .then(() => writeConversationSnapshot(snapshot));
-    }
+    saveQueue = saveQueue
+      .catch(() => undefined)
+      .then(async () => {
+        let snapshot = pendingSnapshot;
+        pendingSnapshot = null;
+        if (!snapshot) return;
+        await writeConversationSnapshot(snapshot);
+        while (pendingSnapshot) {
+          snapshot = pendingSnapshot;
+          pendingSnapshot = null;
+          await writeConversationSnapshot(snapshot);
+        }
+      });
   }
   return saveQueue.catch(() => undefined);
 }

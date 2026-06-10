@@ -23,25 +23,25 @@ const DEPTH_OPTIONS: {
   {
     value: "quick",
     label: "Quick",
-    description: "2 search rounds, up to 15 sources",
+    description: "3 search rounds, up to 35 sources",
     icon: <Zap className="size-4" />,
   },
   {
     value: "standard",
     label: "Standard",
-    description: "4 rounds, up to 36 sources, verify",
+    description: "5 rounds, up to 75 sources, verify",
     icon: <Target className="size-4" />,
   },
   {
     value: "deep",
     label: "Deep",
-    description: "6 rounds, up to 75 sources, verify + gap analysis",
+    description: "8 rounds, up to 150 sources, verify + gap analysis",
     icon: <Telescope className="size-4" />,
   },
   {
     value: "exhaustive",
     label: "Exhaustive",
-    description: "8 rounds, up to 120 sources, full analysis",
+    description: "10 rounds, up to 300 sources, full analysis",
     icon: <InfinityIcon className="size-4" />,
   },
 ];

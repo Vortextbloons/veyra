@@ -1,5 +1,5 @@
 import type { DocCreateIntent, DocReadIntent, DocUpdateIntent } from "./document-types";
-import { useDocumentStore } from "./document-store";
+import { selectActiveDocumentContent, useDocumentStore } from "./document-store";
 import { replaceMarkdownSection, insertAfterSection } from "./document-markdown";
 import { getDocument } from "@/lib/document-storage";
 import { useProjectStore } from "@/modules/projects/project-store";
@@ -94,6 +94,9 @@ export async function executeDocUpdate(
     };
   }
 
+  const currentContent =
+    store.activeDocumentId === doc.id ? selectActiveDocumentContent(store) : doc.contentMarkdown;
+
   try {
     let newContent: string;
 
@@ -112,7 +115,7 @@ export async function executeDocUpdate(
           };
         }
         newContent = replaceMarkdownSection(
-          doc.contentMarkdown,
+          currentContent,
           intent.target,
           intent.contentMarkdown
         );
@@ -128,7 +131,7 @@ export async function executeDocUpdate(
           };
         }
         newContent = insertAfterSection(
-          doc.contentMarkdown,
+          currentContent,
           intent.target,
           intent.contentMarkdown
         );
@@ -143,14 +146,14 @@ export async function executeDocUpdate(
             error: "replace_text requires target",
           };
         }
-        if (!doc.contentMarkdown.includes(intent.target)) {
+        if (!currentContent.includes(intent.target)) {
           return {
             applied: false,
             sanitizedText: `I could not find the selected text in "${doc.title}", so no document changes were applied.`,
             error: "Selected text not found",
           };
         }
-        newContent = doc.contentMarkdown.replace(intent.target, intent.contentMarkdown);
+        newContent = currentContent.replace(intent.target, intent.contentMarkdown);
         break;
 
       default:
@@ -162,7 +165,7 @@ export async function executeDocUpdate(
         };
     }
 
-    if (newContent === doc.contentMarkdown) {
+    if (newContent === currentContent) {
       return {
         applied: false,
         sanitizedText: intent.target
@@ -176,7 +179,7 @@ export async function executeDocUpdate(
 
     await store.createVersionSnapshot({
       documentId: doc.id,
-      contentMarkdown: doc.contentMarkdown,
+      contentMarkdown: currentContent,
       changeSource: "assistant",
       changeSummary: `Before ${intent.mode} update`,
       sourceConversationId: conversationId,

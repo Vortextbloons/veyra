@@ -67,30 +67,24 @@ pub fn html_to_text(html: &str) -> String {
 }
 
 fn remove_tag_blocks(html: &str, tag: &str) -> String {
-    let mut result = String::with_capacity(html.len());
-    let lower = html.to_lowercase();
+    let mut result = html.to_string();
     let open = format!("<{}", tag);
     let close = format!("</{}>", tag);
-    let mut i = 0;
 
-    while i < html.len() {
-        if let Some(start) = lower[i..].find(&open) {
-            let abs_start = i + start;
-            // Find the end of the opening tag
-            if let Some(tag_end) = html[abs_start..].find('>') {
-                let after_open = abs_start + tag_end + 1;
-                if let Some(close_start) = lower[after_open..].find(&close) {
-                    let abs_end = after_open + close_start + close.len();
-                    result.push_str(&html[i..abs_start]);
-                    i = abs_end;
-                    continue;
-                }
-            }
-            result.push_str(&html[i..]);
+    loop {
+        let lower = result.to_lowercase();
+        let Some(start) = lower.find(&open) else {
             break;
-        }
-        result.push_str(&html[i..]);
-        break;
+        };
+        let after_open = match result[start..].find('>') {
+            Some(tag_end) => start + tag_end + 1,
+            None => break,
+        };
+        let Some(close_start) = lower[after_open..].find(&close) else {
+            break;
+        };
+        let end = after_open + close_start + close.len();
+        result = format!("{}{}", &result[..start], &result[end..]);
     }
 
     result

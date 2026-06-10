@@ -65,13 +65,13 @@ type DepthConfig = {
 function getDepthConfig(depth: ResearchDepth): DepthConfig {
   switch (depth) {
     case "quick":
-      return { maxSearchRounds: 2, maxSources: 15, maxSourcesPerRound: 8, verify: false, followUp: false, adaptiveDeepening: false, minSourceQuality: 2, perSourceRead: false, crossSourceVerify: false, gapAnalysis: false };
+      return { maxSearchRounds: 3, maxSources: 35, maxSourcesPerRound: 12, verify: false, followUp: false, adaptiveDeepening: false, minSourceQuality: 2, perSourceRead: false, crossSourceVerify: false, gapAnalysis: false };
     case "standard":
-      return { maxSearchRounds: 4, maxSources: 36, maxSourcesPerRound: 12, verify: true, followUp: false, adaptiveDeepening: false, minSourceQuality: 3, perSourceRead: true, crossSourceVerify: true, gapAnalysis: false };
+      return { maxSearchRounds: 5, maxSources: 75, maxSourcesPerRound: 15, verify: true, followUp: false, adaptiveDeepening: false, minSourceQuality: 3, perSourceRead: true, crossSourceVerify: true, gapAnalysis: false };
     case "deep":
-      return { maxSearchRounds: 6, maxSources: 75, maxSourcesPerRound: 16, verify: true, followUp: true, adaptiveDeepening: true, minSourceQuality: 3, perSourceRead: true, crossSourceVerify: true, gapAnalysis: true };
+      return { maxSearchRounds: 8, maxSources: 150, maxSourcesPerRound: 19, verify: true, followUp: true, adaptiveDeepening: true, minSourceQuality: 3, perSourceRead: true, crossSourceVerify: true, gapAnalysis: true };
     case "exhaustive":
-      return { maxSearchRounds: 8, maxSources: 120, maxSourcesPerRound: 20, verify: true, followUp: true, adaptiveDeepening: true, minSourceQuality: 4, perSourceRead: true, crossSourceVerify: true, gapAnalysis: true };
+      return { maxSearchRounds: 10, maxSources: 300, maxSourcesPerRound: 30, verify: true, followUp: true, adaptiveDeepening: true, minSourceQuality: 4, perSourceRead: true, crossSourceVerify: true, gapAnalysis: true };
   }
 }
 

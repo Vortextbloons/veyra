@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { Bot, Check, ChevronDown, MessageSquare } from "lucide-react";
+import { Bot, Check, ChevronDown, MessageSquare, Telescope } from "lucide-react";
 import type { ChatMode } from "@/lib/chat-types";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
@@ -15,6 +15,12 @@ const MODES: { id: ChatMode; label: string; description: string; icon: ReactNode
     label: "Agents",
     description: "Multi-step tasks with tools",
     icon: <Bot className="size-3.5" />,
+  },
+  {
+    id: "research",
+    label: "Deep Research",
+    description: "In-depth research and analysis",
+    icon: <Telescope className="size-3.5" />,
   },
 ];
 

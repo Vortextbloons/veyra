@@ -1,4 +1,5 @@
 use crate::db_utils::run_db_command;
+use crate::path_utils::validate_export_file_path;
 use crate::project_db::{self, ProjectDbState};
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -92,9 +93,11 @@ pub async fn export_project_manifest(
     })
     .await?;
 
+    let export_path = validate_export_file_path(&target_path, &["json"])?;
+
     let json = serde_json::to_string_pretty(&manifest)
         .map_err(|e| format!("failed to serialize manifest: {}", e))?;
-    std::fs::write(&target_path, json)
+    std::fs::write(&export_path, json)
         .map_err(|e| format!("failed to write manifest: {}", e))?;
     Ok(())
 }

@@ -38,6 +38,7 @@ mod document_db;
 mod lm_studio_setup;
 mod memory_commands;
 mod memory_db;
+mod path_utils;
 mod project_commands;
 mod project_db;
 mod research_commands;

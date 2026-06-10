@@ -25,6 +25,8 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 type DocumentStore = {
   documents: DocumentRecord[];
   activeDocumentId: string | null;
+  /** In-memory draft for the active document; avoids remapping the full documents array on every keystroke. */
+  activeDraftContent: string | null;
   activeConversationId: string | null;
   activeProjectId: string | null;
   versions: DocumentVersion[];
@@ -70,11 +72,20 @@ function removeDocument(documents: DocumentRecord[], id: string): DocumentRecord
   return documents.filter((d) => d.id !== id);
 }
 
+export function selectActiveDocumentContent(state: DocumentStore): string {
+  const { activeDocumentId, activeDraftContent, documents } = state;
+  if (!activeDocumentId) return "";
+  const doc = documents.find((item) => item.id === activeDocumentId);
+  if (!doc) return "";
+  return activeDraftContent ?? doc.contentMarkdown;
+}
+
 let hydrationPromise: Promise<void> | null = null;
 
 export const useDocumentStore = create<DocumentStore>((set, get) => ({
   documents: [],
   activeDocumentId: null,
+  activeDraftContent: null,
   activeConversationId: null,
   activeProjectId: null,
   versions: [],
@@ -85,8 +96,8 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   _lastSavedContent: null,
 
   hydrateDocuments: async () => {
-    if (get().isLoading && get().documents.length > 0) return;
-    hydrationPromise ??= (async () => {
+    if (hydrationPromise) return hydrationPromise;
+    hydrationPromise = (async () => {
       set({ isLoading: true, error: null });
       try {
         const conversationId = get().activeConversationId ?? undefined;
@@ -95,6 +106,8 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
         set({ documents, isLoading: false });
       } catch (error) {
         set({ error: String(error), isLoading: false });
+      } finally {
+        hydrationPromise = null;
       }
     })();
     return hydrationPromise;
@@ -120,6 +133,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       set((state) => ({
         documents: [doc, ...state.documents],
         activeDocumentId: shouldOpen ? doc.id : state.activeDocumentId,
+        activeDraftContent: shouldOpen ? doc.contentMarkdown : state.activeDraftContent,
         versions: shouldOpen ? [] : state.versions,
         _lastSavedContent: shouldOpen ? doc.contentMarkdown : state._lastSavedContent,
       }));
@@ -135,7 +149,10 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       const doc = await ipcUpdateDocument(input);
       set((state) => ({
         documents: replaceDocument(state.documents, doc),
-        _lastSavedContent: doc.contentMarkdown,
+        activeDraftContent:
+          state.activeDocumentId === doc.id ? doc.contentMarkdown : state.activeDraftContent,
+        _lastSavedContent:
+          state.activeDocumentId === doc.id ? doc.contentMarkdown : state._lastSavedContent,
         saveStatus: "saved",
       }));
     } catch (error) {
@@ -151,7 +168,9 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
         const isActive = state.activeDocumentId === id;
         return {
           documents: removeDocument(state.documents, id),
-          ...(isActive ? { activeDocumentId: null, versions: [], _lastSavedContent: null } : {}),
+          ...(isActive
+            ? { activeDocumentId: null, activeDraftContent: null, versions: [], _lastSavedContent: null }
+            : {}),
         };
       });
     } catch (error) {
@@ -171,7 +190,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   },
 
   openDocument: async (id) => {
-    set({ activeDocumentId: id, versions: [], isLoading: true });
+    set({ activeDocumentId: id, activeDraftContent: null, versions: [], isLoading: true });
     try {
       const [doc, versions] = await Promise.all([
         ipcGetDocument(id),
@@ -179,6 +198,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       ]);
       set((state) => ({
         documents: replaceDocument(state.documents, doc),
+        activeDraftContent: doc.contentMarkdown,
         versions,
         isLoading: false,
         _lastSavedContent: doc.contentMarkdown,
@@ -197,6 +217,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     await get().saveNow();
     set({
       activeDocumentId: null,
+      activeDraftContent: null,
       versions: [],
       _debounceTimer: null,
       _lastSavedContent: null,
@@ -209,12 +230,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     const activeId = state.activeDocumentId;
     if (!activeId) return;
 
-    set((s) => ({
-      documents: s.documents.map((d) =>
-        d.id === activeId ? { ...d, contentMarkdown: content, updatedAt: new Date().toISOString() } : d
-      ),
-      saveStatus: "saving",
-    }));
+    set({ activeDraftContent: content, saveStatus: "saving" });
 
     if (state._debounceTimer) {
       clearTimeout(state._debounceTimer);
@@ -238,7 +254,8 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     const doc = state.documents.find((d) => d.id === activeId);
     if (!doc) return;
 
-    if (doc.contentMarkdown === state._lastSavedContent) {
+    const content = state.activeDraftContent ?? doc.contentMarkdown;
+    if (content === state._lastSavedContent) {
       set({ saveStatus: "saved" });
       return;
     }
@@ -250,7 +267,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       }
       const saved = await ipcUpdateDocument({
         id: activeId,
-        contentMarkdown: doc.contentMarkdown,
+        contentMarkdown: content,
       });
       const version = await ipcCreateVersion({
         documentId: activeId,
@@ -260,6 +277,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       });
       set((current) => ({
         documents: replaceDocument(current.documents, saved),
+        activeDraftContent: saved.contentMarkdown,
         versions: current.activeDocumentId === activeId ? [version, ...current.versions] : current.versions,
         _lastSavedContent: saved.contentMarkdown,
         saveStatus: "saved",
@@ -280,11 +298,12 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
 
   restoreVersion: async (versionId) => {
     try {
-      const currentDoc = get().documents.find((doc) => doc.id === get().activeDocumentId);
+      const store = get();
+      const currentDoc = store.documents.find((doc) => doc.id === store.activeDocumentId);
       if (currentDoc) {
         await ipcCreateVersion({
           documentId: currentDoc.id,
-          contentMarkdown: currentDoc.contentMarkdown,
+          contentMarkdown: store.activeDraftContent ?? currentDoc.contentMarkdown,
           changeSource: "user",
           changeSummary: "Before version restore",
         });
@@ -292,6 +311,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       const doc = await ipcRestoreVersion(versionId);
       set((state) => ({
         documents: replaceDocument(state.documents, doc),
+        activeDraftContent: doc.contentMarkdown,
         _lastSavedContent: doc.contentMarkdown,
         saveStatus: "saved",
       }));

@@ -1,6 +1,6 @@
 import { WandSparkles, Scissors, StretchHorizontal, Languages, MessageSquareQuote } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDocumentStore } from "../document-store";
+import { selectActiveDocumentContent, useDocumentStore } from "../document-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { countWords, countCharacters } from "../document-markdown";
 
@@ -54,6 +54,7 @@ function selectedTextCoordinates(textarea: HTMLTextAreaElement) {
 
 export function MarkdownEditor() {
   const activeDocumentId = useDocumentStore((s) => s.activeDocumentId);
+  const activeContent = useDocumentStore(selectActiveDocumentContent);
   const documents = useDocumentStore((s) => s.documents);
   const setContent = useDocumentStore((s) => s.setContent);
   const saveStatus = useDocumentStore((s) => s.saveStatus);
@@ -64,7 +65,7 @@ export function MarkdownEditor() {
   const documentTabSize = useSettingsStore((s) => s.documentTabSize);
 
   const doc = documents.find((d) => d.id === activeDocumentId);
-  const [localContent, setLocalContent] = useState(doc?.contentMarkdown ?? "");
+  const [localContent, setLocalContent] = useState(activeContent);
   const [inlineEdit, setInlineEdit] = useState<{
     start: number;
     end: number;
@@ -75,8 +76,8 @@ export function MarkdownEditor() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setLocalContent(doc?.contentMarkdown ?? "");
-  }, [activeDocumentId, doc?.contentMarkdown]);
+    setLocalContent(activeContent);
+  }, [activeDocumentId, activeContent]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {

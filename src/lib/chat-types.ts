@@ -7,7 +7,7 @@ import type { SearchResult } from "@/modules/web-search/types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
-export type ChatMode = "chat" | "agents";
+export type ChatMode = "chat" | "agents" | "research";
 
 export type WebSearchSource = Pick<SearchResult, "id" | "title" | "url"> & {
   snippet: string;
