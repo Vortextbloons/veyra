@@ -116,10 +116,6 @@ Do not put production passwords or API keys in the repository.
 
 Logo files under `public/logos/` and root `*.jpg` brand images are for UI display. Ensure you have rights to redistribute them before publishing forks.
 
-## Security
-
-See [SECURITY.md](SECURITY.md).
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).

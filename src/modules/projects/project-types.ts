@@ -76,20 +76,6 @@ export interface UpdateProjectInput {
   lastOpenedAt?: string;
 }
 
-// ── Project file references (Phase 5+) ──────────────────────────────────────
-
-export interface ProjectFileRecord {
-  id: string;
-  projectId: string;
-  name: string;
-  path?: string;
-  mimeType?: string;
-  sizeBytes?: number;
-  contentHash?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 // ── UI helpers ──────────────────────────────────────────────────────────────
 
 export const PROJECT_KIND_LABELS: Record<ProjectKind, string> = {

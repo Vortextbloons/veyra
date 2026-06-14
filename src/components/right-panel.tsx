@@ -178,6 +178,12 @@ function AgentSessionsPanel({
   activeCount: number;
   onClearSessions?: () => void;
 }) {
+  const handleClearSessions = () => {
+    if (window.confirm("Clear all agent sessions? This cannot be undone.")) {
+      onClearSessions?.();
+    }
+  };
+
   return (
     <PanelShell title="Sessions">
       <div className="flex items-center justify-between">
@@ -199,7 +205,7 @@ function AgentSessionsPanel({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={onClearSessions}
+              onClick={handleClearSessions}
               title="Clear all sessions"
               className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] transition-colors hover:bg-red-400/10 hover:text-red-300"
             >

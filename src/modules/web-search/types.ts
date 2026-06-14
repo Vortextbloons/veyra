@@ -40,20 +40,6 @@ export type SearchResult = {
   sourceType?: "webpage" | "docs" | "news" | "github" | "wikipedia" | "pdf" | "forum" | "package";
 };
 
-export type WebSearchInput = {
-  query: string;
-  limit?: number;
-  language?: string;
-};
-
-export type WebSearchOutput = {
-  query: string;
-  providerId: string;
-  results: SearchResult[];
-  resultCount: number;
-  createdAt: string;
-};
-
 export type SearchContextBundle = {
   query: string;
   summary: string;

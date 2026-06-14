@@ -221,6 +221,17 @@ pub async fn stop_opencode_agent(session_id: String) -> Result<(), String> {
         .map_err(|error| format!("opencode stop task failed: {error}"))?
 }
 
+pub fn stop_all_opencode_agents() {
+    let pids = RUNNING_AGENT_PIDS
+        .lock()
+        .drain()
+        .map(|(_, pid)| pid)
+        .collect::<Vec<_>>();
+    for pid in pids {
+        kill_pid(pid);
+    }
+}
+
 fn stop_opencode_agent_sync(session_id: String) -> Result<(), String> {
     let session_id = session_id.trim();
     if session_id.is_empty() {
@@ -325,7 +336,7 @@ fn opencode_agent_for_mode(mode: &str) -> &str {
         "ask" => "plan",
         "plan" => "plan",
         "build" => "build",
-        _ => "build",
+        _ => "plan",
     }
 }
 

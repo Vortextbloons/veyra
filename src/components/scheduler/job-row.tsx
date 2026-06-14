@@ -26,7 +26,7 @@ export function formatElapsed(startedAt: number): string {
   return `${minutes}:${secs.toString().padStart(2, "0")}`;
 }
 
-export function formatDuration(ms: number): string {
+export function formatDurationMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return `${seconds}s`;

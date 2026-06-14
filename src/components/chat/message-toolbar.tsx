@@ -55,6 +55,12 @@ export function MessageToolbar({
   onFork,
   onDelete,
 }: MessageToolbarProps) {
+  const handleDelete = () => {
+    if (window.confirm("Delete this message? This cannot be undone.")) {
+      onDelete?.();
+    }
+  };
+
   return (
     <div
       className={`flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-0.5 shadow-lg shadow-black/30 opacity-0 transition-opacity group-hover/message:opacity-100 ${
@@ -90,7 +96,7 @@ export function MessageToolbar({
       <ToolbarButton label="Fork" onClick={onFork} disabled={isStreaming}>
         <GitFork className="size-3.5" />
       </ToolbarButton>
-      <ToolbarButton label="Delete" onClick={onDelete} disabled={isStreaming}>
+      <ToolbarButton label="Delete" onClick={handleDelete} disabled={isStreaming}>
         <Trash2 className="size-3.5" />
       </ToolbarButton>
     </div>

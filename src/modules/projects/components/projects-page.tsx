@@ -71,6 +71,11 @@ export function ProjectsPage() {
     : archivedProjects;
 
   const selectedProject = projects.find((p) => p.id === activeProjectId) ?? null;
+  const handleArchiveProject = (project: ProjectRecord) => {
+    if (window.confirm(`Archive project "${project.name}"?`)) {
+      void archiveProject(project.id);
+    }
+  };
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1">
@@ -113,7 +118,7 @@ export function ProjectsPage() {
               project={project}
               active={project.id === activeProjectId}
               onSelect={() => setActiveProjectId(project.id)}
-              onArchive={() => archiveProject(project.id)}
+              onArchive={() => handleArchiveProject(project)}
             />
           ))}
 
@@ -131,7 +136,7 @@ export function ProjectsPage() {
                   project={project}
                   active={project.id === activeProjectId}
                   onSelect={() => setActiveProjectId(project.id)}
-                  onArchive={() => archiveProject(project.id)}
+                  onArchive={() => handleArchiveProject(project)}
                 />
               ))}
             </>

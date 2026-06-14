@@ -17,6 +17,12 @@ export function AgentSessionList({
   onStop: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
+  const handleDelete = (session: AgentSession) => {
+    if (window.confirm(`Delete agent session "${session.title}"? This cannot be undone.`)) {
+      onDelete(session.id);
+    }
+  };
+
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-[var(--color-border)] bg-[#101018]">
       <div className="border-b border-[var(--color-border)] p-3">
@@ -83,7 +89,7 @@ export function AgentSessionList({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDelete(session.id);
+                    handleDelete(session);
                   }}
                   className="mt-0.5 grid size-5 shrink-0 place-items-center rounded text-[var(--color-text-dim)] opacity-0 transition-opacity hover:bg-red-400/10 hover:text-red-300 group-hover:opacity-100"
                   title="Delete session"

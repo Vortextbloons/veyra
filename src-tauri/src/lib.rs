@@ -273,6 +273,7 @@ pub fn run() {
                     reveal_main_window(&app_handle, false);
                 }
                 RunEvent::ExitRequested { .. } => {
+                    agent_commands::stop_all_opencode_agents();
                     if let Some(state) = app_handle.try_state::<searxng_setup::SearxngState>() {
                         if state.was_started_by_us() {
                             searxng_setup::stop_container();

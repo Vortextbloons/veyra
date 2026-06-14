@@ -21,6 +21,7 @@ pub fn open_app_sqlite(app: &AppHandle, db_filename: &str) -> Result<Connection,
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          PRAGMA foreign_keys = ON;
+         PRAGMA busy_timeout = 5000;
          PRAGMA cache_size = -64000;
          PRAGMA mmap_size = 268435456;",
     )

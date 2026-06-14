@@ -5,7 +5,7 @@ import type { AiJobSnapshot } from "@/lib/ai-scheduler";
 import { PriorityChip } from "@/components/scheduler/priority-chip";
 import {
   formatElapsed,
-  formatDuration,
+  formatDurationMs,
   statusIcon,
   statusColor,
   statusBorderColor,
@@ -75,7 +75,7 @@ function MetaRow({ label, value }: { label: string; value: ReactNode }) {
 export function JobDetail({ job, onBack }: { job: AiJobSnapshot; onBack: () => void }) {
   const duration =
     job.startedAt && job.finishedAt
-      ? formatDuration(job.finishedAt - job.startedAt)
+      ? formatDurationMs(job.finishedAt - job.startedAt)
       : job.startedAt && job.status === "running"
         ? formatElapsed(job.startedAt)
         : null;
