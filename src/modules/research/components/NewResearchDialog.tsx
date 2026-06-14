@@ -7,11 +7,15 @@ import {
   Target,
   Telescope,
   Infinity as InfinityIcon,
+  AlertCircle,
 } from "lucide-react";
 import { useProviderStore } from "@/stores/provider-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useResearchStore } from "../research-store";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { executeResearchRun } from "../research-runtime";
+import { invokeTestSearxngConnection } from "@/modules/web-search/tauri-commands";
 import type { ResearchDepth } from "../research-types";
 
 const DEPTH_OPTIONS: {
@@ -23,25 +27,25 @@ const DEPTH_OPTIONS: {
   {
     value: "quick",
     label: "Quick",
-    description: "3 search rounds, up to 35 sources",
+    description: "3 rounds, lighter evidence pass",
     icon: <Zap className="size-4" />,
   },
   {
     value: "standard",
     label: "Standard",
-    description: "5 rounds, up to 75 sources, verify",
+    description: "5 rounds, source validation + verify",
     icon: <Target className="size-4" />,
   },
   {
     value: "deep",
     label: "Deep",
-    description: "8 rounds, up to 150 sources, verify + gap analysis",
+    description: "8 rounds, verify + gap follow-ups",
     icon: <Telescope className="size-4" />,
   },
   {
     value: "exhaustive",
     label: "Exhaustive",
-    description: "10 rounds, up to 300 sources, full analysis",
+    description: "10 rounds, stricter source threshold",
     icon: <InfinityIcon className="size-4" />,
   },
 ];
@@ -57,10 +61,41 @@ type Props = {
   onClose: () => void;
 };
 
+async function runResearchPreflight(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  if (useConnectivityStore.getState().effectiveConnectivity === "offline") {
+    return {
+      ok: false,
+      error: "Web search is unavailable in Offline mode. Disable Offline mode in Settings → Connectivity.",
+    };
+  }
+
+  const searxngUrl = useSettingsStore.getState().webSearchSearxngUrl.trim();
+  if (!searxngUrl) {
+    return {
+      ok: false,
+      error: "SearXNG URL is not configured. Open Settings → Tools → Web Search to set a SearXNG instance URL.",
+    };
+  }
+
+  try {
+    await invokeTestSearxngConnection(searxngUrl);
+    return { ok: true };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      error: `Web search pre-flight failed: ${detail}`,
+    };
+  }
+}
+
 export function NewResearchDialog({ onClose }: Props) {
   const [question, setQuestion] = useState("");
   const [depth, setDepth] = useState<ResearchDepth>("standard");
   const [isStarting, setIsStarting] = useState(false);
+  const [preflightError, setPreflightError] = useState<string | null>(null);
 
   const createRun = useResearchStore((s) => s.createRun);
   const providers = useProviderStore((s) => s.providers);
@@ -81,8 +116,15 @@ export function NewResearchDialog({ onClose }: Props) {
 
   const handleStart = async () => {
     if (!canStart) return;
+    setPreflightError(null);
     setIsStarting(true);
     try {
+      const preflight = await runResearchPreflight();
+      if (!preflight.ok) {
+        setPreflightError(preflight.error);
+        return;
+      }
+
       const run = await createRun({
         question: question.trim(),
         depth,
@@ -109,6 +151,9 @@ export function NewResearchDialog({ onClose }: Props) {
       onClose();
     } catch (err) {
       console.error("Failed to start research:", err);
+      setPreflightError(
+        err instanceof Error ? err.message : "Failed to start research.",
+      );
     } finally {
       setIsStarting(false);
     }
@@ -239,6 +284,16 @@ export function NewResearchDialog({ onClose }: Props) {
             </div>
           </div>
         </div>
+
+        {preflightError && (
+          <div className="mx-6 mb-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/[0.08] px-3 py-2 text-[12px] text-red-200">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <div className="flex-1">
+              <div className="font-medium">Cannot start research</div>
+              <div className="mt-0.5 text-[11.5px] text-red-200/85">{preflightError}</div>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-[var(--color-border)] px-6 py-4">

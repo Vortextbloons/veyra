@@ -8,13 +8,13 @@ import { DocEditorPanel } from "@/modules/documents/components/doc-editor-panel"
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { executeChatSend, ensureProviderReady, triggerMemoryExtractionNow } from "@/lib/chat-actions";
 import { prepareAgentLmStudioModel } from "@/lib/lm-model-session";
-import type { ChatMessage, ContextBreakdown, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
+import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
 import { isChatModeNav } from "@/lib/chat-types";
 import { useWorkspaceModeChange } from "@/lib/workspace-mode";
 import type { MessageAttachment } from "@/lib/message-attachments";
-import { estimateTokens, getContextStats, type BuildChatContextOptions } from "@/lib/context";
-import { getContextBreakdown } from "@/lib/context-breakdown";
-import { buildContextAnchoringBlock } from "@/lib/prompts";
+import { estimateTokens } from "@/lib/context";
+import { getContextBreakdown, getContextStatsFromBreakdown } from "@/lib/context-breakdown";
+import { buildContextPanelOptions } from "@/lib/context-panel-options";
 import { ShutdownOverlay } from "@/components/shutdown-overlay";
 import { registerAppShutdownHandler } from "@/lib/app-shutdown";
 import {
@@ -176,7 +176,6 @@ function App() {
   const workspaceChatMode = useSettingsStore((state) => state.workspaceChatMode);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
   const setRightPanelCollapsed = useSettingsStore((state) => state.setRightPanelCollapsed);
-  const contextAnchoringEnabled = useSettingsStore((s) => s.contextAnchoringEnabled);
   const defaultWebSearchEnabled = useSettingsStore(
     (state) => state.defaultWebSearchEnabled,
   );
@@ -359,27 +358,15 @@ function App() {
   const selectedModelInfo = models.find((model) => model.id === selectedModel);
   const selectedProviderInfo = providers.find((p) => p.id === selectedProvider);
 
-  const chatContextStats: ContextStats | undefined = useMemo(
-    () =>
-      activeConversation
-        ? getContextStats(activeConversation.messages, resolvedContextLength, resolvedReservedOutputTokens)
-        : undefined,
-    [activeConversation, resolvedContextLength, resolvedReservedOutputTokens],
-  );
-
-  const chatContextBreakdown: ContextBreakdown | undefined = useMemo(() => {
+  const chatContextBreakdown = useMemo(() => {
     if (!activeConversation) return undefined;
-    const contextAnchoringBlock = contextAnchoringEnabled
-      ? buildContextAnchoringBlock()
-      : undefined;
-    const breakdownOptions: BuildChatContextOptions = {
-      conversationSummary: activeConversation.conversationSummary,
-      summaryCoversMessageCount: activeConversation.summaryCoversMessageCount,
-      contextAnchoringBlock,
-      reservedOutputTokens: resolvedReservedOutputTokens,
+    const breakdownOptions = buildContextPanelOptions({
+      conversation: activeConversation,
+      modelId: selectedModel,
       modelName: selectedModelInfo?.name,
       providerName: selectedProviderInfo?.name,
-    };
+      reservedOutputTokens: resolvedReservedOutputTokens,
+    });
     return getContextBreakdown(
       activeConversation.messages,
       breakdownOptions,
@@ -387,12 +374,17 @@ function App() {
     );
   }, [
     activeConversation,
-    contextAnchoringEnabled,
     resolvedContextLength,
     resolvedReservedOutputTokens,
+    selectedModel,
     selectedModelInfo?.name,
     selectedProviderInfo?.name,
   ]);
+
+  const chatContextStats: ContextStats | undefined = useMemo(
+    () => (chatContextBreakdown ? getContextStatsFromBreakdown(chatContextBreakdown) : undefined),
+    [chatContextBreakdown],
+  );
 
   const recentChats: RecentChatsItem[] = useMemo(() => {
     const scoped = activeProjectId

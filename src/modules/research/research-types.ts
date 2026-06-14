@@ -140,6 +140,16 @@ export interface ResearchSource {
    * Not the same as `status` (which is the research pipeline state).
    */
   fetchStatus?: string;
+  sourceQuality?: {
+    relevant: boolean;
+    quality: number;
+    relevanceScore?: number;
+    credibilityScore?: number;
+    currencyScore?: number;
+    depthScore?: number;
+    reason?: string;
+    keyInsights?: string[];
+  };
   createdAt: string;
 }
 
@@ -260,6 +270,7 @@ export interface UpdateResearchSourceInput {
   fetchedAt?: string;
   readAt?: string;
   error?: string;
+  sourceQuality?: ResearchSource["sourceQuality"];
 }
 
 export interface CreateResearchEvidenceInput {

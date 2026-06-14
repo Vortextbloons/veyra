@@ -1,4 +1,4 @@
-import type { ChatMessage, ContextBlock, ContextBreakdown } from "@/lib/chat-types";
+import type { ChatMessage, ContextBlock, ContextBreakdown, ContextStats } from "@/lib/chat-types";
 import { estimateTokens, buildChatContext, type BuildChatContextOptions } from "@/lib/context";
 import {
   VEYRA_CORE_SYSTEM,
@@ -160,5 +160,26 @@ export function getContextBreakdown(
     totalTokens,
     contextLimit: limit,
     reservedOutputTokens: reserved,
+  };
+}
+
+export function getBreakdownInputTokens(breakdown: ContextBreakdown): number {
+  const includedMessageTokens = breakdown.messageBlocks
+    .filter((block) => !block.dropped)
+    .reduce((sum, block) => sum + block.tokenCount, 0);
+  return breakdown.totalSystemTokens + includedMessageTokens;
+}
+
+export function getContextStatsFromBreakdown(breakdown: ContextBreakdown): ContextStats {
+  const estimatedTokens = getBreakdownInputTokens(breakdown);
+  const includedMessages = breakdown.messageBlocks.filter((block) => !block.dropped).length;
+
+  return {
+    estimatedTokens,
+    contextLimit: breakdown.contextLimit,
+    percentUsed: Math.round((estimatedTokens / breakdown.contextLimit) * 100),
+    includedMessages,
+    droppedMessages: breakdown.droppedCount,
+    reservedOutputTokens: breakdown.reservedOutputTokens,
   };
 }

@@ -98,6 +98,7 @@ pub struct ResearchSourceRow {
     pub read_at: Option<String>,
     pub error: Option<String>,
     pub fetch_status: Option<String>,
+    pub source_quality: Option<serde_json::Value>,
     pub created_at: String,
 }
 
@@ -261,6 +262,7 @@ pub struct UpdateResearchSourceInput {
     pub fetched_at: Option<String>,
     pub read_at: Option<String>,
     pub error: Option<String>,
+    pub source_quality: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -413,6 +415,7 @@ CREATE TABLE IF NOT EXISTS research_sources (
   read_at TEXT,
   error TEXT,
   fetch_status TEXT,
+  source_quality_json TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE CASCADE
 );
@@ -495,7 +498,7 @@ CREATE INDEX IF NOT EXISTS idx_research_contradictions_run ON research_contradic
 CREATE INDEX IF NOT EXISTS idx_research_reports_run ON research_reports(run_id);
 "#;
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -613,6 +616,9 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         if schema_version < 4 {
             add_column_if_missing(conn, "research_sources", "fetch_status", "TEXT")?;
         }
+        if schema_version < 5 {
+            add_column_if_missing(conn, "research_sources", "source_quality_json", "TEXT")?;
+        }
 
         conn.execute(
             "INSERT INTO _schema_migrations (module, version, applied_at) VALUES ('research', ?1, datetime('now'))
@@ -701,6 +707,8 @@ fn row_to_step(row: &rusqlite::Row) -> rusqlite::Result<ResearchStepRow> {
 }
 
 fn row_to_source(row: &rusqlite::Row) -> rusqlite::Result<ResearchSourceRow> {
+    let source_quality_json: Option<String> = row.get("source_quality_json")?;
+    let source_quality = source_quality_json.and_then(|s| serde_json::from_str(&s).ok());
     Ok(ResearchSourceRow {
         id: row.get("id")?,
         run_id: row.get("run_id")?,
@@ -719,6 +727,7 @@ fn row_to_source(row: &rusqlite::Row) -> rusqlite::Result<ResearchSourceRow> {
         read_at: row.get("read_at")?,
         error: row.get("error")?,
         fetch_status: row.get("fetch_status")?,
+        source_quality,
         created_at: row.get("created_at")?,
     })
 }
@@ -1125,7 +1134,7 @@ pub fn list_steps_for_run(conn: &Connection, run_id: String) -> Result<Vec<Resea
 
 // ── Sources ────────────────────────────────────────────────────────────────────
 
-const SOURCE_SELECT_COLS: &str = "id, run_id, step_id, url, title, snippet, full_text, content_type, status, source_type, engine, score, rank, fetched_at, read_at, error, fetch_status, created_at";
+const SOURCE_SELECT_COLS: &str = "id, run_id, step_id, url, title, snippet, full_text, content_type, status, source_type, engine, score, rank, fetched_at, read_at, error, fetch_status, source_quality_json, created_at";
 
 pub fn create_source(conn: &Connection, input_json: String) -> Result<ResearchSourceRow, String> {
     let input: CreateResearchSourceInput = serde_json::from_str(&input_json)
@@ -1215,6 +1224,12 @@ pub fn update_source(conn: &Connection, input_json: String) -> Result<ResearchSo
     if let Some(v) = input.error {
         sets.push(format!("error = ?{}", params.len() + 1));
         params.push(Value::Text(v));
+    }
+    if let Some(v) = input.source_quality {
+        let json = serde_json::to_string(&v)
+            .map_err(|e| format!("failed to serialize source_quality: {}", e))?;
+        sets.push(format!("source_quality_json = ?{}", params.len() + 1));
+        params.push(Value::Text(json));
     }
 
     if sets.is_empty() {

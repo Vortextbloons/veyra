@@ -40,6 +40,17 @@ export function ResearchPlanPanel({ plan, runId }: Props) {
       if (!Array.isArray(parsed.steps)) {
         throw new Error("Plan must have a 'steps' array");
       }
+      if (parsed.steps.length === 0) {
+        throw new Error("Plan must include at least one step");
+      }
+      parsed.steps.forEach((step: Partial<ResearchPlanStep>, index) => {
+        if (!step.title || !step.description) {
+          throw new Error(`Step ${index + 1} must include title and description`);
+        }
+        if (!Array.isArray(step.searchQueries) || step.searchQueries.some((q) => typeof q !== "string" || q.trim().length === 0)) {
+          throw new Error(`Step ${index + 1} must include non-empty search queries`);
+        }
+      });
       await updateRun({
         id: runId,
         plan: { ...parsed, userEdited: true, runId },

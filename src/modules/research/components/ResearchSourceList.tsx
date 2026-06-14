@@ -96,6 +96,28 @@ export function ResearchSourceList({ sources }: Props) {
                 {SOURCE_TYPE_LABELS[source.sourceType] || source.sourceType}
               </span>
 
+              {source.sourceQuality && (
+                <div
+                  className="flex shrink-0 items-center gap-1.5"
+                  title={source.sourceQuality.reason || "Validated source quality"}
+                >
+                  <span
+                    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${
+                      source.sourceQuality.relevant
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                        : "border-amber-500/20 bg-amber-500/10 text-amber-300"
+                    }`}
+                  >
+                    Q{source.sourceQuality.quality}/5
+                  </span>
+                  {source.sourceQuality.credibilityScore !== undefined && (
+                    <span className="text-[10px] text-[var(--color-text-dim)]">
+                      Cred {source.sourceQuality.credibilityScore}/5
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Score bar */}
               {source.score !== undefined && source.score > 0 && (
                 <div className="flex w-16 items-center gap-1.5">

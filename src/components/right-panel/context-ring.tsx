@@ -2,33 +2,42 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ContextBlock, ContextBreakdown, ContextStats } from "@/lib/chat-types";
 import { CONTEXT_BLOCK_ACCENTS } from "@/lib/chat-types";
+import { getBreakdownInputTokens } from "@/lib/context-breakdown";
 import { PanelShell } from "@/components/right-panel";
 import { ContextBreakdownPanel } from "@/components/right-panel/context-breakdown";
 
-const MIN_SEGMENT_PX = 2;
+function tokenLength(tokens: number, contextLimit: number, circumference: number): number {
+  if (tokens <= 0 || contextLimit <= 0) return 0;
+  return (tokens / contextLimit) * circumference;
+}
 
 function getSegments(
   breakdown: ContextBreakdown,
   circumference: number,
 ): { color: string; length: number }[] {
   const segs: { color: string; length: number }[] = [];
-  const all = [
+  const blocks = [
     ...breakdown.systemBlocks,
-    ...breakdown.messageBlocks.filter((b) => !b.dropped),
+    ...breakdown.messageBlocks.filter((block) => !block.dropped),
   ];
-  for (const block of all) {
-    const raw = (block.tokenCount / breakdown.contextLimit) * circumference;
-    segs.push({
-      color: CONTEXT_BLOCK_ACCENTS[block.category],
-      length: Math.max(raw, MIN_SEGMENT_PX),
-    });
+
+  for (const block of blocks) {
+    const length = tokenLength(block.tokenCount, breakdown.contextLimit, circumference);
+    if (length > 0) {
+      segs.push({
+        color: CONTEXT_BLOCK_ACCENTS[block.category],
+        length,
+      });
+    }
   }
-  const totalSegLen = segs.reduce((s, seg) => s + seg.length, 0);
-  if (totalSegLen > circumference) {
-    const scale = circumference / totalSegLen;
-    for (const seg of segs) seg.length *= scale;
-  }
+
   return segs;
+}
+
+function getContextPercent(breakdown?: ContextBreakdown, fallbackPercent = 0): number {
+  if (!breakdown) return Math.max(0, Math.min(100, fallbackPercent));
+  const inputTokens = getBreakdownInputTokens(breakdown);
+  return Math.round((inputTokens / breakdown.contextLimit) * 100);
 }
 
 export function ContextPanel({
@@ -38,7 +47,7 @@ export function ContextPanel({
   stats?: ContextStats;
   breakdown?: ContextBreakdown;
 }) {
-  const percent = stats?.percentUsed ?? 0;
+  const percent = getContextPercent(breakdown, stats?.percentUsed ?? 0);
 
   return (
     <PanelShell
@@ -188,7 +197,7 @@ function ContextCompactPopover({
 }
 
 export function ContextRingCompact({ stats, breakdown }: { stats?: ContextStats; breakdown?: ContextBreakdown }) {
-  const percent = stats?.percentUsed ?? 0;
+  const percent = getContextPercent(breakdown, stats?.percentUsed ?? 0);
   const triggerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | null>(null);
@@ -290,7 +299,7 @@ export function ContextRing({
   const stroke = compact ? Math.max(3, Math.round(size / 11)) : 8;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const displayPercent = Math.max(0, Math.min(100, percent));
+  const displayPercent = getContextPercent(breakdown, percent);
 
   const segments = useMemo(
     () => (breakdown ? getSegments(breakdown, circumference) : []),
@@ -312,12 +321,15 @@ export function ContextRing({
         fill="none"
         strokeDasharray={`${seg.length} ${circumference}`}
         strokeDashoffset={offset}
-        strokeLinecap={compact ? "round" : "butt"}
+        strokeLinecap="butt"
       />
     );
   });
 
-  const singleOffset = circumference - (displayPercent / 100) * circumference;
+  const inputArcLength = breakdown
+    ? tokenLength(getBreakdownInputTokens(breakdown), breakdown.contextLimit, circumference)
+    : (displayPercent / 100) * circumference;
+  const singleOffset = circumference - inputArcLength;
 
   return (
     <div
@@ -361,7 +373,7 @@ export function ContextRing({
               : "text-[20px]"
           }`}
         >
-          {percent}%
+          {displayPercent}%
         </div>
         {!compact && (
           <div className="text-[10px] text-[var(--color-text-dim)]">

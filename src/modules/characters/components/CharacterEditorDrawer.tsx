@@ -63,8 +63,10 @@ function DrawerBody({ character, onClose }: { character: CharacterRecord; onClos
   const [tab, setTab] = useState<EditorTabId>("identity");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pendingChanges = useCharacterAssistStore((s) =>
-    selectPendingChangesFor(s, liveCharacter.id),
+  const rawPendingChanges = useCharacterAssistStore((s) => s.pendingChanges);
+  const pendingChanges = useMemo(
+    () => selectPendingChangesFor(rawPendingChanges, liveCharacter.id),
+    [rawPendingChanges, liveCharacter.id],
   );
   const clearPendingChangesFor = useCharacterAssistStore((s) => s.clearPendingChangesFor);
 
@@ -1354,8 +1356,11 @@ function PendingChangeApplier({
   setDraft: (c: CharacterRecord) => void;
   onApplyValue?: (v: unknown) => void;
 }) {
-  const pendingChanges = useCharacterAssistStore((s) =>
-    selectPendingChangesFor(s, draft.id).filter((c) => c.field === field),
+  const rawPendingChanges = useCharacterAssistStore((s) => s.pendingChanges);
+  const pendingChanges = useMemo(
+    () =>
+      selectPendingChangesFor(rawPendingChanges, draft.id).filter((c) => c.field === field),
+    [rawPendingChanges, draft.id, field],
   );
   const discardPendingChange = useCharacterAssistStore((s) => s.discardPendingChange);
   const markPendingChangeApplied = useCharacterAssistStore((s) => s.markPendingChangeApplied);

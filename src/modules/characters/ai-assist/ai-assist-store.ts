@@ -434,8 +434,11 @@ export function selectActiveJob(state: AssistState, jobId: string | null): Assis
   return state.jobs[jobId] ?? null;
 }
 
-export function selectPendingChangesFor(state: AssistState, characterId: string): CharacterPendingChange[] {
-  return Object.values(state.pendingChanges).filter(
+export function selectPendingChangesFor(
+  pendingChanges: AssistState["pendingChanges"],
+  characterId: string,
+): CharacterPendingChange[] {
+  return Object.values(pendingChanges).filter(
     (c) => c.characterId === characterId && c.status === "pending",
   );
 }
