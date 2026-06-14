@@ -116,11 +116,13 @@ export function Composer({
 
   const isEditMode = Boolean(editMessageId);
 
-  // Sync edit value from props into local state
   useEffect(() => {
     if (editMessageId && editInitialValue != null) {
-      setValue(editInitialValue);
-      setTimeout(() => textareaRef.current?.focus(), 0);
+      const timer = window.setTimeout(() => {
+        setValue(editInitialValue);
+        textareaRef.current?.focus();
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [editMessageId, editInitialValue]);
 

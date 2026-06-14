@@ -76,7 +76,8 @@ export function MarkdownEditor() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setLocalContent(activeContent);
+    const timer = window.setTimeout(() => setLocalContent(activeContent), 0);
+    return () => window.clearTimeout(timer);
   }, [activeDocumentId, activeContent]);
 
   const handleChange = useCallback(

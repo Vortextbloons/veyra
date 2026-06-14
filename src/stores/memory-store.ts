@@ -82,20 +82,14 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
     try {
       const node = await ipcCreate({ ...input, id });
       set((state) => ({ nodes: [node, ...state.nodes] }));
-    } catch (err) {
-      throw err;
     } finally {
       pendingCreateIds.delete(id);
     }
   },
 
   updateNode: async (input) => {
-    try {
-      const node = await ipcUpdate(input);
-      set((state) => ({ nodes: replaceNode(state.nodes, node) }));
-    } catch (err) {
-      throw err;
-    }
+    const node = await ipcUpdate(input);
+    set((state) => ({ nodes: replaceNode(state.nodes, node) }));
   },
 
   archiveNode: async (id) => {

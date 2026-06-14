@@ -25,7 +25,6 @@ export async function executeDocRead(
       doc = await getDocument(intent.documentId);
     }
 
-    console.log(`[Document] Read: ${doc.title} (${doc.id})`);
     return {
       applied: true,
       sanitizedText: `Read "${doc.title}" from the document editor.`,
@@ -63,7 +62,6 @@ export async function executeDocCreation(
       sourceConversationId: conversationId,
     });
 
-    console.log(`[Document] Created: ${doc.title} (${doc.id})`);
     return {
       applied: true,
       sanitizedText: `Created document "${doc.title}" in the document editor.`,
@@ -198,7 +196,6 @@ export async function executeDocUpdate(
       sourceConversationId: conversationId,
     });
 
-    console.log(`[Document] Updated: ${doc.title} (${intent.mode})`);
     return {
       applied: true,
       sanitizedText: `Updated "${doc.title}" in the document editor.`,

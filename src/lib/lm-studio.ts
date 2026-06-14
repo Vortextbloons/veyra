@@ -520,7 +520,9 @@ async function readV1SseStream(
     try {
       reader.releaseLock();
     } catch (error) {
-      if (!isClosedTauriResourceError(error)) throw error;
+      if (!isClosedTauriResourceError(error)) {
+        console.warn("[LM Studio] Failed to release stream reader:", error);
+      }
     }
   }
 }

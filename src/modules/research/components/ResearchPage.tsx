@@ -79,7 +79,8 @@ export function ResearchPage() {
 
   useEffect(() => {
     if (activeRun?.run.plan && !activeRun.run.plan.userApproved && activeRun.run.status === "paused") {
-      setActiveTab("plan");
+      const timer = window.setTimeout(() => setActiveTab("plan"), 0);
+      return () => window.clearTimeout(timer);
     }
   }, [activeRun?.run.plan, activeRun?.run.status]);
 

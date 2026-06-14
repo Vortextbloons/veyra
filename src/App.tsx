@@ -168,7 +168,6 @@ function App() {
   const defaultContextLength = useSettingsStore((state) => state.defaultContextLength);
   const defaultReservedOutputTokens = useSettingsStore((state) => state.defaultReservedOutputTokens);
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
-  const getModelSettings = useSettingsStore((state) => state.getModelSettings);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
   const setRightPanelCollapsed = useSettingsStore((state) => state.setRightPanelCollapsed);
@@ -340,12 +339,15 @@ function App() {
     );
   }, [activeConversation?.id, activeConversation?.messages, streamingBuffer]);
 
-  const selectedModelSettings = useMemo(
-    () => getModelSettings(selectedModel),
-    [defaultContextLength, defaultReservedOutputTokens, getModelSettings, modelOverrides, selectedModel],
-  );
-  const resolvedContextLength = selectedModelSettings.contextLength;
-  const resolvedReservedOutputTokens = selectedModelSettings.reservedOutputTokens;
+  const selectedModelContextSettings = useMemo(() => {
+    const override = modelOverrides[selectedModel];
+    return {
+      contextLength: override?.contextLength ?? defaultContextLength,
+      reservedOutputTokens: override?.reservedOutputTokens ?? defaultReservedOutputTokens,
+    };
+  }, [defaultContextLength, defaultReservedOutputTokens, modelOverrides, selectedModel]);
+  const resolvedContextLength = selectedModelContextSettings.contextLength;
+  const resolvedReservedOutputTokens = selectedModelContextSettings.reservedOutputTokens;
 
   const chatContextStats: ContextStats | undefined = useMemo(
     () =>

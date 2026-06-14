@@ -514,7 +514,8 @@ function StopSequencesInput({
   const [draft, setDraft] = useState(value.join(", "));
 
   useEffect(() => {
-    setDraft(value.join(", "));
+    const timer = window.setTimeout(() => setDraft(value.join(", ")), 0);
+    return () => window.clearTimeout(timer);
   }, [value]);
 
   const handleBlur = () => {

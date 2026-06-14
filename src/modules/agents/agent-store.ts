@@ -262,10 +262,12 @@ function parseOpencodeJsonOutput(stdout: string): ParsedOpencodeOutput {
 }
 
 function stripAnsi(value: string) {
+  const esc = String.fromCharCode(27);
+  const bel = String.fromCharCode(7);
   return value
-    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
-    .replace(/\x1b[@-_]/g, "")
+    .replace(new RegExp(`${esc}\\][^${bel}]*(?:${bel}|${esc}\\\\)`, "g"), "")
+    .replace(new RegExp(`${esc}\\[[0-9;?]*[ -/]*[@-~]`, "g"), "")
+    .replace(new RegExp(`${esc}[@-_]`, "g"), "")
     .trim();
 }
 

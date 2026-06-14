@@ -106,6 +106,8 @@ export async function runOpencodeAgent(
     rejectResult(error);
   };
 
+  // Assigned after listeners are registered so cleanup can cancel it from any path.
+  // eslint-disable-next-line prefer-const
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
   let unlisten: () => void = () => {};
   let unlistenEvent: () => void = () => {};

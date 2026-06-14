@@ -340,7 +340,7 @@ export async function executeResearchRun(
   const evidenceList: ResearchEvidence[] = [];
   const claims: ResearchClaim[] = [];
   const contradictions: ResearchContradiction[] = [];
-  let searchQueriesUsed: string[] = [];
+  const searchQueriesUsed: string[] = [];
 
   // On resume, pre-populate arrays from persisted state
   if (resumeFromPhase && store.activeRun) {
@@ -564,7 +564,6 @@ Question: ${run.question}`;
     // ── Phase 2: Multi-Round Search ─────────────────────────────────────────
     checkAbort();
     const searchRoundLimit = Math.min(planSteps.length, config.maxSearchRounds);
-    let totalDiscovered = 0;
     const discoveredUrls = new Set<string>(sources.map((s) => s.url));
 
     for (let round = 0; round < searchRoundLimit; round++) {
@@ -589,8 +588,6 @@ Question: ${run.question}`;
             if (roundDiscovered >= config.maxSourcesPerRound) break;
             discoveredUrls.add(src.url);
             roundDiscovered++;
-            totalDiscovered++;
-
             const sourceInput: CreateResearchSourceInput = {
               runId: run.id,
               stepId: searchStep.id,

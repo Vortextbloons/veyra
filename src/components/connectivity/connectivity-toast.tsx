@@ -22,13 +22,17 @@ export function ConnectivityToastHost() {
         : "Offline — web search disabled.";
 
     const id = ++toastId;
-    setToast({ id, text });
-
+    const showTimer = window.setTimeout(() => {
+      setToast({ id, text });
+    }, 0);
     const timer = window.setTimeout(() => {
       setToast((current) => (current?.id === id ? null : current));
     }, 4000);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(showTimer);
+      window.clearTimeout(timer);
+    };
   }, [effectiveConnectivity]);
 
   if (!toast) return null;

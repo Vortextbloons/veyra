@@ -11,15 +11,17 @@ export function TypewriterMarkdown({ content, enabled }: { content: string; enab
 
   useEffect(() => {
     if (!enabled) {
-      visibleRef.current = content;
-      setVisible(content);
-      return;
+      const timer = window.setTimeout(() => {
+        visibleRef.current = content;
+        setVisible(content);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
 
     let index = content.startsWith(visibleRef.current) ? visibleRef.current.length : 0;
     if (index > content.length) index = 0;
-    visibleRef.current = content.slice(0, index);
-    setVisible(visibleRef.current);
+    const nextVisible = content.slice(0, index);
+    visibleRef.current = nextVisible;
     if (index >= content.length) return;
 
     const interval = window.setInterval(() => {
