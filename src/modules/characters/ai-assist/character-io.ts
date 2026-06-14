@@ -289,7 +289,7 @@ export function parseCcv3Json(text: string): Ccv3ParseResult {
   try {
     parsed = JSON.parse(text);
   } catch (err) {
-    throw new Error(`Invalid JSON: ${(err as Error).message}`);
+    throw new Error(`Invalid JSON: ${(err as Error).message}`, { cause: err });
   }
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Top-level value is not an object");
@@ -455,7 +455,8 @@ export function embedCcv3InPng(pngBytes: Uint8Array, card: Ccv3Card): Uint8Array
   let iendOffset = -1;
   while (offset < pngBytes.length) {
     if (offset + 8 > pngBytes.length) break;
-    const { length: _length, type, next } = readChunkHeader(view, offset);
+    const header = readChunkHeader(view, offset);
+    const { type, next } = header;
     if (type === "IEND") {
       iendOffset = offset;
       break;

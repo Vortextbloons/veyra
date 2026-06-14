@@ -44,6 +44,7 @@ export function PanelShell({
 
 export function RightPanel({
   contextStats,
+  contextBreakdown,
   collapsed: collapsedProp,
   onCollapsedChange,
   hidden,
@@ -100,7 +101,7 @@ export function RightPanel({
             <PanelRightOpen className="size-4" />
           </button>
 
-          {!showProjectPanel && <ContextRingCompact stats={contextStats} />}
+          {!showProjectPanel && <ContextRingCompact stats={contextStats} breakdown={contextBreakdown} />}
 
           {showProjectPanel && activeProject && (
             <div className="grid size-8 place-items-center rounded-lg bg-[var(--color-accent-soft)]">
@@ -153,7 +154,7 @@ export function RightPanel({
             <ProjectContextPanel />
           ) : (
             <>
-              <ContextPanel stats={contextStats} />
+              <ContextPanel stats={contextStats} breakdown={contextBreakdown} />
               <ToolsPanel
                 webSearch={webSearchEnabled}
                 onWebSearchChange={(on) => onWebSearchChange?.(on)}

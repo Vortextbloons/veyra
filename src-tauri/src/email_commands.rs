@@ -41,6 +41,22 @@ pub async fn email_connect_gmail(
 }
 
 #[tauri::command]
+pub async fn email_connect_gmail_with_config(
+    config: email_db::GmailOAuthConfigInput,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailAccountRow, String> {
+    let config_clone = email_db::GmailOAuthConfigInput {
+        client_id: config.client_id.clone(),
+        client_secret: config.client_secret.clone(),
+    };
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::configure_gmail_oauth(conn, config_clone)?;
+        email_db::connect_gmail_with_config(conn, &config.client_id, &config.client_secret)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn email_sync_account(
     account_id: String,
     state: State<'_, EmailDbState>,

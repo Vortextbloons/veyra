@@ -44,6 +44,7 @@ export const lmStudioAdapter: ProviderAdapter = {
       onToolCallDetected: options.onToolCallDetected,
       onComplete: options.onComplete,
       onError: options.onError,
+      reasoningEnabled: options.reasoningEnabled,
     }),
   reconnect: async () => {
     const success = await isServerRunning();

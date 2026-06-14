@@ -138,6 +138,7 @@ function buildOpenAiChatBody(options: {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   stream?: boolean;
+  reasoningEnabled?: boolean;
 }): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: options.model,
@@ -152,6 +153,9 @@ function buildOpenAiChatBody(options: {
   if (options.tools && options.tools.length > 0) {
     body.tools = options.tools;
     body.tool_choice = options.toolChoice ?? "auto";
+  }
+  if (options.reasoningEnabled === false) {
+    body.reasoning_effort = "none";
   }
 
   return body;
@@ -170,6 +174,7 @@ function buildV1ChatBody(options: {
   store?: boolean;
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
+  reasoningEnabled?: boolean;
 }): Record<string, unknown> {
   const {
     model,
@@ -182,6 +187,7 @@ function buildV1ChatBody(options: {
     store = true,
     tools,
     toolChoice,
+    reasoningEnabled,
   } = options;
   const systemPrompt = messages
     .filter((m) => m.role === "system" && m.content.trim())
@@ -214,6 +220,10 @@ function buildV1ChatBody(options: {
   if (tools && tools.length > 0) {
     body.tools = tools;
     body.tool_choice = toolChoice ?? "auto";
+  }
+
+  if (reasoningEnabled === false) {
+    body.reasoning = "off";
   }
 
   if (systemPrompt) {
@@ -751,6 +761,7 @@ export async function sendLmStudioChat(options: {
   previousResponseId?: string;
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
+  reasoningEnabled?: boolean;
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
@@ -776,6 +787,7 @@ async function sendLmStudioChatImpl(options: {
   previousResponseId?: string;
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
+  reasoningEnabled?: boolean;
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
@@ -798,6 +810,7 @@ async function sendLmStudioChatImpl(options: {
     previousResponseId,
     tools,
     toolChoice,
+    reasoningEnabled,
     signal,
     onChunk,
     onReasoningChunk,
@@ -824,6 +837,7 @@ async function sendLmStudioChatImpl(options: {
       stopSequences,
       tools,
       toolChoice,
+      reasoningEnabled,
       signal,
       startedAt,
       onChunk,
@@ -855,6 +869,7 @@ async function sendLmStudioChatImpl(options: {
             previousResponseId,
             tools,
             toolChoice,
+            reasoningEnabled,
           }),
         ),
         signal: fetchSignal,
@@ -933,6 +948,7 @@ async function sendOpenAiCompatibleChat(options: {
   stopSequences?: string[];
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
+  reasoningEnabled?: boolean;
   signal?: AbortSignal;
   startedAt: number;
   onChunk: (content: string, done: boolean) => void;

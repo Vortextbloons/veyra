@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Drama, Plus, Search, Users, Copy, Download } from "lucide-react";
 import { useCharacterStore } from "../character-store";
 import type { CharacterRecord } from "../character-types";
-import { getAvatarGradient } from "../character-gradients";
+import { CharacterAvatar } from "../CharacterAvatar";
 
 interface CharacterListPanelProps {
   onCreate: () => void;
@@ -11,16 +11,7 @@ interface CharacterListPanelProps {
 }
 
 function Avatar({ character, size = "md" }: { character: CharacterRecord; size?: "sm" | "md" }) {
-  const sizeClass = size === "sm" ? "size-7 text-[11px]" : "size-9 text-[12.5px]";
-  const gradient = getAvatarGradient(character.avatarColor);
-  const initials = (character.name || "?").trim().slice(0, 2).toUpperCase();
-  return (
-    <div
-      className={`grid shrink-0 place-items-center rounded-full ${gradient} font-semibold text-white ${sizeClass}`}
-    >
-      {initials}
-    </div>
-  );
+  return <CharacterAvatar character={character} size={size} className="shrink-0 rounded-full" />;
 }
 
 function CharacterRow({

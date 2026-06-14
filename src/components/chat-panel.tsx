@@ -19,6 +19,7 @@ import { ModelLoadingBar } from "@/components/model-loading-bar";
 import { AgentsPanel } from "@/modules/agents/components/agents-panel";
 import { Composer } from "@/components/chat/composer";
 import { MessageBubble } from "@/components/chat/message-bubble";
+import { useSettingsStore } from "@/stores/settings-store";
 
 function chatLayoutClasses(sidebarsCollapsed: number) {
   const wide = sidebarsCollapsed >= 1;
@@ -84,7 +85,8 @@ export function ChatPanel({
   onEditSave,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(defaultMemoryEnabled);
-  const [showReasoning, setShowReasoning] = useState(true);
+  const reasoningEnabled = useSettingsStore((s) => s.reasoningEnabled);
+  const setReasoningEnabled = useSettingsStore((s) => s.setReasoningEnabled);
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
   const mode = controlledMode ?? internalMode;
 
@@ -288,7 +290,6 @@ export function ChatPanel({
                 key={m.id}
                 message={m}
                 isStreaming={m.id === streamingMessageId}
-                showReasoning={showReasoning}
                 layout={layout}
                 isLastAssistant={m.id === lastAssistantId}
                 onEdit={onEditMessage}
@@ -315,8 +316,8 @@ export function ChatPanel({
           memory={memory}
           onMemoryChange={setMemory}
           onTriggerMemoryExtraction={onTriggerMemoryExtraction}
-          showReasoning={showReasoning}
-          onShowReasoningChange={setShowReasoning}
+          reasoningEnabled={reasoningEnabled}
+          onReasoningEnabledChange={setReasoningEnabled}
           mode={mode}
           onModeChange={handleModeChange}
           onSend={onSend}

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ConnectivityPreference } from "@/lib/connectivity/connectivity-types";
 import type { MemoryMode } from "@/lib/memory-types";
+import type { WorkspaceChatMode } from "@/lib/chat-types";
 import {
   DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
   mergeVisibleToolSettingsSections,
@@ -77,6 +78,8 @@ type SettingsStoreState = {
   characterAssistSendContext: boolean;
   characterAssistTelemetry: boolean;
   characterAssistTone: string;
+  workspaceChatMode: WorkspaceChatMode;
+  reasoningEnabled: boolean;
   visibleToolSettingsSections: Record<ToolSettingsSectionId, boolean>;
   toolSettingsSubsectionsExpanded: Record<string, boolean>;
 };
@@ -150,6 +153,8 @@ type SettingsStore = SettingsStoreState & {
   setCharacterAssistSendContext: (enabled: boolean) => void;
   setCharacterAssistTelemetry: (enabled: boolean) => void;
   setCharacterAssistTone: (tone: string) => void;
+  setWorkspaceChatMode: (mode: WorkspaceChatMode) => void;
+  setReasoningEnabled: (enabled: boolean) => void;
   setToolSettingsSectionVisible: (id: ToolSettingsSectionId, visible: boolean) => void;
   setAllToolSettingsSectionsVisible: (visible: boolean) => void;
   setToolSettingsSubsectionExpanded: (key: string, expanded: boolean) => void;
@@ -211,6 +216,8 @@ const DEFAULT_STATE: SettingsStoreState = {
   characterAssistSendContext: false,
   characterAssistTelemetry: true,
   characterAssistTone: "neutral",
+  workspaceChatMode: "chat",
+  reasoningEnabled: true,
   visibleToolSettingsSections: DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
   toolSettingsSubsectionsExpanded: {},
 };
@@ -272,6 +279,8 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     characterAssistSendContext: state.characterAssistSendContext,
     characterAssistTelemetry: state.characterAssistTelemetry,
     characterAssistTone: state.characterAssistTone,
+    workspaceChatMode: state.workspaceChatMode,
+    reasoningEnabled: state.reasoningEnabled,
     visibleToolSettingsSections: state.visibleToolSettingsSections,
     toolSettingsSubsectionsExpanded: state.toolSettingsSubsectionsExpanded,
   };
@@ -377,6 +386,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setCharacterAssistSendContext: (characterAssistSendContext) => set({ characterAssistSendContext }),
       setCharacterAssistTelemetry: (characterAssistTelemetry) => set({ characterAssistTelemetry }),
       setCharacterAssistTone: (characterAssistTone) => set({ characterAssistTone }),
+      setWorkspaceChatMode: (workspaceChatMode) => set({ workspaceChatMode }),
+      setReasoningEnabled: (reasoningEnabled) => set({ reasoningEnabled }),
       setToolSettingsSectionVisible: (id, visible) =>
         set((state) => ({
           visibleToolSettingsSections: {

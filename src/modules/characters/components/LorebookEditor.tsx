@@ -39,7 +39,10 @@ const PRIORITY_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = {
 };
 
 export function LorebookEditor({ character, draft, setDraft }: LorebookEditorProps) {
-  const entries = draft.lorebookEntries ?? [];
+  const entries = useMemo(
+    () => draft.lorebookEntries ?? [],
+    [draft.lorebookEntries],
+  );
   const setEntries = (next: CharacterLorebookEntry[]) =>
     setDraft({ ...draft, lorebookEntries: next });
 
@@ -771,28 +774,29 @@ function PendingKeyAccept({
     );
   }
   if (!jobBuffer) return null;
+  const list = parseSuggestedKeysFromBuffer(jobBuffer);
+  if (!list) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => setProposed(list)}
+      className="inline-flex items-center gap-1 self-start rounded-md border border-emerald-300/30 bg-emerald-300/[0.06] px-2.5 py-1 text-[11.5px] text-emerald-200 hover:bg-emerald-300/10"
+    >
+      <WandSparkles className="size-3" />
+      Show {list.length} suggested key{list.length === 1 ? "" : "s"}
+    </button>
+  );
+}
+
+function parseSuggestedKeysFromBuffer(buffer: string): string[] | null {
   try {
-    const trimmed = jobBuffer.trim().replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-    const parsed = JSON.parse(trimmed);
-    if (Array.isArray(parsed.keys)) {
-      const list = (parsed.keys as unknown[]).filter((k) => typeof k === "string") as string[];
-      if (list.length > 0) {
-        return (
-          <button
-            type="button"
-            onClick={() => setProposed(list)}
-            className="inline-flex items-center gap-1 self-start rounded-md border border-emerald-300/30 bg-emerald-300/[0.06] px-2.5 py-1 text-[11.5px] text-emerald-200 hover:bg-emerald-300/10"
-          >
-            <WandSparkles className="size-3" />
-            Show {list.length} suggested key{list.length === 1 ? "" : "s"}
-          </button>
-        );
-      }
-    }
+    const trimmed = buffer.trim().replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    const parsed = JSON.parse(trimmed) as { keys?: unknown };
+    if (!Array.isArray(parsed.keys)) return null;
+    return (parsed.keys as unknown[]).filter((k) => typeof k === "string") as string[];
   } catch {
-    /* ignore */
+    return null;
   }
-  return null;
 }
 
 // ── New entry dialog ────────────────────────────────────────────────────────

@@ -297,7 +297,6 @@ export async function runCharacterAssist(
   const finalUser = priming ? `${priming}\n\n${userMsg}` : userMsg;
 
   let buffer = "";
-  let refusedText: string | null = null;
   const startedAt = Date.now();
 
   onChunk({ kind: "status", message: "Sending request…" });
@@ -345,7 +344,7 @@ export async function runCharacterAssist(
     }
     const msg = err instanceof Error ? err.message : String(err);
     onChunk({ kind: "error", error: msg });
-    throw err;
+    throw new Error(`AI assist failed: ${msg}`, { cause: err });
   }
 
   if (options.signal?.aborted) {
@@ -358,7 +357,7 @@ export async function runCharacterAssist(
   if (refusalMatch !== -1) {
     const result = parseAssistOutput(buffer, request.action);
     if (result && result.warnings?.includes("refusal")) {
-      refusedText = result.text ?? "Model refused this request.";
+      const refusalText = result.text ?? "Model refused this request.";
       onChunk({
         kind: "done",
         message: "Refused.",
@@ -369,7 +368,7 @@ export async function runCharacterAssist(
       });
       return {
         card: null,
-        text: refusedText,
+        text: refusalText,
         warnings: ["refusal"],
       };
     }

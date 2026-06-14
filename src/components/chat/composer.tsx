@@ -73,8 +73,8 @@ type ComposerProps = {
   memory: boolean;
   onMemoryChange: (on: boolean) => void;
   onTriggerMemoryExtraction?: () => void;
-  showReasoning: boolean;
-  onShowReasoningChange: (on: boolean) => void;
+  reasoningEnabled: boolean;
+  onReasoningEnabledChange: (on: boolean) => void;
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
   onSend?: (
@@ -95,8 +95,8 @@ export function Composer({
   memory,
   onMemoryChange,
   onTriggerMemoryExtraction,
-  showReasoning,
-  onShowReasoningChange,
+  reasoningEnabled,
+  onReasoningEnabledChange,
   mode,
   onModeChange,
   onSend,
@@ -284,8 +284,8 @@ export function Composer({
                 </IconButton>
                 <Toggle
                   label="Reasoning"
-                  on={showReasoning}
-                  onChange={onShowReasoningChange}
+                  on={reasoningEnabled}
+                  onChange={onReasoningEnabledChange}
                 />
               </>
             )}

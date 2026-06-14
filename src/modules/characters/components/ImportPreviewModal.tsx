@@ -70,10 +70,9 @@ export function ImportPreviewModal({
     () => (sourceId ? existing.find((c) => c.id === sourceId) ?? null : null),
     [existing, sourceId],
   );
-  const duplicateByName = useMemo(() => {
-    if (!draft?.name) return null;
-    return existing.find((c) => c.name === draft.name) ?? null;
-  }, [existing, draft?.name]);
+  const duplicateByName = draft?.name
+    ? existing.find((c) => c.name === draft.name) ?? null
+    : null;
 
   if (!parseResult.ok) {
     return (

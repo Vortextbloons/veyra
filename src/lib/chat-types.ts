@@ -8,7 +8,9 @@ import type { SearchResult } from "@/modules/web-search/types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
-export type ChatMode = "chat" | "agents" | "research";
+export type ChatMode = "chat" | "agents" | "research" | "characters";
+
+export type WorkspaceChatMode = "chat" | "agents";
 
 export type WebSearchSource = Pick<SearchResult, "id" | "title" | "url"> & {
   snippet: string;
@@ -108,6 +110,17 @@ export interface Conversation {
   characterSnapshot?: CharacterConversationSnapshot;
   /** Index of the seeded greeting in `messages` (0 unless greeting regenerated). */
   characterGreetingIndex?: number;
+  /**
+   * Character group this conversation is bound to. When set, the chat pipeline
+   * drives multi-character replies. The `characterId` field is reused as the
+   * active speaker for the most recent assistant turn.
+   */
+  groupId?: string;
+  /**
+   * Index of the greeting slot in `messages` for the group, used when
+   * regenerating greetings.
+   */
+  groupGreetingIndex?: number;
   /** LM Studio `/api/v1/chat` response id for multi-turn continuity */
   lmResponseId?: string;
   /** Rolling summary of older turns (see auto-summarize setting) */
@@ -140,6 +153,77 @@ export interface ContextStats {
   reservedOutputTokens: number;
   includedLabel?: string;
   contextNote?: string;
+}
+
+// ── Context breakdown ─────────────────────────────────────────────────────
+
+export type ContextBlockCategory =
+  | "system_core"
+  | "model_identity"
+  | "user_prompt"
+  | "memory"
+  | "character"
+  | "project"
+  | "summary"
+  | "context_anchor"
+  | "documents_instructions"
+  | "tool_definitions"
+  | "web_search_results"
+  | "user_message"
+  | "assistant_message"
+  | "system_message";
+
+export const CONTEXT_BLOCK_LABELS: Record<ContextBlockCategory, string> = {
+  system_core: "System Core",
+  model_identity: "Model Identity",
+  user_prompt: "Custom Instructions",
+  memory: "Memory",
+  character: "Character",
+  project: "Project",
+  summary: "Conversation Summary",
+  context_anchor: "Context Anchoring",
+  documents_instructions: "Document Instructions",
+  tool_definitions: "Tool Definitions",
+  web_search_results: "Web Search Results",
+  user_message: "User Message",
+  assistant_message: "Assistant",
+  system_message: "System",
+};
+
+export const CONTEXT_BLOCK_ACCENTS: Record<ContextBlockCategory, string> = {
+  system_core: "var(--color-text-dim)",
+  model_identity: "var(--color-text-dim)",
+  user_prompt: "var(--color-accent)",
+  memory: "#818cf8",
+  character: "#c084fc",
+  project: "#60a5fa",
+  summary: "#2dd4bf",
+  context_anchor: "#64748b",
+  documents_instructions: "#34d399",
+  tool_definitions: "#22d3ee",
+  web_search_results: "#22d3ee",
+  user_message: "#4ade80",
+  assistant_message: "#34d399",
+  system_message: "#64748b",
+};
+
+export interface ContextBlock {
+  category: ContextBlockCategory;
+  label: string;
+  tokenCount: number;
+  dropped: boolean;
+  detail?: string;
+}
+
+export interface ContextBreakdown {
+  systemBlocks: ContextBlock[];
+  messageBlocks: ContextBlock[];
+  droppedCount: number;
+  totalSystemTokens: number;
+  totalMessageTokens: number;
+  totalTokens: number;
+  contextLimit: number;
+  reservedOutputTokens: number;
 }
 
 // ── Provider & model types ──────────────────────────────────────────────────
@@ -240,6 +324,7 @@ export interface ChatPanelProps {
 
 export interface RightPanelProps {
   contextStats?: ContextStats;
+  contextBreakdown?: ContextBreakdown;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   hidden?: boolean;

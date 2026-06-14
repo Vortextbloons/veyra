@@ -8,10 +8,13 @@ import { DocEditorPanel } from "@/modules/documents/components/doc-editor-panel"
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { executeChatSend, ensureProviderReady, triggerMemoryExtractionNow } from "@/lib/chat-actions";
 import { prepareAgentLmStudioModel } from "@/lib/lm-model-session";
-import type { ChatMessage, ChatMode, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
+import type { ChatMessage, ContextBreakdown, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
 import { isChatModeNav } from "@/lib/chat-types";
+import { useWorkspaceModeChange } from "@/lib/workspace-mode";
 import type { MessageAttachment } from "@/lib/message-attachments";
-import { estimateTokens, getContextStats } from "@/lib/context";
+import { estimateTokens, getContextStats, type BuildChatContextOptions } from "@/lib/context";
+import { getContextBreakdown } from "@/lib/context-breakdown";
+import { buildContextAnchoringBlock } from "@/lib/prompts";
 import { ShutdownOverlay } from "@/components/shutdown-overlay";
 import { registerAppShutdownHandler } from "@/lib/app-shutdown";
 import {
@@ -124,7 +127,6 @@ function App() {
   const [zoom, setZoom] = useState<number>(loadZoom);
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("idle");
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const [chatMode, setChatMode] = useState<ChatMode>("chat");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const activeChatJobIdRef = useRef<string | null>(null);
 
@@ -171,8 +173,10 @@ function App() {
   const defaultReservedOutputTokens = useSettingsStore((state) => state.defaultReservedOutputTokens);
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
+  const workspaceChatMode = useSettingsStore((state) => state.workspaceChatMode);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
   const setRightPanelCollapsed = useSettingsStore((state) => state.setRightPanelCollapsed);
+  const contextAnchoringEnabled = useSettingsStore((s) => s.contextAnchoringEnabled);
   const defaultWebSearchEnabled = useSettingsStore(
     (state) => state.defaultWebSearchEnabled,
   );
@@ -352,6 +356,9 @@ function App() {
   const resolvedContextLength = selectedModelContextSettings.contextLength;
   const resolvedReservedOutputTokens = selectedModelContextSettings.reservedOutputTokens;
 
+  const selectedModelInfo = models.find((model) => model.id === selectedModel);
+  const selectedProviderInfo = providers.find((p) => p.id === selectedProvider);
+
   const chatContextStats: ContextStats | undefined = useMemo(
     () =>
       activeConversation
@@ -359,6 +366,33 @@ function App() {
         : undefined,
     [activeConversation, resolvedContextLength, resolvedReservedOutputTokens],
   );
+
+  const chatContextBreakdown: ContextBreakdown | undefined = useMemo(() => {
+    if (!activeConversation) return undefined;
+    const contextAnchoringBlock = contextAnchoringEnabled
+      ? buildContextAnchoringBlock()
+      : undefined;
+    const breakdownOptions: BuildChatContextOptions = {
+      conversationSummary: activeConversation.conversationSummary,
+      summaryCoversMessageCount: activeConversation.summaryCoversMessageCount,
+      contextAnchoringBlock,
+      reservedOutputTokens: resolvedReservedOutputTokens,
+      modelName: selectedModelInfo?.name,
+      providerName: selectedProviderInfo?.name,
+    };
+    return getContextBreakdown(
+      activeConversation.messages,
+      breakdownOptions,
+      resolvedContextLength,
+    );
+  }, [
+    activeConversation,
+    contextAnchoringEnabled,
+    resolvedContextLength,
+    resolvedReservedOutputTokens,
+    selectedModelInfo?.name,
+    selectedProviderInfo?.name,
+  ]);
 
   const recentChats: RecentChatsItem[] = useMemo(() => {
     const scoped = activeProjectId
@@ -408,7 +442,6 @@ function App() {
     deleteAllConversations();
   }, [deleteAllConversations]);
 
-  const selectedModelInfo = models.find((model) => model.id === selectedModel);
   const supportsImages = selectedModelInfo?.supportsImages ?? false;
   const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
   const modelLoadProgress = useChatStore((state) => state.modelLoadProgress);
@@ -447,18 +480,19 @@ function App() {
     );
   }, [activeAgentSession, resolvedContextLength, resolvedReservedOutputTokens]);
 
-  const displayContextStats = chatMode === "agents" ? agentContextStats : chatContextStats;
+  const displayContextStats = workspaceChatMode === "agents" ? agentContextStats : chatContextStats;
+  const displayContextBreakdown = workspaceChatMode === "agents" ? undefined : chatContextBreakdown;
 
   useEffect(() => {
-    if (chatMode === "agents" && agentRuntimeAvailable == null) {
+    if (workspaceChatMode === "agents" && agentRuntimeAvailable == null) {
       void checkAgentRuntime();
     }
-  }, [agentRuntimeAvailable, chatMode, checkAgentRuntime]);
+  }, [agentRuntimeAvailable, workspaceChatMode, checkAgentRuntime]);
 
   useEffect(() => {
-    if (chatMode !== "agents" || agentRuntimeAvailable === false) return;
+    if (workspaceChatMode !== "agents" || agentRuntimeAvailable === false) return;
     void loadAgentProjectSessions(agentProjectPath);
-  }, [agentProjectPath, agentRuntimeAvailable, chatMode, loadAgentProjectSessions]);
+  }, [agentProjectPath, agentRuntimeAvailable, workspaceChatMode, loadAgentProjectSessions]);
 
   const handleAgentSessionSelect = useCallback(
     (id: string) => {
@@ -469,9 +503,9 @@ function App() {
   );
 
   useEffect(() => {
-    if (chatMode !== "agents" || !activeAgentSessionId) return;
+    if (workspaceChatMode !== "agents" || !activeAgentSessionId) return;
     void loadOpencodeSession(activeAgentSessionId);
-  }, [activeAgentSessionId, chatMode, loadOpencodeSession]);
+  }, [activeAgentSessionId, workspaceChatMode, loadOpencodeSession]);
 
   const handleSend = useCallback(
     (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
@@ -482,7 +516,7 @@ function App() {
         attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
       if (!trimmed && imageAttachments.length === 0) return;
 
-      if (chatMode === "agents") {
+      if (workspaceChatMode === "agents") {
         if (!trimmed) return;
         aiScheduler.abortActiveBackgroundJob();
         aiScheduler.enqueueAiJob({
@@ -650,7 +684,7 @@ function App() {
       agentProjectPath,
       appendStreamingContent,
       appendStreamingReasoning,
-      chatMode,
+      workspaceChatMode,
       clearStreamingBuffer,
       clearStreamingBufferUnlessSkipped,
       commitAssistantMessage,
@@ -678,16 +712,7 @@ function App() {
     return () => window.removeEventListener("veyra:inline-document-edit", handleInlineDocumentEdit);
   }, [handleSend]);
 
-  const handleModeChange = useCallback(
-    (mode: ChatMode) => {
-      if (mode === "research") {
-        setActiveNav("research");
-        return;
-      }
-      setChatMode(mode);
-    },
-    [setActiveNav],
-  );
+  const handleModeChange = useWorkspaceModeChange();
 
   const handleTriggerMemoryExtraction = useCallback(() => {
     if (!activeConversationId) return;
@@ -1120,7 +1145,7 @@ function App() {
             onTriggerMemoryExtraction={handleTriggerMemoryExtraction}
             sidebarsCollapsed={sidebarsCollapsed}
             modelLoadProgress={modelLoadProgress}
-            mode={chatMode}
+            mode={workspaceChatMode}
             onModeChange={handleModeChange}
             agentSessions={agentSessions}
             activeAgentSessionId={activeAgentSessionId}
@@ -1153,14 +1178,15 @@ function App() {
         {isChatMode && activeNav !== "projects" && activeNav !== "characters" && <DocEditorPanel />}
         <RightPanel
           contextStats={displayContextStats}
+          contextBreakdown={displayContextBreakdown}
           collapsed={rightPanelCollapsed}
           onCollapsedChange={setRightPanelCollapsed}
-          hidden={!isChatMode && chatMode !== "agents" && activeNav !== "projects"}
+          hidden={!isChatMode && workspaceChatMode !== "agents" && activeNav !== "projects"}
           webSearchEnabled={webSearchEnabled}
           onWebSearchChange={setWebSearchEnabled}
           webSearchDisabled={webSearchDisabled}
           webSearchDisabledReason={webSearchAvailability.reason}
-          isAgentsMode={chatMode === "agents"}
+          isAgentsMode={workspaceChatMode === "agents"}
           agentSessionCount={agentSessions.length}
           agentActiveCount={agentSessions.filter((s) => s.status === "running").length}
           onAgentClearSessions={clearAgentSessions}

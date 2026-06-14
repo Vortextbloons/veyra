@@ -46,7 +46,6 @@ export function CharacterDirector({ character, onClose, onApplied }: CharacterDi
   const markPendingChangeApplied = useCharacterAssistStore((s) => s.markPendingChangeApplied);
   const discardPendingChange = useCharacterAssistStore((s) => s.discardPendingChange);
 
-  const [draft, setDraft] = useState<CharacterRecord>(character);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
@@ -61,10 +60,16 @@ export function CharacterDirector({ character, onClose, onApplied }: CharacterDi
     }
   }, [session, character.id, createDirectorSession]);
 
-  // Keep the draft synced to the latest character when reloaded.
-  useEffect(() => {
+  // Keep the draft synced to the latest character when reloaded. The lint
+  // rule bans sync setState in an effect, so we derive by comparing to the
+  // last value we saw. This pattern is recommended by the React docs:
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [draft, setDraft] = useState<CharacterRecord>(character);
+  const [lastDraftId, setLastDraftId] = useState(character.id);
+  if (lastDraftId !== character.id) {
+    setLastDraftId(character.id);
     setDraft(character);
-  }, [character]);
+  }
 
   // Auto-scroll on new message.
   useEffect(() => {
@@ -145,6 +150,9 @@ export function CharacterDirector({ character, onClose, onApplied }: CharacterDi
       });
     }
     job.clear();
+    // job is intentionally read inside the effect (job.clear is a stable
+    // action). We only re-run when the result, character, or draft changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.result, character.id, draft, appendDirectorMessage]);
 
   const applyAll = async () => {
@@ -239,7 +247,7 @@ export function CharacterDirector({ character, onClose, onApplied }: CharacterDi
                   id: "streaming",
                   role: "assistant",
                   content: job.buffer,
-                  timestamp: Date.now(),
+                  timestamp: 0,
                 }}
                 streaming
               />

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Drama, Plus, Sparkles, MoreHorizontal, Upload, FileJson, Image as ImageIcon, Copy, X } from "lucide-react";
+import { Drama, Plus, Sparkles, MoreHorizontal, Upload, FileJson, Image as ImageIcon, Copy, X, Users } from "lucide-react";
 import { useCharacterStore } from "../character-store";
+import { useCharacterGroupStore } from "../character-group-store";
 import { CharacterListPanel } from "./CharacterListPanel";
 import { CharacterDetailView } from "./CharacterDetailView";
 import { CharacterChatView } from "./CharacterChatView";
@@ -11,12 +12,17 @@ import { ImportPreviewModal } from "./ImportPreviewModal";
 import { startCharacterChat } from "../character-chat";
 import type { CharacterRecord } from "../character-types";
 import { exportCharacterJson, exportCharacterCcv3, exportCharacterCcv3Png } from "../character-export";
+import { GroupPage } from "./GroupPage";
+
+type CharacterPane = "character" | "group";
 
 export function CharacterPage() {
   const hydrateCharacters = useCharacterStore((s) => s.hydrateCharacters);
   const characters = useCharacterStore((s) => s.characters);
   const hydrationState = useCharacterStore((s) => s.hydrationState);
   const activeCharacterId = useCharacterStore((s) => s.activeCharacterId);
+  const hydrateGroups = useCharacterGroupStore((s) => s.hydrateGroups);
+  const [pane, setPane] = useState<CharacterPane>("character");
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [chatOpenRaw, setChatOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -32,7 +38,8 @@ export function CharacterPage() {
 
   useEffect(() => {
     void hydrateCharacters();
-  }, [hydrateCharacters]);
+    void hydrateGroups();
+  }, [hydrateCharacters, hydrateGroups]);
 
   const activeCharacter = useMemo(
     () => (activeCharacterId ? characters.find((c) => c.id === activeCharacterId) ?? null : null),
@@ -42,14 +49,12 @@ export function CharacterPage() {
   // Derive chatOpen: auto-close if the active character is missing.
   const chatOpen = chatOpenRaw && !!activeCharacter;
 
-  // If the active character is deleted, close any open editor/director.
-  useEffect(() => {
-    if (!activeCharacter) {
-      setEditorOpen(false);
-      setDirectorOpen(false);
-      setExportMenuFor(null);
-    }
-  }, [activeCharacter]);
+  // The editor, director, and export menu are only meaningful when a
+  // character is active. Render them conditionally so deleting the active
+  // character naturally hides them; no effect needed.
+  const showEditor = editorOpen && !!activeCharacter;
+  const showDirector = directorOpen && !!activeCharacter;
+  const showExport = exportMenuFor && !!characters.find((c) => c.id === exportMenuFor.id);
 
   const handleStartChat = useCallback(() => {
     if (!activeCharacter) return;
@@ -162,22 +167,49 @@ export function CharacterPage() {
             <Drama className="size-3.5 text-indigo-300" />
           </div>
           <h1 className="text-[14px] font-semibold tracking-tight">Characters</h1>
-          <span className="ml-2 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10.5px] font-mono uppercase tracking-wide text-[var(--color-text-dim)]">
-            {characters.length} total
-          </span>
+          <div className="ml-3 flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setPane("character")}
+              className={`flex items-center gap-1.5 rounded px-2 py-1 font-medium transition-colors ${
+                pane === "character"
+                  ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                  : "text-[var(--color-text-dim)] hover:text-white"
+              }`}
+              title="Single-character cards"
+            >
+              <Drama className="size-3" />
+              Characters
+            </button>
+            <button
+              type="button"
+              onClick={() => setPane("group")}
+              className={`flex items-center gap-1.5 rounded px-2 py-1 font-medium transition-colors ${
+                pane === "group"
+                  ? "bg-emerald-500/20 text-emerald-200"
+                  : "text-[var(--color-text-dim)] hover:text-white"
+              }`}
+              title="Multi-character groups"
+            >
+              <Users className="size-3" />
+              Groups
+            </button>
+          </div>
           <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-panel)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
             <Sparkles className="size-2.5" /> roleplay
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowNewDialog(true)}
-            className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-2.5 text-[12px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
-          >
-            <Plus className="size-3.5" />
-            New Character
-          </button>
+          {pane === "character" && (
+            <button
+              type="button"
+              onClick={() => setShowNewDialog(true)}
+              className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-2.5 text-[12px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
+            >
+              <Plus className="size-3.5" />
+              New Character
+            </button>
+          )}
           <div className="relative">
             <button
               type="button"
@@ -219,41 +251,49 @@ export function CharacterPage() {
       </header>
 
       <div className="flex flex-1 min-h-0">
-        <CharacterListPanel
-          onCreate={() => setShowNewDialog(true)}
-          onDuplicate={(c) => handleDuplicate(c)}
-          onExport={(c) => setExportMenuFor(c)}
-        />
-        {hydrationState === "ready" ? (
-          chatOpen && activeCharacter ? (
-            <CharacterChatView
-              key={activeCharacter.id}
-              character={activeCharacter}
-              onBack={handleBackFromChat}
-            />
+        {pane === "character" ? (
+          <CharacterListPanel
+            onCreate={() => setShowNewDialog(true)}
+            onDuplicate={(c) => handleDuplicate(c)}
+            onExport={(c) => setExportMenuFor(c)}
+          />
+        ) : null}
+        {pane === "character" ? (
+          hydrationState === "ready" ? (
+            chatOpen && activeCharacter ? (
+              <CharacterChatView
+                key={activeCharacter.id}
+                character={activeCharacter}
+                onBack={handleBackFromChat}
+              />
+            ) : (
+              <CharacterDetailView
+                onStartChat={handleStartChat}
+                onEdit={() => setEditorOpen(true)}
+                onDirector={() => setDirectorOpen(true)}
+              />
+            )
           ) : (
-            <CharacterDetailView
-              onStartChat={handleStartChat}
-              onEdit={() => setEditorOpen(true)}
-              onDirector={() => setDirectorOpen(true)}
-            />
+            <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--color-text-dim)]">
+              Loading characters…
+            </div>
           )
         ) : (
-          <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--color-text-dim)]">
-            Loading characters…
+          <div className="flex min-w-0 flex-1 basis-0">
+            <GroupPage />
           </div>
         )}
       </div>
 
       <NewCharacterDialog open={showNewDialog} onClose={() => setShowNewDialog(false)} />
-      {editorOpen && activeCharacter && (
+      {showEditor && activeCharacter && (
         <CharacterEditorDrawer
           character={activeCharacter}
-          open={editorOpen}
+          open={showEditor}
           onClose={() => setEditorOpen(false)}
         />
       )}
-      {directorOpen && activeCharacter && (
+      {showDirector && activeCharacter && (
         <CharacterDirector
           character={activeCharacter}
           onClose={() => setDirectorOpen(false)}
@@ -272,7 +312,7 @@ export function CharacterPage() {
           }}
         />
       )}
-      {exportMenuFor && (
+      {showExport && exportMenuFor && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setExportMenuFor(null)}

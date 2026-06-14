@@ -59,6 +59,10 @@ export async function emailConnectGmail(): Promise<EmailAccount> {
   return invoke<EmailAccount>("email_connect_gmail");
 }
 
+export async function emailConnectGmailWithConfig(config: { clientId: string; clientSecret: string }): Promise<EmailAccount> {
+  return invoke<EmailAccount>("email_connect_gmail_with_config", { config });
+}
+
 export async function emailSyncAccount(accountId: string): Promise<void> {
   return invoke<void>("email_sync_account", { accountId });
 }

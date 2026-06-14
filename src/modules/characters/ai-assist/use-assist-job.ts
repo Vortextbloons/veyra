@@ -35,11 +35,13 @@ export function useAssistJob(jobId: string | null) {
  */
 export function useCancelOnUnmount(jobId: string | null) {
   const cancelJob = useCharacterAssistStore((s) => s.cancelJob);
-  const ref = useRef(jobId);
-  ref.current = jobId;
+  const jobIdRef = useRef<string | null>(jobId);
+  useEffect(() => {
+    jobIdRef.current = jobId;
+  }, [jobId]);
   useEffect(() => {
     return () => {
-      if (ref.current) cancelJob(ref.current);
+      if (jobIdRef.current) cancelJob(jobIdRef.current);
     };
   }, [cancelJob]);
 }

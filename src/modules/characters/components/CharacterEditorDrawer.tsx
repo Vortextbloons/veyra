@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ensureCharacterAvatarUrl } from "../character-avatar";
 import {
   X,
   Save,
@@ -59,7 +60,6 @@ function DrawerBody({ character, onClose }: { character: CharacterRecord; onClos
     () => characters.find((c) => c.id === character.id) ?? character,
     [characters, character],
   );
-  const [draft, setDraft] = useState<CharacterRecord>(liveCharacter);
   const [tab, setTab] = useState<EditorTabId>("identity");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,9 +68,16 @@ function DrawerBody({ character, onClose }: { character: CharacterRecord; onClos
   );
   const clearPendingChangesFor = useCharacterAssistStore((s) => s.clearPendingChangesFor);
 
-  useEffect(() => {
+  // Sync local draft to the live character when the underlying record
+  // changes (e.g. after save or when switching characters). We use the
+  // "previous value" pattern: only update when the id actually changes.
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [draft, setDraft] = useState<CharacterRecord>(liveCharacter);
+  const [lastSyncedId, setLastSyncedId] = useState(liveCharacter.id);
+  if (lastSyncedId !== liveCharacter.id) {
+    setLastSyncedId(liveCharacter.id);
     setDraft(liveCharacter);
-  }, [liveCharacter]);
+  }
 
   const dirty = useMemo(() => {
     return JSON.stringify(draft) !== JSON.stringify(liveCharacter);
@@ -256,7 +263,10 @@ function IdentityTab({
   useCancelOnUnmount(runner.jobId);
   const addPendingChange = useCharacterAssistStore((s) => s.addPendingChange);
 
-  const fieldActions = (label: string, _current: string, _field: string): WandAction[] => [
+  const fieldActions = (label: string, current: string, field: string): WandAction[] => {
+    void current;
+    void field;
+    return [
     {
       id: "rewrite",
       label: "Rewrite",
@@ -276,6 +286,7 @@ function IdentityTab({
       instruction: `Make the ${label.toLowerCase()} more concise.`,
     },
   ];
+  };
 
   const handleRun = (field: string, current: string, action: WandAction) => {
     const actionId = action.id as "rewrite" | "expand" | "condense";
@@ -385,23 +396,7 @@ function IdentityTab({
         />
       </FieldRow>
 
-      <FieldRow label="Avatar color">
-        <div className="flex flex-wrap gap-1.5">
-          {CHARACTER_AVATAR_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setDraft({ ...draft, avatarColor: c })}
-              className={`size-7 rounded-md ${AVATAR_GRADIENTS[c]} transition-transform hover:scale-110 ${
-                c === draft.avatarColor
-                  ? "ring-2 ring-white"
-                  : "ring-1 ring-inset ring-white/10"
-              }`}
-              aria-label={c}
-            />
-          ))}
-        </div>
-      </FieldRow>
+      <AvatarField draft={draft} setDraft={setDraft} />
 
       <FieldRow label="Scope">
         <label className="flex items-center gap-2 text-[12.5px] text-[var(--color-text-dim)]">
@@ -531,7 +526,8 @@ function TagEditor({
         />
       </div>
       <StreamingPreview buffer={job.buffer} busy={job.running} onCancel={runner.cancel} hint="Suggesting tags…" />
-      <PendingChangeApplier field="tags" draft={character} setDraft={(_updated) => {
+      <PendingChangeApplier field="tags" draft={character} setDraft={(updated) => {
+        void updated;
         // Use the latest character for "before" context; the actual apply
         // happens via the PendingChangeApplier which knows the change.
         // This dummy setter keeps TS happy and the applier uses the store.
@@ -686,7 +682,8 @@ function WandField({
         field={field}
         label={label}
         draft={character}
-        setDraft={(_c) => {
+        setDraft={(c) => {
+          void c;
           // We pass through to the prop callback via the applier's apply button.
         }}
         onApplyValue={(newValue) => onChange(newValue as string)}
@@ -969,25 +966,22 @@ function SuggestionCatcher({
   onAccept: (parsed: unknown) => void;
 }) {
   if (!jobBuffer) return null;
-  // Try to parse the buffer; if we get a JSON object, accept.
-  try {
-    const trimmed = jobBuffer.trim().replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-    const parsed = JSON.parse(trimmed);
-    return (
-      <div className="rounded-md border border-emerald-300/20 bg-emerald-300/[0.04] p-2">
-        <p className="text-[11px] text-emerald-200/80">Parsed suggestion available.</p>
-        <button
-          type="button"
-          onClick={() => onAccept(parsed)}
-          className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-emerald-500/85 px-2.5 py-1 text-[11.5px] font-medium text-white"
+  // Try to parse the buffer; if we get a JSON object, render the accept UI.
+  // We extract the parse step into a helper to keep JSX out of the try/catch.
+  const parsed = tryParseSuggestionBuffer(jobBuffer);
+  if (!parsed) return null;
+  return (
+    <div className="rounded-md border border-emerald-300/20 bg-emerald-300/[0.04] p-2">
+      <p className="text-[11px] text-emerald-200/80">Parsed suggestion available.</p>
+      <button
+        type="button"
+        onClick={() => onAccept(parsed)}
+        className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-emerald-500/85 px-2.5 py-1 text-[11.5px] font-medium text-white"
         >
           Accept
         </button>
       </div>
     );
-  } catch {
-    return null;
-  }
 }
 
 // ── System tab ──────────────────────────────────────────────────────────────
@@ -1166,6 +1160,15 @@ function MetadataTab({
   );
 }
 
+function tryParseSuggestionBuffer(buffer: string): unknown | null {
+  try {
+    const trimmed = buffer.trim().replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/60 p-2">
@@ -1199,6 +1202,140 @@ function FieldRow({
       {children}
       {hint && <span className="text-[11px] text-[var(--color-text-dim)]/80">{hint}</span>}
     </label>
+  );
+}
+
+// ── Avatar picker ───────────────────────────────────────────────────────────
+
+function AvatarField({
+  draft,
+  setDraft,
+}: {
+  draft: CharacterRecord;
+  setDraft: (c: CharacterRecord) => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!draft.avatarPath) return;
+    ensureCharacterAvatarUrl(draft.avatarPath).then((u) => {
+      if (!cancelled) setAvatarUrl(u);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.avatarPath]);
+
+  const handlePick = async () => {
+    setError(null);
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const path = await open({
+        multiple: false,
+        directory: false,
+        filters: [
+          { name: "Image", extensions: ["png", "jpg", "jpeg", "gif", "webp"] },
+        ],
+      });
+      if (!path || typeof path !== "string") return;
+      setBusy(true);
+      const { invoke } = await import("@tauri-apps/api/core");
+      const { filePathToUrl } = await import("../character-avatar");
+      const url = filePathToUrl(path);
+      setPreviewUrl(url);
+      const bytes = await invoke<number[]>("read_binary_file", { path });
+      const u8 = new Uint8Array(bytes);
+      const { saveCharacterAvatar } = await import("../character-avatar");
+      const relative = await saveCharacterAvatar(draft.id, u8);
+      setDraft({ ...draft, avatarPath: relative });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleClear = async () => {
+    if (!draft.avatarPath) return;
+    try {
+      const { deleteCharacterAvatar } = await import("../character-avatar");
+      await deleteCharacterAvatar(draft.avatarPath);
+      setDraft({ ...draft, avatarPath: undefined });
+      setPreviewUrl(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[11.5px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+        Avatar
+      </span>
+      <div className="flex items-start gap-3">
+        <div className="size-20 shrink-0 overflow-hidden rounded-2xl ring-1 ring-inset ring-white/10">
+          {avatarUrl || previewUrl ? (
+            <img
+              src={avatarUrl ?? previewUrl ?? ""}
+              alt="Avatar preview"
+              className="size-full object-cover"
+            />
+          ) : (
+            <div
+              className={`size-full ${AVATAR_GRADIENTS[(draft.avatarColor as CharacterAvatarColor) ?? "indigo"]}`}
+            />
+          )}
+        </div>
+        <div className="flex flex-1 flex-col gap-2">
+          <div className="flex flex-wrap gap-1.5">
+            {CHARACTER_AVATAR_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setDraft({ ...draft, avatarColor: c })}
+                className={`size-6 rounded ${AVATAR_GRADIENTS[c]} transition-transform hover:scale-110 ${
+                  c === draft.avatarColor
+                    ? "ring-2 ring-white"
+                    : "ring-1 ring-inset ring-white/10"
+                }`}
+                aria-label={c}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePick}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-[11.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white disabled:opacity-50"
+            >
+              {busy ? "Uploading…" : draft.avatarPath ? "Replace image" : "Upload image"}
+            </button>
+            {draft.avatarPath && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="inline-flex items-center gap-1.5 rounded-md border border-red-400/30 bg-red-500/10 px-2.5 py-1.5 text-[11.5px] text-red-200 hover:bg-red-500/20"
+              >
+                Remove image
+              </button>
+            )}
+            <span className="text-[10.5px] text-[var(--color-text-dim)]">
+              PNG, JPEG, GIF, or WebP. Max 4 MB.
+            </span>
+          </div>
+          {error && (
+            <div className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11.5px] text-red-300">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@ import { Drama, Edit3, Eye, MessageSquare, Play, Sparkles, Tag, User, Pencil } f
 import { useCharacterStore } from "../character-store";
 import { useChatStore } from "@/stores/chat-store";
 import type { CharacterRecord } from "../character-types";
-import { getAvatarGradient } from "../character-gradients";
+import { CharacterAvatar } from "../CharacterAvatar";
 
 type TabId = "preview" | "persona" | "greeting" | "examples" | "system";
 
@@ -16,19 +16,7 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 function GradientAvatar({ character, size = "lg" }: { character: CharacterRecord; size?: "lg" | "md" }) {
-  const sizeClass =
-    size === "lg"
-      ? "size-16 text-[18px]"
-      : "size-12 text-[14px]";
-  const gradient = getAvatarGradient(character.avatarColor);
-  const initials = (character.name || "?").trim().slice(0, 2).toUpperCase();
-  return (
-    <div
-      className={`grid place-items-center rounded-2xl ${gradient} font-semibold text-white ${sizeClass}`}
-    >
-      {initials}
-    </div>
-  );
+  return <CharacterAvatar character={character} size={size} />;
 }
 
 function MetaRow({ label, value }: { label: string; value: string | null | undefined }) {

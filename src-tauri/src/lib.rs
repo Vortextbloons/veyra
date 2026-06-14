@@ -32,6 +32,8 @@ fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
 mod agent_commands;
 mod character_commands;
 mod character_db;
+mod character_group_commands;
+mod character_group_db;
 mod character_io_commands;
 mod connectivity_commands;
 mod constants;
@@ -218,11 +220,19 @@ pub fn run() {
             character_commands::update_character,
             character_commands::list_characters,
             character_commands::delete_character,
+            character_group_commands::create_character_group,
+            character_group_commands::get_character_group,
+            character_group_commands::update_character_group,
+            character_group_commands::list_character_groups,
+            character_group_commands::delete_character_group,
             character_io_commands::read_text_file,
             character_io_commands::read_binary_file,
             character_io_commands::write_text_file,
             character_io_commands::write_binary_file,
             character_io_commands::export_character_card,
+            character_io_commands::save_character_avatar,
+            character_io_commands::delete_character_avatar,
+            character_io_commands::read_character_avatar,
         ])
         .setup(|app| {
             let db_state = memory_db::MemoryDbState::new(app.handle().clone());
@@ -248,6 +258,11 @@ pub fn run() {
             let character_db_state = character_db::CharacterDbState::new(app.handle().clone());
             character_db_state.spawn_background_init();
             app.manage(character_db_state);
+
+            let character_group_db_state =
+                character_group_db::CharacterGroupDbState::new(app.handle().clone());
+            character_group_db_state.spawn_background_init();
+            app.manage(character_group_db_state);
 
             let searxng_state = searxng_setup::SearxngState::new();
             app.manage(searxng_state);

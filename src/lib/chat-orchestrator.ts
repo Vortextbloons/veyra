@@ -13,6 +13,8 @@ import { evaluateLorebook } from "@/modules/characters/lorebook";
 import { buildCharacterContextBlock } from "@/modules/characters/character-context";
 import { DEFAULT_CHARACTER_CHAT_DEFAULTS } from "@/modules/characters/character-types";
 import type { CharacterRecord } from "@/modules/characters/character-types";
+import { useCharacterGroupStore } from "@/modules/characters/character-group-store";
+import { buildGroupContextBlock } from "@/modules/characters/group-context";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import {
   DOC_CREATE_TOOL_NAME,
@@ -128,10 +130,35 @@ function registerStreamingToolCalls(
  * (non-character) conversations.
  */
 function resolveCharacterBlock(
-  conversation: { characterId?: string | null } | null | undefined,
+  conversation: { characterId?: string | null; groupId?: string | null } | null | undefined,
   messages: ChatMessage[],
 ): string | null {
-  if (!conversation?.characterId) return null;
+  if (!conversation) return null;
+  // Group conversation takes priority over single-character binding. The
+  // active speaker is mirrored onto `conversation.characterId` by callers.
+  if (conversation.groupId) {
+    const group = useCharacterGroupStore
+      .getState()
+      .groups.find((g) => g.id === conversation.groupId);
+    if (!group) return null;
+    const allCharacters = useCharacterStore.getState().characters;
+    const members = group.memberIds
+      .map((id) => allCharacters.find((c) => c.id === id))
+      .filter((c): c is CharacterRecord => Boolean(c));
+    if (members.length === 0) return null;
+    const activeSpeakerId = conversation.characterId ?? members[0].id;
+    const chatDefaults = {
+      ...DEFAULT_CHARACTER_CHAT_DEFAULTS,
+      ...(members[0]?.chatDefaults ?? {}),
+    };
+    return buildGroupContextBlock(
+      { ...group, activeSpeakerId },
+      members,
+      messages,
+      { chatDefaults },
+    );
+  }
+  if (!conversation.characterId) return null;
   const character: CharacterRecord | undefined = useCharacterStore
     .getState()
     .characters.find((c) => c.id === conversation.characterId);
@@ -250,6 +277,14 @@ export async function sendChatRequest({
     options.onChunk(content, done);
   };
 
+  const reasoningEnabled = settings.reasoningEnabled;
+  const wrappedOnReasoningChunk = options.onReasoningChunk
+    ? (content: string, done: boolean) => {
+        if (!reasoningEnabled) return;
+        options.onReasoningChunk?.(content, done);
+      }
+    : undefined;
+
   let isRePrompt = false;
   let toolCompletion: Promise<void> = Promise.resolve();
 
@@ -322,7 +357,8 @@ export async function sendChatRequest({
             ...options,
             previousResponseId: undefined,
             onChunk: options.onChunk,
-            onReasoningChunk: options.onReasoningChunk,
+            onReasoningChunk: wrappedOnReasoningChunk,
+            reasoningEnabled,
             temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
             contextLength: resolvedContextLength,
             maxTokens: resolvedMaxTokens || undefined,
@@ -624,7 +660,8 @@ export async function sendChatRequest({
               ...options,
               previousResponseId: undefined,
               onChunk: options.onChunk,
-              onReasoningChunk: options.onReasoningChunk,
+              onReasoningChunk: wrappedOnReasoningChunk,
+            reasoningEnabled,
               temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
               contextLength: resolvedContextLength,
               maxTokens: resolvedMaxTokens || undefined,
@@ -705,6 +742,8 @@ export async function sendChatRequest({
     tools: providerTools,
     toolChoice: providerTools.length > 0 ? "auto" : "none",
     onChunk: wrappedOnChunk,
+    onReasoningChunk: wrappedOnReasoningChunk,
+    reasoningEnabled,
     onToolCallDetected: handleToolCallDetected,
     onComplete: wrappedOnComplete,
     messages: buildChatContext(

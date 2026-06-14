@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   Brain,
   ChevronDown,
@@ -26,7 +26,6 @@ type ChatMessageLayout = {
 type MessageBubbleProps = {
   message: ChatMessage;
   isStreaming: boolean;
-  showReasoning: boolean;
   layout: ChatMessageLayout;
   isLastAssistant?: boolean;
   onEdit?: (messageId: string) => void;
@@ -40,7 +39,6 @@ type MessageBubbleProps = {
 export const MessageBubble = memo(function MessageBubble({
   message,
   isStreaming,
-  showReasoning,
   layout,
   isLastAssistant = false,
   onEdit,
@@ -130,7 +128,7 @@ export const MessageBubble = memo(function MessageBubble({
           onFork={() => onFork?.(message.id)}
           onDelete={() => onDelete?.(message.id)}
         />
-        {showReasoning && hasReasoning && (
+        {hasReasoning && (
           <ReasoningBlock
             content={reasoning}
             isStreaming={reasoningOnlyStreaming}
@@ -177,20 +175,46 @@ function ReasoningBlock({
   isStreaming,
   messageTextClass,
 }: ReasoningBlockProps) {
+  const [expanded, setExpanded] = useState(isStreaming);
+
+  useEffect(() => {
+    if (isStreaming) setExpanded(true);
+  }, [isStreaming]);
+
+  useEffect(() => {
+    if (!isStreaming) setExpanded(false);
+  }, [isStreaming]);
+
   return (
     <div
-      className={`mb-2 rounded-xl border border-violet-500/15 bg-violet-500/[0.06] px-3.5 py-2.5 transition-[font-size] duration-200 ease-out ${messageTextClass}`}
+      className={`mb-2 overflow-hidden rounded-xl border border-violet-500/15 bg-violet-500/[0.06] transition-[font-size] duration-200 ease-out ${messageTextClass}`}
     >
-      <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-wide text-violet-300/80">
-        <Brain className="size-3" />
-        <span>Reasoning</span>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition-colors hover:bg-violet-500/[0.04]"
+      >
+        <Brain className="size-3 shrink-0 text-violet-300/80" />
+        <span className="flex-1 text-[10.5px] font-medium uppercase tracking-wide text-violet-300/80">
+          {isStreaming ? "Thinking" : "Reasoning"}
+        </span>
         {isStreaming && (
-          <span className="ml-0.5 inline-block size-1.5 animate-pulse rounded-full bg-violet-400" />
+          <span className="inline-block size-1.5 animate-pulse rounded-full bg-violet-400" />
         )}
-      </div>
-      <p className="m-0 whitespace-pre-wrap text-[12.5px] leading-relaxed text-[var(--color-text-dim)]">
-        {content}
-      </p>
+        <ChevronDown
+          className={`size-3.5 shrink-0 text-violet-300/60 transition-transform ${
+            expanded ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {expanded && (
+        <div className="border-t border-violet-500/10 px-3.5 py-2.5">
+          <p className="m-0 whitespace-pre-wrap text-[12.5px] leading-relaxed text-[var(--color-text-dim)]">
+            {content}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

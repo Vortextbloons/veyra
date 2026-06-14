@@ -268,19 +268,30 @@ pub fn configure_gmail_oauth(conn: &Connection, input: GmailOAuthConfigInput) ->
 
 pub fn connect_gmail(conn: &Connection) -> Result<EmailAccountRow, String> {
     let (client_id, client_secret) = gmail_oauth_config(conn)?;
+    connect_gmail_with_config(conn, &client_id, &client_secret)
+}
+
+pub fn connect_gmail_with_config(
+    conn: &Connection,
+    client_id: &str,
+    client_secret: &str,
+) -> Result<EmailAccountRow, String> {
+    if client_id.trim().is_empty() || client_secret.trim().is_empty() {
+        return Err("Gmail OAuth client ID and secret are required".into());
+    }
     let redirect_uri = "http://127.0.0.1:53682/oauth/gmail/callback";
     let listener = TcpListener::bind("127.0.0.1:53682")
         .map_err(|e| format!("failed to start Gmail OAuth callback server: {e}"))?;
-    let scope = "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.send";
+    let scope = "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.send openid email profile";
     let auth_url = format!(
-        "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&prompt=consent",
-        urlencoding::encode(&client_id),
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&prompt=consent&login_hint=",
+        urlencoding::encode(client_id.trim()),
         urlencoding::encode(redirect_uri),
         urlencoding::encode(scope),
     );
     open_url(&auth_url)?;
     let code = wait_for_oauth_code(listener)?;
-    let token = exchange_gmail_code(&client_id, &client_secret, redirect_uri, &code)?;
+    let token = exchange_gmail_code(client_id.trim(), client_secret.trim(), redirect_uri, &code)?;
     let profile = gmail_request(&token.access_token, reqwest::blocking::Client::new().get("https://gmail.googleapis.com/gmail/v1/users/me/profile"))?;
     let email = profile.get("emailAddress").and_then(Value::as_str).ok_or_else(|| "Gmail profile did not include an email address".to_string())?.to_string();
     let account = upsert_gmail_account(conn, email, token)?;

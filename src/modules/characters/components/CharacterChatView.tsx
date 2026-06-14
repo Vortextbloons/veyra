@@ -8,6 +8,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { getAvatarGradient } from "../character-gradients";
 import type { CharacterRecord } from "../character-types";
+import { useWorkspaceModeChange } from "@/lib/workspace-mode";
 
 function CharacterAvatar({
   character,
@@ -41,6 +42,7 @@ export function CharacterChatView({
   const characters = useCharacterStore((s) => s.characters);
   const unbindCharacter = useChatStore((s) => s.unbindCharacter);
   const pipeline = useCharacterChatPipeline();
+  const handleModeChange = useWorkspaceModeChange();
 
   const isCharacterChatActive =
     !!activeConversation && activeConversation.characterId === character.id;
@@ -153,7 +155,8 @@ export function CharacterChatView({
         onTriggerMemoryExtraction={pipeline.handleTriggerMemoryExtraction}
         sidebarsCollapsed={pipeline.sidebarsCollapsed}
         modelLoadProgress={pipeline.modelLoadProgress}
-        mode="chat"
+        mode="characters"
+        onModeChange={handleModeChange}
         onEditMessage={pipeline.handleEditMessage}
         onRegenerate={pipeline.handleRegenerate}
         onRetry={pipeline.handleRetry}

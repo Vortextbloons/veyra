@@ -33,6 +33,7 @@ export type ProviderChatOptions = {
   previousResponseId?: string;
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
+  reasoningEnabled?: boolean;
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
