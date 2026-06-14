@@ -47,8 +47,6 @@ mod project_commands;
 mod project_db;
 mod research_commands;
 mod research_db;
-mod research_html_parser;
-mod research_source_fetcher;
 mod searxng_setup;
 mod web_fetch_cache;
 mod web_fetch_commands;
@@ -213,8 +211,6 @@ pub fn run() {
             research_commands::create_research_contradiction,
             research_commands::create_research_report,
             research_commands::update_research_report,
-            research_commands::fetch_research_source,
-            research_commands::fetch_research_sources_bulk,
             research_commands::update_research_source_after_fetch,
             character_commands::create_character,
             character_commands::get_character,

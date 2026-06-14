@@ -1,6 +1,6 @@
 use crate::db_utils::run_db_command;
 use crate::research_db::{self, ResearchDbState};
-use crate::research_source_fetcher;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 #[tauri::command]
@@ -168,29 +168,36 @@ pub async fn update_research_report(
     .await
 }
 
-#[tauri::command]
-pub async fn fetch_research_source(
-    url: String,
-) -> Result<research_source_fetcher::FetchedSource, String> {
-    research_source_fetcher::fetch_source_url(url).await
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FetchedSource {
+    pub url: String,
+    pub title: String,
+    pub content_type: String,
+    pub text_content: String,
+    pub status_code: i64,
+    pub fetch_error: Option<String>,
+    pub fetched_at: String,
+    /// Whether the fetch itself succeeded. When false, the row is marked
+    /// "failed" instead of "fetched" and `fetch_error` is recorded.
+    #[serde(default = "default_fetch_ok")]
+    pub ok: bool,
 }
 
-#[tauri::command]
-pub async fn fetch_research_sources_bulk(
-    urls: Vec<String>,
-) -> Result<Vec<research_source_fetcher::FetchedSourceResult>, String> {
-    Ok(research_source_fetcher::fetch_source_urls(urls).await)
+fn default_fetch_ok() -> bool {
+    true
 }
 
 #[tauri::command]
 pub async fn update_research_source_after_fetch(
     source_id: String,
-    fetched: research_source_fetcher::FetchedSource,
+    fetched: FetchedSource,
     state: State<'_, ResearchDbState>,
 ) -> Result<research_db::ResearchSourceRow, String> {
+    let status = if fetched.ok { "fetched" } else { "failed" };
     let input = serde_json::json!({
         "id": source_id,
-        "status": "fetched",
+        "status": status,
         "fullText": fetched.text_content,
         "contentType": fetched.content_type,
         "fetchedAt": fetched.fetched_at,

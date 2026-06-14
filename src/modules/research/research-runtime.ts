@@ -5,7 +5,8 @@ import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { estimateTokens } from "@/lib/context";
 import { useResearchStore } from "./research-store";
-import { fetchResearchSource, fetchResearchSourcesBulk, updateResearchSourceAfterFetch } from "./research-storage";
+import { updateResearchSourceAfterFetch, type FetchedSource } from "./research-storage";
+import { invokeFetchAndExtractPages, type FetchedPage } from "@/modules/web-search/tauri-commands";
 import type {
   ResearchDepth,
   ResearchRun,
@@ -242,6 +243,24 @@ function assessDomainAuthority(url: string): number {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+const RESEARCH_FETCH_TIMEOUT_SECS = 15;
+const RESEARCH_FETCH_MAX_CHARS = 50_000;
+const RESEARCH_FETCH_CONCURRENCY = 3;
+
+function mapFetchedPageToSource(page: FetchedPage): FetchedSource {
+  const ok = page.status === "ok";
+  return {
+    url: page.url,
+    title: page.title ?? page.url,
+    contentType: "text/html",
+    textContent: page.content ?? "",
+    statusCode: ok ? 200 : 0,
+    fetchedAt: nowIso(),
+    ok,
+    ...(page.error_reason ? { fetchError: `${page.status}: ${page.error_reason}` } : {}),
+  };
 }
 
 function truncateToTokens(text: string, maxTokens: number): string {
@@ -662,51 +681,66 @@ Question: ${run.question}`;
     const discoveredSources = sources.filter((s) => s.status === "discovered");
 
     if (discoveredSources.length > 0) {
-      // Bulk fetch for performance
-      try {
-        const urls = discoveredSources.map((s) => s.url);
-        const results = await fetchResearchSourcesBulk(urls);
-        for (let i = 0; i < results.length; i++) {
-          checkAbort();
-          const result = results[i];
-          const source = discoveredSources[i];
-          if (!source) continue;
+      const urls = discoveredSources.map((s) => s.url);
 
-          if (result?.source) {
-            const updated = await updateResearchSourceAfterFetch(source.id, result.source);
-            const idx = sources.findIndex((s) => s.id === source.id);
-            if (idx !== -1) sources[idx] = updated;
-            onEvent({ type: "source_fetched", sourceId: updated.id, title: updated.title });
-          } else {
-            await store.updateSource({
-              id: source.id,
-              status: "failed" as ResearchSourceStatus,
-              error: result?.error || "Fetch failed",
-            });
-            const idx = sources.findIndex((s) => s.id === source.id);
-            if (idx !== -1) {
-              sources[idx] = { ...sources[idx], status: "failed" as ResearchSourceStatus, error: result?.error || "Fetch failed" };
-            }
-          }
-        }
+      let pages: FetchedPage[] = [];
+      try {
+        pages = await invokeFetchAndExtractPages(
+          urls,
+          RESEARCH_FETCH_CONCURRENCY,
+          RESEARCH_FETCH_TIMEOUT_SECS,
+          RESEARCH_FETCH_MAX_CHARS,
+        );
       } catch (bulkErr) {
-        console.warn("[research-runtime] Bulk fetch failed, falling back to individual:", bulkErr);
+        console.warn("[research-runtime] Bulk fetch threw, treating all sources as failed:", bulkErr);
         for (const source of discoveredSources) {
           checkAbort();
-          try {
-            const fetched = await fetchResearchSource(source.url);
-            const updated = await updateResearchSourceAfterFetch(source.id, fetched);
-            const idx = sources.findIndex((s) => s.id === source.id);
-            if (idx !== -1) sources[idx] = updated;
-            onEvent({ type: "source_fetched", sourceId: updated.id, title: updated.title });
-          } catch (fetchErr) {
-            console.warn("[research-runtime] Fetch failed:", source.url, fetchErr);
-            await store.updateSource({
-              id: source.id,
-              status: "failed" as ResearchSourceStatus,
-              error: getErrorMessage(fetchErr),
-            });
+          await store.updateSource({
+            id: source.id,
+            status: "failed" as ResearchSourceStatus,
+            error: getErrorMessage(bulkErr),
+          });
+          const idx = sources.findIndex((s) => s.id === source.id);
+          if (idx !== -1) {
+            sources[idx] = { ...sources[idx], status: "failed" as ResearchSourceStatus, error: getErrorMessage(bulkErr) };
           }
+        }
+      }
+
+      const pageByUrl = new Map<string, FetchedPage>();
+      for (const page of pages) {
+        pageByUrl.set(page.url, page);
+      }
+
+      for (const source of discoveredSources) {
+        checkAbort();
+        const page = pageByUrl.get(source.url);
+        if (!page) {
+          await store.updateSource({
+            id: source.id,
+            status: "failed" as ResearchSourceStatus,
+            error: "No fetch result returned",
+          });
+          const idx = sources.findIndex((s) => s.id === source.id);
+          if (idx !== -1) {
+            sources[idx] = { ...sources[idx], status: "failed" as ResearchSourceStatus, error: "No fetch result returned" };
+          }
+          continue;
+        }
+
+        try {
+          const fetched = mapFetchedPageToSource(page);
+          const updated = await updateResearchSourceAfterFetch(source.id, fetched);
+          const idx = sources.findIndex((s) => s.id === source.id);
+          if (idx !== -1) sources[idx] = updated;
+          onEvent({ type: "source_fetched", sourceId: updated.id, title: updated.title });
+        } catch (updateErr) {
+          console.warn("[research-runtime] Update after fetch failed:", source.url, updateErr);
+          await store.updateSource({
+            id: source.id,
+            status: "failed" as ResearchSourceStatus,
+            error: getErrorMessage(updateErr),
+          });
         }
       }
     }

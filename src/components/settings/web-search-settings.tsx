@@ -48,6 +48,12 @@ export function WebSearchSettings() {
   const setWebSearchPerPageTimeoutSecs = useSettingsStore(
     (s) => s.setWebSearchPerPageTimeoutSecs,
   );
+  const webSearchFetchMaxCharsPerSource = useSettingsStore(
+    (s) => s.webSearchFetchMaxCharsPerSource,
+  );
+  const setWebSearchFetchMaxCharsPerSource = useSettingsStore(
+    (s) => s.setWebSearchFetchMaxCharsPerSource,
+  );
 
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testError, setTestError] = useState<string>("");
@@ -591,6 +597,40 @@ export function WebSearchSettings() {
                   <span>2s</span>
                   <span>15s</span>
                   <span>30s</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <div className="text-[12.5px] font-medium text-white">
+                      Characters per fetched page
+                    </div>
+                    <div className="text-[11px] text-[var(--color-text-dim)]">
+                      Max characters extracted from each page. Readability text
+                      is denser than raw HTML, so even small values give the AI
+                      a lot of context.
+                    </div>
+                  </div>
+                  <span className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[12px] text-white">
+                    {(webSearchFetchMaxCharsPerSource / 1000).toFixed(0)}K
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1000}
+                  max={50000}
+                  step={1000}
+                  value={webSearchFetchMaxCharsPerSource}
+                  onChange={(e) =>
+                    setWebSearchFetchMaxCharsPerSource(parseInt(e.target.value))
+                  }
+                  className="w-full accent-[var(--color-accent)]"
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-[var(--color-text-dim)]">
+                  <span>1K</span>
+                  <span>25K</span>
+                  <span>50K</span>
                 </div>
               </div>
 

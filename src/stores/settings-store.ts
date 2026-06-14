@@ -53,6 +53,7 @@ type SettingsStoreState = {
   webSearchFetchEnabled: boolean;
   webSearchFetchCount: number;
   webSearchPerPageTimeoutSecs: number;
+  webSearchFetchMaxCharsPerSource: number;
   searxngSetupError: string;
   contextAnchoringEnabled: boolean;
   documentPanelEnabled: boolean;
@@ -118,6 +119,7 @@ type SettingsStore = SettingsStoreState & {
   setWebSearchFetchEnabled: (enabled: boolean) => void;
   setWebSearchFetchCount: (n: number) => void;
   setWebSearchPerPageTimeoutSecs: (n: number) => void;
+  setWebSearchFetchMaxCharsPerSource: (n: number) => void;
   setSearxngSetupError: (message: string) => void;
   setContextAnchoringEnabled: (enabled: boolean) => void;
   setDocumentPanelEnabled: (enabled: boolean) => void;
@@ -170,6 +172,7 @@ const DEFAULT_STATE: SettingsStoreState = {
   webSearchFetchEnabled: true,
   webSearchFetchCount: 5,
   webSearchPerPageTimeoutSecs: 8,
+  webSearchFetchMaxCharsPerSource: 8000,
   searxngSetupError: "",
   contextAnchoringEnabled: true,
   documentPanelEnabled: true,
@@ -223,6 +226,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     webSearchFetchEnabled: state.webSearchFetchEnabled,
     webSearchFetchCount: state.webSearchFetchCount,
     webSearchPerPageTimeoutSecs: state.webSearchPerPageTimeoutSecs,
+    webSearchFetchMaxCharsPerSource: state.webSearchFetchMaxCharsPerSource,
     searxngSetupError: state.searxngSetupError,
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     documentPanelEnabled: state.documentPanelEnabled,
@@ -319,6 +323,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setWebSearchFetchCount: (webSearchFetchCount) => set({ webSearchFetchCount }),
       setWebSearchPerPageTimeoutSecs: (webSearchPerPageTimeoutSecs) =>
         set({ webSearchPerPageTimeoutSecs }),
+      setWebSearchFetchMaxCharsPerSource: (webSearchFetchMaxCharsPerSource) =>
+        set({ webSearchFetchMaxCharsPerSource }),
       setSearxngSetupError: (searxngSetupError) => set({ searxngSetupError }),
       setContextAnchoringEnabled: (contextAnchoringEnabled) => set({ contextAnchoringEnabled }),
       setDocumentPanelEnabled: (documentPanelEnabled) => set({ documentPanelEnabled }),

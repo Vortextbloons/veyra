@@ -23,6 +23,7 @@ export interface ProjectSettings {
   webSearchFetchEnabled?: boolean | null;
   webSearchFetchCount?: number | null;
   webSearchPerPageTimeoutSecs?: number | null;
+  webSearchFetchMaxCharsPerSource?: number | null;
   webSearchContextTokenLimit?: number | null;
   enabledTools?: {
     documents: boolean;

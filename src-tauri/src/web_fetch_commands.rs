@@ -310,7 +310,7 @@ pub async fn fetch_and_extract_pages(
     }
     let sem_concurrency = concurrency.clamp(1, 16);
     let semaphore = std::sync::Arc::new(Semaphore::new(sem_concurrency));
-    let max_chars = max_chars_per_source.clamp(500, 32_000);
+    let max_chars = max_chars_per_source.clamp(500, 50_000);
     let timeout = timeout_secs.clamp(2, 30);
 
     let mut tasks = Vec::with_capacity(urls.len());

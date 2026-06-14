@@ -88,6 +88,14 @@ export async function runSearch(
         settings.webSearchPerPageTimeoutSecs,
     ),
   );
+  const maxCharsPerSource = Math.max(
+    1000,
+    Math.min(
+      50_000,
+      projectSettings?.webSearchFetchMaxCharsPerSource ??
+        settings.webSearchFetchMaxCharsPerSource,
+    ),
+  );
   const tokenLimit = Math.max(
     500,
     Math.min(
@@ -136,7 +144,7 @@ export async function runSearch(
           topForFetch,
           3,
           perPageTimeoutSecs,
-          8000,
+          maxCharsPerSource,
         );
         onFetchProgress?.(pages.length, topForFetch.length);
         fetchedPages = pages.map((p: FetchedPage) => ({

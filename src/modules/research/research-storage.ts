@@ -83,9 +83,7 @@ export async function updateResearchReport(input: UpdateResearchReportInput): Pr
   return invoke<ResearchReport>("update_research_report", { input: JSON.stringify(input) });
 }
 
-export async function fetchResearchSource(
-  url: string,
-): Promise<{
+export type FetchedSource = {
   url: string;
   title: string;
   contentType: string;
@@ -93,41 +91,12 @@ export async function fetchResearchSource(
   statusCode: number;
   fetchError?: string;
   fetchedAt: string;
-}> {
-  return invoke("fetch_research_source", { url });
-}
-
-export async function fetchResearchSourcesBulk(
-  urls: string[],
-): Promise<
-  Array<{
-    url: string;
-    source?: {
-      url: string;
-      title: string;
-      contentType: string;
-      textContent: string;
-      statusCode: number;
-      fetchError?: string;
-      fetchedAt: string;
-    };
-    error?: string;
-  }>
-> {
-  return invoke("fetch_research_sources_bulk", { urls });
-}
+  ok: boolean;
+};
 
 export async function updateResearchSourceAfterFetch(
   sourceId: string,
-  fetched: {
-    url: string;
-    title: string;
-    contentType: string;
-    textContent: string;
-    statusCode: number;
-    fetchError?: string;
-    fetchedAt: string;
-  },
+  fetched: FetchedSource,
 ): Promise<ResearchSource> {
   return invoke<ResearchSource>("update_research_source_after_fetch", { sourceId, fetched });
 }
