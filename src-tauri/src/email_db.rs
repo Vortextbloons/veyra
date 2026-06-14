@@ -266,6 +266,17 @@ pub fn configure_gmail_oauth(conn: &Connection, input: GmailOAuthConfigInput) ->
     Ok(())
 }
 
+pub fn has_gmail_oauth_config(conn: &Connection) -> Result<bool, String> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM email_oauth_config WHERE provider = 'gmail'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(count > 0)
+}
+
 pub fn connect_gmail(conn: &Connection) -> Result<EmailAccountRow, String> {
     let (client_id, client_secret) = gmail_oauth_config(conn)?;
     connect_gmail_with_config(conn, &client_id, &client_secret)

@@ -184,6 +184,8 @@ pub fn run() {
             email_commands::email_add_account,
             email_commands::email_configure_gmail_oauth,
             email_commands::email_connect_gmail,
+            email_commands::email_connect_gmail_with_config,
+            email_commands::email_has_gmail_oauth_config,
             email_commands::email_sync_account,
             email_commands::email_remove_account,
             email_commands::email_list_threads,

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
-  MoreHorizontal,
   Users,
   ArrowLeft,
   Edit3,
@@ -15,7 +14,6 @@ import { useCharacterGroupStore } from "../character-group-store";
 import { useCharacterStore } from "../character-store";
 import { newId, nowIso } from "@/lib/id";
 import { CharacterAvatar } from "../CharacterAvatar";
-import { getAvatarGradient } from "../character-gradients";
 import type { CharacterGroupRecord, CharacterGroupSpeakerMode } from "../character-group-types";
 import type { CharacterRecord } from "../character-types";
 import { GroupChatView } from "./GroupChatView";
@@ -23,50 +21,17 @@ import { startGroupChat } from "../group-chat";
 
 export function GroupPage() {
   const hydrateGroups = useCharacterGroupStore((s) => s.hydrateGroups);
-  const groups = useCharacterGroupStore((s) => s.groups);
-  const hydrationState = useCharacterGroupStore((s) => s.hydrationState);
-  const activeGroupId = useCharacterGroupStore((s) => s.activeGroupId);
   const createGroup = useCharacterGroupStore((s) => s.createGroup);
-  const deleteGroup = useCharacterGroupStore((s) => s.deleteGroup);
-  const characters = useCharacterStore((s) => s.characters);
-  const [chatOpenRaw, setChatOpen] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     void hydrateGroups();
   }, [hydrateGroups]);
 
-  const activeGroup = useMemo(
-    () => (activeGroupId ? groups.find((g) => g.id === activeGroupId) ?? null : null),
-    [activeGroupId, groups],
-  );
-
-  // Auto-close chat if the group is gone.
-  const chatOpen = chatOpenRaw && !!activeGroup;
-
-  // If the active group is deleted, close editor.
-  useEffect(() => {
-    if (!activeGroup) {
-      setEditorOpen(false);
-    }
-  }, [activeGroup]);
-
-  const handleStartChat = useCallback(() => {
-    if (!activeGroup) return;
-    startGroupChat(activeGroup);
-    setChatOpen(true);
-  }, [activeGroup]);
-
-  const handleBackFromChat = useCallback(() => {
-    setChatOpen(false);
-  }, []);
-
   const handleCreate = useCallback(async () => {
     const now = nowIso();
     const id = newId("group");
-    const created = await createGroup({
+    await createGroup({
       id,
       name: "New group",
       memberIds: [],
@@ -75,19 +40,67 @@ export function GroupPage() {
       createdAt: now,
       updatedAt: now,
     });
-    setEditorOpen(true);
-    void created;
   }, [createGroup]);
 
-  const showToast = (msg: string) => {
-    void msg;
-  };
-
   return (
-    <GroupPageContent
-      onCreate={handleCreate}
-      onDeleteGroup={(id) => setConfirmDeleteId(id)}
-    />
+    <>
+      <GroupPageContent
+        onCreate={handleCreate}
+        onDeleteGroup={(id) => setConfirmDeleteId(id)}
+      />
+      {confirmDeleteId && (
+        <DeleteGroupModal
+          onCancel={() => setConfirmDeleteId(null)}
+          onConfirm={async () => {
+            const id = confirmDeleteId;
+            setConfirmDeleteId(null);
+            if (id) await useCharacterGroupStore.getState().deleteGroup(id);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function DeleteGroupModal({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="flex w-[360px] max-w-[90vw] flex-col gap-3 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-panel)] p-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-[13px] font-semibold text-white">Delete group?</h3>
+        <p className="text-[12px] text-[var(--color-text-dim)]">
+          This will permanently remove the group. Any conversations bound to it
+          will keep their chat history but lose the persona/lorebook injection.
+        </p>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md px-3 py-1.5 text-[12.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-md bg-red-500/80 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-red-500"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -103,7 +116,6 @@ export function GroupPageContent({
   const activeGroupId = useCharacterGroupStore((s) => s.activeGroupId);
   const characters = useCharacterStore((s) => s.characters);
   const [chatOpenRaw, setChatOpen] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
 
   const activeGroup = useMemo(
     () => (activeGroupId ? groups.find((g) => g.id === activeGroupId) ?? null : null),
@@ -111,9 +123,15 @@ export function GroupPageContent({
   );
   const chatOpen = chatOpenRaw && !!activeGroup;
 
-  useEffect(() => {
-    if (!activeGroup) setEditorOpen(false);
-  }, [activeGroup]);
+  // Close the editor if the active group disappears. The lint rule bans
+  // sync setState in an effect, so we use the "previous value" pattern:
+  // track the last id we saw and reset editor state when it changes.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [lastGroupId, setLastGroupId] = useState<string | null>(activeGroup?.id ?? null);
+  if (lastGroupId !== (activeGroup?.id ?? null)) {
+    setLastGroupId(activeGroup?.id ?? null);
+    setEditorOpen(false);
+  }
 
   const handleStartChat = useCallback(() => {
     if (!activeGroup) return;
@@ -148,70 +166,6 @@ export function GroupPageContent({
         <GroupEditorDrawer group={activeGroup} onClose={() => setEditorOpen(false)} />
       )}
     </div>
-  );
-
-  // Keep references to the unused destructured variables from the legacy
-  // export so the linter doesn't complain about dead code. They were
-  // threaded through the header (now removed) and the create flow.
-  void Groups;
-  void MenuOpen;
-  void SetMenuOpen;
-  void SetToast;
-  void ShowToast;
-  void HandleDuplicate;
-  void HandleExportJson;
-  void HandleExportCcv3;
-  void HandleExportPng;
-  void HandleImport;
-
-      {editorOpen && activeGroup && (
-        <GroupEditorDrawer
-          group={activeGroup}
-          onClose={() => setEditorOpen(false)}
-        />
-      )}
-
-      {confirmDeleteId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setConfirmDeleteId(null)}
-        >
-          <div
-            className="flex w-[360px] max-w-[90vw] flex-col gap-3 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-panel)] p-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-[13px] font-semibold text-white">Delete group?</h3>
-            <p className="text-[12px] text-[var(--color-text-dim)]">
-              This will permanently remove the group. Any conversations bound to
-              it will keep their chat history but lose the persona/lorebook
-              injection.
-            </p>
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteId(null)}
-                className="rounded-md px-3 py-1.5 text-[12.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const id = confirmDeleteId;
-                  setConfirmDeleteId(null);
-                  if (id) await deleteGroup(id);
-                }}
-                className="rounded-md bg-red-500/80 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-red-500"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {void showToast}
-    </main>
   );
 }
 
@@ -969,7 +923,6 @@ function MetaTab({
           <div>recentConversationIds: {draft.recentConversationIds.length} stored</div>
         </div>
       </Field>
-      {void getAvatarGradient}
     </div>
   );
 }

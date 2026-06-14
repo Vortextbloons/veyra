@@ -63,6 +63,10 @@ export async function emailConnectGmailWithConfig(config: { clientId: string; cl
   return invoke<EmailAccount>("email_connect_gmail_with_config", { config });
 }
 
+export async function emailHasGmailOauthConfig(): Promise<boolean> {
+  return invoke<boolean>("email_has_gmail_oauth_config");
+}
+
 export async function emailSyncAccount(accountId: string): Promise<void> {
   return invoke<void>("email_sync_account", { accountId });
 }

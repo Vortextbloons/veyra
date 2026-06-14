@@ -13,6 +13,7 @@ import {
   emailConfigureGmailOauth,
   emailConnectGmail,
   emailConnectGmailWithConfig,
+  emailHasGmailOauthConfig,
   emailSyncAccount,
   emailRemoveAccount,
 } from "./tauri-commands";
@@ -35,6 +36,7 @@ type EmailStore = {
   configureGmailOauth: (clientId: string, clientSecret: string) => Promise<void>;
   connectGmail: () => Promise<void>;
   connectGmailWithConfig: (clientId: string, clientSecret: string) => Promise<void>;
+  hasGmailOauthConfig: boolean;
   syncAccount: (accountId: string) => Promise<void>;
   removeAccount: (accountId: string) => Promise<void>;
   selectAccount: (id: string | null) => void;
@@ -66,13 +68,17 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   isLoading: false,
   error: null,
   hydrationState: "loading",
+  hasGmailOauthConfig: false,
 
   hydrateAccounts: async () => {
     if (get().hydrationState === "ready") return;
     hydrationPromise ??= (async () => {
       try {
-        const accounts = await emailListAccounts();
-        set({ accounts, hydrationState: "ready" });
+        const [accounts, hasGmailOauthConfig] = await Promise.all([
+          emailListAccounts(),
+          emailHasGmailOauthConfig(),
+        ]);
+        set({ accounts, hydrationState: "ready", hasGmailOauthConfig });
         if (accounts.length > 0 && !get().activeAccountId) {
           set({ activeAccountId: accounts[0].id });
           await get().loadThreads();
@@ -139,6 +145,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         activeAccountId: account.id,
         activeThreadId: null,
         activeFolder: "inbox",
+        hasGmailOauthConfig: true,
         isLoading: false,
       }));
       await get().loadThreads();
