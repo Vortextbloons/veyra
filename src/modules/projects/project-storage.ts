@@ -18,7 +18,7 @@ export async function createProject(
   input: Omit<CreateProjectInput, "id"> & { id?: string },
 ): Promise<ProjectRecord> {
   const now = nowIso();
-  const id = input.id ?? newId("proj");
+  const id = input.id && input.id.length > 0 ? input.id : newId("proj");
   const payload = {
     id,
     name: input.name,

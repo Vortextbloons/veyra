@@ -292,10 +292,10 @@ function CharacterHeader({ character }: { character: CharacterRecord }) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <MetaRow label="Creator" value={character.creator} />
         <MetaRow label="Category" value={character.category} />
-        {character.stats.totalChats > 0 && (
-          <MetaRow label="Chats" value={String(character.stats.totalChats)} />
+        {(character.stats?.totalChats ?? 0) > 0 && (
+          <MetaRow label="Chats" value={String(character.stats!.totalChats)} />
         )}
-        {character.stats.lastUsedAt && (
+        {character.stats?.lastUsedAt && (
           <MetaRow
             label="Last used"
             value={new Date(character.stats.lastUsedAt).toLocaleDateString()}

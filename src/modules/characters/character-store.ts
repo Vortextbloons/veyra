@@ -28,7 +28,9 @@ type CharacterStore = {
   clearActiveCharacter: () => void;
 
   // CRUD
-  createCharacter: (input: CreateCharacterInput) => Promise<CharacterRecord>;
+  createCharacter: (
+    input: Omit<CreateCharacterInput, "id"> & { id?: string },
+  ) => Promise<CharacterRecord>;
   updateCharacter: (input: UpdateCharacterInput) => Promise<CharacterRecord>;
   deleteCharacter: (id: string) => Promise<void>;
   refreshCharacter: (id: string) => Promise<CharacterRecord | null>;

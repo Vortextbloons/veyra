@@ -3,13 +3,33 @@ use rusqlite::{params_from_iter, types::Value, Connection};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::db_utils::parse_json_array;
+
 pub struct CharacterDb(pub Mutex<Connection>);
 
 // ── Row types ────────────────────────────────────────────────────────────────
 
+/// Usage statistics for a character. Computed on read (not stored), so the
+/// row struct can flatten this into the same JSON object the frontend
+/// expects without requiring extra columns in the `characters` table.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterStats {
+    pub total_chats: i64,
+    pub total_messages: i64,
+    pub last_used_at: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterExampleMessage {
+    pub user: String,
+    pub assistant: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct CharacterRow {   
+pub struct CharacterRow {
     pub id: String,
     pub name: String,
     pub title: String,
@@ -20,12 +40,12 @@ pub struct CharacterRow {
     pub personality: String,
     pub scenario: String,
     pub first_message: String,
-    pub alternate_greetings_json: String,
+    pub alternate_greetings: Vec<String>,
     pub system_prompt: String,
     pub post_history_instructions: String,
-    pub example_messages_json: String,
+    pub example_messages: Vec<CharacterExampleMessage>,
     pub creator_notes: String,
-    pub tags_json: String,
+    pub tags: Vec<String>,
     pub category: String,
     pub version: String,
     pub spec: String,
@@ -35,6 +55,10 @@ pub struct CharacterRow {
     pub project_id: String,
     pub created_at: String,
     pub updated_at: String,
+    /// Nested in the JSON as `stats: { totalChats, totalMessages, lastUsedAt }`
+    /// so the frontend's `character.stats.totalChats` access works without
+    /// requiring nullable handling.
+    pub stats: CharacterStats,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -250,7 +274,14 @@ impl crate::db_utils::DbConnectionState for CharacterDbState {
 
 const SELECT_COLS: &str = "id, name, title, avatar_path, avatar_color, tagline, description, personality, scenario, first_message, alternate_greetings_json, system_prompt, post_history_instructions, example_messages_json, creator_notes, tags_json, category, version, spec, creator, source, is_global, project_id, created_at, updated_at";
 
+fn parse_example_messages(s: &str) -> Vec<CharacterExampleMessage> {
+    serde_json::from_str(s).unwrap_or_default()
+}
+
 fn row_to_character(row: &rusqlite::Row) -> rusqlite::Result<CharacterRow> {
+    let alternate_greetings_json: String = row.get("alternate_greetings_json")?;
+    let example_messages_json: String = row.get("example_messages_json")?;
+    let tags_json: String = row.get("tags_json")?;
     Ok(CharacterRow {
         id: row.get("id")?,
         name: row.get("name")?,
@@ -262,12 +293,12 @@ fn row_to_character(row: &rusqlite::Row) -> rusqlite::Result<CharacterRow> {
         personality: row.get("personality")?,
         scenario: row.get("scenario")?,
         first_message: row.get("first_message")?,
-        alternate_greetings_json: row.get("alternate_greetings_json")?,
+        alternate_greetings: parse_json_array(&alternate_greetings_json),
         system_prompt: row.get("system_prompt")?,
         post_history_instructions: row.get("post_history_instructions")?,
-        example_messages_json: row.get("example_messages_json")?,
+        example_messages: parse_example_messages(&example_messages_json),
         creator_notes: row.get("creator_notes")?,
-        tags_json: row.get("tags_json")?,
+        tags: parse_json_array(&tags_json),
         category: row.get("category")?,
         version: row.get("version")?,
         spec: row.get("spec")?,
@@ -277,6 +308,7 @@ fn row_to_character(row: &rusqlite::Row) -> rusqlite::Result<CharacterRow> {
         project_id: row.get("project_id")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+        stats: CharacterStats::default(),
     })
 }
 

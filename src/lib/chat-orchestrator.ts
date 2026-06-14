@@ -176,8 +176,7 @@ export async function sendChatRequest({
     ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
     : undefined;
 
-  const isFirstMessage = messages.filter((m) => m.role === "user").length <= 1;
-  const contextAnchoringBlock = isFirstMessage && settings.contextAnchoringEnabled
+  const contextAnchoringBlock = settings.contextAnchoringEnabled
     ? buildContextAnchoringBlock()
     : undefined;
 

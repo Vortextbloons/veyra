@@ -39,7 +39,6 @@ function DialogBody({ onClose }: { onClose: () => void }) {
     try {
       const now = new Date().toISOString();
       await createCharacter({
-        id: "",
         name: trimmed,
         title: title.trim() || undefined,
         tagline: tagline.trim(),

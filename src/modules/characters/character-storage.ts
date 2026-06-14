@@ -27,7 +27,7 @@ export async function createCharacter(
   input: Omit<CreateCharacterInput, "id"> & { id?: string },
 ): Promise<CharacterRecord> {
   const now = nowIso();
-  const id = input.id ?? newId("char");
+  const id = input.id && input.id.length > 0 ? input.id : newId("char");
   const payload: Record<string, unknown> = {
     id,
     name: input.name,
