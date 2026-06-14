@@ -598,6 +598,7 @@ Question: ${run.question}`;
               engine: "searxng",
               score: 0,
               rank: sources.length + 1,
+              ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
             };
 
             const source = await store.createSource(sourceInput);
@@ -637,6 +638,7 @@ Question: ${run.question}`;
               engine: "searxng",
               score: 0,
               rank: sources.length + 1,
+              ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
             });
             sources.push(source);
           }
@@ -1211,6 +1213,7 @@ Return ONLY a JSON object:
                 engine: "searxng",
                 score: 0,
                 rank: sources.length + 1,
+                ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
               });
               sources.push(source);
             }

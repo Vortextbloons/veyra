@@ -43,6 +43,9 @@ export interface BuildChatContextOptions {
   modelName?: string | null;
   /** Active provider display name — paired with `modelName`. */
   providerName?: string | null;
+  /** Character context block (persona, lorebook, examples) for roleplay
+   *  chats. Injected after the core prompt and before the memory block. */
+  characterBlock?: string | null;
 }
 
 /**
@@ -82,9 +85,12 @@ function buildSystemContent(options: BuildChatContextOptions): string {
   const projectPromptBlock = options.projectPromptBlock?.trim() || undefined;
   const userPrompt = options.userPrompt?.trim() || undefined;
 
+  const characterBlock = options.characterBlock?.trim() || undefined;
+
   return composeMainSystemPrompt({
     userPrompt,
     projectPromptBlock,
+    characterBlock,
     memoryBlock,
     summaryBlock,
     toolsBlock: webSearchBlock,

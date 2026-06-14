@@ -1,8 +1,13 @@
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useProjectStore } from "@/modules/projects/project-store";
 import { estimateTokens } from "@/lib/context";
 import { SearXNGProvider } from "../providers/SearXNGProvider";
-import type { SearchContextBundle, SearXNGProviderConfig } from "../types";
+import type { SearchContextBundle, SearchSource, SearXNGProviderConfig, FetchedPageSummary } from "../types";
+import {
+  invokeFetchAndExtractPages,
+  type FetchedPage,
+} from "../tauri-commands";
 
 const ALLOWED_SEARCH_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -26,7 +31,22 @@ function validateSearchBaseUrl(baseUrl: string): void {
   }
 }
 
-export async function runSearch(query: string, signal?: AbortSignal): Promise<SearchContextBundle> {
+export type RunSearchOptions = {
+  projectId?: string;
+  signal?: AbortSignal;
+  onFetchProgress?: (completed: number, total: number) => void;
+};
+
+export async function runSearch(
+  query: string,
+  options: RunSearchOptions | AbortSignal | undefined = {},
+): Promise<SearchContextBundle> {
+  const opts: RunSearchOptions =
+    options && typeof (options as AbortSignal).aborted !== "undefined"
+      ? { signal: options as AbortSignal }
+      : (options as RunSearchOptions) ?? {};
+  const { signal, projectId, onFetchProgress } = opts;
+
   if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
   }
@@ -45,6 +65,37 @@ export async function runSearch(query: string, signal?: AbortSignal): Promise<Se
   }
 
   validateSearchBaseUrl(baseUrl);
+
+  const projectRecord = projectId
+    ? useProjectStore.getState().projects.find((p) => p.id === projectId)
+    : undefined;
+  const projectSettings = projectRecord?.settings;
+
+  const fetchEnabled =
+    projectSettings?.webSearchFetchEnabled ?? settings.webSearchFetchEnabled;
+  const fetchCount = Math.max(
+    1,
+    Math.min(
+      10,
+      projectSettings?.webSearchFetchCount ?? settings.webSearchFetchCount,
+    ),
+  );
+  const perPageTimeoutSecs = Math.max(
+    2,
+    Math.min(
+      30,
+      projectSettings?.webSearchPerPageTimeoutSecs ??
+        settings.webSearchPerPageTimeoutSecs,
+    ),
+  );
+  const tokenLimit = Math.max(
+    500,
+    Math.min(
+      8000,
+      projectSettings?.webSearchContextTokenLimit ??
+        settings.webSearchContextTokenLimit,
+    ),
+  );
 
   const run = async (): Promise<SearchContextBundle> => {
     const maxResults = settings.webSearchMaxResults ?? 8;
@@ -76,30 +127,68 @@ export async function runSearch(query: string, signal?: AbortSignal): Promise<Se
       );
     }
 
-    const sources = results.map((r) => ({
-      id: r.id,
-      title: r.title,
-      url: r.url,
-      snippet: r.snippet ?? "",
-    }));
+    let fetchedPages: FetchedPageSummary[] = [];
+    const topForFetch = results.slice(0, fetchCount).map((r) => r.url);
+    if (fetchEnabled && topForFetch.length > 0) {
+      onFetchProgress?.(0, topForFetch.length);
+      try {
+        const pages = await invokeFetchAndExtractPages(
+          topForFetch,
+          3,
+          perPageTimeoutSecs,
+          8000,
+        );
+        onFetchProgress?.(pages.length, topForFetch.length);
+        fetchedPages = pages.map((p: FetchedPage) => ({
+          url: p.url,
+          status: p.status,
+          title: p.title,
+          content: p.content,
+          error_reason: p.error_reason,
+        }));
+      } catch (error) {
+        console.warn("[web-search] fetch+extract failed, continuing with snippets:", error);
+        onFetchProgress?.(0, topForFetch.length);
+      }
+    }
+
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const fetchedByUrl = new Map<string, FetchedPageSummary>();
+    for (const page of fetchedPages) {
+      fetchedByUrl.set(page.url, page);
+    }
+
+    const sources: SearchSource[] = results.map((r) => {
+      const page = fetchedByUrl.get(r.url);
+      const fetchInfo = page
+        ? {
+            status: page.status,
+            ...(page.error_reason ? { error_reason: page.error_reason } : {}),
+          }
+        : undefined;
+      return {
+        id: r.id,
+        title: r.title,
+        url: r.url,
+        snippet: r.snippet ?? "",
+        ...(fetchInfo ? { fetch: fetchInfo } : {}),
+      };
+    });
 
     const summary = `Search found ${results.length} results for: ${query}`;
 
-    const fullText = `Search results for: "${query}"\n\n` +
-      sources
-        .map(
-          (s, i) =>
-            `Source ${i + 1}: ${s.title}\nURL: ${s.url}\nSnippet: ${s.snippet}`,
-        )
-        .join("\n\n");
-
-    const tokenCount = estimateTokens(fullText);
+    const contextForBudget = buildContextBlock(sources, fetchedByUrl, query, tokenLimit);
+    const tokenCount = estimateTokens(contextForBudget);
 
     return {
       query,
       summary,
       sources,
       tokenCount,
+      fetchedPages,
     };
   };
 
@@ -110,34 +199,57 @@ export async function runSearch(query: string, signal?: AbortSignal): Promise<Se
   return pending;
 }
 
-export function buildSearchContextBlock(bundle: SearchContextBundle): string {
-  const settings = useSettingsStore.getState();
-  const maxContextTokens = settings.webSearchContextTokenLimit ?? 2500;
-
-  const header = `<veyra_web_search>\nSearch results for: "${bundle.query}"\n\n`;
+function buildContextBlock(
+  sources: SearchSource[],
+  fetchedByUrl: Map<string, FetchedPageSummary>,
+  query: string,
+  tokenLimit: number,
+): string {
+  const header = `<veyra_web_search>\nSearch results for: "${query}"\n\n`;
   const footer = `\n</veyra_web_search>`;
+  const headerFooterTokens = estimateTokens(header + footer);
+  const maxContentTokens = Math.max(0, tokenLimit - headerFooterTokens);
 
-  const maxContentTokens = maxContextTokens - estimateTokens(header + footer);
+  const sourceEntries: string[] = [];
+  for (const source of sources) {
+    const page = fetchedByUrl.get(source.url);
+    let body: string;
+    if (page && page.status === "ok" && page.content) {
+      body = page.content;
+    } else {
+      const reason = page?.error_reason ?? "content not fetched";
+      const prefix = page ? `[content unavailable: ${reason}]\n` : "";
+      body = `${prefix}Snippet: ${source.snippet}`;
+    }
+    sourceEntries.push(
+      `Source: ${source.title}\nURL: ${source.url}\n${body}`,
+    );
+  }
 
   const lines: string[] = [];
   let usedTokens = 0;
-
-  for (let i = 0; i < bundle.sources.length; i++) {
-    const source = bundle.sources[i];
-    const block = `Source ${i + 1}: ${source.title}\nURL: ${source.url}\nSnippet: ${source.snippet}`;
-    const blockTokens = estimateTokens(block);
-
-    if (usedTokens + blockTokens > maxContentTokens) {
+  for (const entry of sourceEntries) {
+    const entryTokens = estimateTokens(entry);
+    if (usedTokens + entryTokens > maxContentTokens) {
       const remaining = maxContentTokens - usedTokens;
       if (remaining > 20) {
-        lines.push(block.slice(0, remaining * 4));
+        lines.push(entry.slice(0, remaining * 4));
       }
       break;
     }
-
-    lines.push(block);
-    usedTokens += blockTokens;
+    lines.push(entry);
+    usedTokens += entryTokens;
   }
 
   return header + lines.join("\n\n") + footer;
+}
+
+export function buildSearchContextBlock(bundle: SearchContextBundle): string {
+  const settings = useSettingsStore.getState();
+  const maxContextTokens = settings.webSearchContextTokenLimit ?? 4000;
+  const fetchedByUrl = new Map<string, FetchedPageSummary>();
+  for (const page of bundle.fetchedPages ?? []) {
+    fetchedByUrl.set(page.url, page);
+  }
+  return buildContextBlock(bundle.sources, fetchedByUrl, bundle.query, maxContextTokens);
 }

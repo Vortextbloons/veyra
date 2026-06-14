@@ -20,6 +20,10 @@ export interface ProjectSettings {
   memoryMode?: MemoryMode;
   webSearchEnabled?: boolean;
   webSearchMode?: "auto" | "always" | "off";
+  webSearchFetchEnabled?: boolean | null;
+  webSearchFetchCount?: number | null;
+  webSearchPerPageTimeoutSecs?: number | null;
+  webSearchContextTokenLimit?: number | null;
   enabledTools?: {
     documents: boolean;
     webSearch: boolean;

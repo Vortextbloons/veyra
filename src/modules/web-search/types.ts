@@ -40,14 +40,29 @@ export type SearchResult = {
   sourceType?: "webpage" | "docs" | "news" | "github" | "wikipedia" | "pdf" | "forum" | "package";
 };
 
+export type FetchedPageSummary = {
+  url: string;
+  status: string;
+  title: string | null;
+  content: string | null;
+  error_reason: string | null;
+};
+
+export type SearchSource = {
+  id: string;
+  title: string;
+  url: string;
+  snippet: string;
+  fetch?: {
+    status: string;
+    error_reason?: string;
+  };
+};
+
 export type SearchContextBundle = {
   query: string;
   summary: string;
-  sources: Array<{
-    id: string;
-    title: string;
-    url: string;
-    snippet: string;
-  }>;
+  sources: SearchSource[];
   tokenCount: number;
+  fetchedPages?: FetchedPageSummary[];
 };

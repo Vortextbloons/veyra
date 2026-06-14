@@ -59,6 +59,10 @@ type ChatStore = {
   removeLastMessagePair: (conversationId: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   forkConversation: (conversationId: string, upToMessageId: string) => string;
+  /** Strip the character binding from a conversation (escape hatch). */
+  unbindCharacter: (conversationId: string) => void;
+  /** Recent conversations bound to a given character id. */
+  recentChatsForCharacter: (characterId: string, limit?: number) => Conversation[];
 };
 
 function newConversation(projectId?: string): Conversation {
@@ -386,5 +390,28 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       return { conversations, activeConversationId: forked.id };
     });
     return newId;
+  },
+  unbindCharacter: (conversationId) => {
+    set((state) => {
+      const conversations = state.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              characterId: undefined,
+              characterSnapshot: undefined,
+              characterGreetingIndex: undefined,
+              updatedAt: Date.now(),
+            }
+          : c,
+      );
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  recentChatsForCharacter: (characterId, limit = 5) => {
+    return get()
+      .conversations.filter((c) => c.characterId === characterId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, limit);
   },
 }));

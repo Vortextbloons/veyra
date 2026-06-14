@@ -59,6 +59,10 @@ pub struct CharacterRow {
     /// so the frontend's `character.stats.totalChats` access works without
     /// requiring nullable handling.
     pub stats: CharacterStats,
+    /// Lorebook entries, serialized as a JSON array. Defaults to empty.
+    pub lorebook_entries: Vec<serde_json::Value>,
+    /// Chat runtime defaults (scanDepth, maxLorebookEntries, …).
+    pub chat_defaults: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -89,6 +93,8 @@ pub struct CharacterCreateInput {
     pub project_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub lorebook_entries: Option<String>,
+    pub chat_defaults: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -118,6 +124,8 @@ pub struct CharacterUpdateInput {
     pub is_global: Option<bool>,
     pub project_id: Option<String>,
     pub updated_at: String,
+    pub lorebook_entries: Option<String>,
+    pub chat_defaults: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -157,6 +165,8 @@ CREATE TABLE IF NOT EXISTS characters (
   source TEXT NOT NULL DEFAULT 'native',
   is_global INTEGER NOT NULL DEFAULT 1,
   project_id TEXT NOT NULL DEFAULT '',
+  lorebook_entries_json TEXT NOT NULL DEFAULT '[]',
+  chat_defaults_json TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -165,6 +175,11 @@ CREATE INDEX IF NOT EXISTS idx_characters_is_global ON characters(is_global);
 CREATE INDEX IF NOT EXISTS idx_characters_project_id ON characters(project_id);
 CREATE INDEX IF NOT EXISTS idx_characters_updated_at ON characters(updated_at);
 "#;
+
+const SCHEMA_MIGRATIONS: &[&str] = &[
+    "ALTER TABLE characters ADD COLUMN lorebook_entries_json TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE characters ADD COLUMN chat_defaults_json TEXT",
+];
 
 // ── Validation ───────────────────────────────────────────────────────────────
 
@@ -191,6 +206,20 @@ fn validate_json_field(name: &str, value: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Optional JSON field validator. Treats empty/blank strings and the literal
+/// `null` as "not provided" so callers can omit the field or send null
+/// without triggering a parse error.
+fn validate_optional_json_field(name: &str, value: Option<&str>) -> Result<(), String> {
+    let Some(raw) = value else {
+        return Ok(());
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "null" {
+        return Ok(());
+    }
+    validate_json_field(name, trimmed)
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 impl CharacterDb {
@@ -199,6 +228,15 @@ impl CharacterDb {
         let conn = crate::db_utils::open_app_sqlite(app, "veyra.sqlite")?;
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("character schema migration failed: {}", e))?;
+        for stmt in SCHEMA_MIGRATIONS {
+            // Tolerate "duplicate column" errors from already-applied migrations.
+            if let Err(error) = conn.execute_batch(stmt) {
+                let msg = error.to_string();
+                if !msg.contains("duplicate column") && !msg.contains("already exists") {
+                    return Err(format!("character migration failed: {}", msg));
+                }
+            }
+        }
         if cfg!(debug_assertions) {
             log::info!(
                 "CharacterDb::init completed in {}ms",
@@ -272,16 +310,26 @@ impl crate::db_utils::DbConnectionState for CharacterDbState {
 
 // ── Row mapper ───────────────────────────────────────────────────────────────
 
-const SELECT_COLS: &str = "id, name, title, avatar_path, avatar_color, tagline, description, personality, scenario, first_message, alternate_greetings_json, system_prompt, post_history_instructions, example_messages_json, creator_notes, tags_json, category, version, spec, creator, source, is_global, project_id, created_at, updated_at";
+const SELECT_COLS: &str = "id, name, title, avatar_path, avatar_color, tagline, description, personality, scenario, first_message, alternate_greetings_json, system_prompt, post_history_instructions, example_messages_json, creator_notes, tags_json, category, version, spec, creator, source, is_global, project_id, created_at, updated_at, lorebook_entries_json, chat_defaults_json";
 
 fn parse_example_messages(s: &str) -> Vec<CharacterExampleMessage> {
     serde_json::from_str(s).unwrap_or_default()
+}
+
+fn parse_lorebook_entries(s: &str) -> Vec<serde_json::Value> {
+    serde_json::from_str(s).unwrap_or_default()
+}
+
+fn parse_chat_defaults(s: Option<String>) -> Option<serde_json::Value> {
+    s.and_then(|raw| serde_json::from_str(&raw).ok())
 }
 
 fn row_to_character(row: &rusqlite::Row) -> rusqlite::Result<CharacterRow> {
     let alternate_greetings_json: String = row.get("alternate_greetings_json")?;
     let example_messages_json: String = row.get("example_messages_json")?;
     let tags_json: String = row.get("tags_json")?;
+    let lorebook_entries_json: String = row.get("lorebook_entries_json")?;
+    let chat_defaults_json: Option<String> = row.get("chat_defaults_json")?;
     Ok(CharacterRow {
         id: row.get("id")?,
         name: row.get("name")?,
@@ -309,6 +357,8 @@ fn row_to_character(row: &rusqlite::Row) -> rusqlite::Result<CharacterRow> {
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         stats: CharacterStats::default(),
+        lorebook_entries: parse_lorebook_entries(&lorebook_entries_json),
+        chat_defaults: parse_chat_defaults(chat_defaults_json),
     })
 }
 
@@ -343,10 +393,21 @@ pub fn create_character(conn: &Connection, input_json: String) -> Result<Charact
     let source = input.source.unwrap_or_else(|| "native".to_string());
     let is_global = input.is_global.unwrap_or(true);
     let project_id = input.project_id.unwrap_or_default();
+    let lorebook_entries = input.lorebook_entries.unwrap_or_else(|| "[]".to_string());
+    let chat_defaults = input.chat_defaults.and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed == "null" {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
 
     validate_json_field("alternate_greetings", &alternate_greetings)?;
     validate_json_field("example_messages", &example_messages)?;
     validate_json_field("tags", &tags)?;
+    validate_json_field("lorebook_entries", &lorebook_entries)?;
+    validate_optional_json_field("chat_defaults", chat_defaults.as_deref())?;
 
     let tx = conn
         .unchecked_transaction()
@@ -354,9 +415,9 @@ pub fn create_character(conn: &Connection, input_json: String) -> Result<Charact
 
     tx.execute(
         "INSERT INTO characters
-           (id, name, title, avatar_path, avatar_color, tagline, description, personality, scenario, first_message, alternate_greetings_json, system_prompt, post_history_instructions, example_messages_json, creator_notes, tags_json, category, version, spec, creator, source, is_global, project_id, created_at, updated_at)
+           (id, name, title, avatar_path, avatar_color, tagline, description, personality, scenario, first_message, alternate_greetings_json, system_prompt, post_history_instructions, example_messages_json, creator_notes, tags_json, category, version, spec, creator, source, is_global, project_id, lorebook_entries_json, chat_defaults_json, created_at, updated_at)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
         rusqlite::params![
             input.id,
             input.name,
@@ -381,6 +442,8 @@ pub fn create_character(conn: &Connection, input_json: String) -> Result<Charact
             source,
             is_global as i64,
             project_id,
+            lorebook_entries,
+            chat_defaults,
             input.created_at,
             input.updated_at,
         ],
@@ -511,6 +574,22 @@ pub fn update_character(conn: &Connection, input_json: String) -> Result<Charact
     if let Some(v) = input.project_id {
         sets.push(format!("project_id = ?{}", params.len() + 1));
         params.push(Value::Text(v));
+    }
+    if let Some(v) = input.lorebook_entries {
+        validate_json_field("lorebook_entries", &v)?;
+        sets.push(format!("lorebook_entries_json = ?{}", params.len() + 1));
+        params.push(Value::Text(v));
+    }
+    if let Some(v) = input.chat_defaults {
+        let trimmed = v.trim();
+        if trimmed.is_empty() || trimmed == "null" {
+            sets.push(format!("chat_defaults_json = ?{}", params.len() + 1));
+            params.push(Value::Null);
+        } else {
+            validate_json_field("chat_defaults", trimmed)?;
+            sets.push(format!("chat_defaults_json = ?{}", params.len() + 1));
+            params.push(Value::Text(trimmed.to_string()));
+        }
     }
 
     if sets.is_empty() {

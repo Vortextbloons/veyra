@@ -97,6 +97,7 @@ pub struct ResearchSourceRow {
     pub fetched_at: Option<String>,
     pub read_at: Option<String>,
     pub error: Option<String>,
+    pub fetch_status: Option<String>,
     pub created_at: String,
 }
 
@@ -246,6 +247,7 @@ pub struct CreateResearchSourceInput {
     pub engine: Option<String>,
     pub score: Option<f64>,
     pub rank: Option<i64>,
+    pub fetch_status: Option<String>,
     pub created_at: Option<String>,
 }
 
@@ -410,6 +412,7 @@ CREATE TABLE IF NOT EXISTS research_sources (
   fetched_at TEXT,
   read_at TEXT,
   error TEXT,
+  fetch_status TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE CASCADE
 );
@@ -492,7 +495,7 @@ CREATE INDEX IF NOT EXISTS idx_research_contradictions_run ON research_contradic
 CREATE INDEX IF NOT EXISTS idx_research_reports_run ON research_reports(run_id);
 "#;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -607,6 +610,10 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("research schema migration failed: {}", e))?;
 
+        if schema_version < 4 {
+            add_column_if_missing(conn, "research_sources", "fetch_status", "TEXT")?;
+        }
+
         conn.execute(
             "INSERT INTO _schema_migrations (module, version, applied_at) VALUES ('research', ?1, datetime('now'))
              ON CONFLICT(module) DO UPDATE SET version = excluded.version, applied_at = excluded.applied_at",
@@ -615,6 +622,38 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         .map_err(|e| format!("set schema version failed: {}", e))?;
     }
 
+    Ok(())
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    column_type: &str,
+) -> Result<(), String> {
+    let pragma = format!("PRAGMA table_info({table})");
+    let mut stmt = conn
+        .prepare(&pragma)
+        .map_err(|e| format!("prepare pragma failed: {e}"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| format!("query pragma failed: {e}"))?;
+    let mut present = false;
+    while let Some(row) = rows.next().map_err(|e| format!("read pragma row: {e}"))? {
+        let name: String = row.get(1).map_err(|e| format!("read column name: {e}"))?;
+        if name == column {
+            present = true;
+            break;
+        }
+    }
+    drop(rows);
+    drop(stmt);
+
+    if !present {
+        let sql = format!("ALTER TABLE {table} ADD COLUMN {column} {column_type}");
+        conn.execute_batch(&sql)
+            .map_err(|e| format!("add column {table}.{column} failed: {e}"))?;
+    }
     Ok(())
 }
 
@@ -679,6 +718,7 @@ fn row_to_source(row: &rusqlite::Row) -> rusqlite::Result<ResearchSourceRow> {
         fetched_at: row.get("fetched_at")?,
         read_at: row.get("read_at")?,
         error: row.get("error")?,
+        fetch_status: row.get("fetch_status")?,
         created_at: row.get("created_at")?,
     })
 }
@@ -1085,7 +1125,7 @@ pub fn list_steps_for_run(conn: &Connection, run_id: String) -> Result<Vec<Resea
 
 // ── Sources ────────────────────────────────────────────────────────────────────
 
-const SOURCE_SELECT_COLS: &str = "id, run_id, step_id, url, title, snippet, full_text, content_type, status, source_type, engine, score, rank, fetched_at, read_at, error, created_at";
+const SOURCE_SELECT_COLS: &str = "id, run_id, step_id, url, title, snippet, full_text, content_type, status, source_type, engine, score, rank, fetched_at, read_at, error, fetch_status, created_at";
 
 pub fn create_source(conn: &Connection, input_json: String) -> Result<ResearchSourceRow, String> {
     let input: CreateResearchSourceInput = serde_json::from_str(&input_json)
@@ -1107,9 +1147,9 @@ pub fn create_source(conn: &Connection, input_json: String) -> Result<ResearchSo
 
     tx.execute(
         "INSERT INTO research_sources
-           (id, run_id, step_id, url, title, snippet, source_type, engine, score, rank, status, created_at)
+           (id, run_id, step_id, url, title, snippet, source_type, engine, score, rank, status, fetch_status, created_at)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             id,
             input.run_id,
@@ -1122,6 +1162,7 @@ pub fn create_source(conn: &Connection, input_json: String) -> Result<ResearchSo
             input.score,
             input.rank,
             "discovered",
+            input.fetch_status,
             created_at,
         ],
     )

@@ -1095,8 +1095,8 @@ function App() {
             {activeNav === "settings" && <SettingsPage />}
           </Suspense>
         </div>
-        {isChatMode && activeNav !== "projects" && hydrationState === "loading" && <ChatHydrationSkeleton />}
-        {isChatMode && activeNav !== "projects" && hydrationState === "ready" && (
+        {isChatMode && activeNav !== "projects" && activeNav !== "characters" && hydrationState === "loading" && <ChatHydrationSkeleton />}
+        {isChatMode && activeNav !== "projects" && activeNav !== "characters" && hydrationState === "ready" && (
           <ChatPanel
             title={activeConversation?.title}
             messages={visibleMessages}
@@ -1150,7 +1150,7 @@ function App() {
             onEditSave={handleEditSave}
           />
         )}
-        {isChatMode && activeNav !== "projects" && <DocEditorPanel />}
+        {isChatMode && activeNav !== "projects" && activeNav !== "characters" && <DocEditorPanel />}
         <RightPanel
           contextStats={displayContextStats}
           collapsed={rightPanelCollapsed}

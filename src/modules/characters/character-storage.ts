@@ -52,9 +52,13 @@ export async function createCharacter(
     source: input.source ?? "native",
     isGlobal: input.isGlobal ?? true,
     projectId: input.projectId ?? "",
+    lorebookEntries: JSON.stringify(input.lorebookEntries ?? []),
     createdAt: input.createdAt ?? now,
     updatedAt: input.updatedAt ?? now,
   };
+  if (input.chatDefaults) {
+    payload.chatDefaults = JSON.stringify(input.chatDefaults);
+  }
   return invoke<CharacterRecord>("create_character", {
     input: JSON.stringify(payload),
   });
@@ -95,6 +99,16 @@ export async function updateCharacter(
   if (input.source !== undefined) payload.source = input.source;
   if (input.isGlobal !== undefined) payload.isGlobal = input.isGlobal;
   if (input.projectId !== undefined) payload.projectId = input.projectId;
+  if (input.lorebookEntries !== undefined) {
+    payload.lorebookEntries = JSON.stringify(input.lorebookEntries);
+  }
+  if (input.chatDefaults !== undefined) {
+    if (input.chatDefaults) {
+      payload.chatDefaults = JSON.stringify(input.chatDefaults);
+    } else {
+      payload.chatDefaults = null;
+    }
+  }
   return invoke<CharacterRecord>("update_character", {
     input: JSON.stringify(payload),
   });

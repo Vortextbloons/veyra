@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Drama, Edit3, Eye, MessageSquare, Tag, User } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Drama, Edit3, Eye, MessageSquare, Play, Tag, User } from "lucide-react";
 import { useCharacterStore } from "../character-store";
+import { useChatStore } from "@/stores/chat-store";
 import type { CharacterRecord } from "../character-types";
 import { getAvatarGradient } from "../character-gradients";
 
@@ -186,6 +187,14 @@ function SystemTab({ character }: { character: CharacterRecord }) {
 }
 
 function PreviewTab({ character }: { character: CharacterRecord }) {
+  const conversations = useChatStore((s) => s.conversations);
+  const setActiveConversationId = useChatStore((s) => s.setActiveConversationId);
+  const recentChats = useMemo(() => {
+    return conversations
+      .filter((c) => c.characterId === character.id)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 5);
+  }, [conversations, character.id]);
   return (
     <div className="flex flex-col gap-4">
       <section>
@@ -216,6 +225,33 @@ function PreviewTab({ character }: { character: CharacterRecord }) {
           <MarkdownBlock content={character.scenario} empty="" />
         </section>
       )}
+
+      <section>
+        <h3 className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+          Recent Chats
+        </h3>
+        {recentChats.length === 0 ? (
+          <div className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-dim)]/60">
+            No chats yet. Click “Chat with {character.name}” above to start one.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {recentChats.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setActiveConversationId(c.id)}
+                className="flex items-center justify-between gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-left text-[12.5px] hover:bg-white/[0.03]"
+              >
+                <span className="truncate text-white">{c.title}</span>
+                <span className="shrink-0 text-[10.5px] text-[var(--color-text-dim)]">
+                  {new Date(c.updatedAt).toLocaleString()}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -253,7 +289,7 @@ function WelcomeScreen() {
   );
 }
 
-function CharacterHeader({ character }: { character: CharacterRecord }) {
+function CharacterHeader({ character, onStartChat }: { character: CharacterRecord; onStartChat: () => void }) {
   const tags = character.tags;
   return (
     <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-6 py-5">
@@ -287,6 +323,14 @@ function CharacterHeader({ character }: { character: CharacterRecord }) {
             <div className="mt-1 text-[12.5px] text-white/80">{character.tagline}</div>
           )}
         </div>
+        <button
+          type="button"
+          onClick={onStartChat}
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12.5px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
+        >
+          <Play className="size-3.5" />
+          Chat with {character.name}
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -319,11 +363,17 @@ function CharacterHeader({ character }: { character: CharacterRecord }) {
   );
 }
 
-function CharacterTabs({ character }: { character: CharacterRecord }) {
+function CharacterTabs({
+  character,
+  onStartChat,
+}: {
+  character: CharacterRecord;
+  onStartChat: () => void;
+}) {
   const [activeTab, setActiveTab] = useState<TabId>("preview");
   return (
     <>
-      <CharacterHeader character={character} />
+      <CharacterHeader character={character} onStartChat={onStartChat} />
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-6">
         {TABS.map((tab) => (
           <button
@@ -345,7 +395,7 @@ function CharacterTabs({ character }: { character: CharacterRecord }) {
       </div>
 
       <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
-        <div className="mx-auto w-full max-w-3xl p-6">
+        <div className="w-full p-6">
           {activeTab === "preview" && <PreviewTab character={character} />}
           {activeTab === "persona" && <PersonaTab character={character} />}
           {activeTab === "greeting" && <GreetingTab character={character} />}
@@ -357,7 +407,7 @@ function CharacterTabs({ character }: { character: CharacterRecord }) {
   );
 }
 
-export function CharacterDetailView() {
+export function CharacterDetailView({ onStartChat }: { onStartChat: () => void }) {
   const activeCharacterId = useCharacterStore((s) => s.activeCharacterId);
   const characters = useCharacterStore((s) => s.characters);
   const character = activeCharacterId
@@ -371,7 +421,7 @@ export function CharacterDetailView() {
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
       {/* Tabs + tab content (keyed on character id so state resets on switch) */}
-      <CharacterTabs key={character.id} character={character} />
+      <CharacterTabs key={character.id} character={character} onStartChat={onStartChat} />
     </section>
   );
 }

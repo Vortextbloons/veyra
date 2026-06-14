@@ -67,17 +67,50 @@ export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
           globalLabel={`Global: ${globalSettings.defaultWebSearchEnabled ? "on" : "off"}`}
         />
         {settings.webSearchEnabled !== false && (
-          <SelectRow
-            label="Search mode"
-            value={settings.webSearchMode ?? ""}
-            onChange={(v) => update("webSearchMode", (v || undefined) as "auto" | "always" | "off" | undefined)}
-            options={[
-              { value: "", label: "Use global default" },
-              { value: "auto", label: "Auto (when relevant)" },
-              { value: "always", label: "Always search" },
-              { value: "off", label: "Off" },
-            ]}
-          />
+          <>
+            <SelectRow
+              label="Search mode"
+              value={settings.webSearchMode ?? ""}
+              onChange={(v) => update("webSearchMode", (v || undefined) as "auto" | "always" | "off" | undefined)}
+              options={[
+                { value: "", label: "Use global default" },
+                { value: "auto", label: "Auto (when relevant)" },
+                { value: "always", label: "Always search" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+            <OverrideRow
+              label="Fetch and extract full pages"
+              globalLabel={`Global: ${globalSettings.webSearchFetchEnabled ? "on" : "off"}`}
+              on={settings.webSearchFetchEnabled ?? null}
+              onChange={(v) => update("webSearchFetchEnabled", v)}
+            />
+            <OverrideInputRow
+              label="Pages to fetch per search"
+              value={settings.webSearchFetchCount}
+              globalDefault={globalSettings.webSearchFetchCount}
+              min={1}
+              max={10}
+              onChange={(v) => update("webSearchFetchCount", v)}
+            />
+            <OverrideInputRow
+              label="Per-page timeout (seconds)"
+              value={settings.webSearchPerPageTimeoutSecs}
+              globalDefault={globalSettings.webSearchPerPageTimeoutSecs}
+              min={2}
+              max={30}
+              onChange={(v) => update("webSearchPerPageTimeoutSecs", v)}
+            />
+            <OverrideInputRow
+              label="Context token limit"
+              value={settings.webSearchContextTokenLimit}
+              globalDefault={globalSettings.webSearchContextTokenLimit}
+              min={500}
+              max={8000}
+              step={250}
+              onChange={(v) => update("webSearchContextTokenLimit", v)}
+            />
+          </>
         )}
       </SettingGroup>
 
@@ -261,6 +294,108 @@ function InputRow({
         step={step}
         className="w-32 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-accent)] focus:outline-none"
       />
+    </div>
+  );
+}
+
+function OverrideRow({
+  label,
+  globalLabel,
+  on,
+  onChange,
+}: {
+  label: string;
+  globalLabel: string;
+  on: boolean | null | undefined;
+  onChange: (v: boolean | null) => void;
+}) {
+  const isOverridden = on !== null && on !== undefined;
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <span className="text-[12px] text-[var(--color-text)]">{label}</span>
+        <span className="ml-2 text-[10px] text-[var(--color-text-dim)]">
+          {isOverridden ? "Override" : globalLabel}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Toggle
+          on={on ?? false}
+          onChange={(v) => onChange(v)}
+        />
+        {isOverridden && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-[10px] text-[var(--color-text-dim)] underline hover:text-white"
+            title="Reset to global default"
+          >
+            reset
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OverrideInputRow({
+  label,
+  value,
+  globalDefault,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  label: string;
+  value: number | null | undefined;
+  globalDefault: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (v: number | null) => void;
+}) {
+  const isOverridden = value !== null && value !== undefined;
+  const display = isOverridden ? String(value) : "";
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <span className="text-[12px] text-[var(--color-text)]">{label}</span>
+        <span className="ml-2 text-[10px] text-[var(--color-text-dim)]">
+          {isOverridden ? "Override" : `Global: ${globalDefault}`}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          value={display}
+          placeholder={String(globalDefault)}
+          min={min}
+          max={max}
+          step={step}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === "") {
+              onChange(null);
+              return;
+            }
+            const n = parseInt(raw, 10);
+            if (Number.isNaN(n)) return;
+            onChange(Math.max(min, Math.min(max, n)));
+          }}
+          className="w-24 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-accent)] focus:outline-none"
+        />
+        {isOverridden && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-[10px] text-[var(--color-text-dim)] underline hover:text-white"
+            title="Reset to global default"
+          >
+            reset
+          </button>
+        )}
+      </div>
     </div>
   );
 }

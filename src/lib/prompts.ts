@@ -49,6 +49,7 @@ ${parts.join("\n")}
 export function composeMainSystemPrompt(options: {
   userPrompt?: string;
   projectPromptBlock?: string;
+  characterBlock?: string;
   memoryBlock?: string;
   summaryBlock?: string;
   toolsBlock?: string;
@@ -63,6 +64,7 @@ export function composeMainSystemPrompt(options: {
   const identityBlock = buildModelIdentityBlock(options.modelName, options.providerName);
   if (identityBlock) parts.push(identityBlock);
   if (options.projectPromptBlock?.trim()) parts.push(options.projectPromptBlock.trim());
+  if (options.characterBlock?.trim()) parts.push(options.characterBlock.trim());
   if (options.contextAnchoringBlock?.trim()) parts.push(options.contextAnchoringBlock.trim());
   if (options.documentInstructionsBlock?.trim()) parts.push(options.documentInstructionsBlock.trim());
   if (options.memoryBlock?.trim()) parts.push(options.memoryBlock.trim());

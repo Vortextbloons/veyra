@@ -1,14 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { Toggle } from "@/components/toggle";
-import { invokeTestSearxngConnection } from "@/modules/web-search/tauri-commands";
+import {
+  invokeTestSearxngConnection,
+  invokeClearWebFetchCache,
+  invokeGetWebFetchCacheStats,
+  type WebFetchCacheStats,
+} from "@/modules/web-search/tauri-commands";
 import {
   invokeCheckSearxngSetup,
   invokeStartSearxngContainer,
   invokeStopSearxngContainer,
   type SearxngSetupStatus,
 } from "@/modules/web-search/searxng-setup";
-import { CheckCircle, XCircle, Loader2, Container, Shield } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Container, Shield, Trash2 } from "lucide-react";
 import { useConnectivity } from "@/lib/connectivity/useConnectivity";
 
 type TestStatus = "idle" | "testing" | "success" | "error";
@@ -35,9 +40,20 @@ export function WebSearchSettings() {
   const setWebSearchSafeSearch = useSettingsStore((s) => s.setWebSearchSafeSearch);
   const webSearchContextTokenLimit = useSettingsStore((s) => s.webSearchContextTokenLimit);
   const setWebSearchContextTokenLimit = useSettingsStore((s) => s.setWebSearchContextTokenLimit);
+  const webSearchFetchEnabled = useSettingsStore((s) => s.webSearchFetchEnabled);
+  const setWebSearchFetchEnabled = useSettingsStore((s) => s.setWebSearchFetchEnabled);
+  const webSearchFetchCount = useSettingsStore((s) => s.webSearchFetchCount);
+  const setWebSearchFetchCount = useSettingsStore((s) => s.setWebSearchFetchCount);
+  const webSearchPerPageTimeoutSecs = useSettingsStore((s) => s.webSearchPerPageTimeoutSecs);
+  const setWebSearchPerPageTimeoutSecs = useSettingsStore(
+    (s) => s.setWebSearchPerPageTimeoutSecs,
+  );
 
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testError, setTestError] = useState<string>("");
+  const [cacheStats, setCacheStats] = useState<WebFetchCacheStats | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
+  const [clearError, setClearError] = useState<string>("");
 
   // Docker / SearXNG container status
   const [setupStatus, setSetupStatus] = useState<SearxngSetupStatus | null>(null);
@@ -57,6 +73,33 @@ export function WebSearchSettings() {
     const id = window.setTimeout(() => void refreshSetupStatus(), 0);
     return () => window.clearTimeout(id);
   }, [refreshSetupStatus]);
+
+  const refreshCacheStats = useCallback(async () => {
+    try {
+      const stats = await invokeGetWebFetchCacheStats();
+      setCacheStats(stats);
+    } catch {
+      setCacheStats(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => void refreshCacheStats(), 0);
+    return () => window.clearTimeout(id);
+  }, [refreshCacheStats]);
+
+  async function handleClearCache() {
+    setClearingCache(true);
+    setClearError("");
+    try {
+      await invokeClearWebFetchCache();
+      await refreshCacheStats();
+    } catch (e) {
+      setClearError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setClearingCache(false);
+    }
+  }
 
   async function handleTestConnection() {
     setTestStatus("testing");
@@ -464,6 +507,123 @@ export function WebSearchSettings() {
               <span>8000</span>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── Content Extraction ────────────────────────────────────────────── */}
+      <section>
+        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
+          Content Extraction
+        </h2>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+            <Toggle
+              label="Fetch and extract full page content"
+              on={webSearchFetchEnabled}
+              onChange={setWebSearchFetchEnabled}
+            />
+            <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
+              When on, Veyra fetches each result page and extracts the readable
+              article body using Mozilla Readability. Failures fall back to the
+              search snippet and mark the source as unavailable.
+            </p>
+          </div>
+
+          {webSearchFetchEnabled && (
+            <>
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <div className="text-[12.5px] font-medium text-white">
+                      Pages to fetch per search
+                    </div>
+                    <div className="text-[11px] text-[var(--color-text-dim)]">
+                      Top N results to fetch. Higher values use more time and
+                      context.
+                    </div>
+                  </div>
+                  <span className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[12px] text-white">
+                    {webSearchFetchCount}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={webSearchFetchCount}
+                  onChange={(e) => setWebSearchFetchCount(parseInt(e.target.value))}
+                  className="w-full accent-[var(--color-accent)]"
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-[var(--color-text-dim)]">
+                  <span>1</span>
+                  <span>5</span>
+                  <span>10</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <div className="text-[12.5px] font-medium text-white">
+                      Per-page timeout (seconds)
+                    </div>
+                    <div className="text-[11px] text-[var(--color-text-dim)]">
+                      How long to wait for a page before giving up.
+                    </div>
+                  </div>
+                  <span className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[12px] text-white">
+                    {webSearchPerPageTimeoutSecs}s
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={2}
+                  max={30}
+                  step={1}
+                  value={webSearchPerPageTimeoutSecs}
+                  onChange={(e) =>
+                    setWebSearchPerPageTimeoutSecs(parseInt(e.target.value))
+                  }
+                  className="w-full accent-[var(--color-accent)]"
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-[var(--color-text-dim)]">
+                  <span>2s</span>
+                  <span>15s</span>
+                  <span>30s</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+                <div className="mb-1 flex items-center justify-between">
+                  <div className="text-[12.5px] font-medium text-white">Cache</div>
+                  <div className="font-mono text-[11.5px] text-[var(--color-text-dim)]">
+                    {cacheStats
+                      ? `${cacheStats.entries} ${cacheStats.entries === 1 ? "entry" : "entries"} · ${(cacheStats.total_bytes / (1024 * 1024)).toFixed(2)} MB`
+                      : "—"}
+                  </div>
+                </div>
+                <p className="text-[11px] text-[var(--color-text-dim)]">
+                  Extracted pages are cached locally for 24 hours. The cache is
+                  capped at 50 MB; oldest entries are pruned first.
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleClearCache}
+                    disabled={clearingCache || !cacheStats || cacheStats.entries === 0}
+                    className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[11.5px] font-medium text-white transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Trash2 className="size-3" />
+                    {clearingCache ? "Clearing…" : "Clear cache"}
+                  </button>
+                  {clearError && (
+                    <span className="text-[11px] text-red-400">{clearError}</span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </section>
     </div>

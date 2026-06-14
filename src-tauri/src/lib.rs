@@ -50,6 +50,8 @@ mod research_db;
 mod research_html_parser;
 mod research_source_fetcher;
 mod searxng_setup;
+mod web_fetch_cache;
+mod web_fetch_commands;
 mod web_search_commands;
 
 const CONVERSATIONS_FILE: &str = "conversations.json";
@@ -159,6 +161,9 @@ pub fn run() {
             connectivity_commands::probe_internet_connectivity,
             web_search_commands::web_search_searxng,
             web_search_commands::test_searxng_connection,
+            web_fetch_commands::fetch_and_extract_pages,
+            web_fetch_commands::clear_web_fetch_cache,
+            web_fetch_commands::get_web_fetch_cache_stats,
             searxng_setup::check_searxng_setup,
             searxng_setup::start_searxng_container,
             searxng_setup::stop_searxng_container,

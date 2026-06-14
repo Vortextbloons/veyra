@@ -1,5 +1,6 @@
 // ── Core chat types ──────────────────────────────────────────────────────────
 
+import type { ReactNode } from "react";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
@@ -11,14 +12,32 @@ export type ChatMode = "chat" | "agents" | "research";
 
 export type WebSearchSource = Pick<SearchResult, "id" | "title" | "url"> & {
   snippet: string;
+  fetch?: SourceFetch;
 };
 
-export type WebSearchPhase = "searching" | "reading" | "done" | "error";
+export type SourceFetchStatus =
+  | "ok"
+  | "timeout"
+  | "http"
+  | "extraction"
+  | "network"
+  | "ssrf_blocked"
+  | "too_large"
+  | "unsupported"
+  | "invalid_url";
+
+export type SourceFetch = {
+  status: SourceFetchStatus | string;
+  error_reason?: string;
+};
+
+export type WebSearchPhase = "searching" | "fetching" | "reading" | "done" | "error";
 
 export type WebSearchState = {
   query: string;
   phase: WebSearchPhase;
   sources: WebSearchSource[];
+  fetch_progress?: { completed: number; total: number };
   error?: string;
 };
 
@@ -79,6 +98,16 @@ export interface Conversation {
   updatedAt: number;
   /** Project this conversation belongs to. undefined = no project (global chat). */
   projectId?: string;
+  /** Character this conversation is bound to. undefined = plain (non-character) chat. */
+  characterId?: string;
+  /**
+   * Snapshot of character identity at the time the conversation was created.
+   * Preserves header rendering (name, gradient, version) if the character
+   * record is later deleted or renamed.
+   */
+  characterSnapshot?: CharacterConversationSnapshot;
+  /** Index of the seeded greeting in `messages` (0 unless greeting regenerated). */
+  characterGreetingIndex?: number;
   /** LM Studio `/api/v1/chat` response id for multi-turn continuity */
   lmResponseId?: string;
   /** Rolling summary of older turns (see auto-summarize setting) */
@@ -89,6 +118,15 @@ export interface Conversation {
   memoryLastProcessedMessageCount?: number;
   /** Timestamp when this conversation first became pending for memory extraction. */
   memoryPendingSince?: number;
+}
+
+export interface CharacterConversationSnapshot {
+  id: string;
+  name: string;
+  title?: string;
+  avatarColor?: string;
+  spec: "veyra" | "chara_card_v3";
+  version: string;
 }
 
 // ── Context stats ───────────────────────────────────────────────────────────
@@ -143,6 +181,10 @@ export type ModelLoadProgress = {
 
 export interface ChatPanelProps {
   title?: string;
+  /** Optional node rendered next to the title (e.g. character badge). */
+  titleAccessory?: ReactNode;
+  /** Optional right-side action buttons rendered in the title bar. */
+  headerActions?: ReactNode;
   messages?: ChatMessage[];
   onSend?: (
     text: string,

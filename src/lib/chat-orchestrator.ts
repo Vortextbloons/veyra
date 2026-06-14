@@ -8,6 +8,11 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { buildMemoryPackWithInfo } from "@/lib/memory-retrieval";
 import type { MemoryRetrievalInfo } from "@/lib/memory-types";
+import { useCharacterStore } from "@/modules/characters/character-store";
+import { evaluateLorebook } from "@/modules/characters/lorebook";
+import { buildCharacterContextBlock } from "@/modules/characters/character-context";
+import { DEFAULT_CHARACTER_CHAT_DEFAULTS } from "@/modules/characters/character-types";
+import type { CharacterRecord } from "@/modules/characters/character-types";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import {
   DOC_CREATE_TOOL_NAME,
@@ -114,6 +119,35 @@ function registerStreamingToolCalls(
   for (const call of calls) {
     registerStreamingToolCall(call, phase, inputForCall?.(call));
   }
+}
+
+/**
+ * Resolves the character context block for a conversation, if any. Looks up
+ * the character by id, evaluates its lorebook against the trailing scan
+ * window, and returns the rendered system block. Returns null for plain
+ * (non-character) conversations.
+ */
+function resolveCharacterBlock(
+  conversation: { characterId?: string | null } | null | undefined,
+  messages: ChatMessage[],
+): string | null {
+  if (!conversation?.characterId) return null;
+  const character: CharacterRecord | undefined = useCharacterStore
+    .getState()
+    .characters.find((c) => c.id === conversation.characterId);
+  if (!character) return null;
+  const chatDefaults = {
+    ...DEFAULT_CHARACTER_CHAT_DEFAULTS,
+    ...(character.chatDefaults ?? {}),
+  };
+  const lorebookResult = evaluateLorebook(character.lorebookEntries, messages, {
+    scanDepth: chatDefaults.scanDepth,
+    maxEntries: chatDefaults.maxLorebookEntries,
+  });
+  return buildCharacterContextBlock(character, {
+    chatDefaults,
+    matchedLorebook: lorebookResult.matches,
+  });
 }
 
 export async function sendChatRequest({
@@ -314,6 +348,7 @@ export async function sendChatRequest({
                 reservedOutputTokens: resolvedReservedOutputTokens,
                 modelName: activeModelName,
                 providerName: activeProviderName,
+                characterBlock: resolveCharacterBlock(conversation, rePromptMessages),
               },
               resolvedContextLength,
             ),
@@ -421,6 +456,7 @@ export async function sendChatRequest({
                 reservedOutputTokens: resolvedReservedOutputTokens,
                 modelName: activeModelName,
                 providerName: activeProviderName,
+                characterBlock: resolveCharacterBlock(conversation, messages),
               },
               resolvedContextLength,
             ),
@@ -503,7 +539,23 @@ export async function sendChatRequest({
                   input: query,
                   attempts: attempt > 0 ? attempt : undefined,
                 });
-                searchBundle = await runSearch(query, options.signal);
+                chatStore.setStreamingWebSearchState({
+                  query,
+                  phase: "searching",
+                  sources: [],
+                });
+                searchBundle = await runSearch(query, {
+                  signal: options.signal,
+                  projectId,
+                  onFetchProgress: (completed, total) => {
+                    chatStore.setStreamingWebSearchState({
+                      query,
+                      phase: "fetching",
+                      sources: [],
+                      fetch_progress: { completed, total },
+                    });
+                  },
+                });
                 lastSearchError = null;
                 break;
               } catch (error) {
@@ -517,8 +569,11 @@ export async function sendChatRequest({
             const contextBlock = buildSearchContextBlock(searchBundle);
 
             const searchSources: WebSearchSource[] = searchBundle.sources.map((s) => ({
-              ...s,
+              id: s.id,
+              title: s.title,
+              url: s.url,
               snippet: s.snippet ?? "",
+              ...(s.fetch ? { fetch: s.fetch } : {}),
             }));
 
             // Update to reading phase with sources
@@ -527,13 +582,17 @@ export async function sendChatRequest({
               phase: "reading",
               sources: searchSources,
             });
+            const fetchedCount = searchBundle.fetchedPages?.length ?? 0;
+            const detail = fetchedCount > 0
+              ? `${searchSources.length} source${searchSources.length !== 1 ? "s" : ""} · ${fetchedCount} page${fetchedCount !== 1 ? "s" : ""} read`
+              : `${searchSources.length} source${searchSources.length !== 1 ? "s" : ""} found`;
             chatStore.setStreamingToolState({
               id: webSearchCall.id,
               name: WEB_SEARCH_TOOL_NAME,
               label: "Web Search",
               phase: "done",
               input: query,
-              detail: `${searchSources.length} source${searchSources.length !== 1 ? "s" : ""} found`,
+              detail,
             });
 
             const rePromptMessages: ChatMessage[] = [
@@ -601,6 +660,7 @@ export async function sendChatRequest({
                   reservedOutputTokens: resolvedReservedOutputTokens,
                   modelName: activeModelName,
                   providerName: activeProviderName,
+                  characterBlock: resolveCharacterBlock(conversation, rePromptMessages),
                 },
                 resolvedContextLength,
               ),
@@ -660,6 +720,7 @@ export async function sendChatRequest({
         reservedOutputTokens: resolvedReservedOutputTokens,
         modelName: activeModelName,
         providerName: activeProviderName,
+        characterBlock: resolveCharacterBlock(conversation, messages),
       },
       resolvedContextLength,
     ),

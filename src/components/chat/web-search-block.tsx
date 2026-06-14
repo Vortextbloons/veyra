@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { ExternalLink, Search } from "lucide-react";
-import type { ToolCallState, WebSearchState } from "@/lib/chat-types";
+import {
+  ExternalLink,
+  Search,
+  CheckCircle2,
+  AlertTriangle,
+  Minus,
+} from "lucide-react";
+import type { SourceFetchStatus, ToolCallState, WebSearchState } from "@/lib/chat-types";
 import { ToolCallShell } from "@/components/chat/tool-call-shell";
 import { toolCallPhaseLabel } from "@/lib/tool-call-ui";
 
@@ -9,21 +15,60 @@ type WebSearchToolCallBlockProps = {
   state: WebSearchState;
 };
 
+function fetchStatusLabel(status: SourceFetchStatus | string | undefined): string {
+  switch (status) {
+    case "ok":
+      return "Full content read";
+    case "timeout":
+      return "Timed out";
+    case "http":
+      return "HTTP error";
+    case "extraction":
+      return "Could not extract readable text";
+    case "network":
+      return "Network error";
+    case "ssrf_blocked":
+      return "Blocked (private network)";
+    case "too_large":
+      return "Page too large";
+    case "unsupported":
+      return "Unsupported content type";
+    case "invalid_url":
+      return "Invalid URL";
+    default:
+      return status ? `Unavailable (${status})` : "Snippet only";
+  }
+}
+
 export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBlockProps) {
   const [expanded, setExpanded] = useState(false);
 
   const isSearching = state.phase === "searching";
+  const isFetching = state.phase === "fetching";
   const isReading = state.phase === "reading";
   const isError = state.phase === "error";
-  const isActive = isSearching || isReading || toolState.phase === "retrying" || toolState.phase === "pending";
+  const isActive =
+    isSearching || isFetching || isReading || toolState.phase === "retrying" || toolState.phase === "pending";
+
+  const fetchedCount = state.sources.filter((s) => s.fetch?.status === "ok").length;
+  const unavailableCount = state.sources.filter(
+    (s) => s.fetch && s.fetch.status !== "ok",
+  ).length;
 
   const phaseLabel = isSearching
-    ? "Searching…"
-    : isReading
-      ? `Reading ${state.sources.length} source${state.sources.length !== 1 ? "s" : ""}…`
-      : isError
-        ? "Search failed"
-        : `${state.sources.length} source${state.sources.length !== 1 ? "s" : ""} found`;
+    ? "Searching the web…"
+    : isFetching
+      ? `Reading ${state.fetch_progress?.completed ?? 0} of ${state.fetch_progress?.total ?? 0} page${(state.fetch_progress?.total ?? 0) !== 1 ? "s" : ""}…`
+      : isReading
+        ? "Composing answer…"
+        : isError
+          ? "Search failed"
+          : state.sources.length === 0
+            ? "0 sources"
+            : `${state.sources.length} source${state.sources.length !== 1 ? "s" : ""}` +
+              (fetchedCount > 0
+                ? ` · ${fetchedCount} page${fetchedCount !== 1 ? "s" : ""} read`
+                : "");
 
   const displayPhase =
     toolState.phase === "retrying" || toolState.phase === "pending"
@@ -47,35 +92,71 @@ export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBl
       {expanded && state.sources.length > 0 && (
         <div className="mt-1 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]/50">
           <ul className="m-0 list-none divide-y divide-[var(--color-border)] p-0">
-            {state.sources.map((source, index) => (
-              <li key={source.id} className="px-3 py-2">
-                <div className="flex items-start gap-2">
-                  <span className="mt-0.5 shrink-0 font-mono text-[10px] text-[var(--color-text-dim)]/60">
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <a
-                      href={source.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group/link inline-flex items-center gap-1 text-[12px] font-medium text-white hover:text-cyan-300"
-                    >
-                      <span className="truncate">{source.title}</span>
-                      <ExternalLink className="size-3 shrink-0 opacity-0 transition-opacity group-hover/link:opacity-100" />
-                    </a>
-                    <div className="mt-0.5 truncate text-[10.5px] text-[var(--color-accent)]/70">
-                      {source.url}
+            {state.sources.map((source, index) => {
+              const fetch = source.fetch;
+              const fetchedOk = fetch?.status === "ok";
+              const isUnavailable = fetch && fetch.status !== "ok";
+              const noFetchAttempt = !fetch;
+              const tooltip = isUnavailable
+                ? `Page not fetched: ${fetchStatusLabel(fetch.status)}${fetch.error_reason ? ` — ${fetch.error_reason}` : ""}`
+                : noFetchAttempt
+                  ? "Only the search snippet is used for this source (beyond the page-fetch limit)"
+                  : fetchedOk
+                    ? "Full extracted article content was injected into the AI context"
+                    : fetchStatusLabel(fetch?.status);
+              const Icon = fetchedOk
+                ? CheckCircle2
+                : isUnavailable
+                  ? AlertTriangle
+                  : Minus;
+              const iconClass = fetchedOk
+                ? "text-emerald-400"
+                : isUnavailable
+                  ? "text-amber-400"
+                  : "text-[var(--color-text-dim)]/60";
+              return (
+                <li key={source.id} className="px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 font-mono text-[10px] text-[var(--color-text-dim)]/60">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={source.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group/link inline-flex min-w-0 items-center gap-1 text-[12px] font-medium text-white hover:text-cyan-300"
+                        >
+                          <span className="truncate">{source.title}</span>
+                          <ExternalLink className="size-3 shrink-0 opacity-0 transition-opacity group-hover/link:opacity-100" />
+                        </a>
+                        <span
+                          title={tooltip}
+                          className={`inline-flex shrink-0 items-center ${iconClass}`}
+                        >
+                          <Icon className="size-3" />
+                        </span>
+                      </div>
+                      <div className="mt-0.5 truncate text-[10.5px] text-[var(--color-accent)]/70">
+                        {source.url}
+                      </div>
+                      {source.snippet && (
+                        <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-dim)]">
+                          {source.snippet}
+                        </p>
+                      )}
                     </div>
-                    {source.snippet && (
-                      <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-dim)]">
-                        {source.snippet}
-                      </p>
-                    )}
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
+          {unavailableCount > 0 && (
+            <div className="border-t border-[var(--color-border)] px-3 py-1.5 text-[10.5px] text-[var(--color-text-dim)]">
+              {unavailableCount} page{unavailableCount !== 1 ? "s" : ""} could not be fetched — falling back to snippet.
+            </div>
+          )}
         </div>
       )}
 

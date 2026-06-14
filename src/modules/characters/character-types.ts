@@ -42,6 +42,24 @@ export interface CharacterStats {
   lastUsedAt?: string;
 }
 
+export interface CharacterChatDefaults {
+  /** How many trailing messages are scanned for lorebook triggers. */
+  scanDepth: number;
+  /** Max lorebook entries injected per turn (after priority ordering). */
+  maxLorebookEntries: number;
+  /** Whether to inject example messages as few-shot. */
+  includeExamples: boolean;
+  /** Whether document AI tools may be used in character chat. */
+  allowDocumentTools: boolean;
+}
+
+export const DEFAULT_CHARACTER_CHAT_DEFAULTS: CharacterChatDefaults = {
+  scanDepth: 4,
+  maxLorebookEntries: 6,
+  includeExamples: true,
+  allowDocumentTools: false,
+};
+
 export interface CharacterRecord {
   id: string;
   name: string;
@@ -68,6 +86,10 @@ export interface CharacterRecord {
   projectId?: string;
   creatorMetadata?: Record<string, unknown>;
   stats: CharacterStats;
+  /** Lorebook entries. Stored inline on the record for v1. */
+  lorebookEntries?: CharacterLorebookEntry[];
+  /** Per-character chat runtime defaults. */
+  chatDefaults?: CharacterChatDefaults;
   createdAt: string;
   updatedAt: string;
 }
@@ -96,6 +118,8 @@ export interface CreateCharacterInput {
   source?: CharacterSource;
   isGlobal?: boolean;
   projectId?: string;
+  lorebookEntries?: CharacterLorebookEntry[];
+  chatDefaults?: CharacterChatDefaults;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,6 +148,8 @@ export interface UpdateCharacterInput {
   source?: CharacterSource;
   isGlobal?: boolean;
   projectId?: string;
+  lorebookEntries?: CharacterLorebookEntry[];
+  chatDefaults?: CharacterChatDefaults;
   updatedAt: string;
 }
 

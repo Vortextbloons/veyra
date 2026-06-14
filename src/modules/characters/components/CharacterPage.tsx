@@ -1,19 +1,41 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Drama, Plus, Sparkles } from "lucide-react";
 import { useCharacterStore } from "../character-store";
 import { CharacterListPanel } from "./CharacterListPanel";
 import { CharacterDetailView } from "./CharacterDetailView";
+import { CharacterChatView } from "./CharacterChatView";
 import { NewCharacterDialog } from "./NewCharacterDialog";
+import { startCharacterChat } from "../character-chat";
 
 export function CharacterPage() {
   const hydrateCharacters = useCharacterStore((s) => s.hydrateCharacters);
   const characters = useCharacterStore((s) => s.characters);
   const hydrationState = useCharacterStore((s) => s.hydrationState);
+  const activeCharacterId = useCharacterStore((s) => s.activeCharacterId);
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [chatOpenRaw, setChatOpen] = useState(false);
 
   useEffect(() => {
     void hydrateCharacters();
   }, [hydrateCharacters]);
+
+  const activeCharacter = useMemo(
+    () => (activeCharacterId ? characters.find((c) => c.id === activeCharacterId) ?? null : null),
+    [activeCharacterId, characters],
+  );
+
+  // Derive chatOpen: auto-close if the active character is missing.
+  const chatOpen = chatOpenRaw && !!activeCharacter;
+
+  const handleStartChat = useCallback(() => {
+    if (!activeCharacter) return;
+    startCharacterChat(activeCharacter);
+    setChatOpen(true);
+  }, [activeCharacter]);
+
+  const handleBackFromChat = useCallback(() => {
+    setChatOpen(false);
+  }, []);
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
@@ -43,7 +65,15 @@ export function CharacterPage() {
       <div className="flex flex-1 min-h-0">
         <CharacterListPanel onCreate={() => setShowNewDialog(true)} />
         {hydrationState === "ready" ? (
-          <CharacterDetailView />
+          chatOpen && activeCharacter ? (
+            <CharacterChatView
+              key={activeCharacter.id}
+              character={activeCharacter}
+              onBack={handleBackFromChat}
+            />
+          ) : (
+            <CharacterDetailView onStartChat={handleStartChat} />
+          )
         ) : (
           <div className="flex flex-1 items-center justify-center text-[12px] text-[var(--color-text-dim)]">
             Loading characters…

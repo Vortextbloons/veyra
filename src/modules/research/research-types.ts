@@ -133,6 +133,13 @@ export interface ResearchSource {
   fetchedAt?: string;
   readAt?: string;
   error?: string;
+  /**
+   * Status of the optional page-content fetch performed at search time by
+   * SearchOrchestrator. "ok" | "timeout" | "http" | "extraction" |
+   * "network" | "ssrf_blocked" | "too_large" | "unsupported" | "invalid_url".
+   * Not the same as `status` (which is the research pipeline state).
+   */
+  fetchStatus?: string;
   createdAt: string;
 }
 
@@ -242,6 +249,7 @@ export interface CreateResearchSourceInput {
   engine?: string;
   score?: number;
   rank?: number;
+  fetchStatus?: string;
 }
 
 export interface UpdateResearchSourceInput {

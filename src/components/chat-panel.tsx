@@ -34,6 +34,8 @@ function chatLayoutClasses(sidebarsCollapsed: number) {
 
 export function ChatPanel({
   title = "New conversation",
+  titleAccessory,
+  headerActions,
   messages = [],
   onSend,
   isStreaming = false,
@@ -228,8 +230,12 @@ export function ChatPanel({
       />
 
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4">
-        <h1 className="text-[14px] font-medium tracking-tight">{title}</h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="truncate text-[14px] font-medium tracking-tight">{title}</h1>
+          {titleAccessory}
+        </div>
         <div className="flex items-center gap-1">
+          {headerActions}
           <button
             aria-label="More"
             className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
