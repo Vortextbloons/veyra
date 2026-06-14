@@ -41,7 +41,18 @@ export function ResearchFollowUpComposer({ previousRun }: Props) {
           const pauseController = new AbortController();
           useResearchStore.getState().setActiveController(pauseController);
           const combined = AbortSignal.any([signal, pauseController.signal]);
-          await executeResearchRun(run, combined, () => {});
+          await executeResearchRun(
+            run,
+            combined,
+            (event) => {
+              useResearchStore.getState().applyRuntimeEvent(event);
+            },
+            undefined,
+            // Follow-ups inherit the original run's depth preset and any global
+            // override. (Per-run overrides are not preserved across run creation
+            // in v1; this is consistent with how depth/model are inherited.)
+            undefined,
+          );
         },
       });
 

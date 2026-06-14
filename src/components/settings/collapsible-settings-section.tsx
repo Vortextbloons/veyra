@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useId } from "react";
 import { ChevronDown } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { sectionMatchesSearch } from "./tools-settings-registry";
@@ -26,13 +26,7 @@ export function CollapsibleSettingsSection({
   const setSubsectionExpanded = useSettingsStore((s) => s.setToolSettingsSubsectionExpanded);
 
   const storedExpanded = expandedMap[subsectionKey];
-  const [expanded, setExpanded] = useState(storedExpanded ?? defaultExpanded);
-
-  useEffect(() => {
-    if (storedExpanded !== undefined) {
-      setExpanded(storedExpanded);
-    }
-  }, [storedExpanded]);
+  const expanded = storedExpanded ?? defaultExpanded;
 
   const contentId = useId();
 
@@ -41,9 +35,7 @@ export function CollapsibleSettingsSection({
   }
 
   const toggle = () => {
-    const next = !expanded;
-    setExpanded(next);
-    setSubsectionExpanded(subsectionKey, next);
+    setSubsectionExpanded(subsectionKey, !expanded);
   };
 
   return (
@@ -75,16 +67,5 @@ export function CollapsibleSettingsSection({
         </div>
       )}
     </section>
-  );
-}
-
-/** Returns true when any child subsection would render for the current search query. */
-export function useToolSectionHasVisibleSubsections(
-  subsections: Array<{ title: string; description?: string; keywords?: string[] }>,
-): boolean {
-  const searchQuery = useToolsSettingsSearch();
-  if (!searchQuery.trim()) return true;
-  return subsections.some((s) =>
-    sectionMatchesSearch(searchQuery, [s.title, s.description, ...(s.keywords ?? [])]),
   );
 }

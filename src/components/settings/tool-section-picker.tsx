@@ -4,8 +4,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 import {
   TOOL_SETTINGS_SECTIONS,
   sectionMatchesSearch,
-  toolSectionMatchesSearch,
-  type ToolSettingsSectionId,
 } from "./tools-settings-registry";
 
 type ToolSectionPickerProps = {
@@ -140,12 +138,3 @@ export function ToolSectionPicker({
   );
 }
 
-export function isToolSectionVisible(
-  id: ToolSettingsSectionId,
-  visibleSections: Record<ToolSettingsSectionId, boolean>,
-  searchQuery: string,
-): boolean {
-  if (!visibleSections[id]) return false;
-  if (!searchQuery.trim()) return true;
-  return toolSectionMatchesSearch(id, searchQuery);
-}

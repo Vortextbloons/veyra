@@ -8,6 +8,7 @@ import {
   Wrench,
   Shield,
   Drama,
+  FlaskConical,
 } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
@@ -16,8 +17,17 @@ import { MemoriesSettings } from "./memories-settings";
 import { ModelsSettings } from "./models-settings";
 import { ToolsSettings } from "./tools-settings";
 import { CharacterSettings } from "./character-settings";
+import { ResearchSettings } from "./research-settings";
 
-type SettingsTab = "general" | "privacy" | "chat" | "memories" | "models" | "tools" | "characters";
+type SettingsTab =
+  | "general"
+  | "privacy"
+  | "chat"
+  | "memories"
+  | "models"
+  | "tools"
+  | "characters"
+  | "research";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <Settings className="size-4" /> },
@@ -26,6 +36,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "memories", label: "Memories", icon: <Database className="size-4" /> },
   { id: "models", label: "Models", icon: <Boxes className="size-4" /> },
   { id: "tools", label: "Tools", icon: <Wrench className="size-4" /> },
+  { id: "research", label: "Research", icon: <FlaskConical className="size-4" /> },
   { id: "characters", label: "Characters", icon: <Drama className="size-4" /> },
 ];
 
@@ -73,6 +84,7 @@ export function SettingsPage() {
           {activeTab === "memories" && <MemoriesSettings />}
           {activeTab === "models" && <ModelsSettings />}
           {activeTab === "tools" && <ToolsSettings />}
+          {activeTab === "research" && <ResearchSettings />}
           {activeTab === "characters" && <CharacterSettings />}
         </div>
       </div>

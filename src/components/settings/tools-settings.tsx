@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import { Wrench } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
-import { ToolSectionPicker, isToolSectionVisible } from "./tool-section-picker";
-import { ToolsSettingsSearchProvider } from "./tools-settings-search-context";
-import { TOOL_SETTINGS_SECTIONS, TOOL_SETTINGS_SUBSECTIONS } from "./tools-settings-registry";
-import { useToolSectionHasVisibleSubsections } from "./collapsible-settings-section";
+import { ToolSectionPicker } from "./tool-section-picker";
+import { ToolsSettingsSearchProvider } from "./tools-settings-search-provider";
+import { TOOL_SETTINGS_SECTIONS, TOOL_SETTINGS_SUBSECTIONS, isToolSectionVisible, useToolSectionHasVisibleSubsections } from "./tools-settings-registry";
 
 function ToolSettingsSectionBlock({
   sectionId,

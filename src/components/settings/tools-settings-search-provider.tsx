@@ -1,6 +1,4 @@
-import { createContext, useContext } from "react";
-
-const ToolsSettingsSearchContext = createContext("");
+import { ToolsSettingsSearchContext } from "./tools-settings-search-context";
 
 export function ToolsSettingsSearchProvider({
   query,
@@ -14,8 +12,4 @@ export function ToolsSettingsSearchProvider({
       {children}
     </ToolsSettingsSearchContext.Provider>
   );
-}
-
-export function useToolsSettingsSearch(): string {
-  return useContext(ToolsSettingsSearchContext);
 }

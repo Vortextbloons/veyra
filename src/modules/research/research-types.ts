@@ -11,6 +11,24 @@ export type ResearchRunStatus =
   | "failed"
   | "paused";
 
+export type ResearchRuntimeEvent =
+  | { type: "phase_start"; phase: string; stepId: string }
+  | { type: "phase_complete"; phase: string; stepId: string }
+  | { type: "phase_error"; phase: string; stepId: string; error: string }
+  | { type: "search_complete"; query: string; sourceCount: number }
+  | { type: "source_fetched"; sourceId: string; title: string }
+  | { type: "source_validated"; sourceId: string; quality: number; relevant: boolean }
+  | { type: "evidence_extracted"; evidenceId: string; evidenceType: string; content: string }
+  | { type: "claim_verified"; claimId: string; status: string; supportingSources: number; contradictingSources: number }
+  | { type: "contradiction_found"; contradictionId: string; claimA: string; claimB: string }
+  | { type: "report_progress"; percent: number }
+  | { type: "report_complete"; reportId: string }
+  | { type: "error"; error: string }
+  | { type: "validate_progress"; done: number; total: number }
+  | { type: "extract_progress"; done: number; total: number }
+  | { type: "contradiction_progress"; done: number; total: number }
+  | { type: "audit_progress"; done: number; total: number };
+
 export type ResearchStepType =
   | "clarify"
   | "plan"

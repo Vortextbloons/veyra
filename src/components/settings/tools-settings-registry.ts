@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { FileText, Globe } from "lucide-react";
 import { WebSearchSettings } from "./web-search-settings";
 import { DocumentSettings } from "./document-settings";
+import { useToolsSettingsSearch } from "./tools-settings-search-context";
 
 export type ToolSettingsSectionId = "webSearch" | "documents";
 
@@ -115,5 +116,27 @@ export function toolSectionMatchesSearch(
   }
   return (TOOL_SETTINGS_SUBSECTIONS[sectionId] ?? []).some((sub) =>
     sectionMatchesSearch(query, [sub.title, sub.description, ...(sub.keywords ?? [])]),
+  );
+}
+
+/** Returns true when a tool section is enabled and matches the current search query. */
+export function isToolSectionVisible(
+  id: ToolSettingsSectionId,
+  visibleSections: Record<ToolSettingsSectionId, boolean>,
+  searchQuery: string,
+): boolean {
+  if (!visibleSections[id]) return false;
+  if (!searchQuery.trim()) return true;
+  return toolSectionMatchesSearch(id, searchQuery);
+}
+
+/** Returns true when any child subsection would render for the current search query. */
+export function useToolSectionHasVisibleSubsections(
+  subsections: Array<{ title: string; description?: string; keywords?: string[] }>,
+): boolean {
+  const searchQuery = useToolsSettingsSearch();
+  if (!searchQuery.trim()) return true;
+  return subsections.some((s) =>
+    sectionMatchesSearch(searchQuery, [s.title, s.description, ...(s.keywords ?? [])]),
   );
 }

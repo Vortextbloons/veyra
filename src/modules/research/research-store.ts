@@ -20,6 +20,7 @@ import type {
   CreateResearchContradictionInput,
   CreateResearchReportInput,
   UpdateResearchReportInput,
+  ResearchRuntimeEvent,
 } from "./research-types";
 import {
   createResearchRun as apiCreateRun,
@@ -91,6 +92,14 @@ type ResearchStore = {
   // Derived
   getRunById: (id: string) => ResearchRun | undefined;
   activeRunOrNull: () => ResearchRunWithRelations | null;
+
+  // Live progress plumbing
+  applyRuntimeEvent: (event: ResearchRuntimeEvent) => void;
+  // Per-phase progress counters (in-memory; not persisted).
+  validateProgress: { done: number; total: number };
+  extractProgress: { done: number; total: number };
+  contradictionProgress: { done: number; total: number };
+  auditProgress: { done: number; total: number };
 };
 
 let hydrationPromise: Promise<void> | null = null;
@@ -104,6 +113,10 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
   hydrationState: "loading",
   activeController: null,
   isPausing: false,
+  validateProgress: { done: 0, total: 0 },
+  extractProgress: { done: 0, total: 0 },
+  contradictionProgress: { done: 0, total: 0 },
+  auditProgress: { done: 0, total: 0 },
 
   setActiveController: (controller) => {
     set({ activeController: controller, isPausing: false });
@@ -391,5 +404,37 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
 
   activeRunOrNull: () => {
     return get().activeRun;
+  },
+
+  applyRuntimeEvent: (event) => {
+    const state = get();
+    switch (event.type) {
+      case "validate_progress":
+        set({ validateProgress: { done: event.done, total: event.total } });
+        return;
+      case "extract_progress":
+        set({ extractProgress: { done: event.done, total: event.total } });
+        return;
+      case "contradiction_progress":
+        set({ contradictionProgress: { done: event.done, total: event.total } });
+        return;
+      case "audit_progress":
+        set({ auditProgress: { done: event.done, total: event.total } });
+        return;
+      case "source_validated":
+      case "evidence_extracted":
+      case "claim_verified":
+      case "contradiction_found":
+      case "source_fetched":
+      case "search_complete":
+      case "phase_start":
+      case "phase_complete":
+      case "phase_error":
+      case "report_complete":
+      case "error":
+      case "report_progress":
+        return;
+    }
+    void state;
   },
 }));

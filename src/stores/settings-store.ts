@@ -8,6 +8,16 @@ import {
   mergeVisibleToolSettingsSections,
   type ToolSettingsSectionId,
 } from "@/components/settings/tools-settings-registry";
+import {
+  DEFAULT_RESEARCH_CONFIG,
+  applyResearchConfig,
+  type ResearchConfigSetter,
+  type ResearchConfigState,
+  type ResearchDepthProfileId,
+  type ResearchProfileOverride,
+  type ResearchDepthProfile,
+} from "@/modules/research/research-config";
+import type { ResearchDepth } from "@/modules/research/research-types";
 const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 
 export interface ModelSettings {
@@ -82,6 +92,9 @@ type SettingsStoreState = {
   reasoningEnabled: boolean;
   visibleToolSettingsSections: Record<ToolSettingsSectionId, boolean>;
   toolSettingsSubsectionsExpanded: Record<string, boolean>;
+  research: ResearchConfigState;
+  researchAdvancedOpen: boolean;
+  researchFirstRunNoticeDismissed: boolean;
 };
 
 type ResolvedModelSettings = {
@@ -158,6 +171,20 @@ type SettingsStore = SettingsStoreState & {
   setToolSettingsSectionVisible: (id: ToolSettingsSectionId, visible: boolean) => void;
   setAllToolSettingsSectionsVisible: (visible: boolean) => void;
   setToolSettingsSubsectionExpanded: (key: string, expanded: boolean) => void;
+  applyResearch: (action: ResearchConfigSetter) => void;
+  setResearchAdvancedOpen: (open: boolean) => void;
+  setResearchFirstRunNoticeDismissed: (dismissed: boolean) => void;
+  // Convenience helpers built on top of applyResearch.
+  setResearchActiveProfile: (id: ResearchDepthProfileId) => void;
+  setResearchOverride: (override: ResearchProfileOverride) => void;
+  setResearchDepthOverride: (depth: ResearchDepth, override: ResearchProfileOverride) => void;
+  addResearchCustomProfile: (profile: ResearchDepthProfile) => void;
+  updateResearchCustomProfile: (id: string, profile: Partial<ResearchDepthProfile>) => void;
+  deleteResearchCustomProfile: (id: string) => void;
+  setResearchDefaultDepth: (depth: ResearchDepth) => void;
+  setResearchDefaultModelId: (modelId: string | null) => void;
+  setResearchLiteModel: (modelId: string, providerId: string) => void;
+  resetResearch: () => void;
 };
 
 const DEFAULT_STATE: SettingsStoreState = {
@@ -220,6 +247,9 @@ const DEFAULT_STATE: SettingsStoreState = {
   reasoningEnabled: true,
   visibleToolSettingsSections: DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
   toolSettingsSubsectionsExpanded: {},
+  research: DEFAULT_RESEARCH_CONFIG,
+  researchAdvancedOpen: false,
+  researchFirstRunNoticeDismissed: false,
 };
 
 function partializeSettings(state: SettingsStore): SettingsStoreState {
@@ -283,6 +313,9 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     reasoningEnabled: state.reasoningEnabled,
     visibleToolSettingsSections: state.visibleToolSettingsSections,
     toolSettingsSubsectionsExpanded: state.toolSettingsSubsectionsExpanded,
+    research: state.research,
+    researchAdvancedOpen: state.researchAdvancedOpen,
+    researchFirstRunNoticeDismissed: state.researchFirstRunNoticeDismissed,
   };
 }
 
@@ -408,6 +441,31 @@ export const useSettingsStore = create<SettingsStore>()(
             [key]: expanded,
           },
         })),
+      applyResearch: (action) =>
+        set((state) => ({ research: applyResearchConfig(state.research, action) })),
+      setResearchAdvancedOpen: (researchAdvancedOpen) => set({ researchAdvancedOpen }),
+      setResearchFirstRunNoticeDismissed: (researchFirstRunNoticeDismissed) =>
+        set({ researchFirstRunNoticeDismissed }),
+      setResearchActiveProfile: (id) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setActiveProfile", id }) })),
+      setResearchOverride: (override) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setOverride", override }) })),
+      setResearchDepthOverride: (depth, override) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setDepthOverride", depth, override }) })),
+      addResearchCustomProfile: (profile) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "addCustomProfile", profile }) })),
+      updateResearchCustomProfile: (id, profile) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "updateCustomProfile", id, profile }) })),
+      deleteResearchCustomProfile: (id) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "deleteCustomProfile", id }) })),
+      setResearchDefaultDepth: (defaultDepth) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setDefaultDepth", depth: defaultDepth }) })),
+      setResearchDefaultModelId: (defaultModelId) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setDefaultModelId", modelId: defaultModelId }) })),
+      setResearchLiteModel: (modelId, providerId) =>
+        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setLiteModel", modelId, providerId }) })),
+      resetResearch: () =>
+        set({ research: { ...DEFAULT_RESEARCH_CONFIG } }),
     }),
     {
       name: SETTINGS_STORAGE_KEY,
@@ -428,6 +486,13 @@ export const useSettingsStore = create<SettingsStore>()(
         migrated.toolSettingsSubsectionsExpanded = {
           ...current.toolSettingsSubsectionsExpanded,
           ...parsed.toolSettingsSubsectionsExpanded,
+        };
+        migrated.research = {
+          ...DEFAULT_RESEARCH_CONFIG,
+          ...(parsed.research ?? {}),
+          // Always restore baseline of built-in depthOverrides; do not trust user overrides silently.
+          depthOverrides: parsed.research?.depthOverrides ?? {},
+          customProfiles: parsed.research?.customProfiles ?? [],
         };
         return { ...current, ...DEFAULT_STATE, ...migrated };
       },

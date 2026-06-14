@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import {
   Brain,
   ChevronDown,
@@ -175,15 +175,8 @@ function ReasoningBlock({
   isStreaming,
   messageTextClass,
 }: ReasoningBlockProps) {
-  const [expanded, setExpanded] = useState(isStreaming);
-
-  useEffect(() => {
-    if (isStreaming) setExpanded(true);
-  }, [isStreaming]);
-
-  useEffect(() => {
-    if (!isStreaming) setExpanded(false);
-  }, [isStreaming]);
+  const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
+  const expanded = isStreaming ? true : (userExpanded ?? false);
 
   return (
     <div
@@ -191,7 +184,7 @@ function ReasoningBlock({
     >
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => setUserExpanded((v) => !(v ?? expanded))}
         aria-expanded={expanded}
         className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition-colors hover:bg-violet-500/[0.04]"
       >

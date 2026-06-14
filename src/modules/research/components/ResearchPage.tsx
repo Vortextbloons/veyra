@@ -12,8 +12,11 @@ import {
   Pause,
   Play,
   Loader2,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { useResearchStore } from "../research-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { ResearchRunCard } from "./ResearchRunCard";
 import { ResearchPlanPanel } from "./ResearchPlanPanel";
 import { ResearchRunTimeline } from "./ResearchRunTimeline";
@@ -121,7 +124,9 @@ export function ResearchPage() {
         const pauseController = new AbortController();
         useResearchStore.getState().setActiveController(pauseController);
         const combined = AbortSignal.any([signal, pauseController.signal]);
-        await resumeResearchRun(run, combined, () => {});
+        await resumeResearchRun(run, combined, (event) => {
+          useResearchStore.getState().applyRuntimeEvent(event);
+        });
       },
     });
   }, [run, activeRun]);
@@ -133,8 +138,33 @@ export function ResearchPage() {
   const isActive = run && ["planning", "searching", "reading", "extracting", "verifying", "synthesizing"].includes(run.status);
   const canResume = run && (run.status === "paused" || run.status === "failed");
 
+  const firstRunNoticeDismissed = useSettingsStore((s) => s.researchFirstRunNoticeDismissed);
+  const setFirstRunNoticeDismissed = useSettingsStore((s) => s.setResearchFirstRunNoticeDismissed);
+  const showFirstRunBanner = !firstRunNoticeDismissed;
+
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
+      {showFirstRunBanner && (
+        <div className="flex items-start gap-3 border-b border-[var(--color-border)] bg-gradient-to-r from-amber-500/10 via-amber-500/[0.04] to-transparent px-5 py-2.5">
+          <Sparkles className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
+          <div className="flex-1 text-[11.5px] leading-relaxed text-amber-100/90">
+            <span className="font-medium text-amber-100">Research is faster now.</span>{" "}
+            Per-source validation, contradiction detection, and citation audit run in
+            parallel and skip reasoning by default. Tune every knob in{" "}
+            <span className="font-mono text-amber-200">Settings → Research</span>, or
+            set a per-run override from the New Research dialog's "Advanced" panel.
+          </div>
+          <button
+            type="button"
+            onClick={() => setFirstRunNoticeDismissed(true)}
+            className="grid size-5 shrink-0 place-items-center rounded text-amber-200/80 transition-colors hover:bg-amber-500/10 hover:text-amber-100"
+            title="Dismiss"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
+
       {/* Page header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
         <div className="flex items-center gap-2.5">
@@ -259,28 +289,12 @@ export function ResearchPage() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="flex items-center gap-3">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${
-                        run.status === "failed"
-                          ? "bg-red-500/60"
-                          : run.status === "completed"
-                            ? "bg-emerald-500/60"
-                            : "bg-amber-500/60"
-                      }`}
-                      style={{ width: `${run.progressPercent}%` }}
-                    />
+                <LiveProgressBar status={run.status} percent={run.progressPercent} />
+                {run.totalTokensUsed !== undefined && run.totalTokensUsed > 0 && (
+                  <div className="text-right text-[11px] text-[var(--color-text-dim)]">
+                    {run.totalTokensUsed.toLocaleString()} tokens
                   </div>
-                  <span className="text-[11px] font-mono text-[var(--color-text-dim)]">
-                    {run.progressPercent}%
-                  </span>
-                  {run.totalTokensUsed !== undefined && run.totalTokensUsed > 0 && (
-                    <span className="text-[11px] font-mono text-[var(--color-text-dim)]">
-                      {run.totalTokensUsed.toLocaleString()} tokens
-                    </span>
-                  )}
-                </div>
+                )}
               </div>
 
               {/* Tabs */}
@@ -499,4 +513,73 @@ function getTabCount(
     default:
       return 0;
   }
+}
+
+function LiveProgressBar({
+  status,
+  percent,
+}: {
+  status: string;
+  percent: number;
+}) {
+  const validateProgress = useResearchStore((s) => s.validateProgress);
+  const extractProgress = useResearchStore((s) => s.extractProgress);
+  const contradictionProgress = useResearchStore((s) => s.contradictionProgress);
+  const auditProgress = useResearchStore((s) => s.auditProgress);
+
+  const isActive = status !== "completed" && status !== "failed" && status !== "paused";
+
+  // Pick the most relevant in-flight phase indicator.
+  let phaseLabel: string | null = null;
+  let phasePct: number | null = null;
+  if (validateProgress.total > 0 && (validateProgress.done < validateProgress.total || percent < 50)) {
+    phaseLabel = "Validating sources";
+    phasePct = validateProgress.total > 0
+      ? Math.floor((validateProgress.done / validateProgress.total) * 100)
+      : null;
+  } else if (extractProgress.total > 0 && (extractProgress.done < extractProgress.total || percent < 65)) {
+    phaseLabel = "Extracting evidence";
+    phasePct = extractProgress.total > 0
+      ? Math.floor((extractProgress.done / extractProgress.total) * 100)
+      : null;
+  } else if (contradictionProgress.total > 0 && (contradictionProgress.done < contradictionProgress.total || percent < 80)) {
+    phaseLabel = "Detecting contradictions";
+    phasePct = contradictionProgress.total > 0
+      ? Math.floor((contradictionProgress.done / contradictionProgress.total) * 100)
+      : null;
+  } else if (auditProgress.total > 0 && (auditProgress.done < auditProgress.total || percent < 95)) {
+    phaseLabel = "Auditing citations";
+    phasePct = auditProgress.total > 0
+      ? Math.floor((auditProgress.done / auditProgress.total) * 100)
+      : null;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-3">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ${
+              status === "failed"
+                ? "bg-red-500/60"
+                : status === "completed"
+                  ? "bg-emerald-500/60"
+                  : "bg-amber-500/60"
+            }`}
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+        <span className="text-[11px] font-mono text-[var(--color-text-dim)]">
+          {percent}%
+        </span>
+      </div>
+      {isActive && phaseLabel && phasePct !== null && (
+        <div className="flex items-center gap-2 text-[10.5px] text-[var(--color-text-dim)]">
+          <Loader2 className="size-3 animate-spin text-amber-400" />
+          <span>{phaseLabel}</span>
+          <span className="font-mono text-amber-300">{phasePct}%</span>
+        </div>
+      )}
+    </div>
+  );
 }
