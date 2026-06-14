@@ -32,6 +32,7 @@ fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
 mod agent_commands;
 mod character_commands;
 mod character_db;
+mod character_io_commands;
 mod connectivity_commands;
 mod constants;
 mod db_utils;
@@ -217,6 +218,11 @@ pub fn run() {
             character_commands::update_character,
             character_commands::list_characters,
             character_commands::delete_character,
+            character_io_commands::read_text_file,
+            character_io_commands::read_binary_file,
+            character_io_commands::write_text_file,
+            character_io_commands::write_binary_file,
+            character_io_commands::export_character_card,
         ])
         .setup(|app| {
             let db_state = memory_db::MemoryDbState::new(app.handle().clone());

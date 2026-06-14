@@ -11,10 +11,12 @@ import type {
   CharacterAssistAction,
   CharacterAssistOptions,
   CharacterAssistRequest,
-  CharacterLorebookEntry,
-  CharacterRecord,
   CharacterAssistTone,
 } from "./ai-assist-types";
+import type {
+  CharacterLorebookEntry,
+  CharacterRecord,
+} from "../character-types";
 
 const TONE_PRESETS: Record<Exclude<CharacterAssistTone, "custom">, string> = {
   neutral: "balanced, clear, and grounded",

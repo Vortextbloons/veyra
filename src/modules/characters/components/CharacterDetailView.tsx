@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Drama, Edit3, Eye, MessageSquare, Play, Tag, User } from "lucide-react";
+import { Drama, Edit3, Eye, MessageSquare, Play, Sparkles, Tag, User, Pencil } from "lucide-react";
 import { useCharacterStore } from "../character-store";
 import { useChatStore } from "@/stores/chat-store";
 import type { CharacterRecord } from "../character-types";
@@ -289,7 +289,17 @@ function WelcomeScreen() {
   );
 }
 
-function CharacterHeader({ character, onStartChat }: { character: CharacterRecord; onStartChat: () => void }) {
+function CharacterHeader({
+  character,
+  onStartChat,
+  onEdit,
+  onDirector,
+}: {
+  character: CharacterRecord;
+  onStartChat: () => void;
+  onEdit?: () => void;
+  onDirector?: () => void;
+}) {
   const tags = character.tags;
   return (
     <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-6 py-5">
@@ -313,6 +323,15 @@ function CharacterHeader({ character, onStartChat }: { character: CharacterRecor
                 Project
               </span>
             )}
+            {character.creatorMetadata &&
+              typeof character.creatorMetadata === "object" &&
+              Boolean(
+                (character.creatorMetadata as Record<string, unknown>).aiAssisted,
+              ) && (
+                <span className="rounded border border-emerald-300/30 bg-emerald-300/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-200">
+                  AI assisted
+                </span>
+              )}
           </div>
           {character.title && (
             <div className="text-[12.5px] text-[var(--color-text-dim)]">
@@ -323,14 +342,36 @@ function CharacterHeader({ character, onStartChat }: { character: CharacterRecor
             <div className="mt-1 text-[12.5px] text-white/80">{character.tagline}</div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onStartChat}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12.5px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
-        >
-          <Play className="size-3.5" />
-          Chat with {character.name}
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {onDirector && (
+            <button
+              type="button"
+              onClick={onDirector}
+              className="flex h-9 items-center gap-1.5 rounded-md border border-emerald-300/30 bg-emerald-300/[0.06] px-3 text-[12.5px] font-medium text-emerald-200 hover:bg-emerald-300/10"
+            >
+              <Sparkles className="size-3.5" />
+              Develop with AI
+            </button>
+          )}
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex h-9 items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/40 px-3 text-[12.5px] font-medium text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+            >
+              <Pencil className="size-3.5" />
+              Edit
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onStartChat}
+            className="flex h-9 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12.5px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
+          >
+            <Play className="size-3.5" />
+            Chat with {character.name}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -366,14 +407,23 @@ function CharacterHeader({ character, onStartChat }: { character: CharacterRecor
 function CharacterTabs({
   character,
   onStartChat,
+  onEdit,
+  onDirector,
 }: {
   character: CharacterRecord;
   onStartChat: () => void;
+  onEdit?: () => void;
+  onDirector?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("preview");
   return (
     <>
-      <CharacterHeader character={character} onStartChat={onStartChat} />
+      <CharacterHeader
+        character={character}
+        onStartChat={onStartChat}
+        onEdit={onEdit}
+        onDirector={onDirector}
+      />
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-6">
         {TABS.map((tab) => (
           <button
@@ -407,7 +457,15 @@ function CharacterTabs({
   );
 }
 
-export function CharacterDetailView({ onStartChat }: { onStartChat: () => void }) {
+export function CharacterDetailView({
+  onStartChat,
+  onEdit,
+  onDirector,
+}: {
+  onStartChat: () => void;
+  onEdit?: () => void;
+  onDirector?: () => void;
+}) {
   const activeCharacterId = useCharacterStore((s) => s.activeCharacterId);
   const characters = useCharacterStore((s) => s.characters);
   const character = activeCharacterId
@@ -421,7 +479,13 @@ export function CharacterDetailView({ onStartChat }: { onStartChat: () => void }
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
       {/* Tabs + tab content (keyed on character id so state resets on switch) */}
-      <CharacterTabs key={character.id} character={character} onStartChat={onStartChat} />
+      <CharacterTabs
+        key={character.id}
+        character={character}
+        onStartChat={onStartChat}
+        onEdit={onEdit}
+        onDirector={onDirector}
+      />
     </section>
   );
 }

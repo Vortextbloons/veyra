@@ -59,6 +59,9 @@ export async function createCharacter(
   if (input.chatDefaults) {
     payload.chatDefaults = JSON.stringify(input.chatDefaults);
   }
+  if (input.creatorMetadata) {
+    payload.creatorMetadata = JSON.stringify(input.creatorMetadata);
+  }
   return invoke<CharacterRecord>("create_character", {
     input: JSON.stringify(payload),
   });

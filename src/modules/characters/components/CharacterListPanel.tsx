@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
-import { Drama, Plus, Search, Users } from "lucide-react";
+import { Drama, Plus, Search, Users, Copy, Download } from "lucide-react";
 import { useCharacterStore } from "../character-store";
 import type { CharacterRecord } from "../character-types";
 import { getAvatarGradient } from "../character-gradients";
 
 interface CharacterListPanelProps {
   onCreate: () => void;
+  onDuplicate?: (c: CharacterRecord) => void;
+  onExport?: (c: CharacterRecord) => void;
 }
 
 function Avatar({ character, size = "md" }: { character: CharacterRecord; size?: "sm" | "md" }) {
@@ -26,11 +28,15 @@ function CharacterRow({
   active,
   onSelect,
   onDelete,
+  onDuplicate,
+  onExport,
 }: {
   character: CharacterRecord;
   active: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  onDuplicate?: () => void;
+  onExport?: () => void;
 }) {
   return (
     <div className="group relative">
@@ -66,20 +72,44 @@ function CharacterRow({
           ) : null}
         </div>
       </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="absolute right-1 top-1 grid size-5 place-items-center rounded bg-red-500/10 text-red-300 opacity-0 transition-opacity hover:bg-red-500/20 group-hover:opacity-100"
-        title="Delete character"
-        aria-label="Delete character"
-      >
-        <span className="text-[10px] font-bold">×</span>
-      </button>
+      <div className="absolute right-1 top-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        {onDuplicate && (
+          <button
+            type="button"
+            onClick={onDuplicate}
+            className="grid size-5 place-items-center rounded bg-white/5 text-[var(--color-text-dim)] hover:bg-white/10 hover:text-white"
+            title="Duplicate"
+            aria-label="Duplicate character"
+          >
+            <Copy className="size-2.5" />
+          </button>
+        )}
+        {onExport && (
+          <button
+            type="button"
+            onClick={onExport}
+            className="grid size-5 place-items-center rounded bg-white/5 text-[var(--color-text-dim)] hover:bg-white/10 hover:text-white"
+            title="Export"
+            aria-label="Export character"
+          >
+            <Download className="size-2.5" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="grid size-5 place-items-center rounded bg-red-500/10 text-red-300 hover:bg-red-500/20"
+          title="Delete character"
+          aria-label="Delete character"
+        >
+          <span className="text-[10px] font-bold">×</span>
+        </button>
+      </div>
     </div>
   );
 }
 
-export function CharacterListPanel({ onCreate }: CharacterListPanelProps) {
+export function CharacterListPanel({ onCreate, onDuplicate, onExport }: CharacterListPanelProps) {
   const characters = useCharacterStore((s) => s.characters);
   const activeCharacterId = useCharacterStore((s) => s.activeCharacterId);
   const setActiveCharacterId = useCharacterStore((s) => s.setActiveCharacterId);
@@ -185,6 +215,8 @@ export function CharacterListPanel({ onCreate }: CharacterListPanelProps) {
                 active={c.id === activeCharacterId}
                 onSelect={() => setActiveCharacterId(c.id)}
                 onDelete={() => setConfirmDeleteId(c.id)}
+                onDuplicate={onDuplicate ? () => onDuplicate(c) : undefined}
+                onExport={onExport ? () => onExport(c) : undefined}
               />
             ))}
           </div>

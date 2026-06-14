@@ -95,6 +95,7 @@ pub struct CharacterCreateInput {
     pub updated_at: String,
     pub lorebook_entries: Option<String>,
     pub chat_defaults: Option<String>,
+    pub creator_metadata: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -168,7 +169,8 @@ CREATE TABLE IF NOT EXISTS characters (
   lorebook_entries_json TEXT NOT NULL DEFAULT '[]',
   chat_defaults_json TEXT,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  creator_metadata TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE INDEX IF NOT EXISTS idx_characters_is_global ON characters(is_global);
@@ -179,6 +181,7 @@ CREATE INDEX IF NOT EXISTS idx_characters_updated_at ON characters(updated_at);
 const SCHEMA_MIGRATIONS: &[&str] = &[
     "ALTER TABLE characters ADD COLUMN lorebook_entries_json TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE characters ADD COLUMN chat_defaults_json TEXT",
+    "ALTER TABLE characters ADD COLUMN creator_metadata TEXT NOT NULL DEFAULT '{}'",
 ];
 
 // ── Validation ───────────────────────────────────────────────────────────────

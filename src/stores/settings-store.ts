@@ -2,6 +2,11 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ConnectivityPreference } from "@/lib/connectivity/connectivity-types";
 import type { MemoryMode } from "@/lib/memory-types";
+import {
+  DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
+  mergeVisibleToolSettingsSections,
+  type ToolSettingsSectionId,
+} from "@/components/settings/tools-settings-registry";
 const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 
 export interface ModelSettings {
@@ -66,6 +71,14 @@ type SettingsStoreState = {
   documentSpellCheck: boolean;
   documentAutoOpenOnCreate: boolean;
   connectivityPreference: ConnectivityPreference;
+  // ── Character AI assist ──────────────────────────────────────────────────
+  characterAssistModel: string;
+  characterAssistMaxTokens: number;
+  characterAssistSendContext: boolean;
+  characterAssistTelemetry: boolean;
+  characterAssistTone: string;
+  visibleToolSettingsSections: Record<ToolSettingsSectionId, boolean>;
+  toolSettingsSubsectionsExpanded: Record<string, boolean>;
 };
 
 type ResolvedModelSettings = {
@@ -132,6 +145,14 @@ type SettingsStore = SettingsStoreState & {
   setDocumentSpellCheck: (enabled: boolean) => void;
   setDocumentAutoOpenOnCreate: (enabled: boolean) => void;
   setConnectivityPreference: (preference: ConnectivityPreference) => void;
+  setCharacterAssistModel: (model: string) => void;
+  setCharacterAssistMaxTokens: (n: number) => void;
+  setCharacterAssistSendContext: (enabled: boolean) => void;
+  setCharacterAssistTelemetry: (enabled: boolean) => void;
+  setCharacterAssistTone: (tone: string) => void;
+  setToolSettingsSectionVisible: (id: ToolSettingsSectionId, visible: boolean) => void;
+  setAllToolSettingsSectionsVisible: (visible: boolean) => void;
+  setToolSettingsSubsectionExpanded: (key: string, expanded: boolean) => void;
 };
 
 const DEFAULT_STATE: SettingsStoreState = {
@@ -185,6 +206,13 @@ const DEFAULT_STATE: SettingsStoreState = {
   documentSpellCheck: true,
   documentAutoOpenOnCreate: true,
   connectivityPreference: "auto",
+  characterAssistModel: "",
+  characterAssistMaxTokens: 1500,
+  characterAssistSendContext: false,
+  characterAssistTelemetry: true,
+  characterAssistTone: "neutral",
+  visibleToolSettingsSections: DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
+  toolSettingsSubsectionsExpanded: {},
 };
 
 function partializeSettings(state: SettingsStore): SettingsStoreState {
@@ -239,6 +267,13 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     documentSpellCheck: state.documentSpellCheck,
     documentAutoOpenOnCreate: state.documentAutoOpenOnCreate,
     connectivityPreference: state.connectivityPreference,
+    characterAssistModel: state.characterAssistModel,
+    characterAssistMaxTokens: state.characterAssistMaxTokens,
+    characterAssistSendContext: state.characterAssistSendContext,
+    characterAssistTelemetry: state.characterAssistTelemetry,
+    characterAssistTone: state.characterAssistTone,
+    visibleToolSettingsSections: state.visibleToolSettingsSections,
+    toolSettingsSubsectionsExpanded: state.toolSettingsSubsectionsExpanded,
   };
 }
 
@@ -337,6 +372,31 @@ export const useSettingsStore = create<SettingsStore>()(
       setDocumentSpellCheck: (documentSpellCheck) => set({ documentSpellCheck }),
       setDocumentAutoOpenOnCreate: (documentAutoOpenOnCreate) => set({ documentAutoOpenOnCreate }),
       setConnectivityPreference: (connectivityPreference) => set({ connectivityPreference }),
+      setCharacterAssistModel: (characterAssistModel) => set({ characterAssistModel }),
+      setCharacterAssistMaxTokens: (characterAssistMaxTokens) => set({ characterAssistMaxTokens }),
+      setCharacterAssistSendContext: (characterAssistSendContext) => set({ characterAssistSendContext }),
+      setCharacterAssistTelemetry: (characterAssistTelemetry) => set({ characterAssistTelemetry }),
+      setCharacterAssistTone: (characterAssistTone) => set({ characterAssistTone }),
+      setToolSettingsSectionVisible: (id, visible) =>
+        set((state) => ({
+          visibleToolSettingsSections: {
+            ...state.visibleToolSettingsSections,
+            [id]: visible,
+          },
+        })),
+      setAllToolSettingsSectionsVisible: (visible) =>
+        set((state) => ({
+          visibleToolSettingsSections: Object.fromEntries(
+            Object.keys(state.visibleToolSettingsSections).map((id) => [id, visible]),
+          ) as Record<ToolSettingsSectionId, boolean>,
+        })),
+      setToolSettingsSubsectionExpanded: (key, expanded) =>
+        set((state) => ({
+          toolSettingsSubsectionsExpanded: {
+            ...state.toolSettingsSubsectionsExpanded,
+            [key]: expanded,
+          },
+        })),
     }),
     {
       name: SETTINGS_STORAGE_KEY,
@@ -351,6 +411,13 @@ export const useSettingsStore = create<SettingsStore>()(
         ) {
           migrated.defaultWebSearchEnabled = parsed.webSearchEnabled;
         }
+        migrated.visibleToolSettingsSections = mergeVisibleToolSettingsSections(
+          parsed.visibleToolSettingsSections,
+        );
+        migrated.toolSettingsSubsectionsExpanded = {
+          ...current.toolSettingsSubsectionsExpanded,
+          ...parsed.toolSettingsSubsectionsExpanded,
+        };
         return { ...current, ...DEFAULT_STATE, ...migrated };
       },
     },

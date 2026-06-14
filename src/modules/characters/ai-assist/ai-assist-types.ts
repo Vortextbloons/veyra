@@ -10,7 +10,7 @@
 import type {
   CharacterLorebookEntry,
   CharacterRecord,
-} from "./character-types";
+} from "../character-types";
 
 export type CharacterAssistAction =
   | "generate"

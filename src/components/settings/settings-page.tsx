@@ -14,8 +14,7 @@ import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
 import { ChatSettings } from "./chat-settings";
 import { MemoriesSettings } from "./memories-settings";
 import { ModelsSettings } from "./models-settings";
-import { WebSearchSettings } from "./web-search-settings";
-import { DocumentSettings } from "./document-settings";
+import { ToolsSettings } from "./tools-settings";
 import { CharacterSettings } from "./character-settings";
 
 type SettingsTab = "general" | "privacy" | "chat" | "memories" | "models" | "tools" | "characters";
@@ -73,13 +72,7 @@ export function SettingsPage() {
           {activeTab === "chat" && <ChatSettings />}
           {activeTab === "memories" && <MemoriesSettings />}
           {activeTab === "models" && <ModelsSettings />}
-          {activeTab === "tools" && (
-            <>
-              <WebSearchSettings />
-              <div className="my-8 border-t border-[var(--color-border)]" />
-              <DocumentSettings />
-            </>
-          )}
+          {activeTab === "tools" && <ToolsSettings />}
           {activeTab === "characters" && <CharacterSettings />}
         </div>
       </div>

@@ -120,6 +120,7 @@ export interface CreateCharacterInput {
   projectId?: string;
   lorebookEntries?: CharacterLorebookEntry[];
   chatDefaults?: CharacterChatDefaults;
+  creatorMetadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }

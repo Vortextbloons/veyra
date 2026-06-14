@@ -15,6 +15,7 @@ import {
 } from "@/modules/web-search/searxng-setup";
 import { CheckCircle, XCircle, Loader2, Container, Shield, Trash2 } from "lucide-react";
 import { useConnectivity } from "@/lib/connectivity/useConnectivity";
+import { CollapsibleSettingsSection } from "./collapsible-settings-section";
 
 type TestStatus = "idle" | "testing" | "success" | "error";
 
@@ -170,11 +171,13 @@ export function WebSearchSettings() {
       )}
 
       {/* ── Docker / SearXNG Status ──────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          SearXNG Server
-        </h2>
-
+      <CollapsibleSettingsSection
+        subsectionKey="webSearch:searxng"
+        title="SearXNG Server"
+        description="Docker container status and automatic setup."
+        keywords={["docker", "container", "searxng", "start", "stop"]}
+        defaultExpanded
+      >
         {!dockerInstalled ? (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
             <p className="text-[12px] text-[var(--color-text-dim)]">
@@ -259,14 +262,16 @@ export function WebSearchSettings() {
           </div>
         )}
 
-      </section>
+      </CollapsibleSettingsSection>
 
       {/* ── Web Search Toggle ────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Web Search
-        </h2>
-        <div className="space-y-3">
+      <CollapsibleSettingsSection
+        subsectionKey="webSearch:general"
+        title="Web Search"
+        description="Default on/off for new chats."
+        keywords={["enable", "default", "toggle"]}
+        defaultExpanded
+      >
           <div className="flex flex-wrap gap-2">
             <Toggle
               label="Enable web search by default"
@@ -278,15 +283,15 @@ export function WebSearchSettings() {
             When on, new chats start with web search enabled. You can still turn
             web search on or off per chat from the tools panel.
           </p>
-        </div>
-      </section>
+      </CollapsibleSettingsSection>
 
       {/* ── SearXNG URL ─────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          SearXNG Provider
-        </h2>
-        <div className="space-y-3">
+      <CollapsibleSettingsSection
+        subsectionKey="webSearch:provider"
+        title="SearXNG Provider"
+        description="Instance URL and connection test."
+        keywords={["url", "localhost", "connection", "test"]}
+      >
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
             <div className="mb-2">
               <div className="text-[12.5px] font-medium text-white">
@@ -333,14 +338,15 @@ export function WebSearchSettings() {
               </span>
             )}
           </div>
-        </div>
-      </section>
+      </CollapsibleSettingsSection>
 
       {/* ── Search Mode ──────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Search Mode
-        </h2>
+      <CollapsibleSettingsSection
+        subsectionKey="webSearch:mode"
+        title="Search Mode"
+        description="How the AI decides when to search."
+        keywords={["auto", "always", "off", "mode"]}
+      >
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
           <div className="text-[12.5px] font-medium text-white">
             Auto When Needed
@@ -354,13 +360,15 @@ export function WebSearchSettings() {
             Current: {webSearchDefaultMode}
           </div>
         </div>
-      </section>
+      </CollapsibleSettingsSection>
 
       {/* ── Search Parameters ────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Search Parameters
-        </h2>
+      <CollapsibleSettingsSection
+        subsectionKey="webSearch:parameters"
+        title="Search Parameters"
+        description="Results, time range, categories, and context limits."
+        keywords={["results", "time", "category", "safe", "tokens"]}
+      >
         <div className="space-y-4">
           {/* Max results */}
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
@@ -514,14 +522,15 @@ export function WebSearchSettings() {
             </div>
           </div>
         </div>
-      </section>
+      </CollapsibleSettingsSection>
 
       {/* ── Content Extraction ────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Content Extraction
-        </h2>
-        <div className="space-y-3">
+      <CollapsibleSettingsSection
+        subsectionKey="webSearch:extraction"
+        title="Content Extraction"
+        description="Fetch full pages, timeouts, and local cache."
+        keywords={["fetch", "readability", "cache", "timeout", "extract"]}
+      >
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
             <Toggle
               label="Fetch and extract full page content"
@@ -664,8 +673,7 @@ export function WebSearchSettings() {
               </div>
             </>
           )}
-        </div>
-      </section>
+      </CollapsibleSettingsSection>
     </div>
   );
 }

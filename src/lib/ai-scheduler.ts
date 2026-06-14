@@ -8,7 +8,8 @@ export type AiJobType =
   | "extract_memory"
   | "compress_context"
   | "maintenance"
-  | "research_run";
+  | "research_run"
+  | "character_ai_assist";
 
 export type AiJobStatus =
   | "queued"
@@ -320,4 +321,5 @@ export const JOB_LABELS: Record<AiJobType, string> = {
   compress_context: "Compressing context",
   maintenance: "Maintenance",
   research_run: "Research run",
+  character_ai_assist: "Character assist",
 };
