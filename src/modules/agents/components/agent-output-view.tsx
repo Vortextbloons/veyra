@@ -22,7 +22,7 @@ export function AgentOutputView({
     }
   }, [session.events.length]);
 
-  const turns = buildAgentChatTurns(session.events);
+  const turns = buildAgentChatTurns(session.events, session.model);
   const hasAssistantAfterLastPrompt = turns.at(-1)?.role === "assistant";
   const showWorkingTurn = isRunning && !hasAssistantAfterLastPrompt;
 
@@ -58,7 +58,13 @@ export function AgentOutputView({
 
           {showWorkingTurn && (
             <AgentChatTurn
-              turn={{ id: `${session.id}:working`, role: "assistant", content: "", pending: true }}
+              turn={{
+                id: `${session.id}:working`,
+                role: "assistant",
+                content: "",
+                pending: true,
+                model: session.model,
+              }}
               mode={session.mode}
             />
           )}

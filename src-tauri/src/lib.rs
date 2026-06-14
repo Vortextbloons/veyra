@@ -30,6 +30,8 @@ fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
 }
 
 mod agent_commands;
+mod character_commands;
+mod character_db;
 mod connectivity_commands;
 mod constants;
 mod db_utils;
@@ -209,6 +211,11 @@ pub fn run() {
             research_commands::fetch_research_source,
             research_commands::fetch_research_sources_bulk,
             research_commands::update_research_source_after_fetch,
+            character_commands::create_character,
+            character_commands::get_character,
+            character_commands::update_character,
+            character_commands::list_characters,
+            character_commands::delete_character,
         ])
         .setup(|app| {
             let db_state = memory_db::MemoryDbState::new(app.handle().clone());
@@ -230,6 +237,10 @@ pub fn run() {
             let research_db_state = research_db::ResearchDbState::new(app.handle().clone());
             research_db_state.spawn_background_init();
             app.manage(research_db_state);
+
+            let character_db_state = character_db::CharacterDbState::new(app.handle().clone());
+            character_db_state.spawn_background_init();
+            app.manage(character_db_state);
 
             let searxng_state = searxng_setup::SearxngState::new();
             app.manage(searxng_state);

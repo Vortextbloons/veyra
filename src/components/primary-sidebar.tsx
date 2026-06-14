@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   Database,
+  Drama,
   FlaskConical,
   Folder,
   Mail,
@@ -18,6 +19,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" /> },
+  { id: "characters", label: "Characters", icon: <Drama className="size-4" /> },
   { id: "projects", label: "Projects", icon: <Folder className="size-4" /> },
   { id: "research", label: "Research", icon: <FlaskConical className="size-4" /> },
   { id: "email", label: "Email", icon: <Mail className="size-4" /> },

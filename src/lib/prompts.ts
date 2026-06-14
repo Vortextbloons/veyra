@@ -54,10 +54,14 @@ export function composeMainSystemPrompt(options: {
   toolsBlock?: string;
   contextAnchoringBlock?: string;
   documentInstructionsBlock?: string;
+  modelName?: string;
+  providerName?: string;
 }): string {
   const parts: string[] = [];
   if (options.userPrompt?.trim()) parts.push(options.userPrompt.trim());
   parts.push(VEYRA_CORE_SYSTEM);
+  const identityBlock = buildModelIdentityBlock(options.modelName, options.providerName);
+  if (identityBlock) parts.push(identityBlock);
   if (options.projectPromptBlock?.trim()) parts.push(options.projectPromptBlock.trim());
   if (options.contextAnchoringBlock?.trim()) parts.push(options.contextAnchoringBlock.trim());
   if (options.documentInstructionsBlock?.trim()) parts.push(options.documentInstructionsBlock.trim());
@@ -65,6 +69,27 @@ export function composeMainSystemPrompt(options: {
   if (options.summaryBlock?.trim()) parts.push(options.summaryBlock.trim());
   if (options.toolsBlock?.trim()) parts.push(options.toolsBlock.trim());
   return parts.join("\n\n");
+}
+
+/**
+ * Builds a one-line identity note telling the model which model/provider it
+ * currently is. Returns an empty string when no useful info is available so
+ * callers can append it unconditionally.
+ */
+export function buildModelIdentityBlock(
+  modelName?: string | null,
+  providerName?: string | null,
+): string {
+  const name = modelName?.trim();
+  const provider = providerName?.trim();
+  if (!name && !provider) return "";
+  if (name && provider) {
+    return `You are currently running as model: "${name}" (provider: ${provider}).`;
+  }
+  if (name) {
+    return `You are currently running as model: "${name}".`;
+  }
+  return `You are currently running on provider: ${provider}.`;
 }
 
 export function buildContextAnchoringBlock(): string {

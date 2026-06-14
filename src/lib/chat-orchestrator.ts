@@ -133,6 +133,12 @@ export async function sendChatRequest({
 
   const settings = useSettingsStore.getState();
 
+  const providerStore = useProviderStore.getState();
+  const activeModelInfo = providerStore.models.find((m) => m.id === options.model);
+  const activeProviderInfo = providerStore.providers.find((p) => p.id === providerId);
+  const activeModelName = activeModelInfo?.name;
+  const activeProviderName = activeProviderInfo?.name;
+
   const { pack: memoryPack, info: memoryRetrieval } = await buildMemoryPackWithInfo({
     enabled: memoryEnabled,
     mode: settings.memoryMode,
@@ -268,7 +274,7 @@ export async function sendChatRequest({
 
           const rePromptMessages: ChatMessage[] = [
             ...messages,
-            { id: crypto.randomUUID(), role: "assistant", content: accumulatedContent, timestamp: Date.now() },
+            { id: crypto.randomUUID(), role: "assistant", content: accumulatedContent, timestamp: Date.now(), modelId: options.model },
             {
               id: crypto.randomUUID(),
               role: "user",
@@ -307,6 +313,8 @@ export async function sendChatRequest({
                 projectPromptBlock,
                 userPrompt: resolvedUserPrompt,
                 reservedOutputTokens: resolvedReservedOutputTokens,
+                modelName: activeModelName,
+                providerName: activeProviderName,
               },
               resolvedContextLength,
             ),
@@ -396,18 +404,25 @@ export async function sendChatRequest({
             onComplete: (nextResult) => {
               retryToolCalls = nextResult.toolCalls ?? [];
             },
-            messages: buildChatContext(
-              [
-                ...messages,
-                { id: crypto.randomUUID(), role: "assistant", content: accumulatedContent, timestamp: Date.now() },
-                {
-                  id: crypto.randomUUID(),
-                  role: "user",
-                  content: `Your previous document tool call failed. Failure reason: ${failed.join("; ")}. Retry by calling exactly one corrected document tool. Do not answer in prose.`,
-                  timestamp: Date.now(),
-                },
-              ],
-              { documentInstructionsBlock, projectPromptBlock, userPrompt: resolvedUserPrompt, reservedOutputTokens: resolvedReservedOutputTokens },
+              messages: buildChatContext(
+                [
+                  ...messages,
+                  { id: crypto.randomUUID(), role: "assistant", content: accumulatedContent, timestamp: Date.now(), modelId: options.model },
+                  {
+                    id: crypto.randomUUID(),
+                    role: "user",
+                    content: `Your previous document tool call failed. Failure reason: ${failed.join("; ")}. Retry by calling exactly one corrected document tool. Do not answer in prose.`,
+                    timestamp: Date.now(),
+                  },
+                ],
+              {
+                documentInstructionsBlock,
+                projectPromptBlock,
+                userPrompt: resolvedUserPrompt,
+                reservedOutputTokens: resolvedReservedOutputTokens,
+                modelName: activeModelName,
+                providerName: activeProviderName,
+              },
               resolvedContextLength,
             ),
           });
@@ -529,6 +544,7 @@ export async function sendChatRequest({
                 role: "assistant",
                 content: accumulatedContent,
                 timestamp: Date.now(),
+                modelId: options.model,
               },
               {
                 id: crypto.randomUUID(),
@@ -584,6 +600,8 @@ export async function sendChatRequest({
                   projectPromptBlock,
                   userPrompt: resolvedUserPrompt,
                   reservedOutputTokens: resolvedReservedOutputTokens,
+                  modelName: activeModelName,
+                  providerName: activeProviderName,
                 },
                 resolvedContextLength,
               ),
@@ -641,6 +659,8 @@ export async function sendChatRequest({
         projectPromptBlock,
         userPrompt: resolvedUserPrompt,
         reservedOutputTokens: resolvedReservedOutputTokens,
+        modelName: activeModelName,
+        providerName: activeProviderName,
       },
       resolvedContextLength,
     ),

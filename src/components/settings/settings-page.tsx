@@ -7,6 +7,7 @@ import {
   Sliders,
   Wrench,
   Shield,
+  Drama,
 } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
@@ -15,8 +16,9 @@ import { MemoriesSettings } from "./memories-settings";
 import { ModelsSettings } from "./models-settings";
 import { WebSearchSettings } from "./web-search-settings";
 import { DocumentSettings } from "./document-settings";
+import { CharacterSettings } from "./character-settings";
 
-type SettingsTab = "general" | "privacy" | "chat" | "memories" | "models" | "tools";
+type SettingsTab = "general" | "privacy" | "chat" | "memories" | "models" | "tools" | "characters";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <Settings className="size-4" /> },
@@ -25,6 +27,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "memories", label: "Memories", icon: <Database className="size-4" /> },
   { id: "models", label: "Models", icon: <Boxes className="size-4" /> },
   { id: "tools", label: "Tools", icon: <Wrench className="size-4" /> },
+  { id: "characters", label: "Characters", icon: <Drama className="size-4" /> },
 ];
 
 export function SettingsPage() {
@@ -77,6 +80,7 @@ export function SettingsPage() {
               <DocumentSettings />
             </>
           )}
+          {activeTab === "characters" && <CharacterSettings />}
         </div>
       </div>
     </main>

@@ -55,6 +55,9 @@ export interface ChatMessage {
   webSearchState?: WebSearchState;
   /** Live/generic tool call state for rendering tool activity. */
   toolStates?: ToolCallState[];
+  /** Model id that produced this assistant message. Used to render the
+   *  correct avatar/label even when the active model changes later. */
+  modelId?: string;
 }
 
 export interface MessagePerformance {

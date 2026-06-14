@@ -11,6 +11,8 @@ import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { MessageAttachmentsPreview } from "@/components/chat/composer";
 import { MessageToolbar } from "@/components/chat/message-toolbar";
 import { ToolCallList } from "@/components/chat/tool-call-list";
+import { ModelIcon } from "@/components/model-icon";
+import { useProviderStore } from "@/stores/provider-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
 type ChatMessageLayout = {
@@ -48,6 +50,11 @@ export const MessageBubble = memo(function MessageBubble({
   onFork,
   onDelete,
 }: MessageBubbleProps) {
+  const models = useProviderStore((state) => state.models);
+  const resolvedModelName = message.modelId
+    ? models.find((m) => m.id === message.modelId)?.name ?? "Assistant"
+    : "Assistant";
+
   const isUser = message.role === "user";
   if (isUser) {
     return (
@@ -96,12 +103,20 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
       <div className="group/message flex items-start gap-3">
-      <div className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_0_0_2px_var(--color-bg)]">
-        <Sparkles className="size-3.5" />
+      <div className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_0_0_2px_var(--color-bg)]">
+        {message.modelId ? (
+          <ModelIcon
+            modelId={message.modelId}
+            className="size-7"
+            fallback={<Sparkles className="size-3.5" />}
+          />
+        ) : (
+          <Sparkles className="size-3.5" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
-          <span className="font-medium text-white">Assistant</span>
+          <span className="truncate font-medium text-white">{resolvedModelName}</span>
           <span className="size-1 rounded-full bg-[var(--color-text-dim)]/50" />
           <span className="text-[var(--color-text-dim)]">just now</span>
         </div>

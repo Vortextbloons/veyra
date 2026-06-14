@@ -1,10 +1,14 @@
 import { useState } from "react";
 import { Server } from "lucide-react";
+import type { ReactNode } from "react";
 
 type ModelIconProps = {
   /** Model identifier — maps to a specific brand logo */
   modelId: string;
   className?: string;
+  /** Optional fallback rendered when no family logo matches (or asset 404s).
+   *  Defaults to a Lucide <Server /> icon. */
+  fallback?: ReactNode;
 };
 
 function matchModelFamily(modelId: string): string | null {
@@ -40,7 +44,7 @@ function matchModelFamily(modelId: string): string | null {
   return null;
 }
 
-export function ModelIcon({ modelId, className }: ModelIconProps) {
+export function ModelIcon({ modelId, className, fallback }: ModelIconProps) {
   const family = matchModelFamily(modelId);
   const [imgFailed, setImgFailed] = useState(false);
   const [triedPng, setTriedPng] = useState(false);
@@ -62,5 +66,5 @@ export function ModelIcon({ modelId, className }: ModelIconProps) {
       />
     );
   }
-  return <Server className={className} />;
+  return fallback ?? <Server className={className} />;
 }

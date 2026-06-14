@@ -4,6 +4,7 @@ import type { AgentEvent, AgentMode } from "@/modules/agents/agent-types";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { AgentActivityCard } from "@/modules/agents/components/agent-output-view";
 import { TypewriterMarkdown } from "@/modules/agents/components/typewriter-markdown";
+import { ModelIcon } from "@/components/model-icon";
 
 export type AgentChatTurnModel = {
   id: string;
@@ -13,13 +14,18 @@ export type AgentChatTurnModel = {
   kind?: "reasoning" | "tool" | "step";
   pending?: boolean;
   animate?: boolean;
+  /** Provider-qualified model id (e.g. "lmstudio/qwen2.5-7b"). */
+  model?: string;
 };
 
 export function shouldAnimateAgentText(event: AgentEvent) {
   return Date.now() - event.at < 60_000;
 }
 
-export function buildAgentChatTurns(events: AgentEvent[]): AgentChatTurnModel[] {
+export function buildAgentChatTurns(
+  events: AgentEvent[],
+  model?: string,
+): AgentChatTurnModel[] {
   const turns: AgentChatTurnModel[] = [];
 
   for (const evt of events) {
@@ -36,7 +42,13 @@ export function buildAgentChatTurns(events: AgentEvent[]): AgentChatTurnModel[] 
         last.content = [last.content, content].filter(Boolean).join("\n\n");
         last.animate = last.animate || shouldAnimateAgentText(evt);
       } else {
-        turns.push({ id: evt.id, role: "assistant", content, animate: shouldAnimateAgentText(evt) });
+        turns.push({
+          id: evt.id,
+          role: "assistant",
+          content,
+          animate: shouldAnimateAgentText(evt),
+          model,
+        });
       }
       continue;
     }
@@ -119,14 +131,27 @@ export function AgentChatTurn({
     return <AgentActivityCard turn={turn} />;
   }
 
+  const modelShortId = turn.model?.split("/").pop()?.trim() || "";
+  const assistantLabel = modelShortId || "Agent";
+
   return (
     <div className="flex items-start gap-3">
-      <div className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_0_0_2px_var(--color-bg)]">
-        {isError ? <AlertTriangle className="size-3.5" /> : <Sparkles className="size-3.5" />}
+      <div className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_0_0_2px_var(--color-bg)]">
+        {isError ? (
+          <AlertTriangle className="size-3.5" />
+        ) : modelShortId ? (
+          <ModelIcon
+            modelId={modelShortId}
+            className="size-7"
+            fallback={<Sparkles className="size-3.5" />}
+          />
+        ) : (
+          <Sparkles className="size-3.5" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
-          <span className="font-medium text-white">Agent</span>
+          <span className="truncate font-medium text-white">{assistantLabel}</span>
           <span className="size-1 rounded-full bg-[var(--color-text-dim)]/50" />
           <span className="text-[var(--color-text-dim)]">{mode}</span>
           {isError && turn.title && (

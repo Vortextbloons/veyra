@@ -38,6 +38,11 @@ export interface BuildChatContextOptions {
   userPrompt?: string | null;
   /** Number of tokens reserved for the model's response. */
   reservedOutputTokens?: number;
+  /** Active model display name — injected into the system prompt so the
+   *  model knows its own identity for this turn. */
+  modelName?: string | null;
+  /** Active provider display name — paired with `modelName`. */
+  providerName?: string | null;
 }
 
 /**
@@ -77,7 +82,17 @@ function buildSystemContent(options: BuildChatContextOptions): string {
   const projectPromptBlock = options.projectPromptBlock?.trim() || undefined;
   const userPrompt = options.userPrompt?.trim() || undefined;
 
-  return composeMainSystemPrompt({ userPrompt, projectPromptBlock, memoryBlock, summaryBlock, toolsBlock: webSearchBlock, contextAnchoringBlock, documentInstructionsBlock });
+  return composeMainSystemPrompt({
+    userPrompt,
+    projectPromptBlock,
+    memoryBlock,
+    summaryBlock,
+    toolsBlock: webSearchBlock,
+    contextAnchoringBlock,
+    documentInstructionsBlock,
+    modelName: options.modelName ?? undefined,
+    providerName: options.providerName ?? undefined,
+  });
 }
 
 /**

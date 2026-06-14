@@ -31,6 +31,7 @@ import { useIsFeatureAvailable } from "@/lib/connectivity/useConnectivity";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useResearchStore } from "@/modules/research/research-store";
+import { useCharacterStore } from "@/modules/characters/character-store";
 import {
   invokeCheckSearxngSetup,
   runSearxngAutoSetup,
@@ -47,6 +48,7 @@ const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
 const ProjectsPage = lazy(() => import("@/modules/projects/components/projects-page").then(m => ({ default: m.ProjectsPage })));
 const ResearchPage = lazy(() => import("@/modules/research/components/ResearchPage").then(m => ({ default: m.ResearchPage })));
 const EmailPage = lazy(() => import("@/modules/email/components/EmailPage").then(m => ({ default: m.EmailPage })));
+const CharacterPage = lazy(() => import("@/modules/characters/components/CharacterPage").then(m => ({ default: m.CharacterPage })));
 
 const OPENCODE_AGENT_BASE_TOKENS = 9_000;
 const OPENCODE_AGENT_TOOL_OVERHEAD_TOKENS = 1_200;
@@ -242,6 +244,7 @@ function App() {
       void useDocumentStore.getState().hydrateDocuments();
       void useProjectStore.getState().hydrateProjects();
       void useResearchStore.getState().hydrateRuns();
+      void useCharacterStore.getState().hydrateCharacters();
       markStartup("veyra:hydration-ready");
       logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
       initializeProvider();
@@ -543,6 +546,7 @@ function App() {
         role: "assistant",
         content: "",
         timestamp: Date.now(),
+        modelId: selectedModel,
       };
 
       const previousResponseId = useChatStore
@@ -737,6 +741,7 @@ function App() {
         role: "assistant",
         content: "",
         timestamp: Date.now(),
+        modelId: selectedModel,
       };
 
       const liveConversation = useChatStore
@@ -889,6 +894,7 @@ function App() {
         role: "assistant",
         content: "",
         timestamp: Date.now(),
+        modelId: selectedModel,
       };
 
       const liveConversation = useChatStore
@@ -1085,6 +1091,7 @@ function App() {
             {activeNav === "projects" && <ProjectsPage />}
             {activeNav === "research" && <ResearchPage />}
             {activeNav === "email" && <EmailPage />}
+            {activeNav === "characters" && <CharacterPage />}
             {activeNav === "settings" && <SettingsPage />}
           </Suspense>
         </div>
