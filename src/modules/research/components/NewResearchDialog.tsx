@@ -16,8 +16,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useResearchStore } from "../research-store";
-import { aiScheduler } from "@/lib/ai-scheduler";
-import { executeResearchRun, type ResearchRunOverride } from "../research-runtime";
+import { enqueueResearchRunJob, type ResearchRunOverride } from "../research-runtime";
 import { invokeTestSearxngConnection } from "@/modules/web-search/tauri-commands";
 import { resolveResearchProfile, RESEARCH_DEPTH_PRESETS } from "../research-config";
 import type { ResearchDepth } from "../research-types";
@@ -166,29 +165,7 @@ export function NewResearchDialog({ onClose }: Props) {
 
       const override = perRunOverrides[depth];
 
-      aiScheduler.enqueueAiJob({
-        type: "research_run",
-        priority: 0,
-        title: `Research: ${run.question}`,
-        description:
-          run.question.length > 80
-            ? run.question.slice(0, 80) + "..."
-            : run.question,
-        run: async (signal) => {
-          const pauseController = new AbortController();
-          useResearchStore.getState().setActiveController(pauseController);
-          const combined = AbortSignal.any([signal, pauseController.signal]);
-          await executeResearchRun(
-            run,
-            combined,
-            (event) => {
-              useResearchStore.getState().applyRuntimeEvent(event);
-            },
-            undefined,
-            override,
-          );
-        },
-      });
+      enqueueResearchRunJob(run, "start", override);
 
       // Mark the first-run notice as dismissed so we don't show it again.
       if (!useSettingsStore.getState().researchFirstRunNoticeDismissed) {

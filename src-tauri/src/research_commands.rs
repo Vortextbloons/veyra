@@ -1,7 +1,13 @@
 use crate::db_utils::run_db_command;
 use crate::research_db::{self, ResearchDbState};
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Emitter, State};
+
+#[derive(Serialize, Clone)]
+struct PlanApprovedEvent {
+    #[serde(rename = "runId")]
+    run_id: String,
+}
 
 #[tauri::command]
 pub async fn create_research_run(
@@ -27,13 +33,23 @@ pub async fn get_research_run(
 
 #[tauri::command]
 pub async fn update_research_run(
+    app: tauri::AppHandle,
     input: String,
     state: State<'_, ResearchDbState>,
 ) -> Result<research_db::ResearchRunRow, String> {
-    run_db_command(state.inner(), "research", move |conn| {
+    let result = run_db_command(state.inner(), "research", move |conn| {
         research_db::update_run(conn, input)
     })
-    .await
+    .await?;
+    if result.plan.as_ref().map(|p| p.user_approved).unwrap_or(false) {
+        let _ = app.emit(
+            "research://plan-approved",
+            PlanApprovedEvent {
+                run_id: result.id.clone(),
+            },
+        );
+    }
+    Ok(result)
 }
 
 #[tauri::command]

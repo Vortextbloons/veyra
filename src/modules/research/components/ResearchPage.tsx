@@ -26,8 +26,7 @@ import { ContradictionsPanel } from "./ContradictionsPanel";
 import { ResearchReportViewer } from "./ResearchReportViewer";
 import { ResearchFollowUpComposer } from "./ResearchFollowUpComposer";
 import { NewResearchDialog } from "./NewResearchDialog";
-import { aiScheduler } from "@/lib/ai-scheduler";
-import { resumeResearchRun } from "../research-runtime";
+import { enqueueResearchResume } from "../research-runtime";
 import { useResearchElapsed } from "../use-research-elapsed";
 import { Clock } from "lucide-react";
 
@@ -83,7 +82,11 @@ export function ResearchPage() {
   }, [activeRunId, loadRun]);
 
   useEffect(() => {
-    if (activeRun?.run.plan && !activeRun.run.plan.userApproved && activeRun.run.status === "paused") {
+    if (
+      activeRun?.run.plan &&
+      !activeRun.run.plan.userApproved &&
+      activeRun.run.status === "planning"
+    ) {
       const timer = window.setTimeout(() => setActiveTab("plan"), 0);
       return () => window.clearTimeout(timer);
     }
@@ -116,22 +119,9 @@ export function ResearchPage() {
   const report = activeRun?.report;
 
   const handleResume = useCallback(() => {
-    if (!run || !activeRun) return;
-    aiScheduler.enqueueAiJob({
-      type: "research_run",
-      priority: 0,
-      title: `Resume: ${run.question}`,
-      description: run.question.length > 80 ? run.question.slice(0, 80) + "..." : run.question,
-      run: async (signal) => {
-        const pauseController = new AbortController();
-        useResearchStore.getState().setActiveController(pauseController);
-        const combined = AbortSignal.any([signal, pauseController.signal]);
-        await resumeResearchRun(run, combined, (event) => {
-          useResearchStore.getState().applyRuntimeEvent(event);
-        });
-      },
-    });
-  }, [run, activeRun]);
+    if (!activeRunId) return;
+    void enqueueResearchResume(activeRunId);
+  }, [activeRunId]);
 
   const handlePause = useCallback(() => {
     pauseActiveResearch();
@@ -214,21 +204,13 @@ export function ResearchPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 {runs.map((r) => (
-                  <div key={r.id} className="group relative">
-                    <ResearchRunCard
-                      run={r}
-                      isActive={r.id === activeRunId}
-                      onClick={() => handleSelectRun(r.id)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteRunId(r.id)}
-                      className="absolute right-2 top-2 grid size-5 place-items-center rounded bg-red-500/10 text-red-300 opacity-0 transition-opacity hover:bg-red-500/20 group-hover:opacity-100"
-                      title="Delete run"
-                    >
-                      <span className="text-[10px] font-bold">×</span>
-                    </button>
-                  </div>
+                  <ResearchRunCard
+                    key={r.id}
+                    run={r}
+                    isActive={r.id === activeRunId}
+                    onClick={() => handleSelectRun(r.id)}
+                    onDelete={() => setConfirmDeleteRunId(r.id)}
+                  />
                 ))}
               </div>
             )}

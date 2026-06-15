@@ -57,6 +57,7 @@ pub struct ResearchRunRow {
     pub model_used: Option<String>,
     pub provider_id: Option<String>,
     pub total_tokens_used: Option<i64>,
+    pub search_provider: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -133,6 +134,8 @@ pub struct ResearchClaimRow {
     pub contradicted_by: Vec<String>,
     pub verification_reason: Option<String>,
     pub created_at: String,
+    pub disputed_by: Vec<String>,
+    pub needs_semantic_review: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -207,6 +210,7 @@ pub struct UpdateResearchRunInput {
     pub completed_at: Option<String>,
     pub total_tokens_used: Option<i64>,
     pub updated_at: Option<String>,
+    pub search_provider: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -303,6 +307,8 @@ pub struct UpdateResearchClaimInput {
     pub verified_by: Option<Vec<String>>,
     pub contradicted_by: Option<Vec<String>>,
     pub verification_reason: Option<String>,
+    pub disputed_by: Option<Vec<String>>,
+    pub needs_semantic_review: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -377,7 +383,8 @@ CREATE TABLE IF NOT EXISTS research_runs (
   error TEXT,
   model_used TEXT,
   provider_id TEXT,
-  total_tokens_used INTEGER
+  total_tokens_used INTEGER,
+  search_provider TEXT
 );
 
 CREATE TABLE IF NOT EXISTS research_steps (
@@ -448,6 +455,8 @@ CREATE TABLE IF NOT EXISTS research_claims (
   contradicted_by TEXT NOT NULL DEFAULT '[]',
   verification_reason TEXT,
   created_at TEXT NOT NULL,
+  disputed_by TEXT NOT NULL DEFAULT '[]',
+  needs_semantic_review INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (run_id) REFERENCES research_runs(id) ON DELETE CASCADE,
   FOREIGN KEY (evidence_id) REFERENCES research_evidence(id) ON DELETE CASCADE,
   FOREIGN KEY (source_id) REFERENCES research_sources(id) ON DELETE CASCADE
@@ -498,7 +507,7 @@ CREATE INDEX IF NOT EXISTS idx_research_contradictions_run ON research_contradic
 CREATE INDEX IF NOT EXISTS idx_research_reports_run ON research_reports(run_id);
 "#;
 
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -619,6 +628,11 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         if schema_version < 5 {
             add_column_if_missing(conn, "research_sources", "source_quality_json", "TEXT")?;
         }
+        if schema_version < 6 {
+            add_column_if_missing(conn, "research_claims", "disputed_by", "TEXT NOT NULL DEFAULT '[]'")?;
+            add_column_if_missing(conn, "research_claims", "needs_semantic_review", "INTEGER NOT NULL DEFAULT 0")?;
+            add_column_if_missing(conn, "research_runs", "search_provider", "TEXT")?;
+        }
 
         conn.execute(
             "INSERT INTO _schema_migrations (module, version, applied_at) VALUES ('research', ?1, datetime('now'))
@@ -685,6 +699,7 @@ fn row_to_run(row: &rusqlite::Row) -> rusqlite::Result<ResearchRunRow> {
         model_used: row.get("model_used")?,
         provider_id: row.get("provider_id")?,
         total_tokens_used: row.get("total_tokens_used")?,
+        search_provider: row.get("search_provider")?,
     })
 }
 
@@ -752,6 +767,8 @@ fn row_to_evidence(row: &rusqlite::Row) -> rusqlite::Result<ResearchEvidenceRow>
 fn row_to_claim(row: &rusqlite::Row) -> rusqlite::Result<ResearchClaimRow> {
     let verified_by_str: String = row.get("verified_by")?;
     let contradicted_by_str: String = row.get("contradicted_by")?;
+    let disputed_by_str: String = row.get("disputed_by").unwrap_or_else(|_| "[]".to_string());
+    let needs_semantic_review: i64 = row.get("needs_semantic_review").unwrap_or(0);
     Ok(ResearchClaimRow {
         id: row.get("id")?,
         run_id: row.get("run_id")?,
@@ -762,6 +779,8 @@ fn row_to_claim(row: &rusqlite::Row) -> rusqlite::Result<ResearchClaimRow> {
         confidence: row.get("confidence")?,
         verified_by: parse_json_array(&verified_by_str),
         contradicted_by: parse_json_array(&contradicted_by_str),
+        disputed_by: parse_json_array(&disputed_by_str),
+        needs_semantic_review: needs_semantic_review != 0,
         verification_reason: row.get("verification_reason")?,
         created_at: row.get("created_at")?,
     })
@@ -807,7 +826,7 @@ fn row_to_report(row: &rusqlite::Row) -> rusqlite::Result<ResearchReportRow> {
 
 // ── Runs ───────────────────────────────────────────────────────────────────────
 
-const RUN_SELECT_COLS: &str = "id, project_id, question, clarified_question, depth, status, plan_json, current_step_id, progress_percent, created_at, updated_at, completed_at, error, model_used, provider_id, total_tokens_used";
+const RUN_SELECT_COLS: &str = "id, project_id, question, clarified_question, depth, status, plan_json, current_step_id, progress_percent, created_at, updated_at, completed_at, error, model_used, provider_id, total_tokens_used, search_provider";
 
 pub fn create_run(conn: &Connection, input_json: String) -> Result<ResearchRunRow, String> {
     let input: CreateResearchRunInput = serde_json::from_str(&input_json)
@@ -914,6 +933,10 @@ pub fn update_run(conn: &Connection, input_json: String) -> Result<ResearchRunRo
     }
     if let Some(v) = input.updated_at {
         sets.push(format!("updated_at = ?{}", params.len() + 1));
+        params.push(Value::Text(v));
+    }
+    if let Some(v) = input.search_provider {
+        sets.push(format!("search_provider = ?{}", params.len() + 1));
         params.push(Value::Text(v));
     }
 
@@ -1347,7 +1370,7 @@ pub fn list_evidence_for_run(conn: &Connection, run_id: String) -> Result<Vec<Re
 
 // ── Claims ─────────────────────────────────────────────────────────────────────
 
-const CLAIM_SELECT_COLS: &str = "id, run_id, evidence_id, source_id, claim, status, confidence, verified_by, contradicted_by, verification_reason, created_at";
+const CLAIM_SELECT_COLS: &str = "id, run_id, evidence_id, source_id, claim, status, confidence, verified_by, contradicted_by, verification_reason, created_at, disputed_by, needs_semantic_review";
 
 pub fn create_claim(conn: &Connection, input_json: String) -> Result<ResearchClaimRow, String> {
     let input: CreateResearchClaimInput = serde_json::from_str(&input_json)
@@ -1431,6 +1454,16 @@ pub fn update_claim(conn: &Connection, input_json: String) -> Result<ResearchCla
             .map_err(|e| format!("failed to serialize contradicted_by: {}", e))?;
         sets.push(format!("contradicted_by = ?{}", params.len() + 1));
         params.push(Value::Text(json));
+    }
+    if let Some(v) = input.disputed_by {
+        let json = serde_json::to_string(&v)
+            .map_err(|e| format!("failed to serialize disputed_by: {}", e))?;
+        sets.push(format!("disputed_by = ?{}", params.len() + 1));
+        params.push(Value::Text(json));
+    }
+    if let Some(v) = input.needs_semantic_review {
+        sets.push(format!("needs_semantic_review = ?{}", params.len() + 1));
+        params.push(Value::Integer(if v { 1 } else { 0 }));
     }
     if let Some(v) = input.verification_reason {
         sets.push(format!("verification_reason = ?{}", params.len() + 1));

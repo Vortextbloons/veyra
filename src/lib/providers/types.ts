@@ -34,6 +34,7 @@ export type ProviderChatOptions = {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  responseFormat?: { type: "json_object" | "text" };
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
@@ -63,6 +64,10 @@ export interface ProviderAdapter {
   /** Provider identifier — used to render the matching logo in ProviderIcon */
   icon: string;
   connectivityRequirement: ProviderConnectivityRequirement;
+  /** Optional capability flags. Use these to opt into provider-specific features. */
+  capabilities?: {
+    jsonMode?: boolean;
+  };
   isAvailable: () => Promise<boolean>;
   fetchModels: () => Promise<ModelInfo[]>;
   sendChat: (options: ProviderChatOptions) => Promise<void>;

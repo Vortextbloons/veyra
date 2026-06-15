@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Pencil, X, Save, Loader2 } from "lucide-react";
 import type { ResearchPlan, ResearchPlanStep } from "../research-types";
 import { useResearchStore } from "../research-store";
+import { enqueueResearchResume } from "../research-runtime";
 
 type Props = {
   plan: ResearchPlan;
@@ -18,10 +19,13 @@ export function ResearchPlanPanel({ plan, runId }: Props) {
   const handleApprove = async () => {
     setIsApproving(true);
     try {
-      await updateRun({
+      const updated = await updateRun({
         id: runId,
         plan: { ...plan, userApproved: true },
       });
+      if (updated.status === "paused" || updated.status === "failed") {
+        await enqueueResearchResume(runId);
+      }
     } finally {
       setIsApproving(false);
     }

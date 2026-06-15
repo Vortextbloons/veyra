@@ -11,6 +11,7 @@ export const lmStudioAdapter: ProviderAdapter = {
   name: "LM Studio",
   icon: "lm-studio",
   connectivityRequirement: "local",
+  capabilities: { jsonMode: true },
   isAvailable: () => isServerRunning(),
   fetchModels: () => fetchModels(),
   prepareModel: async (modelId, options) => {
@@ -45,7 +46,8 @@ export const lmStudioAdapter: ProviderAdapter = {
       onComplete: options.onComplete,
       onError: options.onError,
       reasoningEnabled: options.reasoningEnabled,
-    }),
+      ...(options.responseFormat ? { responseFormat: options.responseFormat } : {}),
+    } as Parameters<typeof sendLmStudioChat>[0]),
   reconnect: async () => {
     const success = await isServerRunning();
     return {

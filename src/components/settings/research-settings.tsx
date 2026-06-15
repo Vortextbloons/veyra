@@ -423,12 +423,29 @@ export function ResearchSettings() {
               </span>
             )}
           </div>
-          <ModelDropdown
-            models={modelOptionsFromProvider(liteModelOptions.length ? liteModelOptions : models)}
-            value={research.liteModelId}
-            onChange={(v) => setLiteModel(v, providers[0]?.id ?? "")}
-            placeholder="(disabled — use main model)"
-          />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[180px_1fr]">
+            <select
+              value={research.liteModelProviderId}
+              onChange={(e) => {
+                const newProvider = e.target.value;
+                setLiteModel("", newProvider);
+              }}
+              className="h-8 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 text-[12px] text-white focus:border-[var(--color-border-strong)] focus:outline-none"
+            >
+              <option value="">(any provider)</option>
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <ModelDropdown
+              models={modelOptionsFromProvider(liteModelOptions.length ? liteModelOptions : models)}
+              value={research.liteModelId}
+              onChange={(v) => setLiteModel(v, research.liteModelProviderId)}
+              placeholder="(disabled — use main model)"
+            />
+          </div>
         </div>
       </CollapsibleSettingsSection>
     </div>
@@ -584,7 +601,7 @@ function DepthOverrideEditor({
               <div>
                 <div className="text-[12px] font-medium text-white">Use reasoning for source validation</div>
                 <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Off is the single biggest speedup for validate.
+                  Structured JSON scoring — off by default for speed and reliable parsing.
                 </div>
               </div>
               <Toggle
@@ -620,7 +637,7 @@ function DepthOverrideEditor({
                 <div>
                   <div className="text-[12px] font-medium text-white">Use reasoning for verification</div>
                   <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                    Off is the single biggest speedup for cross-source verify.
+                    Structured JSON verification — off by default; enable only if you want slower, deeper cross-checks.
                   </div>
                 </div>
                 <Toggle
@@ -633,7 +650,7 @@ function DepthOverrideEditor({
           {resolved.perSourceRead && (
             <Slider
               label="Extract batch size"
-              description="Sources processed per AI extraction call. 1 = one source per call (most thorough); higher values share context for speed."
+              description="Sources per extraction call. Higher values are faster; Veyra auto-shrinks excerpts and splits batches to stay within context limits."
               value={resolved.extractBatchSize}
               min={1}
               max={10}
@@ -665,9 +682,8 @@ function DepthOverrideEditor({
               options={[
                 { value: "all_pairs", label: "All Pairs" },
                 { value: "top_k", label: "Top-K" },
-                { value: "cluster_sample", label: "Cluster+Sample" },
               ]}
-              onChange={(v) => onUpdate({ contradictionStrategy: v as "all_pairs" | "top_k" | "cluster_sample" })}
+              onChange={(v) => onUpdate({ contradictionStrategy: v as "all_pairs" | "top_k" })}
             />
           </div>
           <Slider
@@ -710,7 +726,7 @@ function DepthOverrideEditor({
             <div>
               <div className="text-[12px] font-medium text-white">Use reasoning for synthesis</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                Outline and section drafting. Off is faster but report quality drops.
+                Report outline and section prose — on for Standard+ depths; off on Quick for speed.
               </div>
             </div>
             <Toggle
@@ -723,7 +739,7 @@ function DepthOverrideEditor({
               <div>
                 <div className="text-[12px] font-medium text-white">Use reasoning for citation audit</div>
                 <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Per-citation faithfulness check.
+                  Per-citation JSON audit — on for Deep/Exhaustive presets; off on Quick/Standard for speed.
                 </div>
               </div>
               <Toggle

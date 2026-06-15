@@ -1,6 +1,6 @@
 import type { ResearchDepth } from "@/modules/research/research-types";
 
-export type ResearchContradictionStrategy = "all_pairs" | "top_k" | "cluster_sample";
+export type ResearchContradictionStrategy = "all_pairs" | "top_k";
 
 export type ResearchDepthProfileId =
   | ResearchDepth
@@ -138,14 +138,14 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       crossSourceVerify: true,
       verifyBatchSize: 3,
       verifyReasoning: false,
-      extractBatchSize: 2,
+      extractBatchSize: 3,
       contradictionDetect: true,
       contradictionMaxPairs: 200,
       contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 50,
       synthesisReasoning: true,
-      auditReasoning: false,
+      auditReasoning: true,
       auditMaxCitations: 30,
       auditConcurrency: 3,
       gapAnalysis: true,
@@ -171,15 +171,15 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       validateReasoning: false,
       crossSourceVerify: true,
       verifyBatchSize: 1,
-      verifyReasoning: true,
-      extractBatchSize: 1,
+      verifyReasoning: false,
+      extractBatchSize: 2,
       contradictionDetect: true,
       contradictionMaxPairs: 500,
       contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 80,
       synthesisReasoning: true,
-      auditReasoning: false,
+      auditReasoning: true,
       auditMaxCitations: 50,
       auditConcurrency: 3,
       gapAnalysis: true,
@@ -242,16 +242,41 @@ export function resolveResearchProfile(
     baseline = { ...RESEARCH_DEPTH_PRESETS[profileId as ResearchDepth].baseline };
   }
 
-  const depthOverride: ResearchProfileOverride =
+  let depthOverride: ResearchProfileOverride =
     profileId === "custom" ? {} : state.depthOverrides[profileId as ResearchDepth] ?? {};
-  const override = state.override;
+  let override: ResearchProfileOverride = state.override;
+
+  if ((override.contradictionStrategy as string) === "cluster_sample") {
+    override = { ...override, contradictionStrategy: "top_k" };
+  }
+  if ((depthOverride.contradictionStrategy as string) === "cluster_sample") {
+    depthOverride = { ...depthOverride, contradictionStrategy: "top_k" };
+  }
 
   const merged: ResearchProfileOverride = {
-    ...STANDARD_BASELINE,
     ...baseline,
     ...depthOverride,
     ...override,
   };
+  if (import.meta.env.DEV) {
+    const requiredKeys: Array<keyof ResearchProfileOverride> = [
+      "maxSearchRounds", "maxSources", "maxSourcesPerRound", "adaptiveDeepening",
+      "minSourceQuality", "perSourceRead", "validateConcurrency", "validateReasoning",
+      "crossSourceVerify", "verifyBatchSize", "verifyReasoning", "extractBatchSize",
+      "contradictionDetect", "contradictionMaxPairs", "contradictionMinClaims",
+      "contradictionStrategy", "contradictionTopK", "synthesisReasoning",
+      "auditReasoning", "auditMaxCitations", "auditConcurrency", "gapAnalysis",
+      "sectionMaxWords", "maxSections", "liteModelId", "liteModelProviderId",
+    ];
+    const baselineKeys = Object.keys(baseline) as Array<keyof ResearchProfileOverride>;
+    const missing = requiredKeys.filter((k) => !baselineKeys.includes(k));
+    if (missing.length > 0) {
+      console.warn(
+        `[research-config] Baseline for "${profileId}" is missing fields: ${missing.join(", ")}. ` +
+        `Config drift: expected all keys to be explicitly defined.`,
+      );
+    }
+  }
   return merged as Required<ResearchProfileOverride>;
 }
 
@@ -279,7 +304,7 @@ export const STANDARD_BASELINE: ResearchProfileOverride = {
   crossSourceVerify: true,
   verifyBatchSize: 1,
   verifyReasoning: false,
-  extractBatchSize: 1,
+  extractBatchSize: 3,
   contradictionDetect: false,
   contradictionMaxPairs: 0,
   contradictionMinClaims: 5,

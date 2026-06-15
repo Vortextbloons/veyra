@@ -27,7 +27,8 @@ export type ResearchRuntimeEvent =
   | { type: "validate_progress"; done: number; total: number }
   | { type: "extract_progress"; done: number; total: number }
   | { type: "contradiction_progress"; done: number; total: number }
-  | { type: "audit_progress"; done: number; total: number };
+  | { type: "audit_progress"; done: number; total: number }
+  | { type: "evidence_filtered"; reason: "low_significance" | "too_short" | "empty_content"; content: string; sourceId: string; sourceTitle: string; confidence: number };
 
 export type ResearchStepType =
   | "clarify"
@@ -73,6 +74,7 @@ export type ResearchClaimStatus =
   | "verified"
   | "partially_verified"
   | "contradicted"
+  | "disputed"
   | "unverified"
   | "rejected";
 
@@ -95,6 +97,7 @@ export interface ResearchRun {
   modelUsed?: string;
   providerId?: string;
   totalTokensUsed?: number;
+  searchProvider?: "searxng" | "auto";
 }
 
 export interface ResearchPlan {
@@ -195,6 +198,8 @@ export interface ResearchClaim {
   confidence: number;
   verifiedBy?: string[]; // claimIds that confirm this
   contradictedBy?: string[]; // claimIds that contradict
+  disputedBy?: string[]; // claimIds whose resolution flags this as the loser
+  needsSemanticReview?: boolean; // trigram-Jaccard flagged it for LLM dedup pass
   verificationReason?: string;
   createdAt: string;
 }
@@ -317,6 +322,8 @@ export interface UpdateResearchClaimInput {
   confidence?: number;
   verifiedBy?: string[];
   contradictedBy?: string[];
+  disputedBy?: string[];
+  needsSemanticReview?: boolean;
   verificationReason?: string;
 }
 
