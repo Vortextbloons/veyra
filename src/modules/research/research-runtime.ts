@@ -6,6 +6,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { estimateTokens } from "@/lib/context";
 import { useResearchStore } from "./research-store";
 import { updateResearchSourceAfterFetch, type FetchedSource } from "./research-storage";
+import { prepareReportSection } from "./report-sanitize";
 import { invokeFetchAndExtractPages, type FetchedPage } from "@/modules/web-search/tauri-commands";
 import { listen } from "@tauri-apps/api/event";
 import { aiScheduler } from "@/lib/ai-scheduler";
@@ -2588,22 +2589,20 @@ Resolution: ${c.resolution || "Unresolved"}`;
       .map((id) => sources.find((s) => s.id === id))
       .filter((s): s is ResearchSource => Boolean(s));
 
+    const maxCitationNumber = shownSources.length;
+
     const citationEvidenceSummary = shownEvidence
-      .map((e, i) => {
+      .map((e) => {
         const source = sources.find((s) => s.id === e.sourceId);
         const sourceNumber = getSourceNumber(e.sourceId, shownSources);
-        return `Evidence packet ${i + 1}:
-Citation: ${sourceNumber ? `[${sourceNumber}]` : "uncited-source"}
-Source: ${source?.title || "Unknown"} (${source?.url || "N/A"})
-Type: ${e.type}
-Confidence: ${e.confidence}
+        return `Citation ${sourceNumber ? `[${sourceNumber}]` : "uncited-source"} — ${source?.title || "Unknown"} (${source?.url || "N/A"})
+Type: ${e.type} | Confidence: ${e.confidence}
 Evidence: ${e.content}
 Context: ${e.context}`;
       })
       .join("\n\n");
 
-    const sourceQualitySummary = sources
-      .filter((s) => s.status === "read")
+    const sourceQualitySummary = shownSources
       .map((s, i) => {
         const authority = assessDomainAuthority(s.url);
         return `[${i + 1}] ${s.title} — ${s.url} (Authority: ${authority}/5)`;
@@ -2736,34 +2735,47 @@ ${i === sections.length - 2 && contradictions.length > 0 ? `Contradictions to Ad
 
 Requirements:
 - Write in formal, objective academic tone
-- Cite claims using only the citation numbers attached to the evidence packets above, such as [1] or [2]
+- Cite claims using only citation numbers [1] through [${maxCitationNumber}] from the evidence packets and source list below
 - Do not cite a source unless a listed evidence packet supports the sentence
+- Do not invent citation numbers outside that range
 - Address uncertainties and conflicting evidence honestly
 - Include specific statistics and quotes where available
 - Target: ${section.wordCount || 300} words
 
-Sources:
+Sources (citation numbers [1]–[${maxCitationNumber}] only):
 ${sourceQualitySummary}
 
-Write ONLY the section content in markdown. Do NOT include the heading (it will be added separately).`;
+Output rules:
+- Return ONLY polished report prose for this section
+- Do NOT include the section heading
+- Do NOT include planning notes, checklists, self-corrections, word-count commentary, citation-mapping notes, or instructions to yourself
+- Do NOT output labels like "code", "Copy", "Drafting", or bullet lists of writing steps`;
 
       try {
         const sectionResult = await callResearchAi(
           [
-            { role: "system", content: `You are an expert research writer. Write formal, well-cited, objective research sections. Use markdown formatting.\n\n${getTemporalContext()}` },
+            {
+              role: "system",
+              content: `You are an expert research writer. Write formal, well-cited, objective research sections in markdown. Output only final reader-facing prose — never chain-of-thought, planning, or meta-commentary.\n\n${getTemporalContext()}`,
+            },
             { role: "user", content: sectionPrompt },
           ],
           signal,
           undefined,
           Math.max(1000, (section.wordCount || 300) * 2),
-          { reasoningEnabled: config.synthesisReasoning, temperature: 0.4 },
+          { reasoningEnabled: false, temperature: 0.4 },
         );
         if (sectionResult.tokens?.totalTokens) totalTokens += sectionResult.tokens.totalTokens;
 
-        const sectionResponse = sectionResult.text;
+        const sectionResponse = prepareReportSection(sectionResult.text, maxCitationNumber);
         const wordCount = sectionResponse.split(/\s+/).filter(Boolean).length;
-        reportMarkdown += sectionResponse;
-        reportMarkdown += "\n\n";
+        if (sectionResponse) {
+          reportMarkdown += `## ${section.heading}\n\n`;
+          reportMarkdown += sectionResponse;
+          reportMarkdown += "\n\n";
+        } else {
+          reportMarkdown += `## ${section.heading}\n\n*[Section content could not be generated]*\n\n`;
+        }
         await completeStep(sectionStep, `${wordCount} words written`, sectionResult.tokens?.totalTokens);
       } catch (err) {
         console.warn("[research-runtime] Section writing failed:", section.heading, err);
@@ -2980,15 +2992,11 @@ Audit: Does this source actually support the claims cited? Answer ONLY with a JS
           .join("\n")
       : "No audited citations were flagged.";
 
-    reportMarkdown += `\n\n---\n\n## Citation Audit\n\nAudited ${auditResults.length} of ${bodyCitedNumbers.size} body citations.${skippedAudit > 0 ? ` ${skippedAudit} citations were skipped due to the audit cap.` : ""}\n\n${auditNotes}\n\n`;
-
     const auditDetail = `Audited ${auditResults.length} citations, ${unsupportedCitations.length} flagged` +
-      (skippedAudit > 0 ? ` (${skippedAudit} citations skipped due to cap)` : "");
+      (skippedAudit > 0 ? ` (${skippedAudit} citations skipped due to cap)` : "") +
+      (unsupportedCitations.length > 0 ? `\n\n${auditNotes}` : "");
     await completeStep(auditStep, auditDetail);
     onEvent({ type: "phase_complete", phase: "audit", stepId: auditStep.id });
-
-    const updatedWordCount = reportMarkdown.split(/\s+/).filter(Boolean).length;
-    await store.updateReport({ id: report.id, contentMarkdown: reportMarkdown, wordCount: updatedWordCount });
     } // end of audit-when-citations-exist
 
     onEvent({ type: "report_complete", reportId: report.id });

@@ -10,6 +10,7 @@ import { useDocumentStore } from "@/modules/documents/document-store";
 import { useMemoryStore } from "@/stores/memory-store";
 import { useResearchStore } from "../research-store";
 import { CitationInspector } from "./CitationInspector";
+import { sanitizeReportSection, stripCitationAuditSection } from "../report-sanitize";
 
 // Pre-process markdown to convert [N] citations into markdown links
 function preprocessCitations(content: string): string {
@@ -33,14 +34,16 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
   const createMemoryNode = useMemoryStore((s) => s.createNode);
   const updateReport = useResearchStore((s) => s.updateReport);
 
-  // Pre-processed markdown with citation links
+  // Pre-processed markdown with citation links (strip internal audit appendix / leaked planning)
   const processedMarkdown = useMemo(() => {
-    return preprocessCitations(report.contentMarkdown);
+    const cleaned = sanitizeReportSection(stripCitationAuditSection(report.contentMarkdown));
+    return preprocessCitations(cleaned);
   }, [report.contentMarkdown]);
 
   // Build TOC from markdown headings
   const headings = useMemo(() => {
-    const matches = report.contentMarkdown.matchAll(/^#{1,3}\s+(.+)$/gm);
+    const cleaned = stripCitationAuditSection(report.contentMarkdown);
+    const matches = cleaned.matchAll(/^#{1,3}\s+(.+)$/gm);
     return Array.from(matches).map((m, index) => ({
       level: m[0].match(/^#+/)?.[0].length ?? 1,
       text: m[1].trim(),
@@ -54,10 +57,11 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
 
   const handleExportToDocument = async () => {
     try {
+      const exportMarkdown = sanitizeReportSection(stripCitationAuditSection(report.contentMarkdown));
       const doc = await createDocument({
         title: report.title,
         type: "report",
-        contentMarkdown: report.contentMarkdown,
+        contentMarkdown: exportMarkdown,
         projectId,
       });
       await updateReport({
