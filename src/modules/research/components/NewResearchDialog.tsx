@@ -463,24 +463,28 @@ function PerRunOverridePanel({
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-[11px]">
-        <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-          <span>Use reasoning for validate</span>
-          <input
-            type="checkbox"
-            checked={resolved.validateReasoning}
-            onChange={(e) => onUpdate({ validateReasoning: e.target.checked })}
-            className="size-3.5 accent-[var(--color-accent)]"
-          />
-        </label>
-        <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-          <span>Use reasoning for audit</span>
-          <input
-            type="checkbox"
-            checked={resolved.auditReasoning}
-            onChange={(e) => onUpdate({ auditReasoning: e.target.checked })}
-            className="size-3.5 accent-[var(--color-accent)]"
-          />
-        </label>
+        {resolved.perSourceRead && (
+          <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
+            <span>Use reasoning for validate</span>
+            <input
+              type="checkbox"
+              checked={resolved.validateReasoning}
+              onChange={(e) => onUpdate({ validateReasoning: e.target.checked })}
+              className="size-3.5 accent-[var(--color-accent)]"
+            />
+          </label>
+        )}
+        {resolved.auditMaxCitations > 0 && (
+          <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
+            <span>Use reasoning for audit</span>
+            <input
+              type="checkbox"
+              checked={resolved.auditReasoning}
+              onChange={(e) => onUpdate({ auditReasoning: e.target.checked })}
+              className="size-3.5 accent-[var(--color-accent)]"
+            />
+          </label>
+        )}
         <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
           <span>Cross-source verify</span>
           <input
@@ -490,6 +494,17 @@ function PerRunOverridePanel({
             className="size-3.5 accent-[var(--color-accent)]"
           />
         </label>
+        {resolved.crossSourceVerify && (
+          <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
+            <span>Reasoning during verify</span>
+            <input
+              type="checkbox"
+              checked={resolved.verifyReasoning}
+              onChange={(e) => onUpdate({ verifyReasoning: e.target.checked })}
+              className="size-3.5 accent-[var(--color-accent)]"
+            />
+          </label>
+        )}
         <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
           <span>Contradiction detect</span>
           <input
@@ -551,6 +566,32 @@ function PerRunOverridePanel({
           max={100}
           step={5}
           onChange={(v) => onUpdate({ auditMaxCitations: v })}
+        />
+        {resolved.crossSourceVerify && (
+          <OverrideSlider
+            label="Verify batch size"
+            value={resolved.verifyBatchSize}
+            min={1}
+            max={20}
+            step={1}
+            onChange={(v) => onUpdate({ verifyBatchSize: v })}
+          />
+        )}
+        <OverrideSlider
+          label="Extract batch size"
+          value={resolved.extractBatchSize}
+          min={1}
+          max={10}
+          step={1}
+          onChange={(v) => onUpdate({ extractBatchSize: v })}
+        />
+        <OverrideSlider
+          label="Contradiction min claims"
+          value={resolved.contradictionMinClaims}
+          min={0}
+          max={50}
+          step={1}
+          onChange={(v) => onUpdate({ contradictionMinClaims: v })}
         />
       </div>
     </div>

@@ -28,6 +28,8 @@ import { ResearchFollowUpComposer } from "./ResearchFollowUpComposer";
 import { NewResearchDialog } from "./NewResearchDialog";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { resumeResearchRun } from "../research-runtime";
+import { useResearchElapsed } from "../use-research-elapsed";
+import { Clock } from "lucide-react";
 
 const TAB_ITEMS = [
   { id: "plan", label: "Plan", icon: <LayoutList className="size-3.5" /> },
@@ -137,6 +139,7 @@ export function ResearchPage() {
 
   const isActive = run && ["planning", "searching", "reading", "extracting", "verifying", "synthesizing"].includes(run.status);
   const canResume = run && (run.status === "paused" || run.status === "failed");
+  const elapsed = useResearchElapsed(run);
 
   const firstRunNoticeDismissed = useSettingsStore((s) => s.researchFirstRunNoticeDismissed);
   const setFirstRunNoticeDismissed = useSettingsStore((s) => s.setResearchFirstRunNoticeDismissed);
@@ -257,6 +260,7 @@ export function ResearchPage() {
                     >
                       {DEPTH_LABELS[run.depth]}
                     </span>
+                    <RunElapsedPill status={run.status} elapsed={elapsed} />
                     <RunStatusBadge status={run.status} />
                     {isActive && (
                       <button
@@ -290,11 +294,20 @@ export function ResearchPage() {
 
                 {/* Progress bar */}
                 <LiveProgressBar status={run.status} percent={run.progressPercent} />
-                {run.totalTokensUsed !== undefined && run.totalTokensUsed > 0 && (
-                  <div className="text-right text-[11px] text-[var(--color-text-dim)]">
-                    {run.totalTokensUsed.toLocaleString()} tokens
+                {(run.totalTokensUsed !== undefined && run.totalTokensUsed > 0) ||
+                (run.completedAt && (run.status === "completed" || run.status === "failed")) ? (
+                  <div className="flex items-center justify-end gap-3 text-[11px] text-[var(--color-text-dim)]">
+                    {(run.status === "completed" || run.status === "failed") && run.completedAt && (
+                      <span className="flex items-center gap-1" title="Total duration">
+                        <Clock className="size-3" />
+                        <span className="font-mono tabular-nums">{elapsed}</span>
+                      </span>
+                    )}
+                    {run.totalTokensUsed !== undefined && run.totalTokensUsed > 0 && (
+                      <span>{run.totalTokensUsed.toLocaleString()} tokens</span>
+                    )}
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* Tabs */}
@@ -487,6 +500,25 @@ function RunStatusBadge({ status }: { status: string }) {
     <span className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${config.classes}`}>
       <Activity className="size-3" />
       {config.label}
+    </span>
+  );
+}
+
+function RunElapsedPill({ status, elapsed }: { status: string; elapsed: string }) {
+  const isLive = ["planning", "searching", "reading", "extracting", "verifying", "synthesizing"].includes(status);
+  const isTerminal = status === "completed" || status === "failed";
+  const classes = isLive
+    ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-200"
+    : isTerminal
+      ? "border-[var(--color-border)] bg-white/[0.03] text-[var(--color-text-dim)]"
+      : "border-[var(--color-border)] bg-white/[0.03] text-[var(--color-text-dim)]";
+  return (
+    <span
+      className={`flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums ${classes}`}
+      title={isLive ? "Elapsed time" : "Total duration"}
+    >
+      <Clock className={`size-3 ${isLive ? "animate-pulse text-indigo-300" : ""}`} />
+      {elapsed}
     </span>
   );
 }

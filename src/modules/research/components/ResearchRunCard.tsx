@@ -8,6 +8,8 @@ import {
   Loader2,
 } from "lucide-react";
 import type { ResearchRun, ResearchDepth } from "../research-types";
+import { useResearchElapsed } from "../use-research-elapsed";
+import { formatElapsedTime } from "../research-duration";
 
 const DEPTH_LABELS: Record<ResearchDepth, string> = {
   quick: "Quick",
@@ -97,6 +99,25 @@ export function ResearchRunCard({ run, isActive, onClick }: Props) {
     });
   }, [run.createdAt]);
 
+  const liveElapsed = useResearchElapsed(run);
+  const finalDuration = useMemo(() => {
+    if (run.completedAt) {
+      const startMs = new Date(run.createdAt).getTime();
+      const endMs = new Date(run.completedAt).getTime();
+      if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs) {
+        return formatElapsedTime((endMs - startMs) / 1000);
+      }
+    }
+    return null;
+  }, [run.createdAt, run.completedAt]);
+  const isLive =
+    run.status === "planning" ||
+    run.status === "searching" ||
+    run.status === "reading" ||
+    run.status === "extracting" ||
+    run.status === "verifying" ||
+    run.status === "synthesizing";
+
   return (
     <button
       type="button"
@@ -129,9 +150,28 @@ export function ResearchRunCard({ run, isActive, onClick }: Props) {
         </span>
       </div>
 
-      <div className="flex items-center gap-2 text-[11px] text-[var(--color-text-dim)]">
-        <Clock className="size-3" />
-        <span>{dateStr}</span>
+      <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--color-text-dim)]">
+        <div className="flex items-center gap-2">
+          <Clock className="size-3" />
+          <span>{dateStr}</span>
+        </div>
+        {isLive && (
+          <span
+            className="flex items-center gap-1 rounded-md border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[10px] text-indigo-200 tabular-nums"
+            title="Elapsed time"
+          >
+            <span className="size-1.5 animate-pulse rounded-full bg-indigo-300" />
+            {liveElapsed}
+          </span>
+        )}
+        {!isLive && finalDuration && (
+          <span
+            className="flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
+            title="Total duration"
+          >
+            {finalDuration}
+          </span>
+        )}
       </div>
 
       {/* Progress bar */}

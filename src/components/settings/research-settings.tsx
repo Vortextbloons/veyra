@@ -579,18 +579,20 @@ function DepthOverrideEditor({
             step={1}
             onChange={(v) => onUpdate({ validateConcurrency: v })}
           />
-          <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
-            <div>
-              <div className="text-[12px] font-medium text-white">Use reasoning for source validation</div>
-              <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                Off is the single biggest speedup for validate.
+          {resolved.perSourceRead && (
+            <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+              <div>
+                <div className="text-[12px] font-medium text-white">Use reasoning for source validation</div>
+                <div className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Off is the single biggest speedup for validate.
+                </div>
               </div>
+              <Toggle
+                on={resolved.validateReasoning}
+                onChange={(v) => onUpdate({ validateReasoning: v })}
+              />
             </div>
-            <Toggle
-              on={resolved.validateReasoning}
-              onChange={(v) => onUpdate({ validateReasoning: v })}
-            />
-          </div>
+          )}
           <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
             <div>
               <div className="text-[12px] font-medium text-white">Cross-source verification</div>
@@ -603,6 +605,42 @@ function DepthOverrideEditor({
               onChange={(v) => onUpdate({ crossSourceVerify: v })}
             />
           </div>
+          {resolved.crossSourceVerify && (
+            <>
+              <Slider
+                label="Verify batch size"
+                description="Claims verified per AI call. 1 = one claim per call (most thorough); higher values share context for speed."
+                value={resolved.verifyBatchSize}
+                min={1}
+                max={20}
+                step={1}
+                onChange={(v) => onUpdate({ verifyBatchSize: v })}
+              />
+              <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+                <div>
+                  <div className="text-[12px] font-medium text-white">Use reasoning for verification</div>
+                  <div className="text-[10.5px] text-[var(--color-text-dim)]">
+                    Off is the single biggest speedup for cross-source verify.
+                  </div>
+                </div>
+                <Toggle
+                  on={resolved.verifyReasoning}
+                  onChange={(v) => onUpdate({ verifyReasoning: v })}
+                />
+              </div>
+            </>
+          )}
+          {resolved.perSourceRead && (
+            <Slider
+              label="Extract batch size"
+              description="Sources processed per AI extraction call. 1 = one source per call (most thorough); higher values share context for speed."
+              value={resolved.extractBatchSize}
+              min={1}
+              max={10}
+              step={1}
+              onChange={(v) => onUpdate({ extractBatchSize: v })}
+            />
+          )}
           <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
             <div>
               <div className="text-[12px] font-medium text-white">Contradiction detection</div>
@@ -650,6 +688,15 @@ function DepthOverrideEditor({
             step={10}
             onChange={(v) => onUpdate({ contradictionMaxPairs: v })}
           />
+          <Slider
+            label="Contradiction min claims"
+            description="Skip contradiction detection when fewer than N verified claims exist. 0 = always run."
+            value={resolved.contradictionMinClaims}
+            min={0}
+            max={50}
+            step={1}
+            onChange={(v) => onUpdate({ contradictionMinClaims: v })}
+          />
         </div>
       </div>
 
@@ -671,18 +718,20 @@ function DepthOverrideEditor({
               onChange={(v) => onUpdate({ synthesisReasoning: v })}
             />
           </div>
-          <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
-            <div>
-              <div className="text-[12px] font-medium text-white">Use reasoning for citation audit</div>
-              <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                Per-citation faithfulness check.
+          {resolved.auditMaxCitations > 0 && (
+            <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+              <div>
+                <div className="text-[12px] font-medium text-white">Use reasoning for citation audit</div>
+                <div className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Per-citation faithfulness check.
+                </div>
               </div>
+              <Toggle
+                on={resolved.auditReasoning}
+                onChange={(v) => onUpdate({ auditReasoning: v })}
+              />
             </div>
-            <Toggle
-              on={resolved.auditReasoning}
-              onChange={(v) => onUpdate({ auditReasoning: v })}
-            />
-          </div>
+          )}
           <Slider
             label="Max citations to audit"
             description="Hard cap. Long reports audit only the first N citations. 0 = unlimited."
@@ -713,6 +762,24 @@ function DepthOverrideEditor({
               onChange={(v) => onUpdate({ gapAnalysis: v })}
             />
           </div>
+          <Slider
+            label="Max words per section"
+            description="Upper bound for each report section. Larger values produce longer, more detailed sections."
+            value={resolved.sectionMaxWords}
+            min={150}
+            max={3000}
+            step={50}
+            onChange={(v: number) => onUpdate({ sectionMaxWords: v })}
+          />
+          <Slider
+            label="Max sections"
+            description="Maximum number of sections in the report outline."
+            value={resolved.maxSections}
+            min={1}
+            max={20}
+            step={1}
+            onChange={(v: number) => onUpdate({ maxSections: v })}
+          />
         </div>
       </div>
     </div>

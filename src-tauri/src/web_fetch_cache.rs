@@ -15,6 +15,8 @@ pub struct CachedEntry {
     pub title: Option<String>,
     pub content: Option<String>,
     pub error_reason: Option<String>,
+    #[serde(default)]
+    pub max_chars: usize,
 }
 
 #[derive(Serialize)]
@@ -30,9 +32,11 @@ fn ensure_dir(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn key_path(url: &str, dir: &Path) -> PathBuf {
+fn key_path(url: &str, max_chars: usize, dir: &Path) -> PathBuf {
     let mut hasher = Sha256::new();
     hasher.update(url.as_bytes());
+    hasher.update(b"|mc|");
+    hasher.update(max_chars.to_le_bytes());
     let hash = format!("{:x}", hasher.finalize());
     dir.join(format!("{hash}.json"))
 }
@@ -48,8 +52,8 @@ pub fn now_unix_static() -> i64 {
     now_unix()
 }
 
-pub fn read(url: &str, cache_dir: &Path) -> Option<CachedEntry> {
-    let path = key_path(url, cache_dir);
+pub fn read(url: &str, max_chars: usize, cache_dir: &Path) -> Option<CachedEntry> {
+    let path = key_path(url, max_chars, cache_dir);
     let raw = fs::read_to_string(&path).ok()?;
     let entry: CachedEntry = serde_json::from_str(&raw).ok()?;
 
@@ -62,9 +66,9 @@ pub fn read(url: &str, cache_dir: &Path) -> Option<CachedEntry> {
     Some(entry)
 }
 
-pub fn write(url: &str, entry: &CachedEntry, cache_dir: &Path) -> Result<(), String> {
+pub fn write(url: &str, max_chars: usize, entry: &CachedEntry, cache_dir: &Path) -> Result<(), String> {
     ensure_dir(cache_dir)?;
-    let path = key_path(url, cache_dir);
+    let path = key_path(url, max_chars, cache_dir);
     let tmp = path.with_extension("json.tmp");
     let json = serde_json::to_string(entry).map_err(|e| e.to_string())?;
     fs::write(&tmp, json).map_err(|e| format!("Failed to write cache entry: {e}"))?;

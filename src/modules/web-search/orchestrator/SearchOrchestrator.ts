@@ -35,6 +35,13 @@ export type RunSearchOptions = {
   projectId?: string;
   signal?: AbortSignal;
   onFetchProgress?: (completed: number, total: number) => void;
+  /**
+   * When true, skip the page-fetch/extract step that normally runs after search.
+   * The research pipeline fetches the same URLs again with larger limits, so the
+   * intermediate search-time fetch is wasted work (and pollutes the cache with
+   * truncated content).
+   */
+  skipFetch?: boolean;
 };
 
 export async function runSearch(
@@ -45,7 +52,7 @@ export async function runSearch(
     options && typeof (options as AbortSignal).aborted !== "undefined"
       ? { signal: options as AbortSignal }
       : (options as RunSearchOptions) ?? {};
-  const { signal, projectId, onFetchProgress } = opts;
+  const { signal, projectId, onFetchProgress, skipFetch } = opts;
 
   if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
@@ -137,7 +144,7 @@ export async function runSearch(
 
     let fetchedPages: FetchedPageSummary[] = [];
     const topForFetch = results.slice(0, fetchCount).map((r) => r.url);
-    if (fetchEnabled && topForFetch.length > 0) {
+    if (!skipFetch && fetchEnabled && topForFetch.length > 0) {
       onFetchProgress?.(0, topForFetch.length);
       try {
         const pages = await invokeFetchAndExtractPages(

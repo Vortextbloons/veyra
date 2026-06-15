@@ -7,6 +7,7 @@ use tokio::sync::Semaphore;
 
 use crate::web_fetch_cache;
 use readability::extractor::extract as readability_extract;
+use scraper::{Html, Selector};
 
 #[derive(Serialize, Clone)]
 pub struct FetchedPage {
@@ -18,7 +19,8 @@ pub struct FetchedPage {
 }
 
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; Veyra/0.1; +https://github.com/anomalyco/veyra)";
-const MAX_BODY_BYTES: usize = 1_000_000;
+const MAX_BODY_BYTES: usize = 5_000_000;
+const MIN_CONTENT_CHARS: usize = 200;
 
 static FETCH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
@@ -109,11 +111,81 @@ fn truncate_at_sentence_boundary(text: &str, max_chars: usize) -> String {
     text[..cut].to_string()
 }
 
+/// Fallback extraction using scraper (html5ever) when readability fails or
+/// returns too little content. Pulls text from paragraphs, list items,
+/// headings, and blockquotes, joined with double newlines.
+fn extract_paragraphs_fallback(html: &str) -> String {
+    let document = Html::parse_document(html);
+    let sel = Selector::parse("p, li, h1, h2, h3, h4, h5, h6, blockquote, pre")
+        .expect("static selector must parse");
+    let mut out = String::new();
+    for element in document.select(&sel) {
+        let text: String = element
+            .text()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if text.len() >= 20 {
+            if !out.is_empty() {
+                out.push_str("\n\n");
+            }
+            out.push_str(&text);
+        }
+    }
+    out
+}
+
+/// Last-resort regex extraction of <p> blocks when scraper yields nothing.
+fn extract_paragraphs_regex(html: &str) -> String {
+    let mut out = String::new();
+    let lower = html.to_lowercase();
+    let mut i = 0usize;
+    while i < lower.len() {
+        if let Some(pos) = find_subslice(lower.as_bytes()[i..].as_ref(), b"<p") {
+            let abs = i + pos;
+            if let Some(end_rel) = lower[abs..].find("</p>") {
+                let block = &html[abs..abs + end_rel];
+                let text: String = block
+                    .split('<')
+                    .skip(1)
+                    .filter_map(|s| s.split_once('>').map(|(_, after)| after))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let cleaned: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+                if cleaned.len() >= 20 {
+                    if !out.is_empty() {
+                        out.push_str("\n\n");
+                    }
+                    out.push_str(&cleaned);
+                }
+                i = abs + end_rel + 4;
+                continue;
+            }
+        }
+        break;
+    }
+    out
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+fn extract_pdf_text(bytes: &[u8]) -> Result<String, String> {
+    pdf_extract::extract_text_from_mem(bytes).map_err(|e| format!("PDF extraction failed: {e}"))
+}
+
 async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let url = req.url.clone();
-    let cache_key = url.clone();
+    let max_chars = req.max_chars;
 
-    if let Some(cached) = web_fetch_cache::read(&cache_key, &req.cache_dir) {
+    if let Some(cached) = web_fetch_cache::read(&url, max_chars, &req.cache_dir) {
         if cached.status == "ok" {
             return FetchedPage {
                 url: cached.url,
@@ -137,12 +209,12 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let parsed = match url::Url::parse(&url) {
         Ok(p) => p,
         Err(e) => {
-            return make_error_page(&url, "invalid_url", &format!("Invalid URL: {e}"), &req.cache_dir)
+            return make_error_page(&url, max_chars, "invalid_url", &format!("Invalid URL: {e}"), &req.cache_dir)
         }
     };
 
     if let Err(reason) = ssrf_check(&parsed).await {
-        return make_error_page(&url, "ssrf_blocked", &reason, &req.cache_dir);
+        return make_error_page(&url, max_chars, "ssrf_blocked", &reason, &req.cache_dir);
     }
 
     let timeout = Duration::from_secs(req.timeout_secs.clamp(2, 30));
@@ -163,11 +235,12 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                 format!("Network error: {e}")
             };
             let status = if e.is_timeout() { "timeout" } else { "network" };
-            return make_error_page(&url, status, &reason, &req.cache_dir);
+            return make_error_page(&url, max_chars, status, &reason, &req.cache_dir);
         }
         Err(_) => {
             return make_error_page(
                 &url,
+                max_chars,
                 "timeout",
                 &format!("Request timed out after {}s", req.timeout_secs),
                 &req.cache_dir,
@@ -179,6 +252,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     if !http_status.is_success() {
         return make_error_page(
             &url,
+            max_chars,
             "http",
             &format!("HTTP {}", http_status.as_u16()),
             &req.cache_dir,
@@ -192,14 +266,17 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
         .unwrap_or("")
         .to_lowercase();
 
+    let is_pdf = content_type.contains("application/pdf");
     if !content_type.is_empty()
         && !content_type.contains("text/html")
         && !content_type.contains("text/plain")
         && !content_type.contains("application/xhtml")
         && !content_type.contains("text/")
+        && !is_pdf
     {
         return make_error_page(
             &url,
+            max_chars,
             "unsupported",
             &format!("Unsupported content-type: {content_type}"),
             &req.cache_dir,
@@ -209,62 +286,142 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let body_bytes = match response.bytes().await {
         Ok(b) => b,
         Err(e) => {
-            return make_error_page(&url, "network", &format!("Failed to read body: {e}"), &req.cache_dir)
+            return make_error_page(&url, max_chars, "network", &format!("Failed to read body: {e}"), &req.cache_dir)
         }
     };
 
     if body_bytes.len() > MAX_BODY_BYTES {
         return make_error_page(
             &url,
+            max_chars,
             "too_large",
             &format!("Response exceeds {} MB", MAX_BODY_BYTES / (1024 * 1024)),
             &req.cache_dir,
         );
     }
 
+    if is_pdf {
+        return handle_pdf(&url, &body_bytes, max_chars, &req.cache_dir);
+    }
+
     let body = String::from_utf8_lossy(&body_bytes).to_string();
 
-    let product = match readability_extract(&mut body.as_bytes(), &parsed) {
-        Ok(p) => p,
-        Err(e) => {
-            return make_error_page(
-                &url,
-                "extraction",
-                &format!("Extraction failed: {e}"),
-                &req.cache_dir,
-            )
+    // Primary extraction: readability
+    let (primary_content, primary_title) = match readability_extract(&mut body.as_bytes(), &parsed) {
+        Ok(p) if p.content.trim().len() >= MIN_CONTENT_CHARS => {
+            (p.content, Some(p.title))
+        }
+        Ok(_) => {
+            // Readability produced too little. Try fallback.
+            let fallback = extract_paragraphs_fallback(&body);
+            let fallback = if fallback.trim().len() >= MIN_CONTENT_CHARS {
+                fallback
+            } else {
+                let regex = extract_paragraphs_regex(&body);
+                if regex.trim().len() >= MIN_CONTENT_CHARS {
+                    regex
+                } else {
+                    return make_error_page(
+                        &url,
+                        max_chars,
+                        "extraction",
+                        "Extraction returned too little content (likely a JS-only site)",
+                        &req.cache_dir,
+                    );
+                }
+            };
+            (fallback, None)
+        }
+        Err(_) => {
+            // Readability failed entirely. Try fallback.
+            let fallback = extract_paragraphs_fallback(&body);
+            let fallback = if fallback.trim().len() >= MIN_CONTENT_CHARS {
+                fallback
+            } else {
+                let regex = extract_paragraphs_regex(&body);
+                if regex.trim().len() >= MIN_CONTENT_CHARS {
+                    regex
+                } else {
+                    return make_error_page(
+                        &url,
+                        max_chars,
+                        "extraction",
+                        "Extraction failed and no fallback content found",
+                        &req.cache_dir,
+                    );
+                }
+            };
+            (fallback, None)
         }
     };
 
-    let content_trimmed = product.content.trim();
-    if content_trimmed.len() < 200 {
-        return make_error_page(
-            &url,
-            "extraction",
-            "Extraction returned too little content (likely a JS-only site)",
-            &req.cache_dir,
-        );
-    }
-
-    let content = truncate_at_sentence_boundary(content_trimmed, req.max_chars);
+    let content_trimmed = primary_content.trim();
+    let content = truncate_at_sentence_boundary(content_trimmed, max_chars);
+    let title = primary_title.unwrap_or_else(|| url.clone());
 
     let entry = web_fetch_cache::CachedEntry {
         url: url.clone(),
         fetched_at_unix: web_fetch_cache::now_unix_static(),
         ttl_secs: 24 * 60 * 60,
         status: "ok".into(),
-        title: Some(product.title.clone()),
+        title: Some(title.clone()),
         content: Some(content.clone()),
         error_reason: None,
+        max_chars,
     };
-    if let Err(e) = web_fetch_cache::write(&cache_key, &entry, &req.cache_dir) {
+    if let Err(e) = web_fetch_cache::write(&url, max_chars, &entry, &req.cache_dir) {
         eprintln!("[web_fetch] cache write failed: {e}");
     }
 
     FetchedPage {
         url,
         status: "ok".into(),
-        title: Some(product.title),
+        title: Some(title),
+        content: Some(content),
+        error_reason: None,
+    }
+}
+
+fn handle_pdf(
+    url: &str,
+    body_bytes: &[u8],
+    max_chars: usize,
+    cache_dir: &PathBuf,
+) -> FetchedPage {
+    let text = match extract_pdf_text(body_bytes) {
+        Ok(t) => t,
+        Err(e) => {
+            return make_error_page(url, max_chars, "extraction", &e, cache_dir);
+        }
+    };
+    let trimmed = text.trim();
+    if trimmed.len() < MIN_CONTENT_CHARS {
+        return make_error_page(
+            url,
+            max_chars,
+            "extraction",
+            "PDF text extraction returned too little content",
+            cache_dir,
+        );
+    }
+    let content = truncate_at_sentence_boundary(trimmed, max_chars);
+    let entry = web_fetch_cache::CachedEntry {
+        url: url.to_string(),
+        fetched_at_unix: web_fetch_cache::now_unix_static(),
+        ttl_secs: 24 * 60 * 60,
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content.clone()),
+        error_reason: None,
+        max_chars,
+    };
+    if let Err(e) = web_fetch_cache::write(url, max_chars, &entry, cache_dir) {
+        eprintln!("[web_fetch] cache write failed: {e}");
+    }
+    FetchedPage {
+        url: url.to_string(),
+        status: "ok".into(),
+        title: Some(url.to_string()),
         content: Some(content),
         error_reason: None,
     }
@@ -272,6 +429,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
 
 fn make_error_page(
     url: &str,
+    max_chars: usize,
     status: &str,
     reason: &str,
     cache_dir: &PathBuf,
@@ -284,8 +442,9 @@ fn make_error_page(
         title: None,
         content: None,
         error_reason: Some(reason.to_string()),
+        max_chars,
     };
-    if let Err(e) = web_fetch_cache::write(url, &entry, cache_dir) {
+    if let Err(e) = web_fetch_cache::write(url, max_chars, &entry, cache_dir) {
         eprintln!("[web_fetch] cache write failed: {e}");
     }
     FetchedPage {

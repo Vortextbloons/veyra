@@ -19,8 +19,12 @@ export interface ResearchProfileOverride {
   validateConcurrency?: number;
   validateReasoning?: boolean;
   crossSourceVerify?: boolean;
+  verifyBatchSize?: number;
+  verifyReasoning?: boolean;
+  extractBatchSize?: number;
   contradictionDetect?: boolean;
   contradictionMaxPairs?: number;
+  contradictionMinClaims?: number;
   contradictionStrategy?: ResearchContradictionStrategy;
   contradictionTopK?: number;
 
@@ -30,6 +34,9 @@ export interface ResearchProfileOverride {
   auditMaxCitations?: number;
   auditConcurrency?: number;
   gapAnalysis?: boolean;
+  // Report composition
+  sectionMaxWords?: number;
+  maxSections?: number;
 
   // Lite-model routing (optional override of (modelId, providerId) for repetitive calls).
   liteModelId?: string;
@@ -61,8 +68,12 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       validateConcurrency: 3,
       validateReasoning: false,
       crossSourceVerify: false,
+      verifyBatchSize: 10,
+      verifyReasoning: false,
+      extractBatchSize: 5,
       contradictionDetect: false,
       contradictionMaxPairs: 0,
+      contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 20,
       synthesisReasoning: false,
@@ -70,6 +81,8 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       auditMaxCitations: 0,
       auditConcurrency: 1,
       gapAnalysis: false,
+      sectionMaxWords: 400,
+      maxSections: 4,
       liteModelId: "",
       liteModelProviderId: "",
     },
@@ -89,8 +102,12 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       validateConcurrency: 3,
       validateReasoning: false,
       crossSourceVerify: true,
+      verifyBatchSize: 5,
+      verifyReasoning: false,
+      extractBatchSize: 3,
       contradictionDetect: false,
       contradictionMaxPairs: 0,
+      contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 30,
       synthesisReasoning: true,
@@ -98,6 +115,8 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       auditMaxCitations: 20,
       auditConcurrency: 3,
       gapAnalysis: false,
+      sectionMaxWords: 600,
+      maxSections: 6,
       liteModelId: "",
       liteModelProviderId: "",
     },
@@ -117,8 +136,12 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       validateConcurrency: 3,
       validateReasoning: false,
       crossSourceVerify: true,
+      verifyBatchSize: 3,
+      verifyReasoning: false,
+      extractBatchSize: 2,
       contradictionDetect: true,
       contradictionMaxPairs: 200,
+      contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 50,
       synthesisReasoning: true,
@@ -126,6 +149,8 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       auditMaxCitations: 30,
       auditConcurrency: 3,
       gapAnalysis: true,
+      sectionMaxWords: 1000,
+      maxSections: 8,
       liteModelId: "",
       liteModelProviderId: "",
     },
@@ -145,8 +170,12 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       validateConcurrency: 3,
       validateReasoning: false,
       crossSourceVerify: true,
+      verifyBatchSize: 1,
+      verifyReasoning: true,
+      extractBatchSize: 1,
       contradictionDetect: true,
       contradictionMaxPairs: 500,
+      contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 80,
       synthesisReasoning: true,
@@ -154,6 +183,8 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       auditMaxCitations: 50,
       auditConcurrency: 3,
       gapAnalysis: true,
+      sectionMaxWords: 1500,
+      maxSections: 10,
       liteModelId: "",
       liteModelProviderId: "",
     },
@@ -246,8 +277,12 @@ export const STANDARD_BASELINE: ResearchProfileOverride = {
   validateConcurrency: 3,
   validateReasoning: false,
   crossSourceVerify: true,
+  verifyBatchSize: 1,
+  verifyReasoning: false,
+  extractBatchSize: 1,
   contradictionDetect: false,
   contradictionMaxPairs: 0,
+  contradictionMinClaims: 5,
   contradictionStrategy: "top_k",
   contradictionTopK: 30,
   synthesisReasoning: true,
@@ -255,6 +290,8 @@ export const STANDARD_BASELINE: ResearchProfileOverride = {
   auditMaxCitations: 20,
   auditConcurrency: 3,
   gapAnalysis: false,
+  sectionMaxWords: 600,
+  maxSections: 6,
   liteModelId: "",
   liteModelProviderId: "",
 };

@@ -34,6 +34,65 @@ function stripUtmParams(urlString: string): string {
   }
 }
 
+// Conservative blocklist: low-quality/spam TLDs and keyword patterns commonly
+// found in junk results. Keep short and unambiguous to avoid false positives.
+const SPAM_TLDS = [
+  ".tk",
+  ".ml",
+  ".ga",
+  ".cf",
+  ".gq",
+  ".xyz",
+  ".top",
+  ".click",
+  ".loan",
+  ".work",
+  ".review",
+  ".country",
+  ".stream",
+  ".download",
+  ".racing",
+];
+
+const SPAM_KEYWORDS = [
+  "porn",
+  "casino",
+  "viagra",
+  "cialis",
+  "pharmacy",
+  "weight-loss",
+  "payday-loan",
+  "crypto-scam",
+];
+
+const MIN_SCORE_THRESHOLD = 0.1;
+
+function isBlockedUrl(urlString: string): boolean {
+  const lower = urlString.toLowerCase();
+  for (const tld of SPAM_TLDS) {
+    if (lower.includes(tld)) return true;
+  }
+  for (const keyword of SPAM_KEYWORDS) {
+    if (lower.includes(keyword)) return true;
+  }
+  return false;
+}
+
+function isLowQualityResult(opts: {
+  title?: string;
+  snippet?: string;
+  score?: number;
+}): boolean {
+  const title = (opts.title ?? "").trim();
+  const snippet = (opts.snippet ?? "").trim();
+  const hasAnyText = title.length > 0 || snippet.length > 0;
+  if (!hasAnyText) return true;
+  if (typeof opts.score === "number" && opts.score > 0 && opts.score < MIN_SCORE_THRESHOLD) {
+    return true;
+  }
+  return false;
+}
+
 function extractDisplayUrl(urlString: string): string {
   try {
     const url = new URL(urlString);
@@ -75,6 +134,10 @@ export class SearXNGProvider implements SearchProvider {
       .filter((result) => {
         const normalized = result.url.trim().toLowerCase();
         if (!normalized || seenUrls.has(normalized)) return false;
+        if (isBlockedUrl(normalized)) return false;
+        if (isLowQualityResult({ title: result.title, snippet: result.snippet, score: result.score })) {
+          return false;
+        }
         seenUrls.add(normalized);
         return true;
       })
