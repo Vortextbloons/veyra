@@ -1,4 +1,4 @@
-export type ResearchDepth = "quick" | "standard" | "deep" | "exhaustive";
+export type ResearchDepth = "lightning" | "quick" | "standard" | "deep" | "exhaustive";
 
 export type ResearchRunStatus =
   | "planning"

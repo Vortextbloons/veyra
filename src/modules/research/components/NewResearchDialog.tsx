@@ -29,6 +29,12 @@ const DEPTH_OPTIONS: {
   icon: React.ReactNode;
 }[] = [
   {
+    value: "lightning",
+    label: "Lightning",
+    description: "1 round, snippets only",
+    icon: <Zap className="size-4" />,
+  },
+  {
     value: "quick",
     label: "Quick",
     description: "3 rounds, lighter evidence pass",
@@ -55,6 +61,7 @@ const DEPTH_OPTIONS: {
 ];
 
 const DEPTH_BADGE: Record<ResearchDepth, string> = {
+  lightning: "border-yellow-500/30 bg-yellow-500/10 text-yellow-300",
   quick: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   standard: "border-blue-500/30 bg-blue-500/10 text-blue-300",
   deep: "border-amber-500/30 bg-amber-500/10 text-amber-300",
@@ -103,6 +110,7 @@ export function NewResearchDialog({ onClose }: Props) {
   const [preflightError, setPreflightError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [perRunOverrides, setPerRunOverrides] = useState<Record<ResearchDepth, ResearchRunOverride>>({
+    lightning: {},
     quick: {},
     standard: {},
     deep: {},

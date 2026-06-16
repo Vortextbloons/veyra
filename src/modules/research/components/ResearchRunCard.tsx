@@ -13,6 +13,7 @@ import { useResearchElapsed } from "../use-research-elapsed";
 import { formatElapsedTime } from "../research-duration";
 
 const DEPTH_LABELS: Record<ResearchDepth, string> = {
+  lightning: "Lightning",
   quick: "Quick",
   standard: "Standard",
   deep: "Deep",
@@ -20,6 +21,7 @@ const DEPTH_LABELS: Record<ResearchDepth, string> = {
 };
 
 const DEPTH_BADGE_CLASSES: Record<ResearchDepth, string> = {
+  lightning: "bg-yellow-500/10 text-yellow-300 border-yellow-500/20",
   quick: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
   standard: "bg-blue-500/10 text-blue-300 border-blue-500/20",
   deep: "bg-amber-500/10 text-amber-300 border-amber-500/20",

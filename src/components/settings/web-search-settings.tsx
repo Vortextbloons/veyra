@@ -517,7 +517,7 @@ export function WebSearchSettings() {
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
             <div className="mb-2 flex items-center justify-between">
               <div>
-                <div className="text-[12.5px] font-medium text-white">Context token limit</div>
+                <div className="text-[12.5px] font-medium text-white">Search result token budget</div>
                 <div className="text-[11px] text-[var(--color-text-dim)]">
                   Max tokens from search results injected into the AI context.
                 </div>

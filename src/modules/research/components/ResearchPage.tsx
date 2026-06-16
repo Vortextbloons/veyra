@@ -48,6 +48,7 @@ const TAB_ITEMS = [
 type TabId = (typeof TAB_ITEMS)[number]["id"];
 
 const DEPTH_LABELS = {
+  lightning: "Lightning",
   quick: "Quick",
   standard: "Standard",
   deep: "Deep",
@@ -55,6 +56,7 @@ const DEPTH_LABELS = {
 };
 
 const DEPTH_BADGE = {
+  lightning: "bg-yellow-500/10 text-yellow-300 border-yellow-500/20",
   quick: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
   standard: "bg-blue-500/10 text-blue-300 border-blue-500/20",
   deep: "bg-amber-500/10 text-amber-300 border-amber-500/20",

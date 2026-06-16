@@ -15,9 +15,10 @@ import { ResearchProfileKnobsEditor } from "@/modules/research/components/Resear
 import type { ResearchDepth } from "@/modules/research/research-types";
 import type { ModelInfo } from "@/lib/chat-types";
 
-const DEPTH_ORDER: ResearchDepth[] = ["quick", "standard", "deep", "exhaustive"];
+const DEPTH_ORDER: ResearchDepth[] = ["lightning", "quick", "standard", "deep", "exhaustive"];
 
 const DEPTH_DESCRIPTIONS: Record<ResearchDepth, string> = {
+  lightning: "1 round, snippets only. Fastest possible report.",
   quick: "3 rounds, lightweight quality checks. Fast but capable.",
   standard: "5 rounds, source validation + verify. Balanced.",
   deep: "8 rounds, contradiction + gap follow-ups. Thorough.",
@@ -25,6 +26,7 @@ const DEPTH_DESCRIPTIONS: Record<ResearchDepth, string> = {
 };
 
 const PRESET_BORDER: Record<ResearchDepth, string> = {
+  lightning: "border-yellow-500/30",
   quick: "border-emerald-500/30",
   standard: "border-blue-500/30",
   deep: "border-amber-500/30",
@@ -32,6 +34,7 @@ const PRESET_BORDER: Record<ResearchDepth, string> = {
 };
 
 const PRESET_BG: Record<ResearchDepth, string> = {
+  lightning: "bg-yellow-500/10 text-yellow-300",
   quick: "bg-emerald-500/10 text-emerald-300",
   standard: "bg-blue-500/10 text-blue-300",
   deep: "bg-amber-500/10 text-amber-300",
@@ -182,7 +185,7 @@ export function ResearchSettings() {
         subsectionKey="research:presets"
         title="Depth Preset"
         description="The four built-in depth levels. Pick one as a starting baseline."
-        keywords={["quick", "standard", "deep", "exhaustive", "preset"]}
+        keywords={["lightning", "quick", "standard", "deep", "exhaustive", "preset"]}
         defaultExpanded
       >
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -282,7 +285,7 @@ export function ResearchSettings() {
       {/* Per-depth editing */}
       <CollapsibleSettingsSection
         subsectionKey="research:knobs"
-        title={`Per-Knob Settings — ${editingDepth.charAt(0).toUpperCase() + editingDepth.slice(1)} preset`}
+        title={`Pipeline Settings — ${editingDepth.charAt(0).toUpperCase() + editingDepth.slice(1)} preset`}
         description="Tweak each phase of the pipeline for this depth. Changes are saved per preset (Quick, Standard, etc.)."
         keywords={["knobs", "search", "validate", "audit", "synthesis", "arxiv", "wikipedia"]}
       >

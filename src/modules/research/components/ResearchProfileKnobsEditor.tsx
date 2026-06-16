@@ -3,7 +3,7 @@ import { Toggle } from "@/components/toggle";
 import type { ResearchProfileOverride } from "../research-config";
 import type { ResearchDepth } from "../research-types";
 
-const DEPTH_ORDER: ResearchDepth[] = ["quick", "standard", "deep", "exhaustive"];
+const DEPTH_ORDER: ResearchDepth[] = ["lightning", "quick", "standard", "deep", "exhaustive"];
 
 function Slider({
   value,
@@ -185,9 +185,9 @@ export function ResearchProfileKnobsEditor({
           />
           <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
             <div>
-              <div className="text-[12px] font-medium text-white">Adaptive deepening</div>
+              <div className="text-[12px] font-medium text-white">Auto-expand search</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                Issue one broad query after the last round to fill the source cap.
+                Run one extra broad query if under the source cap.
               </div>
             </div>
             <Toggle
@@ -221,9 +221,9 @@ export function ResearchProfileKnobsEditor({
           </div>
           <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
             <div>
-              <div className="text-[12px] font-medium text-white">Per-source deep read</div>
+              <div className="text-[12px] font-medium text-white">Source validation & extraction</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                Enable source validation and per-source extraction for higher-quality reports.
+                Validate each source's quality and extract structured evidence for stronger reports.
               </div>
             </div>
             <Toggle on={resolved.perSourceRead} onChange={(v) => onUpdate({ perSourceRead: v })} />
@@ -265,7 +265,7 @@ export function ResearchProfileKnobsEditor({
         </div>
         <div className="space-y-3">
           <Slider
-            label="Per-source AI concurrency"
+            label="Validation concurrency"
             description="How many source-quality checks run in parallel. 3 is safe; higher needs a strong GPU."
             value={resolved.validateConcurrency}
             min={1}
@@ -287,10 +287,10 @@ export function ResearchProfileKnobsEditor({
           {resolved.perSourceRead && (
             <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
               <div>
-                <div className="text-[12px] font-medium text-white">Use reasoning for source validation</div>
-                <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Structured JSON scoring — off by default for speed and reliable parsing.
-                </div>
+              <div className="text-[12px] font-medium text-white">Validation reasoning</div>
+              <div className="text-[10.5px] text-[var(--color-text-dim)]">
+                Structured JSON scoring — off by default for speed and reliable parsing.
+              </div>
               </div>
               <Toggle
                 on={resolved.validateReasoning}
@@ -323,10 +323,10 @@ export function ResearchProfileKnobsEditor({
               />
               <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
                 <div>
-                  <div className="text-[12px] font-medium text-white">Use reasoning for verification</div>
-                  <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                    Structured JSON verification — off by default; enable only if you want slower, deeper cross-checks.
-                  </div>
+              <div className="text-[12px] font-medium text-white">Verification reasoning</div>
+              <div className="text-[10.5px] text-[var(--color-text-dim)]">
+                Structured JSON verification — off by default; enable only if you want slower, deeper cross-checks.
+              </div>
                 </div>
                 <Toggle
                   on={resolved.verifyReasoning}
@@ -411,9 +411,9 @@ export function ResearchProfileKnobsEditor({
         <div className="space-y-3">
           <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
             <div>
-              <div className="text-[12px] font-medium text-white">Use reasoning for synthesis</div>
+              <div className="text-[12px] font-medium text-white">Extended reasoning</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                Report outline and section prose — on for Standard+ depths; off on Quick for speed.
+                Contradiction detection, gap analysis, outline, writing, and self-critique — on for Standard+; off on Quick.
               </div>
             </div>
             <Toggle
@@ -435,7 +435,7 @@ export function ResearchProfileKnobsEditor({
           </div>
           <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
             <div>
-              <div className="text-[12px] font-medium text-white">Use reasoning for citation audit</div>
+              <div className="text-[12px] font-medium text-white">Citation audit reasoning</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
                 Per-citation JSON audit — on for Deep/Exhaustive presets; off on Quick/Standard for speed.
               </div>

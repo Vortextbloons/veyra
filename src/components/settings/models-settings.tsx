@@ -200,7 +200,7 @@ export function ModelsSettings() {
             </h3>
             <div className="space-y-3">
               <SliderControl
-                label="Context length"
+                label="Conversation context window"
                 description="Maximum token window for conversations. Lower values save memory."
                 value={defaultContextLength}
                 onChange={setDefaultContextLength}
@@ -212,7 +212,7 @@ export function ModelsSettings() {
                 }
               />
               <SliderControl
-                label="Reserved output tokens"
+                label="Response reserve tokens"
                 description="Tokens reserved for the model's response when calculating context budget."
                 value={defaultReservedOutputTokens}
                 onChange={setDefaultReservedOutputTokens}

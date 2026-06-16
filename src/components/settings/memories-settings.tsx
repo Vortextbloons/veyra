@@ -179,8 +179,8 @@ export function MemoriesSettings() {
           />
           <SliderControl
             variant="card"
-            label="Max graph depth"
-            description="How many hops to follow in the memory graph"
+              label="Memory graph hops"
+              description="How many hops to follow in the memory graph"
             value={maxGraphDepth}
             onChange={setMaxGraphDepth}
             min={0}
