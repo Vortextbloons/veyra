@@ -123,7 +123,7 @@ fn prune_to_cap(cache_dir: &Path) {
         return;
     };
 
-    let mut files: Vec<(PathBuf, i64, u64)> = Vec::new();
+    let mut paths: Vec<(PathBuf, u64)> = Vec::new();
     let mut total: u64 = 0;
     for entry in read_dir.flatten() {
         let path = entry.path();
@@ -132,18 +132,24 @@ fn prune_to_cap(cache_dir: &Path) {
         }
         let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
         total += size;
-        let mut fetched_at: i64 = i64::MAX;
-        if let Ok(raw) = fs::read_to_string(&path) {
-            if let Ok(parsed) = serde_json::from_str::<CachedEntry>(&raw) {
-                fetched_at = parsed.fetched_at_unix;
-            }
-        }
-        files.push((path, fetched_at, size));
+        paths.push((path, size));
     }
 
     if total <= CACHE_CAP_BYTES {
         return;
     }
+
+    let mut files: Vec<(PathBuf, i64, u64)> = paths
+        .into_iter()
+        .map(|(path, size)| {
+            let fetched_at = fs::read_to_string(&path)
+                .ok()
+                .and_then(|raw| serde_json::from_str::<CachedEntry>(&raw).ok())
+                .map(|parsed| parsed.fetched_at_unix)
+                .unwrap_or(i64::MAX);
+            (path, fetched_at, size)
+        })
+        .collect();
 
     files.sort_by_key(|(_, fetched_at, _)| *fetched_at);
     for (path, _, size) in files {

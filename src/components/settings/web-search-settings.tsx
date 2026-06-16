@@ -19,6 +19,8 @@ import { CollapsibleSettingsSection } from "./collapsible-settings-section";
 
 type TestStatus = "idle" | "testing" | "success" | "error";
 
+const noopToggle = () => {};
+
 function AdvancedSearchToggleRow({
   label,
   description,
@@ -652,13 +654,13 @@ export function WebSearchSettings() {
                 <AdvancedSearchToggleRow
                   label="YouTube transcripts"
                   on={true}
-                  onChange={() => {}}
+                  onChange={noopToggle}
                   description="Always available. Extracts public captions/transcripts when present."
                 />
                 <AdvancedSearchToggleRow
                   label="PDF text extraction"
                   on={true}
-                  onChange={() => {}}
+                  onChange={noopToggle}
                   description="Always available. Extracts text from PDF documents."
                 />
                 <AdvancedSearchToggleRow

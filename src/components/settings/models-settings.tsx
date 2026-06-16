@@ -278,6 +278,8 @@ function ModelOverrideCard({
   const override = modelOverrides[model.id];
   const hasOverride = !!override;
   const resolved = getModelSettings(model.id);
+  const formatContextLength = (n: number) =>
+    n >= 1024 ? `${(n / 1024).toFixed(n % 1024 ? 1 : 0)}K` : `${n}`;
 
   const update = (patch: ModelSettings) => {
     setModelOverride(model.id, { ...override, ...patch });
@@ -399,7 +401,7 @@ function ModelOverrideCard({
               <div className="space-y-3">
                 <SliderControl
                   label="Temperature"
-                  description={`Default: ${getModelSettings(model.id).temperature.toFixed(2)}`}
+                  description={`Default: ${resolved.temperature.toFixed(2)}`}
                   value={resolved.temperature}
                   onChange={(v) => update({ temperature: v })}
                   min={0}
@@ -409,7 +411,7 @@ function ModelOverrideCard({
                 />
                 <SliderControl
                   label="Repetition Penalty"
-                  description={`Default: ${getModelSettings(model.id).repetitionPenalty.toFixed(2)}`}
+                  description={`Default: ${resolved.repetitionPenalty.toFixed(2)}`}
                   value={resolved.repetitionPenalty}
                   onChange={(v) => update({ repetitionPenalty: v })}
                   min={1}
@@ -419,7 +421,7 @@ function ModelOverrideCard({
                 />
                 <SliderControl
                   label="Top-p"
-                  description={`Default: ${getModelSettings(model.id).topP.toFixed(2)}`}
+                  description={`Default: ${resolved.topP.toFixed(2)}`}
                   value={resolved.topP}
                   onChange={(v) => update({ topP: v })}
                   min={0}
@@ -437,7 +439,7 @@ function ModelOverrideCard({
               <div className="space-y-3">
                 <SliderControl
                   label="Max output tokens"
-                  description={`Default: ${getModelSettings(model.id).maxTokens === 0 ? "Unlimited" : getModelSettings(model.id).maxTokens.toLocaleString()}`}
+                  description={`Default: ${resolved.maxTokens === 0 ? "Unlimited" : resolved.maxTokens.toLocaleString()}`}
                   value={resolved.maxTokens}
                   onChange={(v) => update({ maxTokens: v })}
                   min={0}
@@ -448,7 +450,7 @@ function ModelOverrideCard({
                 <StopSequencesInput
                   value={resolved.stopSequences}
                   onChange={(v) => update({ stopSequences: v })}
-                  defaultValue={getModelSettings(model.id).stopSequences}
+                  defaultValue={resolved.stopSequences}
                 />
               </div>
             </div>
@@ -460,19 +462,17 @@ function ModelOverrideCard({
               <div className="space-y-3">
                 <SliderControl
                   label="Context length"
-                  description={`Default: ${getModelSettings(model.id).contextLength >= 1024 ? `${(getModelSettings(model.id).contextLength / 1024).toFixed(getModelSettings(model.id).contextLength % 1024 ? 1 : 0)}K` : getModelSettings(model.id).contextLength}`}
+                  description={`Default: ${formatContextLength(resolved.contextLength)}`}
                   value={resolved.contextLength}
                   onChange={(v) => update({ contextLength: v })}
                   min={512}
                   max={131072}
                   step={512}
-                  formatValue={(n) =>
-                    n >= 1024 ? `${(n / 1024).toFixed(n % 1024 ? 1 : 0)}K` : `${n}`
-                  }
+                  formatValue={formatContextLength}
                 />
                 <SliderControl
                   label="Reserved output tokens"
-                  description={`Default: ${getModelSettings(model.id).reservedOutputTokens.toLocaleString()}`}
+                  description={`Default: ${resolved.reservedOutputTokens.toLocaleString()}`}
                   value={resolved.reservedOutputTokens}
                   onChange={(v) => update({ reservedOutputTokens: v })}
                   min={256}

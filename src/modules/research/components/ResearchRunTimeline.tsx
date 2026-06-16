@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Brain,
   Search,
@@ -47,8 +47,9 @@ type Props = {
 export function ResearchRunTimeline({ steps }: Props) {
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
 
-  const sorted = [...steps].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  const sorted = useMemo(
+    () => [...steps].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)),
+    [steps],
   );
 
   return (

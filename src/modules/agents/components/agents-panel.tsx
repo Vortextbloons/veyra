@@ -34,7 +34,7 @@ type AgentsPanelProps = {
 export const AGENT_MODES: { id: AgentMode; label: string; detail: string; icon: ReactNode }[] = [
   { id: "ask", label: "Ask", detail: "Read-only answers", icon: <HelpCircle className="size-3.5" /> },
   { id: "plan", label: "Plan", detail: "Strategy & analysis", icon: <ListTodo className="size-3.5" /> },
-  { id: "build", label: "Build", detail: "Make code changes", icon: <Hammer className="size-3.5" /> },
+  { id: "build", label: "Build", detail: "Take action on your machine", icon: <Hammer className="size-3.5" /> },
 ];
 
 export function AgentsPanel({

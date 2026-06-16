@@ -522,7 +522,10 @@ function GroupEditorDrawer({
     setDraft(liveGroup);
   }
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(liveGroup);
+  const dirty = useMemo(
+    () => JSON.stringify(draft) !== JSON.stringify(liveGroup),
+    [draft, liveGroup],
+  );
 
   const handleSave = async () => {
     setSaving(true);

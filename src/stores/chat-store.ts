@@ -67,6 +67,74 @@ type ChatStore = {
   recentChatsForCharacter: (characterId: string, limit?: number) => Conversation[];
 };
 
+type SetChatStore = (
+  partial: Partial<ChatStore> | ((state: ChatStore) => Partial<ChatStore>),
+) => void;
+let pendingStreamTarget: { conversationId: string; messageId: string } | null = null;
+let pendingContent = "";
+let pendingReasoning = "";
+let pendingStreamTimer: number | null = null;
+
+function flushPendingStreaming(set: SetChatStore): void {
+  if (pendingStreamTimer != null) {
+    window.clearTimeout(pendingStreamTimer);
+    pendingStreamTimer = null;
+  }
+  if (!pendingStreamTarget || (!pendingContent && !pendingReasoning)) return;
+
+  const target = pendingStreamTarget;
+  const content = pendingContent;
+  const reasoning = pendingReasoning;
+  pendingStreamTarget = null;
+  pendingContent = "";
+  pendingReasoning = "";
+
+  set((state) => {
+    const current = state.streamingBuffer;
+    if (!current || current.conversationId !== target.conversationId || current.messageId !== target.messageId) {
+      return {
+        streamingBuffer: {
+          conversationId: target.conversationId,
+          messageId: target.messageId,
+          content,
+          reasoning,
+        },
+      };
+    }
+    return {
+      streamingBuffer: {
+        ...current,
+        content: current.content + content,
+        reasoning: current.reasoning + reasoning,
+      },
+    };
+  });
+}
+
+function queueStreamingChunk(
+  set: SetChatStore,
+  conversationId: string,
+  messageId: string,
+  chunk: string,
+  field: "content" | "reasoning",
+): void {
+  if (!chunk) return;
+  if (
+    pendingStreamTarget &&
+    (pendingStreamTarget.conversationId !== conversationId || pendingStreamTarget.messageId !== messageId)
+  ) {
+    flushPendingStreaming(set);
+  }
+
+  pendingStreamTarget = { conversationId, messageId };
+  if (field === "content") pendingContent += chunk;
+  else pendingReasoning += chunk;
+
+  if (pendingStreamTimer == null) {
+    pendingStreamTimer = window.setTimeout(() => flushPendingStreaming(set), 16);
+  }
+}
+
 function newConversation(projectId?: string): Conversation {
   const now = Date.now();
   return {
@@ -159,38 +227,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
   },
   appendStreamingContent: (conversationId, messageId, chunk) => {
-    set((state) => {
-      const current = state.streamingBuffer;
-      if (!current || current.conversationId !== conversationId || current.messageId !== messageId) {
-        return {
-          streamingBuffer: { conversationId, messageId, content: chunk, reasoning: "" },
-        };
-      }
-      return { streamingBuffer: { ...current, content: current.content + chunk } };
-    });
+    queueStreamingChunk(set, conversationId, messageId, chunk, "content");
   },
   appendStreamingReasoning: (conversationId, messageId, chunk) => {
-    set((state) => {
-      const current = state.streamingBuffer;
-      if (!current || current.conversationId !== conversationId || current.messageId !== messageId) {
-        return {
-          streamingBuffer: { conversationId, messageId, content: "", reasoning: chunk },
-        };
-      }
-      return { streamingBuffer: { ...current, reasoning: current.reasoning + chunk } };
-    });
+    queueStreamingChunk(set, conversationId, messageId, chunk, "reasoning");
   },
-  clearStreamingBuffer: () => set({ streamingBuffer: null, _skipNextClear: false }),
+  clearStreamingBuffer: () => {
+    flushPendingStreaming(set);
+    set({ streamingBuffer: null, _skipNextClear: false });
+  },
   clearStreamingBufferUnlessSkipped: () => {
     if (get()._skipNextClear) {
       set({ _skipNextClear: false });
       return;
     }
+    flushPendingStreaming(set);
     set({ streamingBuffer: null });
   },
   isBufferClearSkipped: () => get()._skipNextClear,
   skipNextBufferClear: () => set({ _skipNextClear: true }),
-  resetAfterRePrompt: () => set({ streamingBuffer: null, _skipNextClear: false }),
+  resetAfterRePrompt: () => {
+    flushPendingStreaming(set);
+    set({ streamingBuffer: null, _skipNextClear: false });
+  },
   setModelLoadProgress: (progress) => set({ modelLoadProgress: progress }),
   setStreamingWebSearchState: (webSearchState) => {
     set((state) => {
@@ -243,6 +302,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
   },
   commitAssistantMessage: (conversationId, messageId, patch = {}) => {
+    flushPendingStreaming(set);
     set((state) => {
       const buffer =
         state.streamingBuffer?.conversationId === conversationId &&

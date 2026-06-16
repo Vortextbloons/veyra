@@ -998,12 +998,13 @@ fn extract_paragraphs_fallback(html: &str) -> String {
         .expect("static selector must parse");
     let mut out = String::new();
     for element in document.select(&sel) {
-        let text: String = element
-            .text()
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
+        let mut text = String::new();
+        for part in element.text().map(str::trim).filter(|s| !s.is_empty()) {
+            if !text.is_empty() {
+                text.push(' ');
+            }
+            text.push_str(part);
+        }
         if text.len() >= 20 {
             if !out.is_empty() {
                 out.push_str("\n\n");
@@ -1024,13 +1025,18 @@ fn extract_paragraphs_regex(html: &str) -> String {
             let abs = i + pos;
             if let Some(end_rel) = lower[abs..].find("</p>") {
                 let block = &html[abs..abs + end_rel];
-                let text: String = block
+                let mut text = String::new();
+                for part in block
                     .split('<')
                     .skip(1)
                     .filter_map(|s| s.split_once('>').map(|(_, after)| after))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let cleaned: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+                {
+                    if !text.is_empty() {
+                        text.push(' ');
+                    }
+                    text.push_str(part);
+                }
+                let cleaned = compact_whitespace(&text);
                 if cleaned.len() >= 20 {
                     if !out.is_empty() {
                         out.push_str("\n\n");
@@ -1046,6 +1052,17 @@ fn extract_paragraphs_regex(html: &str) -> String {
     out
 }
 
+fn compact_whitespace(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for part in text.split_whitespace() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(part);
+    }
+    out
+}
+
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
@@ -1057,6 +1074,20 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 fn extract_pdf_text(bytes: &[u8]) -> Result<String, String> {
     pdf_extract::extract_text_from_mem(bytes).map_err(|e| format!("PDF extraction failed: {e}"))
+}
+
+async fn run_blocking_extraction<F>(url: &str, f: F) -> FetchedPage
+where
+    F: FnOnce() -> FetchedPage + Send + 'static,
+{
+    match tauri::async_runtime::spawn_blocking(f).await {
+        Ok(page) => page,
+        Err(e) => transient_error_page(
+            url,
+            "extraction",
+            &format!("Document extraction task failed: {e}"),
+        ),
+    }
 }
 
 async fn fetch_one(req: FetchRequest) -> FetchedPage {
@@ -1240,7 +1271,13 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                 &req.cache_dir,
             );
         }
-        let result = handle_pdf(&url, &body_bytes, max_chars, &req.cache_dir);
+        let result = run_blocking_extraction(&url, {
+            let url = url.clone();
+            let body_bytes = body_bytes.to_vec();
+            let cache_dir = req.cache_dir.clone();
+            move || handle_pdf(&url, &body_bytes, max_chars, &cache_dir)
+        })
+        .await;
         if result.status == "ok" {
             return result;
         }
@@ -1263,7 +1300,13 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                 &req.cache_dir,
             );
         }
-        let result = fetch_office_document(&url, &body_bytes, max_chars, &req.cache_dir);
+        let result = run_blocking_extraction(&url, {
+            let url = url.clone();
+            let body_bytes = body_bytes.to_vec();
+            let cache_dir = req.cache_dir.clone();
+            move || fetch_office_document(&url, &body_bytes, max_chars, &cache_dir)
+        })
+        .await;
         if result.status == "ok" {
             return result;
         }
@@ -1285,7 +1328,13 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                 &req.cache_dir,
             );
         }
-        let result = handle_epub(&url, &body_bytes, max_chars, &req.cache_dir);
+        let result = run_blocking_extraction(&url, {
+            let url = url.clone();
+            let body_bytes = body_bytes.to_vec();
+            let cache_dir = req.cache_dir.clone();
+            move || handle_epub(&url, &body_bytes, max_chars, &cache_dir)
+        })
+        .await;
         if result.status == "ok" {
             return result;
         }
@@ -1298,7 +1347,13 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     // Some servers mislabel PDF/Office payloads as HTML or wrap them in a minimal HTML shell.
     if body_bytes.len() >= 4 && &body_bytes[0..4] == b"%PDF" {
         if req.advanced_search_bundle_enabled {
-            let result = handle_pdf(&url, &body_bytes, max_chars, &req.cache_dir);
+            let result = run_blocking_extraction(&url, {
+                let url = url.clone();
+                let body_bytes = body_bytes.to_vec();
+                let cache_dir = req.cache_dir.clone();
+                move || handle_pdf(&url, &body_bytes, max_chars, &cache_dir)
+            })
+            .await;
             if result.status == "ok" {
                 return result;
             }
@@ -1318,7 +1373,13 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
 
     if contains_ole_compound_signature(&body_bytes) || is_zip_archive(&body_bytes) {
         if req.advanced_search_bundle_enabled {
-            let result = fetch_office_document(&url, &body_bytes, max_chars, &req.cache_dir);
+            let result = run_blocking_extraction(&url, {
+                let url = url.clone();
+                let body_bytes = body_bytes.to_vec();
+                let cache_dir = req.cache_dir.clone();
+                move || fetch_office_document(&url, &body_bytes, max_chars, &cache_dir)
+            })
+            .await;
             if result.status == "ok" {
                 return result;
             }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Folder,
   MessageSquare,
@@ -90,8 +90,14 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
   const conversations = useChatStore((s) => s.conversations);
   const documents = useDocumentStore((s) => s.documents);
 
-  const projectChats = conversations.filter((c) => c.projectId === project.id);
-  const projectDocs = documents.filter((d) => d.projectId === project.id);
+  const projectChats = useMemo(
+    () => conversations.filter((c) => c.projectId === project.id),
+    [conversations, project.id],
+  );
+  const projectDocs = useMemo(
+    () => documents.filter((d) => d.projectId === project.id),
+    [documents, project.id],
+  );
 
   const lastActivity = projectChats.length > 0
     ? new Date(Math.max(...projectChats.map((c) => c.updatedAt))).toLocaleDateString()
@@ -154,7 +160,10 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
   const setActiveConversationId = useChatStore((s) => s.setActiveConversationId);
   const setActiveNav = useSettingsStore((s) => s.setActiveNav);
 
-  const projectChats = conversations.filter((c) => c.projectId === project.id);
+  const projectChats = useMemo(
+    () => conversations.filter((c) => c.projectId === project.id),
+    [conversations, project.id],
+  );
 
   const handleNewChat = () => {
     createConversation(project.id);
@@ -221,7 +230,10 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
 
 function DocumentsTab({ project }: { project: ProjectRecord }) {
   const documents = useDocumentStore((s) => s.documents);
-  const projectDocs = documents.filter((d) => d.projectId === project.id);
+  const projectDocs = useMemo(
+    () => documents.filter((d) => d.projectId === project.id),
+    [documents, project.id],
+  );
 
   return (
     <div className="flex h-full w-full flex-col p-4">

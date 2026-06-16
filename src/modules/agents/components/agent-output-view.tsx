@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ChevronRight, FileCode2, Loader2, Sparkles, Square, TerminalSquare } from "lucide-react";
+import { ChevronRight, Bot, Loader2, Sparkles, Square, TerminalSquare } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { AgentChatTurn, buildAgentChatTurns } from "@/modules/agents/components/agent-chat-turn";
 import type { AgentChatTurnModel } from "@/modules/agents/components/agent-chat-turn";
@@ -118,12 +118,12 @@ export function AgentEmptyState() {
     <div className="flex flex-1 items-center justify-center">
       <div className="max-w-sm px-6 text-center">
         <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/15 to-violet-500/10 ring-1 ring-inset ring-indigo-400/10">
-          <FileCode2 className="size-5 text-indigo-300/70" />
+          <Bot className="size-5 text-indigo-300/70" />
         </div>
         <h3 className="text-[14px] font-semibold text-white">Agent workspace</h3>
         <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--color-text-dim)]">
-          Choose a mode above, then send a task from the composer below. Sessions and their output
-          will appear here.
+          Agents can research, write, code, manage files, and run commands on your machine.
+          Choose a mode above, then send a task from the composer below.
         </p>
         <div className="mt-5 grid grid-cols-3 gap-2">
           {AGENT_MODES.map((m) => (

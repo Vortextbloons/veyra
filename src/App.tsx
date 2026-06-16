@@ -7,7 +7,6 @@ import { RightPanel } from "@/components/right-panel";
 import { DocEditorPanel } from "@/modules/documents/components/doc-editor-panel";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { executeChatSend, ensureProviderReady, triggerMemoryExtractionNow } from "@/lib/chat-actions";
-import { prepareAgentLmStudioModel } from "@/lib/lm-model-session";
 import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "@/lib/chat-types";
 import { isChatModeNav } from "@/lib/chat-types";
 import { useWorkspaceModeChange } from "@/lib/workspace-mode";
@@ -531,6 +530,7 @@ function App() {
           run: async (signal) => {
             if (signal.aborted) throw new DOMException("Agent job aborted", "AbortError");
             if (selectedProvider === "lm-studio") {
+              const { prepareAgentLmStudioModel } = await import("@/lib/lm-model-session");
               await prepareAgentLmStudioModel(
                 selectedModel,
                 resolvedContextLength,

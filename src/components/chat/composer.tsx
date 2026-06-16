@@ -229,7 +229,7 @@ export function Composer({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isEditMode ? "Edit your message…" : mode === "agents" ? "Describe a coding task…" : "Ask anything…"}
+          placeholder={isEditMode ? "Edit your message…" : mode === "agents" ? "Describe a task for the agent…" : "Ask anything…"}
           disabled={disabled}
           className={`block w-full resize-none rounded-md bg-transparent px-2 py-1.5 font-medium leading-snug tracking-[-0.005em] text-white transition-[font-size] duration-200 ease-out placeholder:font-normal placeholder:tracking-normal placeholder:text-[var(--color-text-dim)]/70 focus:outline-none disabled:opacity-50 ${composerTextClass}`}
         />

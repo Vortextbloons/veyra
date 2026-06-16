@@ -179,7 +179,7 @@ export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
           type="text"
           value={settings.agentProjectPath ?? ""}
           onChange={(v) => update("agentProjectPath", v || undefined)}
-          placeholder="Filesystem path for agent mode"
+          placeholder="Working directory for agents"
         />
       </SettingGroup>
 

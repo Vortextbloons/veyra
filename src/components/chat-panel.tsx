@@ -286,19 +286,20 @@ export function ChatPanel({
             className={`relative z-10 flex w-full flex-col gap-5 pb-6 pt-5 transition-[padding] duration-200 ease-out ${layout.messagesPx}`}
           >
             {messages.map((m) => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                isStreaming={m.id === streamingMessageId}
-                layout={layout}
-                isLastAssistant={m.id === lastAssistantId}
-                onEdit={onEditMessage}
-                onRegenerate={onRegenerate}
-                onRetry={onRetry}
-                onCopy={onCopyMessage}
-                onFork={onForkMessage}
-                onDelete={onDeleteMessage}
-              />
+              <div key={m.id} style={{ contentVisibility: "auto", containIntrinsicSize: "0 180px" }}>
+                <MessageBubble
+                  message={m}
+                  isStreaming={m.id === streamingMessageId}
+                  layout={layout}
+                  isLastAssistant={m.id === lastAssistantId}
+                  onEdit={onEditMessage}
+                  onRegenerate={onRegenerate}
+                  onRetry={onRetry}
+                  onCopy={onCopyMessage}
+                  onFork={onForkMessage}
+                  onDelete={onDeleteMessage}
+                />
+              </div>
             ))}
           </div>
         )}
