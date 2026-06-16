@@ -4,7 +4,8 @@ import { aiScheduler } from "@/lib/ai-scheduler";
 import { flushConversationSave, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { unloadAllProviderModels } from "@/lib/providers";
 import { useProviderStore } from "@/stores/provider-store";
-import { clearAllDelayedMemoryTimers } from "@/lib/post-chat-jobs";
+// Imported lazily so post-chat-jobs stays out of the main chunk.
+// The static import in chat-actions.ts is dynamic; this was the only eager site.
 import { terminateDecryptWorker } from "@/lib/conversation-storage";
 import { invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
 import { useChatStore } from "@/stores/chat-store";
@@ -154,6 +155,7 @@ export async function runAppShutdown(): Promise<void> {
   setShutdownStep("preparing");
   await withTimeout(useResearchStore.getState().interruptActiveResearchOnShutdown(), "Pause active research");
   aiScheduler.shutdown();
+  const { clearAllDelayedMemoryTimers } = await import("@/lib/post-chat-jobs");
   clearAllDelayedMemoryTimers();
   terminateDecryptWorker();
 

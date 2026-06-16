@@ -154,6 +154,10 @@ export async function runSearch(
     const fusedSearchEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchFusionEnabled !== false;
     const multiQueryEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchMultiQueryEnabled !== false && multiQuery !== false;
     const fallbackEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchAdaptiveFallbackEnabled !== false;
+    const rankingOptions = {
+      freshnessBoost: fusedSearchEnabled && settings.advancedSearchFreshnessBoostEnabled !== false,
+      qualityFilter: fusedSearchEnabled && settings.advancedSearchQualityFilterEnabled !== false,
+    };
     const plannedQueries: PlannedSearchQuery[] = multiQueryEnabled
       ? planSearchQueries(query, Math.min(6, Math.max(2, Math.ceil(maxResults / 2))))
       : [{ query, lane: "general" }];
@@ -232,7 +236,7 @@ export async function runSearch(
     }
 
     let results: SearchResult[] = fusedSearchEnabled
-      ? dedupeAndRankSearchResults(flatEntries, new Map(), maxResults)
+      ? dedupeAndRankSearchResults(flatEntries, new Map(), maxResults, rankingOptions)
       : flatEntries.map((entry) => entry.result).slice(0, maxResults);
 
     if (signal?.aborted) {
@@ -281,7 +285,7 @@ export async function runSearch(
     }
 
     if (fusedSearchEnabled && fetchedPages.length > 0) {
-      results = dedupeAndRankSearchResults(flatEntries, fetchedByUrl, maxResults);
+      results = dedupeAndRankSearchResults(flatEntries, fetchedByUrl, maxResults, rankingOptions);
     }
 
     const sources: SearchSource[] = results.map((r) => {
@@ -330,6 +334,8 @@ export async function runSearch(
         providerResultCounts,
         fused: fusedSearchEnabled,
         fallbackUsed,
+        freshnessBoosted: rankingOptions.freshnessBoost,
+        qualityFiltered: rankingOptions.qualityFilter,
       },
     };
   };

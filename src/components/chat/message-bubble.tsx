@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useRef, useState } from "react";
 import {
   Brain,
   ChevronDown,
@@ -8,13 +8,16 @@ import type { ChatMessage, MessagePerformance } from "@/lib/chat-types";
 import { hasWebSearchActivity } from "@/lib/web-search-state";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
-import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { MessageAttachmentsPreview } from "@/components/chat/composer";
 import { MessageToolbar } from "@/components/chat/message-toolbar";
 import { ToolCallList } from "@/components/chat/tool-call-list";
 import { ModelIcon } from "@/components/model-icon";
 import { useProviderStore } from "@/stores/provider-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
+
+const MarkdownRenderer = lazy(() =>
+  import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
+);
 
 type ChatMessageLayout = {
   messagesPx: string;
@@ -80,9 +83,11 @@ export const MessageBubble = memo(function MessageBubble({
               <MessageAttachmentsPreview attachments={message.attachments} />
             )}
             {message.content.trim() && (
-              <MarkdownRenderer className="leading-snug">
-                {message.content.trim()}
-              </MarkdownRenderer>
+              <Suspense>
+                <MarkdownRenderer className="leading-snug">
+                  {message.content.trim()}
+                </MarkdownRenderer>
+              </Suspense>
             )}
           </div>
         </div>
@@ -143,9 +148,11 @@ export const MessageBubble = memo(function MessageBubble({
         <div
           className={`rounded-2xl rounded-tl-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-2.5 text-[var(--color-text)] shadow-[0_1px_0_rgba(255,255,255,0.03)_inset transition-[font-size] duration-200 ease-out ${layout.messageText}`}
         >
-          <MarkdownRenderer className="leading-snug">
-            {body}
-          </MarkdownRenderer>
+          <Suspense>
+            <MarkdownRenderer className="leading-snug">
+              {body}
+            </MarkdownRenderer>
+          </Suspense>
           {showPulseInReply && (
             <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
           )}

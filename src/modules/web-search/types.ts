@@ -88,5 +88,7 @@ export type SearchContextBundle = {
     providerResultCounts: Record<string, number>;
     fused: boolean;
     fallbackUsed: boolean;
+    freshnessBoosted?: boolean;
+    qualityFiltered?: boolean;
   };
 };

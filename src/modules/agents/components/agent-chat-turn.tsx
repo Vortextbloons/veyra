@@ -1,10 +1,14 @@
 /* eslint-disable react-refresh/only-export-components */
+import { lazy, Suspense } from "react";
 import { AlertTriangle, Loader2, Sparkles } from "lucide-react";
 import type { AgentEvent, AgentMode } from "@/modules/agents/agent-types";
-import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { AgentActivityCard } from "@/modules/agents/components/agent-output-view";
 import { TypewriterMarkdown } from "@/modules/agents/components/typewriter-markdown";
 import { ModelIcon } from "@/components/model-icon";
+
+const MarkdownRenderer = lazy(() =>
+  import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
+);
 
 export type AgentChatTurnModel = {
   id: string;
@@ -119,7 +123,9 @@ export function AgentChatTurn({
         </div>
         <div className="flex min-w-0 max-w-[85%] flex-col items-end">
           <div className="rounded-2xl rounded-tr-md border border-indigo-400/15 bg-[var(--color-accent-soft)] px-4 py-2.5 text-[13px] text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]">
-            <MarkdownRenderer className="leading-snug">{turn.content}</MarkdownRenderer>
+            <Suspense>
+              <MarkdownRenderer className="leading-snug">{turn.content}</MarkdownRenderer>
+            </Suspense>
           </div>
         </div>
       </div>

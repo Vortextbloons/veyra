@@ -77,6 +77,8 @@ type SettingsStoreState = {
   advancedSearchMultiQueryEnabled: boolean;
   advancedSearchFusionEnabled: boolean;
   advancedSearchAdaptiveFallbackEnabled: boolean;
+  advancedSearchFreshnessBoostEnabled: boolean;
+  advancedSearchQualityFilterEnabled: boolean;
   bundleExtractDocx: boolean;
   bundleExtractPptx: boolean;
   bundleExtractXlsx: boolean;
@@ -170,6 +172,8 @@ type SettingsStore = SettingsStoreState & {
   setAdvancedSearchMultiQueryEnabled: (enabled: boolean) => void;
   setAdvancedSearchFusionEnabled: (enabled: boolean) => void;
   setAdvancedSearchAdaptiveFallbackEnabled: (enabled: boolean) => void;
+  setAdvancedSearchFreshnessBoostEnabled: (enabled: boolean) => void;
+  setAdvancedSearchQualityFilterEnabled: (enabled: boolean) => void;
   setBundleExtractDocx: (enabled: boolean) => void;
   setBundleExtractPptx: (enabled: boolean) => void;
   setBundleExtractXlsx: (enabled: boolean) => void;
@@ -261,6 +265,8 @@ const DEFAULT_STATE: SettingsStoreState = {
   advancedSearchMultiQueryEnabled: true,
   advancedSearchFusionEnabled: true,
   advancedSearchAdaptiveFallbackEnabled: true,
+  advancedSearchFreshnessBoostEnabled: true,
+  advancedSearchQualityFilterEnabled: true,
   bundleExtractDocx: true,
   bundleExtractPptx: true,
   bundleExtractXlsx: true,
@@ -341,6 +347,8 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     advancedSearchMultiQueryEnabled: state.advancedSearchMultiQueryEnabled,
     advancedSearchFusionEnabled: state.advancedSearchFusionEnabled,
     advancedSearchAdaptiveFallbackEnabled: state.advancedSearchAdaptiveFallbackEnabled,
+    advancedSearchFreshnessBoostEnabled: state.advancedSearchFreshnessBoostEnabled,
+    advancedSearchQualityFilterEnabled: state.advancedSearchQualityFilterEnabled,
     bundleExtractDocx: state.bundleExtractDocx,
     bundleExtractPptx: state.bundleExtractPptx,
     bundleExtractXlsx: state.bundleExtractXlsx,
@@ -470,6 +478,10 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ advancedSearchFusionEnabled }),
       setAdvancedSearchAdaptiveFallbackEnabled: (advancedSearchAdaptiveFallbackEnabled) =>
         set({ advancedSearchAdaptiveFallbackEnabled }),
+      setAdvancedSearchFreshnessBoostEnabled: (advancedSearchFreshnessBoostEnabled) =>
+        set({ advancedSearchFreshnessBoostEnabled }),
+      setAdvancedSearchQualityFilterEnabled: (advancedSearchQualityFilterEnabled) =>
+        set({ advancedSearchQualityFilterEnabled }),
       setBundleExtractDocx: (bundleExtractDocx) => set({ bundleExtractDocx }),
       setBundleExtractPptx: (bundleExtractPptx) => set({ bundleExtractPptx }),
       setBundleExtractXlsx: (bundleExtractXlsx) => set({ bundleExtractXlsx }),

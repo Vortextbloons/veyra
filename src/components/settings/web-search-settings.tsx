@@ -19,6 +19,27 @@ import { CollapsibleSettingsSection } from "./collapsible-settings-section";
 
 type TestStatus = "idle" | "testing" | "success" | "error";
 
+function AdvancedSearchToggleRow({
+  label,
+  description,
+  on,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  on: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/45 px-3 py-2">
+      <Toggle label={label} on={on} onChange={onChange} />
+      <p className="mt-1 text-[10.5px] leading-relaxed text-[var(--color-text-dim)]">
+        {description}
+      </p>
+    </div>
+  );
+}
+
 export function WebSearchSettings() {
   const defaultWebSearchEnabled = useSettingsStore((s) => s.defaultWebSearchEnabled);
   const setDefaultWebSearchEnabled = useSettingsStore(
@@ -67,6 +88,10 @@ export function WebSearchSettings() {
   const setAdvancedSearchFusionEnabled = useSettingsStore((s) => s.setAdvancedSearchFusionEnabled);
   const advancedSearchAdaptiveFallbackEnabled = useSettingsStore((s) => s.advancedSearchAdaptiveFallbackEnabled);
   const setAdvancedSearchAdaptiveFallbackEnabled = useSettingsStore((s) => s.setAdvancedSearchAdaptiveFallbackEnabled);
+  const advancedSearchFreshnessBoostEnabled = useSettingsStore((s) => s.advancedSearchFreshnessBoostEnabled);
+  const setAdvancedSearchFreshnessBoostEnabled = useSettingsStore((s) => s.setAdvancedSearchFreshnessBoostEnabled);
+  const advancedSearchQualityFilterEnabled = useSettingsStore((s) => s.advancedSearchQualityFilterEnabled);
+  const setAdvancedSearchQualityFilterEnabled = useSettingsStore((s) => s.setAdvancedSearchQualityFilterEnabled);
   const bundleExtractDocx = useSettingsStore((s) => s.bundleExtractDocx);
   const setBundleExtractDocx = useSettingsStore((s) => s.setBundleExtractDocx);
   const bundleExtractPptx = useSettingsStore((s) => s.bundleExtractPptx);
@@ -573,136 +598,123 @@ export function WebSearchSettings() {
 
         {advancedSearchBundleEnabled && (
           <>
-            {/* Content Extractors */}
+            {/* Search Intelligence */}
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-              <div className="mb-2 text-[12.5px] font-medium text-white">
-                Search Intelligence
+              <div className="mb-3">
+                <div className="text-[12.5px] font-medium text-white">Search Intelligence</div>
+                <p className="mt-1 text-[10.5px] text-[var(--color-text-dim)]">
+                  Controls how Veyra expands, ranks, and cleans up result sets before sources are injected into chat.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Toggle
+              <div className="grid gap-2 md:grid-cols-2">
+                <AdvancedSearchToggleRow
                   label="Multi-query expansion"
                   on={advancedSearchMultiQueryEnabled}
                   onChange={setAdvancedSearchMultiQueryEnabled}
+                  description="Runs broad, recent, academic, primary-source, and opposing-view query variants."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Runs targeted variants for broad, recent, academic, primary-source, and opposing-view coverage.
-                </p>
-                <Toggle
+                <AdvancedSearchToggleRow
                   label="Result fusion and reranking"
                   on={advancedSearchFusionEnabled}
                   onChange={setAdvancedSearchFusionEnabled}
+                  description="Deduplicates results, boosts authority/extraction success, and diversifies domains."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Deduplicates results across queries/providers, boosts authority and extraction success, and diversifies domains.
-                </p>
-                <Toggle
+                <AdvancedSearchToggleRow
                   label="Adaptive fallback searches"
                   on={advancedSearchAdaptiveFallbackEnabled}
                   onChange={setAdvancedSearchAdaptiveFallbackEnabled}
+                  description="Broadens weak searches when too few usable results come back."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Automatically broadens weak searches when too few usable results come back.
-                </p>
+                <AdvancedSearchToggleRow
+                  label="Freshness boost"
+                  on={advancedSearchFreshnessBoostEnabled}
+                  onChange={setAdvancedSearchFreshnessBoostEnabled}
+                  description="Gives recently published sources a small lift without hiding older authority pages."
+                />
+                <AdvancedSearchToggleRow
+                  label="Quality domain filter"
+                  on={advancedSearchQualityFilterEnabled}
+                  onChange={setAdvancedSearchQualityFilterEnabled}
+                  description="Suppresses low-signal domains when enough better alternatives are available."
+                />
               </div>
             </div>
 
             {/* Content Extractors */}
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-              <div className="mb-2 text-[12.5px] font-medium text-white">
-                Content Extractors
+              <div className="mb-3">
+                <div className="text-[12.5px] font-medium text-white">Content Sources</div>
+                <p className="mt-1 text-[10.5px] text-[var(--color-text-dim)]">
+                  Enables richer extraction for result types that normal webpage parsing does not handle well.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Toggle
+              <div className="grid gap-2 md:grid-cols-2">
+                <AdvancedSearchToggleRow
                   label="YouTube transcripts"
                   on={true}
                   onChange={() => {}}
+                  description="Always available. Extracts public captions/transcripts when present."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Extracts captions/transcripts from YouTube videos (free public API, no key required).
-                </p>
-                <Toggle
+                <AdvancedSearchToggleRow
                   label="PDF text extraction"
                   on={true}
                   onChange={() => {}}
+                  description="Always available. Extracts text from PDF documents."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Extracts text from PDF documents using the pdf-extract crate.
-                </p>
-                <Toggle
+                <AdvancedSearchToggleRow
                   label="DOCX documents"
                   on={bundleExtractDocx}
                   onChange={setBundleExtractDocx}
+                  description="Extracts text from Word documents."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Extracts text from Word documents (.docx).
-                </p>
-                <Toggle
+                <AdvancedSearchToggleRow
                   label="PowerPoint presentations"
                   on={bundleExtractPptx}
                   onChange={setBundleExtractPptx}
+                  description="Extracts slide text from presentations."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Extracts slide text from PowerPoint files (.pptx).
-                </p>
-                <Toggle
+                <AdvancedSearchToggleRow
                   label="Excel spreadsheets"
                   on={bundleExtractXlsx}
                   onChange={setBundleExtractXlsx}
+                  description="Extracts readable cell data from spreadsheets."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Extracts cell data from Excel files (.xlsx).
-                </p>
-                <Toggle
+                <AdvancedSearchToggleRow
                   label="EPUB books"
                   on={bundleExtractEpub}
                   onChange={setBundleExtractEpub}
+                  description="Extracts text from EPUB e-books."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Extracts text from EPUB e-books.
+              </div>
+            </div>
+
+            {/* Recovery and Direct API Providers */}
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+              <div className="mb-3">
+                <div className="text-[12.5px] font-medium text-white">Recovery and Direct Sources</div>
+                <p className="mt-1 text-[10.5px] text-[var(--color-text-dim)]">
+                  Adds fallback retrieval and direct provider results that supplement SearXNG.
                 </p>
               </div>
-            </div>
-
-            {/* Recovery */}
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-              <div className="mb-2 text-[12.5px] font-medium text-white">
-                Recovery
-              </div>
-              <Toggle
-                label="Wayback Machine fallback"
-                on={bundleWaybackFallback}
-                onChange={setBundleWaybackFallback}
-              />
-              <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
-                When a page fails to load (timeout, HTTP error, etc.),
-                automatically try the Internet Archive's cached version.
-              </p>
-            </div>
-
-            {/* Direct API Providers */}
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-              <div className="mb-2 text-[12.5px] font-medium text-white">
-                Direct API Providers
-              </div>
-              <div className="space-y-2">
-                <Toggle
+              <div className="grid gap-2 md:grid-cols-2">
+                <AdvancedSearchToggleRow
+                  label="Wayback Machine fallback"
+                  on={bundleWaybackFallback}
+                  onChange={setBundleWaybackFallback}
+                  description="Tries an Internet Archive copy when a page fails to load."
+                />
+                <AdvancedSearchToggleRow
                   label="ArXiv academic search"
                   on={bundleArxivSearch}
                   onChange={setBundleArxivSearch}
+                  description="Includes paper abstracts via ArXiv when allowed by the active research depth."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Include ArXiv results when enabled globally and for the active research depth
-                  (Quick disables by default). Retrieves paper abstracts via the ArXiv API.
-                </p>
-                <Toggle
+                <AdvancedSearchToggleRow
                   label="Wikipedia search"
                   on={bundleWikipediaSearch}
                   onChange={setBundleWikipediaSearch}
+                  description="Includes article content from Wikipedia when allowed by the active research depth."
                 />
-                <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Include Wikipedia results when enabled globally and for the active research depth.
-                  Extracts article content via the Wikipedia API.
-                </p>
               </div>
             </div>
 
@@ -717,6 +729,8 @@ export function WebSearchSettings() {
                 {advancedSearchMultiQueryEnabled && <li>• Multi-query expansion for broader coverage</li>}
                 {advancedSearchFusionEnabled && <li>• Result fusion, authority boosts, and domain diversification</li>}
                 {advancedSearchAdaptiveFallbackEnabled && <li>• Adaptive fallback when searches are sparse</li>}
+                {advancedSearchFreshnessBoostEnabled && <li>• Freshness boost for recently published sources</li>}
+                {advancedSearchQualityFilterEnabled && <li>• Quality domain filtering when alternatives are available</li>}
                 {bundleExtractDocx && <li>• DOCX documents → text extraction</li>}
                 {bundleExtractPptx && <li>• PowerPoint presentations → slide text</li>}
                 {bundleExtractXlsx && <li>• Excel spreadsheets → cell data</li>}

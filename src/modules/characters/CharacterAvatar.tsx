@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CharacterRecord } from "./character-types";
 import { getAvatarGradient } from "./character-gradients";
-import { ensureCharacterAvatarUrl } from "./character-avatar";
 
 interface CharacterAvatarProps {
   character: CharacterRecord;
@@ -30,11 +29,13 @@ export function CharacterAvatar({ character, size = "md", className }: Character
   useEffect(() => {
     if (!path) return;
     let cancelled = false;
-    ensureCharacterAvatarUrl(path).then((u) => {
-      if (!cancelled) setUrl(u);
-    }).catch(() => {
-      if (!cancelled) setUrl(null);
-    });
+    import("./character-avatar").then(({ ensureCharacterAvatarUrl }) =>
+      ensureCharacterAvatarUrl(path).then((u) => {
+        if (!cancelled) setUrl(u);
+      }).catch(() => {
+        if (!cancelled) setUrl(null);
+      }),
+    );
     return () => {
       cancelled = true;
     };

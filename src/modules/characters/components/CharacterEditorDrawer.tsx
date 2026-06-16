@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { ensureCharacterAvatarUrl } from "../character-avatar";
 import {
   X,
   Save,
@@ -1224,9 +1223,11 @@ function AvatarField({
   useEffect(() => {
     let cancelled = false;
     if (!draft.avatarPath) return;
-    ensureCharacterAvatarUrl(draft.avatarPath).then((u) => {
-      if (!cancelled) setAvatarUrl(u);
-    });
+    import("../character-avatar").then(({ ensureCharacterAvatarUrl }) =>
+      ensureCharacterAvatarUrl(draft.avatarPath).then((u) => {
+        if (!cancelled) setAvatarUrl(u);
+      }),
+    );
     return () => {
       cancelled = true;
     };
