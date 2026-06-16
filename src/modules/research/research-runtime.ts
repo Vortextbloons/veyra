@@ -1,6 +1,8 @@
 import type { ChatMessage } from "@/lib/chat-types";
 import { getProviderAdapter, prepareProviderModel } from "@/lib/providers";
 import { runSearch } from "@/modules/web-search/orchestrator/SearchOrchestrator";
+import type { SearchContextBundle } from "@/modules/web-search/types";
+import { runWithConcurrency } from "@/lib/async-pool";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { estimateTokens } from "@/lib/context";
@@ -41,7 +43,7 @@ export type { ResearchRuntimeEvent };
 // ── Depth configuration ────────────────────────────────────────────────────
 
 import {
-  resolveResearchProfile,
+  resolveResearchProfileForRun,
   type ResearchProfileOverride,
 } from "./research-config";
 import { getCredibilityScore } from "./source-credibility";
@@ -74,6 +76,8 @@ type DepthConfig = {
   // Report composition
   sectionMaxWords: number;
   maxSections: number;
+  directArxivSearch: boolean;
+  directWikipediaSearch: boolean;
   // Lite-model routing (optional override of (modelId, providerId) for repetitive calls).
   liteModelId: string;
   liteModelProviderId: string;
@@ -89,6 +93,8 @@ function profileToDepthConfig(p: ResearchProfileOverride): DepthConfig {
     adaptiveDeepening: p.adaptiveDeepening ?? false,
     minSourceQuality: p.minSourceQuality ?? 3,
     perSourceRead: p.perSourceRead ?? true,
+    directArxivSearch: p.directArxivSearch ?? true,
+    directWikipediaSearch: p.directWikipediaSearch ?? true,
     crossSourceVerify: p.crossSourceVerify ?? true,
     gapAnalysis: p.gapAnalysis ?? false,
     validateConcurrency: clamp(p.validateConcurrency ?? 3, 1, 8),
@@ -124,19 +130,19 @@ function clamp(n: number, min: number, max: number): number {
  *   3. The user's global override.
  *   4. Any per-run override passed in.
  */
+/** Per-run overrides keyed by run id — survives pause/resume within a session. */
+const perRunOverrideByRunId = new Map<string, ResearchProfileOverride>();
+
 function buildDepthConfig(
   depth: ResearchDepth,
   perRunOverride?: ResearchProfileOverride,
 ): DepthConfig {
   const settings = useSettingsStore.getState();
-  const resolved = resolveResearchProfile(settings.research, depth);
-  // Apply lite model + per-run override on top.
-  const merged: ResearchProfileOverride = {
-    ...resolved,
-    liteModelId: settings.research.liteModelId,
-    liteModelProviderId: settings.research.liteModelProviderId,
-    ...(perRunOverride ?? {}),
-  };
+  const merged = resolveResearchProfileForRun(
+    settings.research,
+    depth,
+    perRunOverride,
+  );
   return profileToDepthConfig(merged);
 }
 
@@ -1145,6 +1151,12 @@ export function enqueueResearchRunJob(
   mode: "start" | "resume",
   perRunOverride?: ResearchRunOverride,
 ): void {
+  if (mode === "start" && perRunOverride && Object.keys(perRunOverride).length > 0) {
+    perRunOverrideByRunId.set(run.id, perRunOverride);
+  }
+  const effectiveOverride =
+    perRunOverride ?? (mode === "resume" ? perRunOverrideByRunId.get(run.id) : undefined);
+
   const title = mode === "resume"
     ? `Resume: ${run.question}`
     : `Research: ${run.question}`;
@@ -1163,9 +1175,9 @@ export function enqueueResearchRunJob(
       };
       try {
         if (mode === "resume") {
-          await resumeResearchRun(run, combined, onEvent, perRunOverride);
+          await resumeResearchRun(run, combined, onEvent, effectiveOverride);
         } else {
-          await executeResearchRun(run, combined, onEvent, undefined, perRunOverride);
+          await executeResearchRun(run, combined, onEvent, undefined, effectiveOverride);
         }
       } finally {
         useResearchStore.getState().setActiveController(null);
@@ -1186,7 +1198,7 @@ export async function enqueueResearchResume(runId: string): Promise<void> {
   await store.loadRun(runId);
   const run = store.activeRun?.run;
   if (!run) return;
-  enqueueResearchRunJob(run, "resume");
+  enqueueResearchRunJob(run, "resume", perRunOverrideByRunId.get(run.id));
 }
 
 /**
@@ -1195,6 +1207,39 @@ export async function enqueueResearchResume(runId: string): Promise<void> {
  * used in place of the depth preset's defaults.
  */
 export type ResearchRunOverride = ResearchProfileOverride;
+
+const RESEARCH_SEARCH_CONCURRENCY = 6;
+const RESEARCH_SOURCE_CREATE_CONCURRENCY = 8;
+
+type SearchQueryOutcome = {
+  query: string;
+  bundle: SearchContextBundle | null;
+  error: string | null;
+};
+
+async function runResearchSearchesInParallel(
+  queries: string[],
+  signal: AbortSignal,
+  onError: (err: unknown) => string,
+  directSources: { directArxivSearch: boolean; directWikipediaSearch: boolean },
+): Promise<SearchQueryOutcome[]> {
+  return runWithConcurrency(queries, RESEARCH_SEARCH_CONCURRENCY, async (query) => {
+    if (signal.aborted) {
+      return { query, bundle: null, error: "Aborted" };
+    }
+    try {
+      const bundle = await runSearch(query, {
+        signal,
+        skipFetch: true,
+        directArxivSearch: directSources.directArxivSearch,
+        directWikipediaSearch: directSources.directWikipediaSearch,
+      });
+      return { query, bundle, error: null };
+    } catch (err) {
+      return { query, bundle: null, error: onError(err) };
+    }
+  });
+}
 
 export async function executeResearchRun(
   run: ResearchRun,
@@ -1205,6 +1250,10 @@ export async function executeResearchRun(
 ): Promise<void> {
   const store = useResearchStore.getState();
   const config = buildDepthConfig(run.depth, perRunOverride);
+  const directSearchSources = {
+    directArxivSearch: config.directArxivSearch,
+    directWikipediaSearch: config.directWikipediaSearch,
+  };
 
   // Helper to obtain (provider, model) for a given call "kind". When the lite
   // model is configured, repetitive validation/contradiction/audit calls go
@@ -2381,43 +2430,71 @@ Question: ${run.question}`;
       let roundDiscovered = 0;
       const roundQueryErrors: string[] = [];
 
+      const queriesToRun: string[] = [];
       for (const query of queries) {
         checkAbort();
         if (sources.length >= config.maxSources) break;
+        queriesToRun.push(query);
         searchQueriesUsed.push(query);
+      }
 
-        try {
-          const bundle = await runSearch(query, { signal, skipFetch: true });
-          for (const src of bundle.sources) {
-            if (discoveredUrls.has(src.url)) continue;
-            if (sources.length >= config.maxSources) break;
-            if (roundDiscovered >= config.maxSourcesPerRound) break;
-            discoveredUrls.add(src.url);
-            roundDiscovered++;
-            const sourceInput: CreateResearchSourceInput = {
-              runId: run.id,
-              stepId: searchStep.id,
-              url: src.url,
-              title: src.title,
-              snippet: src.snippet,
-              sourceType: guessSourceType(src.url),
-              engine: run.searchProvider ?? "searxng",
-              score: 0,
-              rank: sources.length + 1,
-              ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
-            };
+      const searchOutcomes = await runResearchSearchesInParallel(
+        queriesToRun,
+        signal,
+        captureSearchError,
+        directSearchSources,
+      );
 
-            const source = await store.createSource(sourceInput);
+      for (const outcome of searchOutcomes) {
+        checkAbort();
+        if (sources.length >= config.maxSources) break;
+
+        if (outcome.error || !outcome.bundle) {
+          if (outcome.error && outcome.error !== "Aborted") {
+            roundQueryErrors.push(`"${outcome.query}": ${outcome.error}`);
+            console.warn("[research-runtime] Search failed for query:", outcome.query, outcome.error);
+          }
+          continue;
+        }
+
+        const pendingSources: CreateResearchSourceInput[] = [];
+        for (const src of outcome.bundle.sources) {
+          if (discoveredUrls.has(src.url)) continue;
+          if (sources.length + pendingSources.length >= config.maxSources) break;
+          if (roundDiscovered + pendingSources.length >= config.maxSourcesPerRound) break;
+          discoveredUrls.add(src.url);
+          pendingSources.push({
+            runId: run.id,
+            stepId: searchStep.id,
+            url: src.url,
+            title: src.title,
+            snippet: src.snippet,
+            sourceType: guessSourceType(src.url),
+            engine: run.searchProvider ?? "searxng",
+            score: 0,
+            rank: sources.length + pendingSources.length + 1,
+            ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
+          });
+        }
+
+        if (pendingSources.length > 0) {
+          const created = await runWithConcurrency(
+            pendingSources,
+            RESEARCH_SOURCE_CREATE_CONCURRENCY,
+            (input) => store.createSource(input),
+          );
+          for (const source of created) {
             sources.push(source);
+            roundDiscovered++;
             onEvent({ type: "source_fetched", sourceId: source.id, title: source.title });
           }
-
-          onEvent({ type: "search_complete", query, sourceCount: bundle.sources.length });
-        } catch (err) {
-          const msg = captureSearchError(err);
-          roundQueryErrors.push(`"${query}": ${msg}`);
-          console.warn("[research-runtime] Search failed for query:", query, err);
         }
+
+        onEvent({
+          type: "search_complete",
+          query: outcome.query,
+          sourceCount: outcome.bundle.sources.length,
+        });
       }
 
       if (roundQueryErrors.length > 0 && roundDiscovered === 0) {
@@ -2434,7 +2511,11 @@ Question: ${run.question}`;
         const adaptiveStep = await createStep("search", "Adaptive search: broadening queries");
         const broadQuery = `${run.question} overview comprehensive guide`;
         try {
-          const bundle = await runSearch(broadQuery, { signal, skipFetch: true });
+          const bundle = await runSearch(broadQuery, {
+            signal,
+            skipFetch: true,
+            ...directSearchSources,
+          });
           let added = 0;
           for (const src of bundle.sources) {
             if (discoveredUrls.has(src.url)) continue;
@@ -2823,7 +2904,11 @@ Return ONLY a JSON object:
           if (sources.length >= config.maxSources) break;
 
           try {
-            const bundle = await runSearch(query, { signal, skipFetch: true });
+            const bundle = await runSearch(query, {
+              signal,
+              skipFetch: true,
+              ...directSearchSources,
+            });
             for (const src of bundle.sources) {
               if (discoveredUrls.has(src.url)) continue;
               if (sources.length >= config.maxSources) break;
@@ -3036,7 +3121,7 @@ Return ONLY a JSON object:
         signal,
         undefined,
         12000,
-        { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true, ...researchAiOptions("main") },
+      { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true, temperature: 0.6, ...researchAiOptions("main") },
       );
       if (outlineResult.tokens?.totalTokens) totalTokens += outlineResult.tokens.totalTokens;
 

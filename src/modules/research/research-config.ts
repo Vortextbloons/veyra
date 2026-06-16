@@ -14,6 +14,10 @@ export interface ResearchProfileOverride {
   adaptiveDeepening?: boolean;
   minSourceQuality?: number;
   perSourceRead?: boolean;
+  /** Direct ArXiv API during search (requires global bundle + ArXiv toggle). */
+  directArxivSearch?: boolean;
+  /** Direct Wikipedia API during search (requires global bundle + Wikipedia toggle). */
+  directWikipediaSearch?: boolean;
 
   // Validation
   validateConcurrency?: number;
@@ -66,6 +70,8 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       adaptiveDeepening: false,
       minSourceQuality: 2,
       perSourceRead: true,
+      directArxivSearch: false,
+      directWikipediaSearch: false,
       validateConcurrency: 3,
       validateReasoning: false,
       crossSourceVerify: true,
@@ -101,6 +107,8 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       adaptiveDeepening: false,
       minSourceQuality: 3,
       perSourceRead: true,
+      directArxivSearch: false,
+      directWikipediaSearch: true,
       validateConcurrency: 3,
       validateReasoning: false,
       crossSourceVerify: true,
@@ -111,11 +119,11 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       contradictionMaxPairs: 0,
       contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
-  contradictionTopK: 30,
-  synthesisReasoning: true,
-  selfCritiquePass: true,
-  auditReasoning: false,
-  auditMaxCitations: 20,
+      contradictionTopK: 30,
+      synthesisReasoning: true,
+      selfCritiquePass: true,
+      auditReasoning: false,
+      auditMaxCitations: 20,
       auditConcurrency: 3,
       gapAnalysis: false,
       sectionMaxWords: 600,
@@ -136,6 +144,8 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       adaptiveDeepening: true,
       minSourceQuality: 3,
       perSourceRead: true,
+      directArxivSearch: true,
+      directWikipediaSearch: true,
       validateConcurrency: 3,
       validateReasoning: false,
       crossSourceVerify: true,
@@ -171,10 +181,12 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       adaptiveDeepening: true,
       minSourceQuality: 4,
       perSourceRead: true,
+      directArxivSearch: true,
+      directWikipediaSearch: true,
       validateConcurrency: 3,
       validateReasoning: false,
       crossSourceVerify: true,
-      verifyBatchSize: 1,
+      verifyBatchSize: 2,
       verifyReasoning: false,
       extractBatchSize: 2,
       contradictionDetect: true,
@@ -266,7 +278,8 @@ export function resolveResearchProfile(
   if (import.meta.env.DEV) {
     const requiredKeys: Array<keyof ResearchProfileOverride> = [
       "maxSearchRounds", "maxSources", "maxSourcesPerRound", "adaptiveDeepening",
-      "minSourceQuality", "perSourceRead", "validateConcurrency", "validateReasoning",
+      "minSourceQuality", "perSourceRead", "directArxivSearch", "directWikipediaSearch",
+      "validateConcurrency", "validateReasoning",
       "crossSourceVerify", "verifyBatchSize", "verifyReasoning", "extractBatchSize",
       "contradictionDetect", "contradictionMaxPairs", "contradictionMinClaims",
       "contradictionStrategy", "contradictionTopK", "synthesisReasoning", "selfCritiquePass",
@@ -283,6 +296,24 @@ export function resolveResearchProfile(
     }
   }
   return merged as Required<ResearchProfileOverride>;
+}
+
+/**
+ * Resolve settings for a specific run: preset + saved overrides + optional per-run tweaks.
+ * Mirrors `buildDepthConfig` in research-runtime.
+ */
+export function resolveResearchProfileForRun(
+  state: ResearchConfigState,
+  depth: ResearchDepth,
+  perRunOverride?: ResearchProfileOverride,
+): Required<ResearchProfileOverride> {
+  const resolved = resolveResearchProfile(state, depth);
+  return {
+    ...resolved,
+    liteModelId: state.liteModelId,
+    liteModelProviderId: state.liteModelProviderId,
+    ...(perRunOverride ?? {}),
+  };
 }
 
 export type ResearchConfigSetter =
@@ -304,6 +335,8 @@ export const STANDARD_BASELINE: ResearchProfileOverride = {
   adaptiveDeepening: false,
   minSourceQuality: 3,
   perSourceRead: true,
+  directArxivSearch: false,
+  directWikipediaSearch: true,
   validateConcurrency: 3,
   validateReasoning: false,
   crossSourceVerify: true,
@@ -315,9 +348,9 @@ export const STANDARD_BASELINE: ResearchProfileOverride = {
   contradictionMinClaims: 5,
   contradictionStrategy: "top_k",
   contradictionTopK: 30,
-      synthesisReasoning: true,
-      selfCritiquePass: true,
-      auditReasoning: false,
+  synthesisReasoning: true,
+  selfCritiquePass: true,
+  auditReasoning: false,
   auditMaxCitations: 20,
   auditConcurrency: 3,
   gapAnalysis: false,

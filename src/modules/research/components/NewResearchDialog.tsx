@@ -18,7 +18,8 @@ import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useResearchStore } from "../research-store";
 import { enqueueResearchRunJob, type ResearchRunOverride } from "../research-runtime";
 import { invokeTestSearxngConnection } from "@/modules/web-search/tauri-commands";
-import { resolveResearchProfile, RESEARCH_DEPTH_PRESETS } from "../research-config";
+import { resolveResearchProfileForRun } from "../research-config";
+import { ResearchProfileKnobsEditor } from "./ResearchProfileKnobsEditor";
 import type { ResearchDepth } from "../research-types";
 
 const DEPTH_OPTIONS: {
@@ -101,7 +102,6 @@ export function NewResearchDialog({ onClose }: Props) {
   const [isStarting, setIsStarting] = useState(false);
   const [preflightError, setPreflightError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  // Per-run override; keyed by depth so changing the depth switches to that depth's override.
   const [perRunOverrides, setPerRunOverrides] = useState<Record<ResearchDepth, ResearchRunOverride>>({
     quick: {},
     standard: {},
@@ -126,21 +126,14 @@ export function NewResearchDialog({ onClose }: Props) {
     });
   }, [models, selectedModel, researchConfig.defaultModelId]);
 
-  // Effective resolved profile for the current depth (used to preview override impact).
+  const perRunOverride = perRunOverrides[depth] ?? {};
   const resolvedPreview = useMemo(
-    () =>
-      resolveResearchProfile(
-        {
-          ...researchConfig,
-          override: perRunOverrides[depth] ?? {},
-        },
-        depth,
-      ),
-    [researchConfig, perRunOverrides, depth],
+    () => resolveResearchProfileForRun(researchConfig, depth, perRunOverride),
+    [researchConfig, depth, perRunOverrides],
   );
 
   const canStart = question.trim().length > 0 && !isStarting;
-  const hasOverrides = Object.keys(perRunOverrides[depth] ?? {}).length > 0;
+  const hasOverrides = Object.keys(perRunOverride).length > 0;
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -168,11 +161,9 @@ export function NewResearchDialog({ onClose }: Props) {
         providerId: selectedProvider,
       });
 
-      const override = perRunOverrides[depth];
-
+      const override = Object.keys(perRunOverride).length > 0 ? perRunOverride : undefined;
       enqueueResearchRunJob(run, "start", override);
 
-      // Mark the first-run notice as dismissed so we don't show it again.
       if (!useSettingsStore.getState().researchFirstRunNoticeDismissed) {
         useSettingsStore.getState().setResearchFirstRunNoticeDismissed(true);
       }
@@ -200,13 +191,12 @@ export function NewResearchDialog({ onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-2xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
-        {/* Header */}
+      <div className="relative flex max-h-[min(92vh,900px)] w-full max-w-3xl flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
           <div className="flex items-center gap-2">
             <div className="grid size-7 place-items-center rounded-lg bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
@@ -225,9 +215,7 @@ export function NewResearchDialog({ onClose }: Props) {
           </button>
         </div>
 
-        {/* Body */}
-        <div className="space-y-5 px-6 py-5">
-          {/* Question input */}
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-text)]">
               Research question
@@ -246,7 +234,6 @@ export function NewResearchDialog({ onClose }: Props) {
             />
           </div>
 
-          {/* Depth selector */}
           <div>
             <label className="mb-2 block text-[12px] font-medium text-[var(--color-text)]">
               Research depth
@@ -296,7 +283,6 @@ export function NewResearchDialog({ onClose }: Props) {
             </div>
           </div>
 
-          {/* Model selector */}
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-text)]">
               Model
@@ -330,7 +316,6 @@ export function NewResearchDialog({ onClose }: Props) {
             )}
           </div>
 
-          {/* Advanced per-run override panel */}
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
             <button
               type="button"
@@ -363,12 +348,14 @@ export function NewResearchDialog({ onClose }: Props) {
               </div>
             </button>
             {showAdvanced && (
-              <div className="space-y-2 border-t border-[var(--color-border)] p-3">
-                <PerRunOverridePanel
+              <div className="border-t border-[var(--color-border)] p-3">
+                <ResearchProfileKnobsEditor
                   depth={depth}
+                  hasOverrides={hasOverrides}
                   resolved={resolvedPreview}
                   onUpdate={setOverride}
                   onClear={clearOverride}
+                  showDepthSelector={false}
                 />
               </div>
             )}
@@ -385,7 +372,6 @@ export function NewResearchDialog({ onClose }: Props) {
           </div>
         )}
 
-        {/* Footer */}
         <div className="flex items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
           <button
             type="button"
@@ -414,202 +400,6 @@ export function NewResearchDialog({ onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function PerRunOverridePanel({
-  depth,
-  resolved,
-  onUpdate,
-  onClear,
-}: {
-  depth: ResearchDepth;
-  resolved: ReturnType<typeof resolveResearchProfile>;
-  onUpdate: (patch: ResearchRunOverride) => void;
-  onClear: () => void;
-}) {
-  void depth;
-  const preset = RESEARCH_DEPTH_PRESETS[depth];
-  return (
-    <div className="space-y-2">
-      <div className="mb-1 flex items-center justify-between gap-2 text-[10.5px] text-[var(--color-text-dim)]">
-        <div>{preset.description}</div>
-        <button
-          type="button"
-          onClick={onClear}
-          className="rounded px-1.5 py-0.5 text-[10.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-        >
-          Clear overrides
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 text-[11px]">
-        {resolved.perSourceRead && (
-          <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-            <span>Use reasoning for validate</span>
-            <input
-              type="checkbox"
-              checked={resolved.validateReasoning}
-              onChange={(e) => onUpdate({ validateReasoning: e.target.checked })}
-              className="size-3.5 accent-[var(--color-accent)]"
-            />
-          </label>
-        )}
-        {resolved.auditMaxCitations > 0 && (
-          <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-            <span>Use reasoning for audit</span>
-            <input
-              type="checkbox"
-              checked={resolved.auditReasoning}
-              onChange={(e) => onUpdate({ auditReasoning: e.target.checked })}
-              className="size-3.5 accent-[var(--color-accent)]"
-            />
-          </label>
-        )}
-        <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-          <span>Cross-source verify</span>
-          <input
-            type="checkbox"
-            checked={resolved.crossSourceVerify}
-            onChange={(e) => onUpdate({ crossSourceVerify: e.target.checked })}
-            className="size-3.5 accent-[var(--color-accent)]"
-          />
-        </label>
-        {resolved.crossSourceVerify && (
-          <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-            <span>Reasoning during verify</span>
-            <input
-              type="checkbox"
-              checked={resolved.verifyReasoning}
-              onChange={(e) => onUpdate({ verifyReasoning: e.target.checked })}
-              className="size-3.5 accent-[var(--color-accent)]"
-            />
-          </label>
-        )}
-        <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-          <span>Contradiction detect</span>
-          <input
-            type="checkbox"
-            checked={resolved.contradictionDetect}
-            onChange={(e) => onUpdate({ contradictionDetect: e.target.checked })}
-            className="size-3.5 accent-[var(--color-accent)]"
-          />
-        </label>
-        <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-          <span>Gap analysis</span>
-          <input
-            type="checkbox"
-            checked={resolved.gapAnalysis}
-            onChange={(e) => onUpdate({ gapAnalysis: e.target.checked })}
-            className="size-3.5 accent-[var(--color-accent)]"
-          />
-        </label>
-        <label className="flex items-center justify-between rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
-          <span>Adaptive deepening</span>
-          <input
-            type="checkbox"
-            checked={resolved.adaptiveDeepening}
-            onChange={(e) => onUpdate({ adaptiveDeepening: e.target.checked })}
-            className="size-3.5 accent-[var(--color-accent)]"
-          />
-        </label>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 text-[11px]">
-        <OverrideSlider
-          label="Max sources"
-          value={resolved.maxSources}
-          min={10}
-          max={500}
-          step={5}
-          onChange={(v) => onUpdate({ maxSources: v })}
-        />
-        <OverrideSlider
-          label="Validate concurrency"
-          value={resolved.validateConcurrency}
-          min={1}
-          max={8}
-          step={1}
-          onChange={(v) => onUpdate({ validateConcurrency: v })}
-        />
-        <OverrideSlider
-          label={resolved.contradictionDetect ? "Contradiction max pairs" : "Contradiction max pairs (inactive)"}
-          value={resolved.contradictionMaxPairs}
-          min={0}
-          max={500}
-          step={10}
-          onChange={(v) => onUpdate({ contradictionMaxPairs: v })}
-        />
-        <OverrideSlider
-          label="Audit max citations"
-          value={resolved.auditMaxCitations}
-          min={0}
-          max={100}
-          step={5}
-          onChange={(v) => onUpdate({ auditMaxCitations: v })}
-        />
-        {resolved.crossSourceVerify && (
-          <OverrideSlider
-            label="Verify batch size"
-            value={resolved.verifyBatchSize}
-            min={1}
-            max={20}
-            step={1}
-            onChange={(v) => onUpdate({ verifyBatchSize: v })}
-          />
-        )}
-        <OverrideSlider
-          label={resolved.perSourceRead ? "Extract batch size" : "Extract batch size (inactive)"}
-          value={resolved.extractBatchSize}
-          min={1}
-          max={10}
-          step={1}
-          onChange={(v) => onUpdate({ extractBatchSize: v })}
-        />
-        <OverrideSlider
-          label={resolved.contradictionDetect ? "Contradiction min claims" : "Contradiction min claims (inactive)"}
-          value={resolved.contradictionMinClaims}
-          min={0}
-          max={50}
-          step={1}
-          onChange={(v) => onUpdate({ contradictionMinClaims: v })}
-        />
-      </div>
-    </div>
-  );
-}
-
-function OverrideSlider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5">
-      <div className="mb-0.5 flex items-center justify-between">
-        <span className="text-[10.5px] text-[var(--color-text-dim)]">{label}</span>
-        <span className="font-mono text-[10.5px] text-white">{value}</span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-[var(--color-accent)]"
-      />
     </div>
   );
 }

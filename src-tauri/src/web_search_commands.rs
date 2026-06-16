@@ -1,14 +1,137 @@
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use tokio::time::sleep;
 
 const MAX_SEARCH_RESULTS: usize = 10;
+const DIRECT_SEARCH_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
+const ARXIV_MIN_INTERVAL: Duration = Duration::from_secs(3);
+const WIKIPEDIA_MIN_INTERVAL: Duration = Duration::from_millis(900);
+const DIRECT_SEARCH_MAX_RETRIES: u32 = 4;
+const VEYRA_USER_AGENT: &str =
+    "Veyra/0.2 (+https://github.com/Vortextbloons/veyra; desktop research assistant)";
+
+struct ProviderRateState {
+    last_arxiv: Option<Instant>,
+    last_wikipedia: Option<Instant>,
+}
+
+static DIRECT_SOURCE_RATE: LazyLock<Mutex<ProviderRateState>> =
+    LazyLock::new(|| Mutex::new(ProviderRateState {
+        last_arxiv: None,
+        last_wikipedia: None,
+    }));
+
+static ARXIV_CACHE: LazyLock<Mutex<HashMap<(String, usize), (ArxivSearchResponse, Instant)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+static WIKIPEDIA_CACHE: LazyLock<Mutex<HashMap<(String, usize), (WikipediaSearchResponse, Instant)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+async fn throttle_direct_source(provider: &str, min_interval: Duration) {
+    let wait = {
+        let mut state = DIRECT_SOURCE_RATE.lock();
+        let slot = match provider {
+            "arxiv" => &mut state.last_arxiv,
+            _ => &mut state.last_wikipedia,
+        };
+        let now = Instant::now();
+        let allowed_at = slot.unwrap_or(now);
+        let start_at = if now >= allowed_at { now } else { allowed_at };
+        let wait = start_at.saturating_duration_since(now);
+        *slot = Some(start_at + min_interval);
+        wait
+    };
+    if !wait.is_zero() {
+        sleep(wait).await;
+    }
+}
+
+fn normalize_direct_query(query: &str) -> String {
+    let trimmed = query.trim();
+    if trimmed.len() <= 240 {
+        return trimmed.to_string();
+    }
+    trimmed[..240].trim().to_string()
+}
+
+fn cache_key(query: &str, limit: usize) -> (String, usize) {
+    (query.to_lowercase(), limit)
+}
+
+fn read_cache<T: Clone>(map: &Mutex<HashMap<(String, usize), (T, Instant)>>, key: &(String, usize)) -> Option<T> {
+    let guard = map.lock();
+    guard.get(key).and_then(|(value, fetched_at)| {
+        if fetched_at.elapsed() <= DIRECT_SEARCH_CACHE_TTL {
+            Some(value.clone())
+        } else {
+            None
+        }
+    })
+}
+
+fn write_cache<T: Clone>(map: &Mutex<HashMap<(String, usize), (T, Instant)>>, key: (String, usize), value: T) {
+    let mut guard = map.lock();
+    guard.retain(|_, (_, fetched_at)| fetched_at.elapsed() <= DIRECT_SEARCH_CACHE_TTL);
+    if guard.len() > 128 {
+        guard.clear();
+    }
+    guard.insert(key, (value, Instant::now()));
+}
+
+fn retry_delay(attempt: u32, retry_after: Option<Duration>) -> Duration {
+    retry_after.unwrap_or_else(|| Duration::from_secs(2u64.pow(attempt.min(4))))
+}
+
+async fn get_with_retry(
+    client: &reqwest::Client,
+    url: &str,
+    label: &str,
+) -> Result<reqwest::Response, String> {
+    let mut attempt = 0u32;
+    loop {
+        match client.get(url).send().await {
+            Ok(response) => {
+                let status = response.status();
+                if status.is_success() {
+                    return Ok(response);
+                }
+                let retryable = status.as_u16() == 429
+                    || status.as_u16() == 408
+                    || status.is_server_error();
+                if !retryable || attempt >= DIRECT_SEARCH_MAX_RETRIES {
+                    return Err(format!(
+                        "{label} returned HTTP {}",
+                        status.as_u16()
+                    ));
+                }
+                let retry_after = response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .map(Duration::from_secs);
+                sleep(retry_delay(attempt, retry_after)).await;
+                attempt += 1;
+            }
+            Err(err) => {
+                if attempt >= DIRECT_SEARCH_MAX_RETRIES {
+                    return Err(format!("{label} request failed: {err}"));
+                }
+                sleep(retry_delay(attempt, None)).await;
+                attempt += 1;
+            }
+        }
+    }
+}
 
 static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .user_agent("Veyra/0.1")
+        .user_agent(VEYRA_USER_AGENT)
         .build()
         .expect("failed to build shared HTTP client")
 });
@@ -16,23 +139,23 @@ static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
 static HTTP_CLIENT_SHORT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
-        .user_agent("Veyra/0.1")
+        .user_agent(VEYRA_USER_AGENT)
         .build()
         .expect("failed to build shared HTTP client")
 });
 
 static ARXIV_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .user_agent("Veyra/0.1 (academic search)")
+        .timeout(Duration::from_secs(20))
+        .user_agent(VEYRA_USER_AGENT)
         .build()
         .expect("failed to build arxiv HTTP client")
 });
 
 static WIKIPEDIA_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .user_agent("Veyra/0.1 (encyclopedia search)")
+        .timeout(Duration::from_secs(15))
+        .user_agent(VEYRA_USER_AGENT)
         .build()
         .expect("failed to build wikipedia HTTP client")
 });
@@ -239,7 +362,7 @@ pub async fn test_searxng_connection(base_url: String) -> Result<bool, String> {
 
 // ── ArXiv Search ──────────────────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ArxivResult {
     pub id: String,
     pub title: String,
@@ -251,7 +374,7 @@ pub struct ArxivResult {
     pub summary: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ArxivSearchResponse {
     pub query: String,
     pub results: Vec<ArxivResult>,
@@ -348,26 +471,23 @@ pub async fn search_arxiv(
     query: String,
     limit: usize,
 ) -> Result<ArxivSearchResponse, String> {
+    let normalized_query = normalize_direct_query(&query);
     let effective_limit = limit.clamp(1, MAX_SEARCH_RESULTS);
+    let key = cache_key(&normalized_query, effective_limit);
+
+    if let Some(cached) = read_cache(&ARXIV_CACHE, &key) {
+        return Ok(cached);
+    }
+
+    throttle_direct_source("arxiv", ARXIV_MIN_INTERVAL).await;
 
     let api_url = format!(
-        "http://export.arxiv.org/api/query?search_query=all:{}&start=0&max_results={}&sortBy=relevance",
-        urlencoding::encode(&query),
+        "https://export.arxiv.org/api/query?search_query=all:{}&start=0&max_results={}&sortBy=relevance",
+        urlencoding::encode(&normalized_query),
         effective_limit
     );
 
-    let response = ARXIV_CLIENT
-        .get(&api_url)
-        .send()
-        .await
-        .map_err(|e| format!("ArXiv API request failed: {e}"))?;
-
-    if !response.status().is_success() {
-        return Err(format!(
-            "ArXiv API returned HTTP {}",
-            response.status().as_u16()
-        ));
-    }
+    let response = get_with_retry(&ARXIV_CLIENT, &api_url, "ArXiv API").await?;
 
     let xml_body = response
         .text()
@@ -392,16 +512,18 @@ pub async fn search_arxiv(
     }
 
     let result_count = results.len();
-    Ok(ArxivSearchResponse {
-        query,
+    let payload = ArxivSearchResponse {
+        query: normalized_query,
         results,
         result_count,
-    })
+    };
+    write_cache(&ARXIV_CACHE, key, payload.clone());
+    Ok(payload)
 }
 
 // ── Wikipedia Search ──────────────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct WikipediaResult {
     pub id: String,
     pub title: String,
@@ -410,7 +532,7 @@ pub struct WikipediaResult {
     pub extract: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct WikipediaSearchResponse {
     pub query: String,
     pub results: Vec<WikipediaResult>,
@@ -422,27 +544,25 @@ pub async fn search_wikipedia(
     query: String,
     limit: usize,
 ) -> Result<WikipediaSearchResponse, String> {
+    let normalized_query = normalize_direct_query(&query);
     let effective_limit = limit.clamp(1, MAX_SEARCH_RESULTS);
+    let key = cache_key(&normalized_query, effective_limit);
+
+    if let Some(cached) = read_cache(&WIKIPEDIA_CACHE, &key) {
+        return Ok(cached);
+    }
+
+    throttle_direct_source("wikipedia", WIKIPEDIA_MIN_INTERVAL).await;
 
     // Step 1: Search for matching articles
     let search_url = format!(
-        "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={}&srlimit={}&format=json",
-        urlencoding::encode(&query),
+        "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={}&srlimit={}&format=json&origin=*",
+        urlencoding::encode(&normalized_query),
         effective_limit
     );
 
-    let search_response = WIKIPEDIA_CLIENT
-        .get(&search_url)
-        .send()
-        .await
-        .map_err(|e| format!("Wikipedia search API request failed: {e}"))?;
-
-    if !search_response.status().is_success() {
-        return Err(format!(
-            "Wikipedia search API returned HTTP {}",
-            search_response.status().as_u16()
-        ));
-    }
+    let search_response =
+        get_with_retry(&WIKIPEDIA_CLIENT, &search_url, "Wikipedia search API").await?;
 
     let search_body: serde_json::Value = search_response
         .json()
@@ -478,33 +598,33 @@ pub async fn search_wikipedia(
     }
 
     if page_ids.is_empty() {
-        return Ok(WikipediaSearchResponse {
-            query,
+        let empty = WikipediaSearchResponse {
+            query: normalized_query,
             results: Vec::new(),
             result_count: 0,
-        });
+        };
+        write_cache(&WIKIPEDIA_CACHE, key, empty.clone());
+        return Ok(empty);
     }
 
-    // Step 2: Get article extracts for the found pages
+    // Step 2: Get article extracts (optional — fall back to search snippets on rate limit).
+    throttle_direct_source("wikipedia", WIKIPEDIA_MIN_INTERVAL).await;
+
     let ids_str = page_ids.iter().map(|(id, _, _)| id.as_str()).collect::<Vec<_>>().join("|");
     let extract_url = format!(
-        "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&pageids={}&format=json",
+        "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&pageids={}&format=json&origin=*",
         ids_str
     );
 
-    let extract_response = WIKIPEDIA_CLIENT
-        .get(&extract_url)
-        .send()
-        .await
-        .map_err(|e| format!("Wikipedia extract API request failed: {e}"))?;
-
-    let extract_body: serde_json::Value = if extract_response.status().is_success() {
-        extract_response
+    let extract_body: serde_json::Value = match get_with_retry(&WIKIPEDIA_CLIENT, &extract_url, "Wikipedia extract API").await {
+        Ok(extract_response) => extract_response
             .json()
             .await
-            .unwrap_or_else(|_| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
+            .unwrap_or_else(|_| serde_json::json!({})),
+        Err(err) => {
+            eprintln!("[web_search] Wikipedia extract skipped: {err}");
+            serde_json::json!({})
+        }
     };
 
     let pages = extract_body
@@ -541,9 +661,11 @@ pub async fn search_wikipedia(
     }
 
     let result_count = results.len();
-    Ok(WikipediaSearchResponse {
-        query,
+    let payload = WikipediaSearchResponse {
+        query: normalized_query,
         results,
         result_count,
-    })
+    };
+    write_cache(&WIKIPEDIA_CACHE, key, payload.clone());
+    Ok(payload)
 }

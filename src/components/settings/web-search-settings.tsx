@@ -652,8 +652,8 @@ export function WebSearchSettings() {
                   onChange={setBundleArxivSearch}
                 />
                 <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Include ArXiv results for research queries. Retrieves paper
-                  abstracts and metadata via the ArXiv API.
+                  Include ArXiv results when enabled globally and for the active research depth
+                  (Quick disables by default). Retrieves paper abstracts via the ArXiv API.
                 </p>
                 <Toggle
                   label="Wikipedia search"
@@ -661,8 +661,8 @@ export function WebSearchSettings() {
                   onChange={setBundleWikipediaSearch}
                 />
                 <p className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Include Wikipedia results and extract article content via the
-                  structured Wikipedia REST API.
+                  Include Wikipedia results when enabled globally and for the active research depth.
+                  Extracts article content via the Wikipedia API.
                 </p>
               </div>
             </div>

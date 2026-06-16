@@ -1,3 +1,4 @@
+import { resolveDirectSearchProviders } from "@/lib/direct-search-providers";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProjectStore } from "@/modules/projects/project-store";
@@ -44,6 +45,9 @@ export type RunSearchOptions = {
    * truncated content).
    */
   skipFetch?: boolean;
+  /** Research depth profile: gates direct ArXiv/Wikipedia APIs (omit for chat). */
+  directArxivSearch?: boolean;
+  directWikipediaSearch?: boolean;
 };
 
 export async function runSearch(
@@ -54,7 +58,7 @@ export async function runSearch(
     options && typeof (options as AbortSignal).aborted !== "undefined"
       ? { signal: options as AbortSignal }
       : (options as RunSearchOptions) ?? {};
-  const { signal, projectId, onFetchProgress, skipFetch } = opts;
+  const { signal, projectId, onFetchProgress, skipFetch, directArxivSearch, directWikipediaSearch } = opts;
 
   if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
@@ -127,52 +131,44 @@ export async function runSearch(
     };
 
     const provider = new SearXNGProvider(config);
+    const directLimit = Math.min(3, maxResults);
+    const direct = resolveDirectSearchProviders({
+      advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
+      bundleArxivSearch: settings.bundleArxivSearch,
+      bundleWikipediaSearch: settings.bundleWikipediaSearch,
+      directArxivSearch,
+      directWikipediaSearch,
+    });
 
-    // Run all search providers in parallel
-    const searchPromises: Promise<SearchResult[]>[] = [
+    // SearXNG (local) runs in parallel with direct APIs; Rust serializes ArXiv/Wikipedia safely.
+    const [searxngResults, arxivResults, wikipediaResults] = await Promise.all([
       provider.search({
         query,
         limit: maxResults,
         timeRange: settings.webSearchTimeRange || undefined,
         categories: settings.webSearchCategories || undefined,
       }),
-    ];
+      direct.arxiv
+        ? new ArXivProvider({
+            id: "arxiv-direct",
+            name: "ArXiv",
+            enabled: true,
+            maxResults: directLimit,
+          }).search({ query, limit: directLimit })
+        : Promise.resolve([] as SearchResult[]),
+      direct.wikipedia
+        ? new WikipediaProvider({
+            id: "wikipedia-direct",
+            name: "Wikipedia",
+            enabled: true,
+            maxResults: directLimit,
+          }).search({ query, limit: directLimit })
+        : Promise.resolve([] as SearchResult[]),
+    ]);
 
-    // Add ArXiv provider if enabled
-    if (settings.advancedSearchBundleEnabled) {
-      const arxivProvider = new ArXivProvider({
-        id: "arxiv-direct",
-        name: "ArXiv",
-        enabled: true,
-        maxResults: Math.min(3, maxResults),
-      });
-      searchPromises.push(
-        arxivProvider.search({ query, limit: Math.min(3, maxResults) }),
-      );
-    }
-
-    // Add Wikipedia provider if enabled
-    if (settings.advancedSearchBundleEnabled) {
-      const wikipediaProvider = new WikipediaProvider({
-        id: "wikipedia-direct",
-        name: "Wikipedia",
-        enabled: true,
-        maxResults: Math.min(3, maxResults),
-      });
-      searchPromises.push(
-        wikipediaProvider.search({ query, limit: Math.min(3, maxResults) }),
-      );
-    }
-
-    const searchResults = await Promise.allSettled(searchPromises);
-
-    // Merge results: SearXNG first, then ArXiv, then Wikipedia
-    let results: SearchResult[] = [];
-    for (const result of searchResults) {
-      if (result.status === "fulfilled" && result.value.length > 0) {
-        results = results.concat(result.value);
-      }
-    }
+    let results: SearchResult[] = [...searxngResults];
+    if (arxivResults.length > 0) results = results.concat(arxivResults);
+    if (wikipediaResults.length > 0) results = results.concat(wikipediaResults);
 
     if (signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
@@ -186,7 +182,6 @@ export async function runSearch(
 
     let fetchedPages: FetchedPageSummary[] = [];
     const topForFetch = results.slice(0, fetchCount).map((r) => r.url);
-    const bundleEnabled = settings.advancedSearchBundleEnabled;
     if (!skipFetch && fetchEnabled && topForFetch.length > 0) {
       onFetchProgress?.(0, topForFetch.length);
       try {
@@ -195,7 +190,7 @@ export async function runSearch(
           3,
           perPageTimeoutSecs,
           maxCharsPerSource,
-          { advancedSearchBundleEnabled: bundleEnabled },
+          { advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled },
         );
         onFetchProgress?.(pages.length, topForFetch.length);
         fetchedPages = pages.map((p: FetchedPage) => ({

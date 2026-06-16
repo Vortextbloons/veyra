@@ -1,6 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 
+const inflightDirectSearches = new Map<string, Promise<unknown>>();
+
+function dedupedDirectInvoke<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const existing = inflightDirectSearches.get(key);
+  if (existing) return existing as Promise<T>;
+  const pending = run().finally(() => {
+    inflightDirectSearches.delete(key);
+  });
+  inflightDirectSearches.set(key, pending);
+  return pending;
+}
+
 export type TauriSearchResult = {
   id: string;
   title: string;
@@ -131,7 +143,9 @@ export async function invokeSearchArxiv(
   query: string,
   limit: number,
 ): Promise<ArxivSearchResponse> {
-  return invoke<ArxivSearchResponse>("search_arxiv", { query, limit });
+  return dedupedDirectInvoke(`arxiv:${limit}:${query.trim().toLowerCase()}`, () =>
+    invoke<ArxivSearchResponse>("search_arxiv", { query, limit }),
+  );
 }
 
 // ── Wikipedia Search ──────────────────────────────────────────────────────
@@ -154,5 +168,7 @@ export async function invokeSearchWikipedia(
   query: string,
   limit: number,
 ): Promise<WikipediaSearchResponse> {
-  return invoke<WikipediaSearchResponse>("search_wikipedia", { query, limit });
+  return dedupedDirectInvoke(`wikipedia:${limit}:${query.trim().toLowerCase()}`, () =>
+    invoke<WikipediaSearchResponse>("search_wikipedia", { query, limit }),
+  );
 }
