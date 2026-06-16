@@ -1,5 +1,5 @@
 import { lmStudioAdapter } from "@/lib/providers/lm-studio-adapter";
-import type { ProviderAdapter } from "@/lib/providers/types";
+import type { ProviderAdapter, ProviderPrepareModelOptions } from "@/lib/providers/types";
 
 const providerAdapters = [lmStudioAdapter] satisfies ProviderAdapter[];
 
@@ -24,5 +24,16 @@ export async function unloadAllProviderModels(providerId: string): Promise<void>
   const adapter = getProviderAdapter(providerId);
   if (adapter?.unloadAllModels) {
     await adapter.unloadAllModels();
+  }
+}
+
+export async function prepareProviderModel(
+  providerId: string,
+  modelId: string,
+  options?: ProviderPrepareModelOptions,
+): Promise<void> {
+  const adapter = getProviderAdapter(providerId);
+  if (adapter?.prepareModel) {
+    await adapter.prepareModel(modelId, options);
   }
 }

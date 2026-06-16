@@ -1,5 +1,5 @@
 import type { ChatMessage } from "@/lib/chat-types";
-import { getProviderAdapter } from "@/lib/providers";
+import { getProviderAdapter, prepareProviderModel } from "@/lib/providers";
 import { runSearch } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -848,6 +848,11 @@ async function callResearchAi(
   }
   const adapterRef = adapter;
 
+  await prepareProviderModel(selectedProvider, selectedModel, { signal });
+  if (signal.aborted) {
+    throw new DOMException("Research aborted", "AbortError");
+  }
+
   const settings = useSettingsStore.getState();
   const modelSettings = settings.getModelSettings(selectedModel);
 
@@ -1105,13 +1110,24 @@ export async function executeResearchRun(
   // through it; everything else uses the main model.
   function getModelForKind(kind: "main" | "lite"): { providerId: string; modelId: string } | null {
     const providerState = useProviderStore.getState();
+    const mainProviderId = run.providerId ?? providerState.selectedProvider;
+    const mainModelId = run.modelUsed ?? providerState.selectedModel;
+
     if (kind === "lite" && config.liteModelId && config.liteModelProviderId) {
       return { providerId: config.liteModelProviderId, modelId: config.liteModelId };
     }
-    if (!providerState.selectedProvider || !providerState.selectedModel) return null;
+    if (!mainProviderId || !mainModelId) return null;
+    return { providerId: mainProviderId, modelId: mainModelId };
+  }
+
+  function researchAiOptions(
+    kind: "main" | "lite",
+    extra: CallResearchAiOptions = {},
+  ): CallResearchAiOptions {
+    const routing = getModelForKind(kind);
     return {
-      providerId: providerState.selectedProvider,
-      modelId: providerState.selectedModel,
+      ...extra,
+      ...(routing ? { modelId: routing.modelId, providerId: routing.providerId } : {}),
     };
   }
 
@@ -1265,8 +1281,6 @@ export async function executeResearchRun(
   }
 
   async function validateSource(source: ResearchSource): Promise<ResearchSource> {
-    const lite = getModelForKind("lite");
-
     const domainScore = assessDomainAuthority(source.url);
     const textToValidate = source.fullText || source.snippet || "";
     const truncated = truncateToTokens(
@@ -1315,10 +1329,7 @@ Return ONLY a JSON object:
             signal,
             undefined,
             2000,
-            {
-              reasoningEnabled: config.validateReasoning,
-              ...(lite ? { modelId: lite.modelId, providerId: lite.providerId } : {}),
-            },
+            researchAiOptions("lite", { reasoningEnabled: config.validateReasoning }),
           ),
         (v) => `${v.length} chars evaluated`,
       );
@@ -1561,7 +1572,7 @@ Return ONLY a bare JSON array (no wrapping object, no markdown) with one entry p
               signal,
               undefined,
               3000,
-              { reasoningEnabled: config.verifyReasoning, jsonModeHint: true },
+              { reasoningEnabled: config.verifyReasoning, jsonModeHint: true, ...researchAiOptions("main") },
             ),
           (v) => `${v.length} chars assessed`,
         );
@@ -1967,7 +1978,7 @@ Return ONLY a bare JSON array. Do NOT wrap it in an object.`;
                     signal,
                     undefined,
                     followUp ? 6000 : 12000,
-                    { reasoningEnabled: false, jsonModeHint: true, ...(temperature !== undefined ? { temperature } : {}) },
+                    { reasoningEnabled: false, jsonModeHint: true, ...(temperature !== undefined ? { temperature } : {}), ...researchAiOptions("main") },
                   ),
                 (v) => `${v.length} chars parsed`,
               );
@@ -1999,7 +2010,7 @@ Return ONLY a bare JSON array. Do NOT wrap it in an object.`;
               signal,
               undefined,
               batchMaxTokens,
-              { reasoningEnabled: false, jsonModeHint: true, ...(temperature !== undefined ? { temperature } : {}) },
+              { reasoningEnabled: false, jsonModeHint: true, ...(temperature !== undefined ? { temperature } : {}), ...researchAiOptions("main") },
             ),
           (v) => `${v.length} chars parsed`,
         );
@@ -2125,7 +2136,7 @@ Question: ${run.question}`;
       signal,
       undefined,
       12000,
-      { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true },
+      { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true, ...researchAiOptions("main") },
     );
     if (planResult.tokens?.totalTokens) totalTokens += planResult.tokens.totalTokens;
     const planResponse = planResult.text;
@@ -2440,8 +2451,6 @@ Question: ${run.question}`;
           }
         };
 
-        const lite = getModelForKind("lite");
-
         async function checkPair(pair: Pair): Promise<void> {
           const { a, b } = pair;
           const contradictionPrompt = `Analyze whether these two claims are in DIRECT CONTRADICTION. Be conservative - only say yes if they are clearly incompatible.
@@ -2474,11 +2483,10 @@ Answer ONLY with a JSON object:
                   signal,
                   undefined,
                   1500,
-                  {
+                  researchAiOptions("lite", {
                     reasoningEnabled: config.validateReasoning,
                     jsonModeHint: true,
-                    ...(lite ? { modelId: lite.modelId, providerId: lite.providerId } : {}),
-                  },
+                  }),
                 ),
               (v) => `${v.length} chars analyzed`,
             );
@@ -2644,7 +2652,7 @@ Return ONLY a JSON object:
               signal,
               undefined,
               3000,
-              { reasoningEnabled: false, jsonModeHint: true },
+              { reasoningEnabled: false, jsonModeHint: true, ...researchAiOptions("main") },
             ),
           (v) => `${v.length} chars analyzed`,
         );
@@ -2878,7 +2886,7 @@ Return ONLY a JSON object:
         signal,
         undefined,
         12000,
-        { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true },
+        { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true, ...researchAiOptions("main") },
       );
       if (outlineResult.tokens?.totalTokens) totalTokens += outlineResult.tokens.totalTokens;
 
@@ -2975,7 +2983,7 @@ Output rules:
           signal,
           undefined,
           Math.max(1000, (section.wordCount || 300) * 2),
-          { reasoningEnabled: false, temperature: 0.4 },
+          { reasoningEnabled: false, temperature: 0.4, ...researchAiOptions("main") },
         );
         if (sectionResult.tokens?.totalTokens) totalTokens += sectionResult.tokens.totalTokens;
 
@@ -3093,8 +3101,6 @@ Output rules:
       }
     };
 
-    const lite = getModelForKind("lite");
-
     async function auditOne(num: number, idx: number): Promise<void> {
       const sourceIndex = num - 1;
       const source = readSources[sourceIndex];
@@ -3165,11 +3171,10 @@ Audit: Does this source actually support the claims cited? Answer ONLY with a JS
               signal,
               undefined,
               2000,
-              {
+              researchAiOptions("lite", {
                 reasoningEnabled: config.auditReasoning,
                 jsonModeHint: true,
-                ...(lite ? { modelId: lite.modelId, providerId: lite.providerId } : {}),
-              },
+              }),
             ),
           (v) => `${v.length} chars audited`,
         );

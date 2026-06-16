@@ -8,6 +8,7 @@ import { clearAllDelayedMemoryTimers } from "@/lib/post-chat-jobs";
 import { terminateDecryptWorker } from "@/lib/conversation-storage";
 import { invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
 import { useChatStore } from "@/stores/chat-store";
+import { useResearchStore } from "@/modules/research/research-store";
 
 const SHUTDOWN_STEP_TIMEOUT_MS = 6000;
 
@@ -151,6 +152,7 @@ export async function runAppShutdown(): Promise<void> {
   await waitForShutdownUi();
 
   setShutdownStep("preparing");
+  await withTimeout(useResearchStore.getState().interruptActiveResearchOnShutdown(), "Pause active research");
   aiScheduler.shutdown();
   clearAllDelayedMemoryTimers();
   terminateDecryptWorker();

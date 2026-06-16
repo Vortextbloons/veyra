@@ -9,10 +9,22 @@ import { useSettingsStore } from "@/stores/settings-store";
 
 let loadedModelId: string | null = null;
 
+export function normalizeLmStudioModelId(id: string): string {
+  const trimmed = id.trim();
+  if (!trimmed) return "";
+  const atIndex = trimmed.indexOf("@");
+  return atIndex >= 0 ? trimmed.slice(0, atIndex) : trimmed;
+}
+
 export function sameLmStudioModel(a: string, b: string): boolean {
-  const left = a.trim();
-  const right = b.trim();
-  return left.length > 0 && left === right;
+  const left = normalizeLmStudioModelId(a);
+  const right = normalizeLmStudioModelId(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+
+  const leftTail = left.includes("/") ? left.split("/").pop()! : left;
+  const rightTail = right.includes("/") ? right.split("/").pop()! : right;
+  return leftTail.length > 0 && leftTail === rightTail;
 }
 
 function contextLengthFor(modelId: string): number {
@@ -81,56 +93,68 @@ export async function ensureLmStudioModel(
     const next = modelId.trim();
     if (!next) return;
 
-    const actualLoadedInstances = await fetchActualLoadedModelInstances();
-    const actualTargetLoaded = actualLoadedInstances.some((instance) =>
+    let actualLoadedInstances = await fetchActualLoadedModelInstances();
+    const targetInstances = actualLoadedInstances.filter((instance) =>
       sameLmStudioModel(instance.modelId, next),
     );
-    const forceReloadTarget = options?.forceReload && actualTargetLoaded;
-    const instancesToUnload = actualLoadedInstances.length > 0
-      ? actualLoadedInstances.filter((instance) => !sameLmStudioModel(instance.modelId, next))
-      : loadedModelId && !sameLmStudioModel(loadedModelId, next)
-        ? [{ modelId: loadedModelId, instanceId: loadedModelId }]
-        : [];
+    const soleTargetLoaded =
+      !options?.forceReload &&
+      targetInstances.length > 0 &&
+      actualLoadedInstances.length === targetInstances.length;
 
-    if (forceReloadTarget) {
-      const targetInstances = actualLoadedInstances.filter((instance) => sameLmStudioModel(instance.modelId, next));
-      if (targetInstances.length > 0) onProgress?.("unloading");
-      for (const loadedInstance of targetInstances) {
-        await unloadDirect(loadedInstance.instanceId);
-      }
-      onProgress?.("loading");
-      await loadDirectWithContext(next, options.contextLength ?? contextLengthFor(next));
-      onProgress?.("ready");
-      return;
-    }
-
-    if (instancesToUnload.length === 0 && actualTargetLoaded) {
+    if (soleTargetLoaded) {
       loadedModelId = next;
       onProgress?.("ready");
       return;
     }
 
-    if (instancesToUnload.length === 0 && sameLmStudioModel(loadedModelId ?? "", next)) {
-      onProgress?.("ready");
-      return;
-    }
+    const unloadInstances = options?.forceReload
+      ? targetInstances.length > 0
+        ? targetInstances
+        : actualLoadedInstances
+      : actualLoadedInstances;
 
-    if (instancesToUnload.length > 0) {
+    if (unloadInstances.length > 0) {
       onProgress?.("unloading");
+      for (const instance of unloadInstances) {
+        await unloadDirect(instance.instanceId);
+      }
+    } else if (
+      loadedModelId &&
+      (options?.forceReload || !sameLmStudioModel(loadedModelId, next))
+    ) {
+      onProgress?.("unloading");
+      try {
+        await unloadDirect(loadedModelId);
+      } catch {
+        await unloadAllLmStudioModels();
+      }
     }
 
-    for (const loadedInstance of instancesToUnload) {
-      await unloadDirect(loadedInstance.instanceId);
+    actualLoadedInstances = await fetchActualLoadedModelInstances();
+    const remaining = actualLoadedInstances.filter(
+      (instance) => options?.forceReload
+        ? sameLmStudioModel(instance.modelId, next)
+        : !sameLmStudioModel(instance.modelId, next),
+    );
+    if (remaining.length > 0) {
+      onProgress?.("unloading");
+      for (const instance of remaining) {
+        await unloadDirect(instance.instanceId);
+      }
     }
 
-    if (actualTargetLoaded) {
-      loadedModelId = next;
-      onProgress?.("ready");
-      return;
+    const needsLoad = options?.forceReload || targetInstances.length === 0;
+    if (needsLoad) {
+      onProgress?.("loading");
+      if (options?.contextLength != null) {
+        await loadDirectWithContext(next, options.contextLength);
+      } else {
+        await loadDirect(next);
+      }
     }
 
-    onProgress?.("loading");
-    await loadDirect(next);
+    loadedModelId = next;
     onProgress?.("ready");
   });
 }

@@ -116,6 +116,16 @@ export function NewResearchDialog({ onClose }: Props) {
   const selectedProvider = useProviderStore((s) => s.selectedProvider);
   const [runModel, setRunModel] = useState(researchConfig.defaultModelId || selectedModel || "");
 
+  useEffect(() => {
+    if (models.length === 0) return;
+    setRunModel((current) => {
+      if (current && models.some((model) => model.id === current)) return current;
+      const preferred = researchConfig.defaultModelId || selectedModel;
+      if (preferred && models.some((model) => model.id === preferred)) return preferred;
+      return models[0]?.id ?? "";
+    });
+  }, [models, selectedModel, researchConfig.defaultModelId]);
+
   // Effective resolved profile for the current depth (used to preview override impact).
   const resolvedPreview = useMemo(
     () =>

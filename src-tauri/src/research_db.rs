@@ -532,6 +532,7 @@ impl ResearchDb {
         let start = std::time::Instant::now();
         let conn = crate::db_utils::open_app_sqlite(app, "veyra.sqlite")?;
         run_migrations(&conn)?;
+        reconcile_interrupted_runs(&conn)?;
         if cfg!(debug_assertions) {
             log::info!(
                 "ResearchDb::init completed in {}ms",
@@ -646,6 +647,36 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         )
         .map_err(|e| format!("set schema version failed: {}", e))?;
     }
+
+    Ok(())
+}
+
+/// Pause runs left in an active status after an unclean app exit (no in-memory worker).
+fn reconcile_interrupted_runs(conn: &Connection) -> Result<(), String> {
+    const INTERRUPTED_RUN_ERROR: &str =
+        "Research was interrupted when the app closed. Resume to continue.";
+    const INTERRUPTED_STEP_ERROR: &str = "Interrupted when the app closed";
+    let now = chrono::Utc::now().to_rfc3339();
+
+    conn.execute(
+        "UPDATE research_steps
+         SET status = 'failed', error = ?1, completed_at = ?2
+         WHERE status = 'running'
+           AND run_id IN (
+             SELECT id FROM research_runs
+             WHERE status IN ('planning', 'searching', 'reading', 'extracting', 'verifying', 'synthesizing')
+           )",
+        rusqlite::params![INTERRUPTED_STEP_ERROR, now],
+    )
+    .map_err(|e| format!("reconcile research steps failed: {e}"))?;
+
+    conn.execute(
+        "UPDATE research_runs
+         SET status = 'paused', error = ?1, updated_at = ?2
+         WHERE status IN ('planning', 'searching', 'reading', 'extracting', 'verifying', 'synthesizing')",
+        rusqlite::params![INTERRUPTED_RUN_ERROR, now],
+    )
+    .map_err(|e| format!("reconcile research runs failed: {e}"))?;
 
     Ok(())
 }

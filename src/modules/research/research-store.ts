@@ -3,6 +3,7 @@ import type {
   ResearchRun,
   ResearchRunWithRelations,
   ResearchStep,
+  ResearchStepStatus,
   ResearchSource,
   ResearchEvidence,
   ResearchClaim,
@@ -39,6 +40,7 @@ import {
   createResearchReport as apiCreateReport,
   updateResearchReport as apiUpdateReport,
 } from "./research-storage";
+import { reconcileInterruptedResearchRuns, isActiveResearchRunStatus } from "./research-lifecycle";
 
 type ResearchStore = {
   runs: ResearchRun[];
@@ -101,6 +103,7 @@ type ResearchStore = {
   extractProgress: { done: number; total: number };
   contradictionProgress: { done: number; total: number };
   auditProgress: { done: number; total: number };
+  interruptActiveResearchOnShutdown: () => Promise<void>;
 };
 
 let hydrationPromise: Promise<void> | null = null;
@@ -135,6 +138,7 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
     if (get().hydrationState === "ready") return;
     hydrationPromise ??= (async () => {
       try {
+        // DB init reconciles stale in-flight runs from a prior unclean exit.
         const runs = await apiListRuns();
         set({ runs, hydrationState: "ready" });
       } catch (error) {
@@ -452,5 +456,38 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
         return;
     }
     void state;
+  },
+
+  interruptActiveResearchOnShutdown: async () => {
+    const store = get();
+    store.pauseActiveResearch();
+
+    const stale = store.runs.filter((run) => isActiveResearchRunStatus(run.status));
+    if (stale.length === 0) return;
+
+    const reconciled = await reconcileInterruptedResearchRuns(store.runs);
+    const reconciledById = new Map(reconciled.map((run) => [run.id, run]));
+
+    set((state) => ({
+      runs: reconciled,
+      activeRun:
+        state.activeRun && reconciledById.has(state.activeRun.run.id)
+          ? {
+              ...state.activeRun,
+              run: reconciledById.get(state.activeRun.run.id)!,
+              steps: state.activeRun.steps.map((step) =>
+                step.status === "running"
+                  ? {
+                      ...step,
+                      status: "failed" as ResearchStepStatus,
+                      error: "Interrupted when the app closed",
+                    }
+                  : step,
+              ),
+            }
+          : state.activeRun,
+      activeController: null,
+      isPausing: false,
+    }));
   },
 }));

@@ -591,6 +591,11 @@ export type LoadedLmStudioModelInstance = {
 };
 
 function modelIdFromEntry(entry: LmStudioModelEntry): string {
+  const record = entry as Record<string, unknown>;
+  const selectedVariant = record.selected_variant;
+  if (typeof selectedVariant === "string" && selectedVariant.trim()) {
+    return selectedVariant.trim();
+  }
   const value = entry.id ?? entry.key ?? entry.model ?? entry.path;
   return typeof value === "string" ? value.trim() : "";
 }
