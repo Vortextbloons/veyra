@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   FlaskConical,
@@ -114,23 +114,14 @@ export function NewResearchDialog({ onClose }: Props) {
   const models = useProviderStore((s) => s.models);
   const selectedModel = useProviderStore((s) => s.selectedModel);
   const selectedProvider = useProviderStore((s) => s.selectedProvider);
-  const [runModel, setRunModel] = useState(researchConfig.defaultModelId || selectedModel || "");
-
-  useEffect(() => {
-    if (models.length === 0) return;
-    setRunModel((current) => {
-      if (current && models.some((model) => model.id === current)) return current;
-      const preferred = researchConfig.defaultModelId || selectedModel;
-      if (preferred && models.some((model) => model.id === preferred)) return preferred;
-      return models[0]?.id ?? "";
-    });
-  }, [models, selectedModel, researchConfig.defaultModelId]);
+  const [runModelOverride, setRunModelOverride] = useState("");
+  const fallbackRunModel = researchConfig.defaultModelId || selectedModel || models[0]?.id || "";
+  const runModel = models.some((model) => model.id === runModelOverride)
+    ? runModelOverride
+    : fallbackRunModel;
 
   const perRunOverride = perRunOverrides[depth] ?? {};
-  const resolvedPreview = useMemo(
-    () => resolveResearchProfileForRun(researchConfig, depth, perRunOverride),
-    [researchConfig, depth, perRunOverrides],
-  );
+  const resolvedPreview = resolveResearchProfileForRun(researchConfig, depth, perRunOverride);
 
   const canStart = question.trim().length > 0 && !isStarting;
   const hasOverrides = Object.keys(perRunOverride).length > 0;
@@ -290,7 +281,7 @@ export function NewResearchDialog({ onClose }: Props) {
             <div className="flex items-center gap-2">
               <select
                 value={runModel}
-                onChange={(e) => setRunModel(e.target.value)}
+                onChange={(e) => setRunModelOverride(e.target.value)}
                 className="h-9 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 text-[13px] text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none"
               >
                 {models.length === 0 && (

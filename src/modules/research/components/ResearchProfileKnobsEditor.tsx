@@ -274,6 +274,17 @@ export function ResearchProfileKnobsEditor({
             onChange={(v) => onUpdate({ validateConcurrency: v })}
           />
           {resolved.perSourceRead && (
+            <Slider
+              label="Validation batch size"
+              description="Sources per validation call. Higher values reduce API calls but may reduce per-source accuracy. 1 = most thorough."
+              value={resolved.validateBatchSize}
+              min={1}
+              max={5}
+              step={1}
+              onChange={(v) => onUpdate({ validateBatchSize: v })}
+            />
+          )}
+          {resolved.perSourceRead && (
             <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
               <div>
                 <div className="text-[12px] font-medium text-white">Use reasoning for source validation</div>

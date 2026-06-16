@@ -390,7 +390,7 @@ pub fn update_character_group(
     }
     if let Some(v) = input.is_global {
         sets.push(format!("is_global = ?{}", params.len() + 1));
-        params.push(Value::Integer(if { v } { 1 } else { 0 }));
+        params.push(Value::Integer(if v { 1 } else { 0 }));
     }
     if let Some(v) = input.project_id {
         sets.push(format!("project_id = ?{}", params.len() + 1));
@@ -453,7 +453,7 @@ pub fn list_character_groups(
 
     if let Some(g) = filter.is_global {
         conds.push(format!("is_global = ?{}", param_values.len() + 1));
-        param_values.push(Value::Integer(if { g } { 1 } else { 0 }));
+        param_values.push(Value::Integer(if g { 1 } else { 0 }));
     }
     if let Some(p) = filter.project_id {
         if !p.is_empty() {

@@ -31,7 +31,7 @@ export function sanitizeReportSection(text: string): string {
     if (/^```/.test(trimmed)) {
       const inner = trimmed.replace(/^```\w*\n?/, "").replace(/\n?```$/, "");
       if (PLANNING_LINE.test(inner) || PLANNING_INLINE.test(inner)) continue;
-      if (/^\s*[\*\-]\s*(Drafting|Point \d+|Formal)/im.test(inner)) continue;
+      if (/^\s*[*-]\s*(Drafting|Point \d+|Formal)/im.test(inner)) continue;
     }
 
     const lines = trimmed.split("\n");
