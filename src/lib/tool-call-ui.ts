@@ -1,7 +1,8 @@
 import type { LucideIcon } from "lucide-react";
-import { FileText, Search, Wrench } from "lucide-react";
+import { FileText, Search, TerminalSquare, Wrench } from "lucide-react";
 import type { ToolCallPhase } from "@/lib/chat-types";
 import {
+  CODE_EXEC_TOOL_NAME,
   DOC_CREATE_TOOL_NAME,
   DOC_READ_TOOL_NAME,
   DOC_UPDATE_TOOL_NAME,
@@ -17,6 +18,11 @@ export type ToolCallUiMeta = {
 };
 
 export const TOOL_CALL_UI: Record<string, ToolCallUiMeta> = {
+  [CODE_EXEC_TOOL_NAME]: {
+    label: "Code Execution",
+    icon: TerminalSquare,
+    accent: "amber",
+  },
   [WEB_SEARCH_TOOL_NAME]: {
     label: "Web Search",
     icon: Search,

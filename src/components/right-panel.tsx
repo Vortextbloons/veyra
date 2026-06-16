@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Database,
   BookOpen,
+  TerminalSquare,
   PanelRightClose,
   PanelRightOpen,
   Trash2,
@@ -52,6 +53,10 @@ export function RightPanel({
   onWebSearchChange,
   webSearchDisabled = false,
   webSearchDisabledReason,
+  codeExecutionEnabled = false,
+  onCodeExecutionChange,
+  codeExecutionDisabled = false,
+  codeExecutionDisabledReason,
   isAgentsMode = false,
   agentSessionCount = 0,
   agentActiveCount = 0,
@@ -120,6 +125,15 @@ export function RightPanel({
                 disabledReason={webSearchDisabledReason}
               />
               <CompactToolToggle
+                icon={<TerminalSquare className="size-3.5" />}
+                label="Code Exec"
+                on={codeExecutionDisabled ? false : codeExecutionEnabled}
+                onChange={(on) => onCodeExecutionChange?.(on)}
+                disabled={codeExecutionDisabled}
+                disabledReason={codeExecutionDisabledReason}
+                accent="amber"
+              />
+              <CompactToolToggle
                 icon={<FileText className="size-3.5" />}
                 label="Doc Editor"
                 on={documentPanelEnabled}
@@ -160,6 +174,10 @@ export function RightPanel({
                 onWebSearchChange={(on) => onWebSearchChange?.(on)}
                 webSearchDisabled={webSearchDisabled}
                 webSearchDisabledReason={webSearchDisabledReason}
+                codeExecution={codeExecutionEnabled}
+                onCodeExecutionChange={(on) => onCodeExecutionChange?.(on)}
+                codeExecutionDisabled={codeExecutionDisabled}
+                codeExecutionDisabledReason={codeExecutionDisabledReason}
               />
               <DocumentsPanel />
             </>

@@ -172,6 +172,8 @@ function App() {
   const defaultContextLength = useSettingsStore((state) => state.defaultContextLength);
   const defaultReservedOutputTokens = useSettingsStore((state) => state.defaultReservedOutputTokens);
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
+  const codeExecutionEnabled = useSettingsStore((state) => state.codeExecutionEnabled);
+  const setCodeExecutionEnabled = useSettingsStore((state) => state.setCodeExecutionEnabled);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
   const workspaceChatMode = useSettingsStore((state) => state.workspaceChatMode);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
@@ -183,9 +185,17 @@ function App() {
   const effectiveConnectivity = useConnectivityStore((state) => state.effectiveConnectivity);
   const startProbeListener = useConnectivityStore((state) => state.startProbeListener);
   const webSearchAvailability = useIsFeatureAvailable("webSearch");
+  const codeExecutionAvailability = useIsFeatureAvailable("codeExecution");
   const webSearchDisabled = !webSearchAvailability.available;
+  const codeExecutionDisabled = !codeExecutionAvailability.available;
+  const codeExecutionPanelDisabled = codeExecutionDisabled || workspaceChatMode === "agents";
+  const codeExecutionPanelDisabledReason =
+    workspaceChatMode === "agents"
+      ? "Code execution is only available in chat and characters mode."
+      : codeExecutionAvailability.reason;
   const effectiveWebSearchEnabled =
     effectiveConnectivity === "online" && webSearchEnabled && !webSearchDisabled;
+  const effectiveCodeExecutionEnabled = codeExecutionEnabled && !codeExecutionPanelDisabled;
   const prevEffectiveConnectivityRef = useRef(effectiveConnectivity);
 
   const sidebarsCollapsed =
@@ -610,6 +620,7 @@ function App() {
               selectedModel,
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
+              codeExecutionEnabled: effectiveCodeExecutionEnabled,
               projectId: activeProjectId ?? undefined,
               signal,
               onChunk: (chunk) => {
@@ -689,6 +700,7 @@ function App() {
       startAgentSession,
       supportsImages,
       effectiveWebSearchEnabled,
+      effectiveCodeExecutionEnabled,
     ],
   );
 
@@ -814,6 +826,7 @@ function App() {
               selectedModel,
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
+              codeExecutionEnabled: effectiveCodeExecutionEnabled,
               projectId: activeProjectId ?? undefined,
               signal,
               onChunk: (chunk) => {
@@ -880,6 +893,7 @@ function App() {
       clearStreamingBufferUnlessSkipped,
       commitAssistantMessage,
       effectiveWebSearchEnabled,
+      effectiveCodeExecutionEnabled,
       selectedModel,
       selectedProvider,
       setModelLoadProgress,
@@ -967,6 +981,7 @@ function App() {
               selectedModel,
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
+              codeExecutionEnabled: effectiveCodeExecutionEnabled,
               projectId: activeProjectId ?? undefined,
               signal,
               onChunk: (chunk) => {
@@ -1033,6 +1048,7 @@ function App() {
       clearStreamingBufferUnlessSkipped,
       commitAssistantMessage,
       effectiveWebSearchEnabled,
+      effectiveCodeExecutionEnabled,
       removeLastMessagePair,
       selectedModel,
       selectedProvider,
@@ -1178,6 +1194,10 @@ function App() {
           onWebSearchChange={setWebSearchEnabled}
           webSearchDisabled={webSearchDisabled}
           webSearchDisabledReason={webSearchAvailability.reason}
+          codeExecutionEnabled={codeExecutionEnabled}
+          onCodeExecutionChange={setCodeExecutionEnabled}
+          codeExecutionDisabled={codeExecutionPanelDisabled}
+          codeExecutionDisabledReason={codeExecutionPanelDisabledReason}
           isAgentsMode={workspaceChatMode === "agents"}
           agentSessionCount={agentSessions.length}
           agentActiveCount={agentSessions.filter((s) => s.status === "running").length}

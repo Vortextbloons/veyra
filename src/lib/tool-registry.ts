@@ -4,6 +4,7 @@ export const WEB_SEARCH_TOOL_NAME = "web_search";
 export const DOC_CREATE_TOOL_NAME = "doc_create";
 export const DOC_READ_TOOL_NAME = "doc_read";
 export const DOC_UPDATE_TOOL_NAME = "doc_update";
+export const CODE_EXEC_TOOL_NAME = "code_execution";
 
 const DOCUMENT_TYPES = [
   "document",
@@ -23,6 +24,7 @@ const DOCUMENT_TYPES = [
 export function buildProviderTools(options: {
   webSearchEnabled: boolean;
   documentToolsEnabled: boolean;
+  codeExecutionEnabled: boolean;
   activeDocumentId?: string;
 }): ProviderToolDefinition[] {
   const tools: ProviderToolDefinition[] = [];
@@ -42,6 +44,28 @@ export function buildProviderTools(options: {
             },
           },
           required: ["query"],
+          additionalProperties: false,
+        },
+      },
+    });
+  }
+
+  if (options.codeExecutionEnabled) {
+    tools.push({
+      type: "function",
+      function: {
+        name: CODE_EXEC_TOOL_NAME,
+        description:
+          "Run a local Python snippet for calculations, text processing, and read-only inspection of files in the current workspace. Dangerous imports and write helpers are blocked.",
+        parameters: {
+          type: "object",
+          properties: {
+            code: {
+              type: "string",
+              description: "A Python 3 snippet to execute locally.",
+            },
+          },
+          required: ["code"],
           additionalProperties: false,
         },
       },

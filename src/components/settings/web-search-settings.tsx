@@ -61,6 +61,20 @@ export function WebSearchSettings() {
   const setAdvancedSearchBundleEnabled = useSettingsStore(
     (s) => s.setAdvancedSearchBundleEnabled,
   );
+  const bundleExtractDocx = useSettingsStore((s) => s.bundleExtractDocx);
+  const setBundleExtractDocx = useSettingsStore((s) => s.setBundleExtractDocx);
+  const bundleExtractPptx = useSettingsStore((s) => s.bundleExtractPptx);
+  const setBundleExtractPptx = useSettingsStore((s) => s.setBundleExtractPptx);
+  const bundleExtractXlsx = useSettingsStore((s) => s.bundleExtractXlsx);
+  const setBundleExtractXlsx = useSettingsStore((s) => s.setBundleExtractXlsx);
+  const bundleExtractEpub = useSettingsStore((s) => s.bundleExtractEpub);
+  const setBundleExtractEpub = useSettingsStore((s) => s.setBundleExtractEpub);
+  const bundleWaybackFallback = useSettingsStore((s) => s.bundleWaybackFallback);
+  const setBundleWaybackFallback = useSettingsStore((s) => s.setBundleWaybackFallback);
+  const bundleArxivSearch = useSettingsStore((s) => s.bundleArxivSearch);
+  const setBundleArxivSearch = useSettingsStore((s) => s.setBundleArxivSearch);
+  const bundleWikipediaSearch = useSettingsStore((s) => s.bundleWikipediaSearch);
+  const setBundleWikipediaSearch = useSettingsStore((s) => s.setBundleWikipediaSearch);
 
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testError, setTestError] = useState<string>("");
@@ -534,8 +548,8 @@ export function WebSearchSettings() {
       <CollapsibleSettingsSection
         subsectionKey="webSearch:bundle"
         title="Advanced Search Bundle"
-        description="Optional extractors for non-HTML sources (YouTube transcripts, PDF text, future additions)."
-        keywords={["youtube", "transcript", "pdf", "bundle", "advanced"]}
+        description="Optional extractors for non-HTML sources (YouTube transcripts, PDF text, Office documents, EPUB, and direct API providers)."
+        keywords={["youtube", "transcript", "pdf", "bundle", "advanced", "docx", "epub", "arxiv", "wikipedia"]}
       >
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
           <Toggle
@@ -544,19 +558,134 @@ export function WebSearchSettings() {
             onChange={setAdvancedSearchBundleEnabled}
           />
           <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
-            When on, search results from YouTube and PDF documents are
-            extracted using dedicated handlers (YouTube captions, PDF text
-            parsing). When off, those URLs fall back to standard HTML
-            fetching — YouTube videos will return an empty body and PDFs
-            will be skipped.
+            When on, search results from YouTube, PDF, Office documents, and
+            EPUB files are extracted using dedicated handlers. Wayback Machine
+            fallback recovers content from failed fetches. Direct API providers
+            (ArXiv, Wikipedia) supplement SearXNG results.
           </p>
-          {advancedSearchBundleEnabled && (
-            <ul className="mt-3 space-y-1 text-[11px] text-[var(--color-text-dim)]">
-              <li>• YouTube videos → captions/transcripts (free public API, no key)</li>
-              <li>• PDF documents → text extraction (cached locally for 7 days)</li>
-            </ul>
-          )}
         </div>
+
+        {advancedSearchBundleEnabled && (
+          <>
+            {/* Content Extractors */}
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+              <div className="mb-2 text-[12.5px] font-medium text-white">
+                Content Extractors
+              </div>
+              <div className="space-y-2">
+                <Toggle
+                  label="YouTube transcripts"
+                  on={true}
+                  onChange={() => {}}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Extracts captions/transcripts from YouTube videos (free public API, no key required).
+                </p>
+                <Toggle
+                  label="PDF text extraction"
+                  on={true}
+                  onChange={() => {}}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Extracts text from PDF documents using the pdf-extract crate.
+                </p>
+                <Toggle
+                  label="DOCX documents"
+                  on={bundleExtractDocx}
+                  onChange={setBundleExtractDocx}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Extracts text from Word documents (.docx).
+                </p>
+                <Toggle
+                  label="PowerPoint presentations"
+                  on={bundleExtractPptx}
+                  onChange={setBundleExtractPptx}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Extracts slide text from PowerPoint files (.pptx).
+                </p>
+                <Toggle
+                  label="Excel spreadsheets"
+                  on={bundleExtractXlsx}
+                  onChange={setBundleExtractXlsx}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Extracts cell data from Excel files (.xlsx).
+                </p>
+                <Toggle
+                  label="EPUB books"
+                  on={bundleExtractEpub}
+                  onChange={setBundleExtractEpub}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Extracts text from EPUB e-books.
+                </p>
+              </div>
+            </div>
+
+            {/* Recovery */}
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+              <div className="mb-2 text-[12.5px] font-medium text-white">
+                Recovery
+              </div>
+              <Toggle
+                label="Wayback Machine fallback"
+                on={bundleWaybackFallback}
+                onChange={setBundleWaybackFallback}
+              />
+              <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
+                When a page fails to load (timeout, HTTP error, etc.),
+                automatically try the Internet Archive's cached version.
+              </p>
+            </div>
+
+            {/* Direct API Providers */}
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+              <div className="mb-2 text-[12.5px] font-medium text-white">
+                Direct API Providers
+              </div>
+              <div className="space-y-2">
+                <Toggle
+                  label="ArXiv academic search"
+                  on={bundleArxivSearch}
+                  onChange={setBundleArxivSearch}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Include ArXiv results for research queries. Retrieves paper
+                  abstracts and metadata via the ArXiv API.
+                </p>
+                <Toggle
+                  label="Wikipedia search"
+                  on={bundleWikipediaSearch}
+                  onChange={setBundleWikipediaSearch}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Include Wikipedia results and extract article content via the
+                  structured Wikipedia REST API.
+                </p>
+              </div>
+            </div>
+
+            {/* Capability Summary */}
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+              <div className="mb-2 text-[12.5px] font-medium text-white">
+                Active Capabilities
+              </div>
+              <ul className="space-y-1 text-[11px] text-[var(--color-text-dim)]">
+                <li>• YouTube videos → captions/transcripts</li>
+                <li>• PDF documents → text extraction</li>
+                {bundleExtractDocx && <li>• DOCX documents → text extraction</li>}
+                {bundleExtractPptx && <li>• PowerPoint presentations → slide text</li>}
+                {bundleExtractXlsx && <li>• Excel spreadsheets → cell data</li>}
+                {bundleExtractEpub && <li>• EPUB books → text extraction</li>}
+                {bundleWaybackFallback && <li>• Wayback Machine fallback for failed fetches</li>}
+                {bundleArxivSearch && <li>• ArXiv direct API for academic papers</li>}
+                {bundleWikipediaSearch && <li>• Wikipedia direct API for article content</li>}
+              </ul>
+            </div>
+          </>
+        )}
       </CollapsibleSettingsSection>
 
       {/* ── Content Extraction ────────────────────────────────────────────── */}

@@ -35,6 +35,7 @@ mod character_db;
 mod character_group_commands;
 mod character_group_db;
 mod character_io_commands;
+mod code_execution_commands;
 mod connectivity_commands;
 mod constants;
 mod db_utils;
@@ -150,6 +151,8 @@ pub fn run() {
             agent_commands::delete_opencode_session,
             agent_commands::run_opencode_agent,
             agent_commands::stop_opencode_agent,
+            code_execution_commands::check_python_available,
+            code_execution_commands::execute_python_code,
             memory_commands::list_memory_folders,
             memory_commands::list_memory_files,
             memory_commands::list_memory_nodes,
@@ -162,6 +165,8 @@ pub fn run() {
             connectivity_commands::probe_internet_connectivity,
             web_search_commands::web_search_searxng,
             web_search_commands::test_searxng_connection,
+            web_search_commands::search_arxiv,
+            web_search_commands::search_wikipedia,
             web_fetch_commands::fetch_and_extract_pages,
             web_fetch_commands::clear_web_fetch_cache,
             web_fetch_commands::get_web_fetch_cache_stats,
@@ -237,6 +242,8 @@ pub fn run() {
             character_io_commands::read_character_avatar,
         ])
         .setup(|app| {
+            code_execution_commands::cleanup_stale_temp_files();
+
             let db_state = memory_db::MemoryDbState::new(app.handle().clone());
             db_state.spawn_background_init();
             app.manage(db_state);

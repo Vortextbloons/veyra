@@ -63,6 +63,7 @@ export function useCharacterChatPipeline() {
   const defaultReservedOutputTokens = useSettingsStore((state) => state.defaultReservedOutputTokens);
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
   const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
+  const codeExecutionEnabled = useSettingsStore((s) => s.codeExecutionEnabled);
 
   const effectiveConnectivity = useConnectivityStore((state) => state.effectiveConnectivity);
   const webSearchAvailability = useIsFeatureAvailable("webSearch");
@@ -207,6 +208,7 @@ export function useCharacterChatPipeline() {
               selectedModel,
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
+              codeExecutionEnabled,
               signal,
               onChunk: (chunk) => {
                 if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
@@ -274,6 +276,7 @@ export function useCharacterChatPipeline() {
       createConversation,
       defaultMemoryEnabled,
       effectiveWebSearchEnabled,
+      codeExecutionEnabled,
       selectedModel,
       selectedProvider,
       setModelLoadProgress,
@@ -364,6 +367,7 @@ export function useCharacterChatPipeline() {
               selectedModel,
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
+              codeExecutionEnabled,
               signal,
               onChunk: (chunk) => {
                 if (chunk) appendStreamingContent(activeConversationId, assistantMessage.id, chunk);
@@ -429,6 +433,7 @@ export function useCharacterChatPipeline() {
       commitAssistantMessage,
       defaultMemoryEnabled,
       effectiveWebSearchEnabled,
+      codeExecutionEnabled,
       selectedModel,
       selectedProvider,
       setModelLoadProgress,
@@ -505,6 +510,7 @@ export function useCharacterChatPipeline() {
               selectedModel,
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
+              codeExecutionEnabled,
               signal,
               onChunk: (chunk) => {
                 if (chunk) appendStreamingContent(activeConversationId, assistantMessage.id, chunk);
@@ -570,6 +576,7 @@ export function useCharacterChatPipeline() {
       commitAssistantMessage,
       defaultMemoryEnabled,
       effectiveWebSearchEnabled,
+      codeExecutionEnabled,
       removeLastMessagePair,
       selectedModel,
       selectedProvider,

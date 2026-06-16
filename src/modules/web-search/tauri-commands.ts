@@ -64,6 +64,10 @@ export type FetchedPage = {
   title: string | null;
   content: string | null;
   error_reason: string | null;
+  source_type?: string | null;
+  extraction_method?: string | null;
+  via_wayback?: boolean | null;
+  char_count?: number | null;
 };
 
 export type WebFetchCacheStats = {
@@ -102,4 +106,53 @@ export async function invokeClearWebFetchCache(): Promise<void> {
 export async function invokeGetWebFetchCacheStats(): Promise<WebFetchCacheStats> {
   const cacheDir = await cacheDirPath();
   return invoke<WebFetchCacheStats>("get_web_fetch_cache_stats", { cacheDir });
+}
+
+// ── ArXiv Search ──────────────────────────────────────────────────────────
+
+export type ArxivResult = {
+  id: string;
+  title: string;
+  url: string;
+  snippet: string;
+  authors: string;
+  published: string;
+  updated: string;
+  summary: string;
+};
+
+export type ArxivSearchResponse = {
+  query: string;
+  results: ArxivResult[];
+  result_count: number;
+};
+
+export async function invokeSearchArxiv(
+  query: string,
+  limit: number,
+): Promise<ArxivSearchResponse> {
+  return invoke<ArxivSearchResponse>("search_arxiv", { query, limit });
+}
+
+// ── Wikipedia Search ──────────────────────────────────────────────────────
+
+export type WikipediaResult = {
+  id: string;
+  title: string;
+  url: string;
+  snippet: string;
+  extract: string;
+};
+
+export type WikipediaSearchResponse = {
+  query: string;
+  results: WikipediaResult[];
+  result_count: number;
+};
+
+export async function invokeSearchWikipedia(
+  query: string,
+  limit: number,
+): Promise<WikipediaSearchResponse> {
+  return invoke<WikipediaSearchResponse>("search_wikipedia", { query, limit });
 }

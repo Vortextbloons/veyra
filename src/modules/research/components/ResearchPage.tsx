@@ -34,7 +34,7 @@ import {
   resolveResearchExtraction,
   summarizeResearchExtractions,
 } from "@/lib/source-extraction-ui";
-import { isPdfUrl, isYouTubeUrl } from "@/lib/url-classifiers";
+import { isPdfUrl, isYouTubeUrl, isDocxUrl, isPptxUrl, isXlsxUrl, isEpubUrl } from "@/lib/url-classifiers";
 
 const TAB_ITEMS = [
   { id: "plan", label: "Plan", icon: <LayoutList className="size-3.5" /> },
@@ -144,8 +144,16 @@ export function ResearchPage() {
           return (
             source.sourceType === "youtube" ||
             source.sourceType === "pdf" ||
+            source.sourceType === "docx" ||
+            source.sourceType === "pptx" ||
+            source.sourceType === "xlsx" ||
+            source.sourceType === "epub" ||
             isYouTubeUrl(source.url) ||
-            isPdfUrl(source.url)
+            isPdfUrl(source.url) ||
+            isDocxUrl(source.url) ||
+            isPptxUrl(source.url) ||
+            isXlsxUrl(source.url) ||
+            isEpubUrl(source.url)
           );
         }).length
       : 0;
@@ -304,7 +312,7 @@ export function ResearchPage() {
                     <ResearchExtractionIndicators sources={sources} />
                     {pendingBundleSources > 0 && (
                       <span className="text-[10.5px] text-[var(--color-text-dim)]">
-                        {pendingBundleSources} more YouTube/PDF source
+                        {pendingBundleSources} more document source
                         {pendingBundleSources !== 1 ? "s" : ""} fetching…
                       </span>
                     )}
@@ -646,7 +654,7 @@ function LiveProgressBar({
         <div className="flex items-center gap-2 text-[10.5px] text-[var(--color-text-dim)]">
           <Loader2 className="size-3 animate-spin text-rose-300" />
           <span>
-            Advanced Search Bundle: reading YouTube transcripts &amp; PDF text…
+            Advanced Search Bundle: extracting document content…
           </span>
         </div>
       )}

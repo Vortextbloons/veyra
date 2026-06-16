@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::io::Read as _;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -16,6 +17,14 @@ pub struct FetchedPage {
     pub title: Option<String>,
     pub content: Option<String>,
     pub error_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extraction_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via_wayback: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub char_count: Option<usize>,
 }
 
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; Veyra/0.1; +https://github.com/anomalyco/veyra)";
@@ -115,6 +124,38 @@ fn is_youtube_url(parsed: &url::Url) -> bool {
         host.as_str(),
         "youtube.com" | "www.youtube.com" | "m.youtube.com" | "music.youtube.com" | "youtu.be"
     )
+}
+
+fn is_docx_url(url_str: &str) -> bool {
+    let lower = url_str.to_lowercase();
+    lower.contains(".docx") || lower.contains("officedocument.wordprocessingml")
+}
+
+fn is_pptx_url(url_str: &str) -> bool {
+    let lower = url_str.to_lowercase();
+    lower.contains(".pptx") || lower.contains("officedocument.presentationml")
+}
+
+fn is_xlsx_url(url_str: &str) -> bool {
+    let lower = url_str.to_lowercase();
+    lower.contains(".xlsx") || lower.contains("officedocument.spreadsheetml")
+}
+
+fn is_epub_url(url_str: &str) -> bool {
+    url_str.to_lowercase().contains(".epub")
+}
+
+fn is_office_content_type(ct: &str) -> bool {
+    ct.contains("officedocument.wordprocessingml")
+        || ct.contains("officedocument.presentationml")
+        || ct.contains("officedocument.spreadsheetml")
+        || ct.contains("msword")
+        || ct.contains("ms-powerpoint")
+        || ct.contains("ms-excel")
+}
+
+fn is_epub_content_type(ct: &str) -> bool {
+    ct.contains("epub+zip") || ct.contains("epub")
 }
 
 fn is_valid_youtube_id(s: &str) -> bool {
@@ -399,6 +440,10 @@ async fn handle_youtube(
                 title: cached.title,
                 content: cached.content,
                 error_reason: None,
+                source_type: Some("youtube".into()),
+                extraction_method: Some("youtube_captions".into()),
+                via_wayback: None,
+                char_count: None,
             };
         }
     }
@@ -531,6 +576,10 @@ async fn handle_youtube(
         title: Some(final_title),
         content: Some(content),
         error_reason: None,
+        source_type: Some("youtube".into()),
+        extraction_method: Some("youtube_captions".into()),
+        via_wayback: None,
+        char_count: None,
     }
 }
 
@@ -581,17 +630,66 @@ fn decode_html_entities(s: &str) -> String {
     out
 }
 
+/// Byte index after at most `max_chars` Unicode scalars (always on a char boundary).
+fn byte_index_at_char_limit(text: &str, max_chars: usize) -> usize {
+    match text.char_indices().nth(max_chars) {
+        Some((idx, _)) => idx,
+        None => text.len(),
+    }
+}
+
 fn truncate_at_sentence_boundary(text: &str, max_chars: usize) -> String {
-    if text.len() <= max_chars {
+    let cut_byte = byte_index_at_char_limit(text, max_chars);
+    if cut_byte >= text.len() {
         return text.to_string();
     }
-    let mut cut = max_chars;
-    let window_start = cut.saturating_sub(200);
-    let window = &text[window_start..cut.min(text.len())];
-    if let Some(idx) = window.rfind(|c| c == '.' || c == '!' || c == '?') {
-        cut = window_start + idx + 1;
+    let window_start = byte_index_at_char_limit(text, max_chars.saturating_sub(200));
+    let window = &text[window_start..cut_byte];
+    let final_cut = if let Some(idx) = window.rfind(|c| c == '.' || c == '!' || c == '?') {
+        // Sentence punctuation is ASCII, so idx + 1 stays on a char boundary.
+        window_start + idx + 1
+    } else {
+        cut_byte
+    };
+    text[..final_cut].to_string()
+}
+
+fn contains_ole_compound_signature(bytes: &[u8]) -> bool {
+    const SIG: [u8; 4] = [0xD0, 0xCF, 0x11, 0xE0];
+    bytes.windows(4).any(|w| w == SIG)
+}
+
+fn is_zip_archive(bytes: &[u8]) -> bool {
+    bytes.len() >= 2 && bytes[0] == 0x50 && bytes[1] == 0x4B
+}
+
+fn url_has_extension(url_str: &str, ext: &str) -> bool {
+    let lower = url_str.to_lowercase();
+    lower.ends_with(ext)
+        || lower.contains(&format!("{ext}?"))
+        || lower.contains(&format!("{ext}#"))
+        || lower.contains(&format!("{ext}&"))
+}
+
+fn is_legacy_office_url(url_str: &str) -> bool {
+    (url_has_extension(url_str, ".doc") && !url_has_extension(url_str, ".docx"))
+        || (url_has_extension(url_str, ".ppt") && !url_has_extension(url_str, ".pptx"))
+        || (url_has_extension(url_str, ".xls") && !url_has_extension(url_str, ".xlsx"))
+}
+
+/// Heuristic for UTF-8 lossy decoding of binary payloads (Office OLE, compressed blobs, etc.).
+fn is_low_quality_extracted_text(text: &str) -> bool {
+    let sample: Vec<char> = text.chars().take(8000).collect();
+    if sample.len() < MIN_CONTENT_CHARS {
+        return false;
     }
-    text[..cut].to_string()
+    let len = sample.len();
+    let replacement = sample.iter().filter(|&&c| c == '\u{FFFD}').count();
+    let controls = sample
+        .iter()
+        .filter(|&&c| c.is_control() && c != '\n' && c != '\r' && c != '\t')
+        .count();
+    replacement * 100 / len >= 12 || controls * 100 / len >= 8
 }
 
 fn random_request_id() -> String {
@@ -827,6 +925,10 @@ async fn handle_qwen_ai_blog(
                 title: cached.title,
                 content: cached.content,
                 error_reason: None,
+                source_type: Some("webpage".into()),
+                extraction_method: Some("qwen_api".into()),
+                via_wayback: None,
+                char_count: None,
             };
         }
     }
@@ -899,6 +1001,10 @@ async fn handle_qwen_ai_blog(
         title: Some(title),
         content: Some(content),
         error_reason: None,
+        source_type: Some("webpage".into()),
+        extraction_method: Some("qwen_api".into()),
+        via_wayback: None,
+        char_count: None,
     }
 }
 
@@ -994,17 +1100,25 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                 title: cached.title,
                 content: cached.content,
                 error_reason: None,
+                source_type: None,
+                extraction_method: None,
+                via_wayback: None,
+                char_count: None,
             };
         }
         // Handler-specific errors are not served from cache so upgrades can retry.
         if !youtube_url && !qwen_blog_url {
             if let Some(reason) = cached.error_reason.clone() {
                 return FetchedPage {
-                    url,
+                    url: url.clone(),
                     status: cached.status,
                     title: None,
                     content: None,
                     error_reason: Some(reason),
+                    source_type: None,
+                    extraction_method: None,
+                    via_wayback: None,
+                    char_count: None,
                 };
             }
         }
@@ -1049,9 +1163,17 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                 format!("Network error: {e}")
             };
             let status = if e.is_timeout() { "timeout" } else { "network" };
+            // Network/timeout error — try Wayback fallback
+            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+                return recovered;
+            }
             return make_error_page(&url, max_chars, status, &reason, &req.cache_dir);
         }
         Err(_) => {
+            // Timeout — try Wayback fallback
+            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+                return recovered;
+            }
             return make_error_page(
                 &url,
                 max_chars,
@@ -1064,6 +1186,10 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
 
     let http_status = response.status();
     if !http_status.is_success() {
+        // HTTP error — try Wayback fallback
+        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+            return recovered;
+        }
         return make_error_page(
             &url,
             max_chars,
@@ -1124,7 +1250,100 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                 &req.cache_dir,
             );
         }
-        return handle_pdf(&url, &body_bytes, max_chars, &req.cache_dir);
+        let result = handle_pdf(&url, &body_bytes, max_chars, &req.cache_dir);
+        if result.status == "ok" {
+            return result;
+        }
+        // PDF extraction failed — try Wayback fallback
+        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+            return recovered;
+        }
+        return result;
+    }
+
+    // Detect Office documents by content-type or URL extension
+    let is_office = is_office_content_type(&content_type) || is_office_url(&url);
+    if is_office {
+        if !req.advanced_search_bundle_enabled {
+            return make_error_page(
+                &url,
+                max_chars,
+                "extraction",
+                "Advanced Search Bundle is disabled (Office document extraction unavailable)",
+                &req.cache_dir,
+            );
+        }
+        let result = fetch_office_document(&url, &body_bytes, max_chars, &req.cache_dir);
+        if result.status == "ok" {
+            return result;
+        }
+        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+            return recovered;
+        }
+        return result;
+    }
+
+    // Detect EPUB by content-type or URL extension
+    let is_epub = is_epub_content_type(&content_type) || is_epub_url(&url);
+    if is_epub {
+        if !req.advanced_search_bundle_enabled {
+            return make_error_page(
+                &url,
+                max_chars,
+                "extraction",
+                "Advanced Search Bundle is disabled (EPUB extraction unavailable)",
+                &req.cache_dir,
+            );
+        }
+        let result = handle_epub(&url, &body_bytes, max_chars, &req.cache_dir);
+        if result.status == "ok" {
+            return result;
+        }
+        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+            return recovered;
+        }
+        return result;
+    }
+
+    // Some servers mislabel PDF/Office payloads as HTML or wrap them in a minimal HTML shell.
+    if body_bytes.len() >= 4 && &body_bytes[0..4] == b"%PDF" {
+        if req.advanced_search_bundle_enabled {
+            let result = handle_pdf(&url, &body_bytes, max_chars, &req.cache_dir);
+            if result.status == "ok" {
+                return result;
+            }
+            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+                return recovered;
+            }
+            return result;
+        }
+        return make_error_page(
+            &url,
+            max_chars,
+            "extraction",
+            "Advanced Search Bundle is disabled (PDF extraction unavailable)",
+            &req.cache_dir,
+        );
+    }
+
+    if contains_ole_compound_signature(&body_bytes) || is_zip_archive(&body_bytes) {
+        if req.advanced_search_bundle_enabled {
+            let result = fetch_office_document(&url, &body_bytes, max_chars, &req.cache_dir);
+            if result.status == "ok" {
+                return result;
+            }
+            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+                return recovered;
+            }
+            return result;
+        }
+        return make_error_page(
+            &url,
+            max_chars,
+            "extraction",
+            "Advanced Search Bundle is disabled (Office document extraction unavailable)",
+            &req.cache_dir,
+        );
     }
 
     let body = String::from_utf8_lossy(&body_bytes).to_string();
@@ -1132,6 +1351,10 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let (primary_content, primary_title) = match extract_text_from_html_body(&body, &parsed) {
         Ok((content, title)) => (content, title),
         Err(_) => {
+            // HTML extraction failed — try Wayback fallback before giving up
+            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+                return recovered;
+            }
             return make_error_page(
                 &url,
                 max_chars,
@@ -1143,6 +1366,19 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     };
 
     let content_trimmed = primary_content.trim();
+    if is_low_quality_extracted_text(content_trimmed) {
+        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+            return recovered;
+        }
+        return make_error_page(
+            &url,
+            max_chars,
+            "extraction",
+            "Extraction returned binary or garbled content (likely a mislabeled document download)",
+            &req.cache_dir,
+        );
+    }
+
     let content = truncate_at_sentence_boundary(content_trimmed, max_chars);
     let title = primary_title.unwrap_or_else(|| url.clone());
 
@@ -1166,6 +1402,10 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
         title: Some(title),
         content: Some(content),
         error_reason: None,
+        source_type: Some("webpage".into()),
+        extraction_method: Some("readability".into()),
+        via_wayback: None,
+        char_count: None,
     }
 }
 
@@ -1211,7 +1451,765 @@ fn handle_pdf(
         title: Some(url.to_string()),
         content: Some(content),
         error_reason: None,
+        source_type: Some("pdf".into()),
+        extraction_method: Some("pdf_extract".into()),
+        via_wayback: None,
+        char_count: None,
     }
+}
+
+fn extract_docx_text(bytes: &[u8]) -> Result<String, String> {
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("DOCX zip open failed: {e}"))?;
+
+    let mut xml_content = String::new();
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("DOCX zip entry read failed: {e}"))?;
+        if file.name() == "word/document.xml" {
+            file.read_to_string(&mut xml_content)
+                .map_err(|e| format!("DOCX document.xml read failed: {e}"))?;
+            break;
+        }
+    }
+
+    if xml_content.is_empty() {
+        return Err("DOCX contains no word/document.xml".into());
+    }
+
+    let doc = quick_xml::Reader::from_str(&xml_content);
+    let mut text = String::new();
+    let mut in_text = false;
+    let mut buf = Vec::new();
+
+    let mut reader = doc;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                if e.name().as_ref() == b"w:p" {
+                    if !text.is_empty() && !text.ends_with("\n") {
+                        text.push('\n');
+                    }
+                } else if e.name().as_ref() == b"w:t" {
+                    in_text = true;
+                }
+            }
+            Ok(quick_xml::events::Event::End(ref e)) => {
+                if e.name().as_ref() == b"w:t" {
+                    in_text = false;
+                }
+            }
+            Ok(quick_xml::events::Event::Text(ref e)) => {
+                if in_text {
+                    if let Ok(s) = e.unescape() {
+                        text.push_str(&s);
+                    }
+                }
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(e) => return Err(format!("DOCX XML parse error: {e}")),
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    Ok(text)
+}
+
+fn handle_docx(
+    url: &str,
+    body_bytes: &[u8],
+    max_chars: usize,
+    cache_dir: &PathBuf,
+) -> FetchedPage {
+    let text = match extract_docx_text(body_bytes) {
+        Ok(t) => t,
+        Err(e) => {
+            return make_error_page(url, max_chars, "extraction", &e, cache_dir);
+        }
+    };
+    let trimmed = text.trim();
+    if trimmed.len() < MIN_CONTENT_CHARS {
+        return make_error_page(
+            url,
+            max_chars,
+            "extraction",
+            "DOCX text extraction returned too little content",
+            cache_dir,
+        );
+    }
+    let content = truncate_at_sentence_boundary(trimmed, max_chars);
+    let entry = web_fetch_cache::CachedEntry {
+        url: url.to_string(),
+        fetched_at_unix: web_fetch_cache::now_unix_static(),
+        ttl_secs: 24 * 60 * 60,
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content.clone()),
+        error_reason: None,
+        max_chars,
+    };
+    if let Err(e) = web_fetch_cache::write(url, max_chars, &entry, cache_dir) {
+        eprintln!("[web_fetch] cache write failed: {e}");
+    }
+    FetchedPage {
+        url: url.to_string(),
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content),
+        error_reason: None,
+        source_type: Some("docx".into()),
+        extraction_method: Some("docx_extract".into()),
+        via_wayback: None,
+        char_count: None,
+    }
+}
+
+fn extract_pptx_text(bytes: &[u8]) -> Result<String, String> {
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("PPTX zip open failed: {e}"))?;
+
+    let mut text_parts: Vec<String> = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("PPTX zip entry read failed: {e}"))?;
+        let name = file.name().to_string();
+        if name.starts_with("ppt/slides/slide") && name.ends_with(".xml") {
+            let mut xml_content = String::new();
+            file.read_to_string(&mut xml_content)
+                .map_err(|e| format!("PPTX slide XML read failed: {e}"))?;
+            let doc = quick_xml::Reader::from_str(&xml_content);
+            let mut slide_text = String::new();
+            let mut in_text = false;
+            let mut buf = Vec::new();
+            let mut reader = doc;
+            loop {
+                match reader.read_event_into(&mut buf) {
+                    Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                        if e.name().as_ref() == b"a:t" {
+                            in_text = true;
+                        }
+                    }
+                    Ok(quick_xml::events::Event::End(ref e)) => {
+                        if e.name().as_ref() == b"a:t" {
+                            in_text = false;
+                        }
+                    }
+                    Ok(quick_xml::events::Event::Text(ref e)) => {
+                        if in_text {
+                            if let Ok(s) = e.unescape() {
+                                slide_text.push_str(&s);
+                            }
+                        }
+                    }
+                    Ok(quick_xml::events::Event::Eof) => break,
+                    Err(e) => return Err(format!("PPTX XML parse error: {e}")),
+                    _ => {}
+                }
+                buf.clear();
+            }
+            if !slide_text.trim().is_empty() {
+                text_parts.push(slide_text.trim().to_string());
+            }
+        }
+    }
+
+    if text_parts.is_empty() {
+        return Err("PPTX contains no slides with text".into());
+    }
+
+    Ok(text_parts.join("\n\n"))
+}
+
+fn handle_pptx(
+    url: &str,
+    body_bytes: &[u8],
+    max_chars: usize,
+    cache_dir: &PathBuf,
+) -> FetchedPage {
+    let text = match extract_pptx_text(body_bytes) {
+        Ok(t) => t,
+        Err(e) => {
+            return make_error_page(url, max_chars, "extraction", &e, cache_dir);
+        }
+    };
+    let trimmed = text.trim();
+    if trimmed.len() < MIN_CONTENT_CHARS {
+        return make_error_page(
+            url,
+            max_chars,
+            "extraction",
+            "PPTX text extraction returned too little content",
+            cache_dir,
+        );
+    }
+    let content = truncate_at_sentence_boundary(trimmed, max_chars);
+    let entry = web_fetch_cache::CachedEntry {
+        url: url.to_string(),
+        fetched_at_unix: web_fetch_cache::now_unix_static(),
+        ttl_secs: 24 * 60 * 60,
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content.clone()),
+        error_reason: None,
+        max_chars,
+    };
+    if let Err(e) = web_fetch_cache::write(url, max_chars, &entry, cache_dir) {
+        eprintln!("[web_fetch] cache write failed: {e}");
+    }
+    FetchedPage {
+        url: url.to_string(),
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content),
+        error_reason: None,
+        source_type: Some("pptx".into()),
+        extraction_method: Some("pptx_extract".into()),
+        via_wayback: None,
+        char_count: None,
+    }
+}
+
+fn handle_xlsx(
+    url: &str,
+    body_bytes: &[u8],
+    max_chars: usize,
+    cache_dir: &PathBuf,
+) -> FetchedPage {
+    let text = match extract_xlsx_text(body_bytes) {
+        Ok(t) => t,
+        Err(e) => {
+            return make_error_page(url, max_chars, "extraction", &e, cache_dir);
+        }
+    };
+    let trimmed = text.trim();
+    if trimmed.len() < MIN_CONTENT_CHARS {
+        return make_error_page(
+            url,
+            max_chars,
+            "extraction",
+            "XLSX text extraction returned too little content",
+            cache_dir,
+        );
+    }
+    let content = truncate_at_sentence_boundary(trimmed, max_chars);
+    let entry = web_fetch_cache::CachedEntry {
+        url: url.to_string(),
+        fetched_at_unix: web_fetch_cache::now_unix_static(),
+        ttl_secs: 24 * 60 * 60,
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content.clone()),
+        error_reason: None,
+        max_chars,
+    };
+    if let Err(e) = web_fetch_cache::write(url, max_chars, &entry, cache_dir) {
+        eprintln!("[web_fetch] cache write failed: {e}");
+    }
+    FetchedPage {
+        url: url.to_string(),
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content),
+        error_reason: None,
+        source_type: Some("xlsx".into()),
+        extraction_method: Some("xlsx_extract".into()),
+        via_wayback: None,
+        char_count: None,
+    }
+}
+
+fn extract_xlsx_text(bytes: &[u8]) -> Result<String, String> {
+    use calamine::{open_workbook_auto_from_rs, Reader};
+
+    let cursor = std::io::Cursor::new(bytes);
+    let mut workbook = open_workbook_auto_from_rs(cursor)
+        .map_err(|e| format!("XLSX open failed: {e}"))?;
+
+    let sheet_names = workbook.sheet_names().to_vec();
+    let mut text_parts: Vec<String> = Vec::new();
+
+    for name in &sheet_names {
+        if let Ok(range) = workbook.worksheet_range(name) {
+            let mut sheet_text = String::new();
+            for row in range.rows() {
+                let cells: Vec<String> = row
+                    .iter()
+                    .map(|cell| match cell {
+                        calamine::Data::Empty => String::new(),
+                        calamine::Data::String(s) => s.clone(),
+                        calamine::Data::Float(f) => {
+                            if *f == (*f as i64) as f64 {
+                                format!("{}", *f as i64)
+                            } else {
+                                format!("{f}")
+                            }
+                        }
+                        calamine::Data::Int(i) => format!("{i}"),
+                        calamine::Data::Bool(b) => format!("{b}"),
+                        calamine::Data::Error(e) => format!("[{e}]"),
+                        calamine::Data::DateTime(dt) => format!("{dt}"),
+                        _ => String::new(),
+                    })
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if !cells.is_empty() {
+                    sheet_text.push_str(&cells.join(" | "));
+                    sheet_text.push('\n');
+                }
+            }
+            if !sheet_text.trim().is_empty() {
+                text_parts.push(format!("Sheet: {name}\n{sheet_text}"));
+            }
+        }
+    }
+
+    if text_parts.is_empty() {
+        return Err("XLSX contains no data".into());
+    }
+
+    Ok(text_parts.join("\n\n"))
+}
+
+fn extract_epub_text(bytes: &[u8]) -> Result<String, String> {
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("EPUB zip open failed: {e}"))?;
+
+    // Find and parse the OPF container to get the content file
+    let mut opf_path = None;
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("EPUB zip entry read failed: {e}"))?;
+        if file.name() == "META-INF/container.xml" {
+            let mut content = String::new();
+            file.read_to_string(&mut content)
+                .map_err(|e| format!("EPUB container.xml read failed: {e}"))?;
+            // Parse the rootfile path from container.xml
+            if let Some(start) = content.find("full-path=\"") {
+                let rest = &content[start + 11..];
+                if let Some(end) = rest.find('\"') {
+                    opf_path = Some(rest[..end].to_string());
+                }
+            }
+            break;
+        }
+    }
+
+    let opf_path = opf_path.unwrap_or_else(|| "content.opf".to_string());
+    let opf_dir = opf_path
+        .rsplit_once('/')
+        .map(|(dir, _)| format!("{dir}/"))
+        .unwrap_or_default();
+
+    // Read the OPF file to find spine items in order
+    let mut spine_hrefs: Vec<String> = Vec::new();
+    let mut opf_content = String::new();
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("EPUB zip entry read failed: {e}"))?;
+        if file.name() == opf_path {
+            file.read_to_string(&mut opf_content)
+                .map_err(|e| format!("EPUB OPF read failed: {e}"))?;
+            break;
+        }
+    }
+
+    if !opf_content.is_empty() {
+        let doc = quick_xml::Reader::from_str(&opf_content);
+        let mut manifest_items: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        let mut in_manifest = false;
+        let mut buf = Vec::new();
+        let mut reader = doc;
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    if tag == "manifest" {
+                        in_manifest = true;
+                    } else if tag == "item" && in_manifest {
+                        let mut id = String::new();
+                        let mut href = String::new();
+                        for attr in e.attributes().flatten() {
+                            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                            let val = String::from_utf8_lossy(&attr.value).to_string();
+                            if key == "id" {
+                                id = val;
+                            } else if key == "href" {
+                                href = val;
+                            }
+                        }
+                        if !id.is_empty() && !href.is_empty() {
+                            manifest_items.insert(id, href);
+                        }
+                    }
+                }
+                Ok(quick_xml::events::Event::End(ref e)) => {
+                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    if tag == "manifest" {
+                        in_manifest = false;
+                    }
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(e) => return Err(format!("EPUB OPF parse error: {e}")),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        // Parse spine to get ordered itemrefs
+        let doc2 = quick_xml::Reader::from_str(&opf_content);
+        let mut buf2 = Vec::new();
+        let mut reader2 = doc2;
+        loop {
+            match reader2.read_event_into(&mut buf2) {
+                Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    if tag == "itemref" {
+                        for attr in e.attributes().flatten() {
+                            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                            if key == "idref" {
+                                let idref = String::from_utf8_lossy(&attr.value).to_string();
+                                if let Some(href) = manifest_items.get(&idref) {
+                                    spine_hrefs.push(format!("{opf_dir}{href}"));
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(_) => break,
+                _ => {}
+            }
+            buf2.clear();
+        }
+    }
+
+    // Extract text from each spine item (XHTML content files)
+    let mut all_text = String::new();
+    for href in &spine_hrefs {
+        for i in 0..archive.len() {
+            let mut file = archive
+                .by_index(i)
+                .map_err(|e| format!("EPUB zip entry read failed: {e}"))?;
+            if file.name() == href.as_str() {
+                let mut content = String::new();
+                file.read_to_string(&mut content)
+                    .map_err(|e| format!("EPUB content file read failed: {e}"))?;
+                let text = strip_html_to_text(&content);
+                if !text.trim().is_empty() {
+                    if !all_text.is_empty() {
+                        all_text.push_str("\n\n");
+                    }
+                    all_text.push_str(text.trim());
+                }
+                break;
+            }
+        }
+    }
+
+    if all_text.trim().is_empty() {
+        return Err("EPUB contains no extractable text content".into());
+    }
+
+    Ok(all_text)
+}
+
+fn handle_epub(
+    url: &str,
+    body_bytes: &[u8],
+    max_chars: usize,
+    cache_dir: &PathBuf,
+) -> FetchedPage {
+    let text = match extract_epub_text(body_bytes) {
+        Ok(t) => t,
+        Err(e) => {
+            return make_error_page(url, max_chars, "extraction", &e, cache_dir);
+        }
+    };
+    let trimmed = text.trim();
+    if trimmed.len() < MIN_CONTENT_CHARS {
+        return make_error_page(
+            url,
+            max_chars,
+            "extraction",
+            "EPUB text extraction returned too little content",
+            cache_dir,
+        );
+    }
+    let content = truncate_at_sentence_boundary(trimmed, max_chars);
+    let entry = web_fetch_cache::CachedEntry {
+        url: url.to_string(),
+        fetched_at_unix: web_fetch_cache::now_unix_static(),
+        ttl_secs: 24 * 60 * 60,
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content.clone()),
+        error_reason: None,
+        max_chars,
+    };
+    if let Err(e) = web_fetch_cache::write(url, max_chars, &entry, cache_dir) {
+        eprintln!("[web_fetch] cache write failed: {e}");
+    }
+    FetchedPage {
+        url: url.to_string(),
+        status: "ok".into(),
+        title: Some(url.to_string()),
+        content: Some(content),
+        error_reason: None,
+        source_type: Some("epub".into()),
+        extraction_method: Some("epub_extract".into()),
+        via_wayback: None,
+        char_count: None,
+    }
+}
+
+/// Try to recover content from the Wayback Machine for a failed URL.
+/// Returns Some(FetchedPage) if a snapshot was found and extracted.
+async fn try_wayback_fallback(
+    original_url: &str,
+    max_chars: usize,
+    cache_dir: &PathBuf,
+) -> Option<FetchedPage> {
+    // Query the Wayback Availability API
+    let availability_url = format!(
+        "https://archive.org/wayback/available?url={}",
+        urlencoding::encode(original_url)
+    );
+
+    let availability_response = match tokio::time::timeout(
+        Duration::from_secs(8),
+        FETCH_CLIENT.get(&availability_url).send(),
+    )
+    .await
+    {
+        Ok(Ok(r)) => r,
+        _ => return None,
+    };
+
+    if !availability_response.status().is_success() {
+        return None;
+    }
+
+    let availability: serde_json::Value = match availability_response.json().await {
+        Ok(v) => v,
+        _ => return None,
+    };
+
+    let snapshot_url = availability
+        .get("archived_snapshots")
+        .and_then(|s| s.get("closest"))
+        .and_then(|c| c.get("url"))
+        .and_then(|u| u.as_str())
+        .map(|s| s.to_string());
+
+    let snapshot_url = match snapshot_url {
+        Some(u) if !u.is_empty() => u,
+        _ => return None,
+    };
+
+    // Fetch the archived snapshot
+    let timeout = Duration::from_secs(15);
+    let response = match tokio::time::timeout(
+        timeout,
+        FETCH_CLIENT
+            .get(&snapshot_url)
+            .timeout(timeout)
+            .send(),
+    )
+    .await
+    {
+        Ok(Ok(r)) => r,
+        _ => return None,
+    };
+
+    if !response.status().is_success() {
+        return None;
+    }
+
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let body_bytes = match response.bytes().await {
+        Ok(b) => b,
+        _ => return None,
+    };
+
+    if body_bytes.len() > MAX_BODY_BYTES {
+        return None;
+    }
+
+    // Handle PDF from Wayback
+    if content_type.contains("application/pdf") {
+        let result = handle_pdf(original_url, &body_bytes, max_chars, cache_dir);
+        if result.status == "ok" {
+            return Some(FetchedPage {
+                via_wayback: Some(true),
+                ..result
+            });
+        }
+        return None;
+    }
+
+    // Handle Office documents from Wayback
+    if is_office_content_type(&content_type) || is_office_url(original_url) {
+        let result = fetch_office_document(original_url, &body_bytes, max_chars, cache_dir);
+        if result.status == "ok" {
+            return Some(FetchedPage {
+                via_wayback: Some(true),
+                ..result
+            });
+        }
+        return None;
+    }
+
+    // Handle EPUB from Wayback
+    if is_epub_content_type(&content_type) || is_epub_url(original_url) {
+        let result = handle_epub(original_url, &body_bytes, max_chars, cache_dir);
+        if result.status == "ok" {
+            return Some(FetchedPage {
+                via_wayback: Some(true),
+                ..result
+            });
+        }
+        return None;
+    }
+
+    // Handle HTML from Wayback
+    if !content_type.is_empty()
+        && !content_type.contains("text/html")
+        && !content_type.contains("text/plain")
+        && !content_type.contains("text/")
+        && !content_type.contains("application/xhtml")
+    {
+        return None;
+    }
+
+    if body_bytes.len() >= 4 && &body_bytes[0..4] == b"%PDF" {
+        let result = handle_pdf(original_url, &body_bytes, max_chars, cache_dir);
+        if result.status == "ok" {
+            return Some(FetchedPage {
+                via_wayback: Some(true),
+                ..result
+            });
+        }
+        return None;
+    }
+
+    if contains_ole_compound_signature(&body_bytes) || is_zip_archive(&body_bytes) {
+        let result = fetch_office_document(original_url, &body_bytes, max_chars, cache_dir);
+        if result.status == "ok" {
+            return Some(FetchedPage {
+                via_wayback: Some(true),
+                ..result
+            });
+        }
+        return None;
+    }
+
+    let body = String::from_utf8_lossy(&body_bytes).to_string();
+    let parsed_url = match url::Url::parse(original_url) {
+        Ok(u) => u,
+        _ => return None,
+    };
+
+    let (content, title) = match extract_text_from_html_body(&body, &parsed_url) {
+        Ok(r) => r,
+        Err(_) => {
+            let plain = strip_html_to_text(&body);
+            if plain.len() < MIN_CONTENT_CHARS {
+                return None;
+            }
+            (plain, None)
+        }
+    };
+
+    let content_trimmed = content.trim();
+    if is_low_quality_extracted_text(content_trimmed) {
+        return None;
+    }
+    let content = truncate_at_sentence_boundary(content_trimmed, max_chars);
+    let title = title.unwrap_or_else(|| original_url.to_string());
+
+    let entry = web_fetch_cache::CachedEntry {
+        url: original_url.to_string(),
+        fetched_at_unix: web_fetch_cache::now_unix_static(),
+        ttl_secs: 4 * 60 * 60, // 4 hours for Wayback content
+        status: "ok".into(),
+        title: Some(title.clone()),
+        content: Some(content.clone()),
+        error_reason: None,
+        max_chars,
+    };
+    if let Err(e) = web_fetch_cache::write(original_url, max_chars, &entry, cache_dir) {
+        eprintln!("[web_fetch] wayback cache write failed: {e}");
+    }
+
+    Some(FetchedPage {
+        url: original_url.to_string(),
+        status: "ok".into(),
+        title: Some(title),
+        content: Some(content),
+        error_reason: None,
+        source_type: None,
+        extraction_method: Some("wayback_html".into()),
+        via_wayback: Some(true),
+        char_count: None,
+    })
+}
+
+fn is_office_url(url_str: &str) -> bool {
+    is_docx_url(url_str)
+        || is_pptx_url(url_str)
+        || is_xlsx_url(url_str)
+        || is_legacy_office_url(url_str)
+}
+
+fn fetch_office_document(
+    url: &str,
+    body_bytes: &[u8],
+    max_chars: usize,
+    cache_dir: &PathBuf,
+) -> FetchedPage {
+    if contains_ole_compound_signature(body_bytes) && !is_zip_archive(body_bytes) {
+        if is_xlsx_url(url) || url_has_extension(url, ".xls") {
+            return handle_xlsx(url, body_bytes, max_chars, cache_dir);
+        }
+        return make_error_page(
+            url,
+            max_chars,
+            "extraction",
+            "Legacy binary Office format (.doc/.ppt) is not supported; try a PDF or DOCX link",
+            cache_dir,
+        );
+    }
+
+    if is_docx_url(url) || is_xlsx_url(url) || is_pptx_url(url) {
+        let lower = url.to_lowercase();
+        if lower.contains(".docx") {
+            return handle_docx(url, body_bytes, max_chars, cache_dir);
+        }
+        if lower.contains(".xlsx") {
+            return handle_xlsx(url, body_bytes, max_chars, cache_dir);
+        }
+        if lower.contains(".pptx") {
+            return handle_pptx(url, body_bytes, max_chars, cache_dir);
+        }
+    }
+    // Fallback: try DOCX first (modern Office Open XML zip archives).
+    handle_docx(url, body_bytes, max_chars, cache_dir)
 }
 
 fn make_error_page(
@@ -1245,6 +2243,10 @@ fn transient_error_page(url: &str, status: &str, reason: &str) -> FetchedPage {
         title: None,
         content: None,
         error_reason: Some(reason.to_string()),
+        source_type: None,
+        extraction_method: None,
+        via_wayback: None,
+        char_count: None,
     }
 }
 
@@ -1270,7 +2272,8 @@ pub async fn fetch_and_extract_pages(
     for url in urls {
         let permit_source = semaphore.clone();
         let cache_dir = cache_dir.clone();
-        tasks.push(tokio::spawn(async move {
+        let url_for_error = url.clone();
+        let handle = tokio::spawn(async move {
             let _permit = permit_source.acquire_owned().await.ok()?;
             let req = FetchRequest {
                 url,
@@ -1280,14 +2283,25 @@ pub async fn fetch_and_extract_pages(
                 advanced_search_bundle_enabled: bundle_enabled,
             };
             Some(fetch_one(req).await)
-        }));
+        });
+        tasks.push((url_for_error, handle));
     }
 
     let mut results = Vec::with_capacity(tasks.len());
-    for task in tasks {
+    for (url, task) in tasks {
         match task.await {
             Ok(Some(page)) => results.push(page),
             Ok(None) => {}
+            Err(e) if e.is_panic() => {
+                eprintln!("[web_fetch] fetch panicked for {url}: {e}");
+                results.push(make_error_page(
+                    &url,
+                    max_chars,
+                    "extraction",
+                    "Page extraction failed unexpectedly",
+                    &cache_dir,
+                ));
+            }
             Err(e) => {
                 return Err(format!("Fetch task failed: {e}"));
             }

@@ -60,6 +60,11 @@ export type ResearchSourceType =
   | "forum"
   | "package"
   | "youtube"
+  | "arxiv"
+  | "epub"
+  | "docx"
+  | "pptx"
+  | "xlsx"
   | "unknown";
 
 export type ResearchEvidenceType =

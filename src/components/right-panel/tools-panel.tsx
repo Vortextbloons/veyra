@@ -1,7 +1,20 @@
 import type { ReactNode } from "react";
-import { FileText, Globe } from "lucide-react";
+import { FileText, Globe, TerminalSquare } from "lucide-react";
 import { PanelShell } from "@/components/right-panel";
 import { useSettingsStore } from "@/stores/settings-store";
+
+type ToolAccent = "emerald" | "amber";
+
+const TOOL_ACCENT_STYLES: Record<ToolAccent, { on: string; icon: string }> = {
+  emerald: {
+    on: "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20 hover:bg-emerald-500/15",
+    icon: "text-emerald-300",
+  },
+  amber: {
+    on: "bg-amber-500/10 text-amber-300 ring-1 ring-inset ring-amber-500/20 hover:bg-amber-500/15",
+    icon: "text-amber-300",
+  },
+};
 
 export function ToolRow({
   icon,
@@ -10,6 +23,7 @@ export function ToolRow({
   onChange,
   disabled = false,
   disabledReason,
+  accent = "emerald",
 }: {
   icon: ReactNode;
   label: string;
@@ -17,7 +31,10 @@ export function ToolRow({
   onChange: (on: boolean) => void;
   disabled?: boolean;
   disabledReason?: string;
+  accent?: ToolAccent;
 }) {
+  const accentStyles = TOOL_ACCENT_STYLES[accent];
+
   return (
     <button
       type="button"
@@ -34,15 +51,11 @@ export function ToolRow({
           ? "cursor-not-allowed opacity-50"
           : "cursor-pointer"
       } ${
-        on
-          ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20 hover:bg-emerald-500/15"
-          : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
+        on ? accentStyles.on : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
       }`}
     >
       <span
-        className={`grid size-4 place-items-center transition-colors ${
-          on ? "text-emerald-300" : "text-[var(--color-text-dim)]"
-        }`}
+        className={`grid size-4 place-items-center transition-colors ${on ? accentStyles.icon : "text-[var(--color-text-dim)]"}`}
       >
         {icon}
       </span>
@@ -58,6 +71,7 @@ export function CompactToolToggle({
   onChange,
   disabled = false,
   disabledReason,
+  accent = "emerald",
 }: {
   icon: ReactNode;
   label: string;
@@ -65,7 +79,10 @@ export function CompactToolToggle({
   onChange: (on: boolean) => void;
   disabled?: boolean;
   disabledReason?: string;
+  accent?: ToolAccent;
 }) {
+  const accentStyles = TOOL_ACCENT_STYLES[accent];
+
   return (
     <div className="group/tool relative">
       <button
@@ -81,15 +98,11 @@ export function CompactToolToggle({
         className={`grid size-8 place-items-center rounded-md transition-colors ${
           disabled ? "cursor-not-allowed opacity-50" : ""
         } ${
-          on
-            ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20 hover:bg-emerald-500/15"
-            : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
+          on ? accentStyles.on : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
         }`}
       >
         <span
-          className={`grid place-items-center transition-colors ${
-            on ? "text-emerald-300" : "text-[var(--color-text-dim)]"
-          }`}
+          className={`grid place-items-center transition-colors ${on ? accentStyles.icon : "text-[var(--color-text-dim)]"}`}
         >
           {icon}
         </span>
@@ -119,11 +132,19 @@ export function ToolsPanel({
   onWebSearchChange,
   webSearchDisabled = false,
   webSearchDisabledReason,
+  codeExecution,
+  onCodeExecutionChange,
+  codeExecutionDisabled = false,
+  codeExecutionDisabledReason,
 }: {
   webSearch: boolean;
   onWebSearchChange: (on: boolean) => void;
   webSearchDisabled?: boolean;
   webSearchDisabledReason?: string;
+  codeExecution: boolean;
+  onCodeExecutionChange: (on: boolean) => void;
+  codeExecutionDisabled?: boolean;
+  codeExecutionDisabledReason?: string;
 }) {
   const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
   const setDocumentPanelEnabled = useSettingsStore((s) => s.setDocumentPanelEnabled);
@@ -138,6 +159,15 @@ export function ToolsPanel({
           onChange={onWebSearchChange}
           disabled={webSearchDisabled}
           disabledReason={webSearchDisabledReason}
+        />
+        <ToolRow
+          icon={<TerminalSquare className="size-3.5" />}
+          label="Code Execution"
+          on={codeExecutionDisabled ? false : codeExecution}
+          onChange={onCodeExecutionChange}
+          disabled={codeExecutionDisabled}
+          disabledReason={codeExecutionDisabledReason}
+          accent="amber"
         />
         <ToolRow
           icon={<FileText className="size-3.5" />}

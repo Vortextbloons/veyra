@@ -59,8 +59,8 @@ export function ToolsSettings() {
         <div>
           <h1 className="text-[15px] font-semibold text-white">Tools</h1>
           <p className="mt-1 max-w-2xl text-[12px] text-[var(--color-text-dim)]">
-            Configure web search, documents, and future chat tools. Show only the
-            sections you need.
+            Configure web search, documents, code execution, and future chat tools.
+            Show only the sections you need.
           </p>
         </div>
       </div>

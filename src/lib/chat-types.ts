@@ -31,6 +31,10 @@ export type SourceFetchStatus =
 export type SourceFetch = {
   status: SourceFetchStatus | string;
   error_reason?: string;
+  extraction_method?: string;
+  via_wayback?: boolean;
+  char_count?: number;
+  source_type?: string;
 };
 
 export type WebSearchPhase = "searching" | "fetching" | "reading" | "done" | "error";
@@ -338,6 +342,10 @@ export interface RightPanelProps {
   onWebSearchChange?: (enabled: boolean) => void;
   webSearchDisabled?: boolean;
   webSearchDisabledReason?: string;
+  codeExecutionEnabled?: boolean;
+  onCodeExecutionChange?: (enabled: boolean) => void;
+  codeExecutionDisabled?: boolean;
+  codeExecutionDisabledReason?: string;
   isAgentsMode?: boolean;
   agentSessionCount?: number;
   agentActiveCount?: number;

@@ -4,11 +4,12 @@ import { runSearch } from "@/modules/web-search/orchestrator/SearchOrchestrator"
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { estimateTokens } from "@/lib/context";
-import { isPdfUrl, isYouTubeUrl } from "@/lib/url-classifiers";
+import { isPdfUrl, isYouTubeUrl, isDocxUrl, isPptxUrl, isXlsxUrl, isEpubUrl, isArxivUrl, isWikipediaUrl } from "@/lib/url-classifiers";
 import { useResearchStore } from "./research-store";
 import { updateResearchSourceAfterFetch, type FetchedSource } from "./research-storage";
 import { prepareReportSection } from "./report-sanitize";
 import { invokeFetchAndExtractPages, type FetchedPage } from "@/modules/web-search/tauri-commands";
+import { evidenceCache } from "./evidence-cache";
 import { listen } from "@tauri-apps/api/event";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import type {
@@ -43,6 +44,7 @@ import {
   resolveResearchProfile,
   type ResearchProfileOverride,
 } from "./research-config";
+import { getCredibilityScore } from "./source-credibility";
 
 type DepthConfig = {
   maxSearchRounds: number;
@@ -65,6 +67,7 @@ type DepthConfig = {
   contradictionStrategy: "all_pairs" | "top_k";
   contradictionTopK: number;
   synthesisReasoning: boolean;
+  selfCritiquePass: boolean;
   auditReasoning: boolean;
   auditMaxCitations: number;
   auditConcurrency: number;
@@ -99,6 +102,7 @@ function profileToDepthConfig(p: ResearchProfileOverride): DepthConfig {
     contradictionStrategy: p.contradictionStrategy ?? "top_k",
     contradictionTopK: clamp(p.contradictionTopK ?? 50, 5, 500),
     synthesisReasoning: p.synthesisReasoning ?? false,
+    selfCritiquePass: p.selfCritiquePass ?? false,
     auditReasoning: p.auditReasoning ?? false,
     auditMaxCitations: Math.max(0, p.auditMaxCitations ?? 30),
     auditConcurrency: clamp(p.auditConcurrency ?? 3, 1, 8),
@@ -157,6 +161,10 @@ function safeJsonParse<T>(text: string): T | null {
     }
   }
   return null;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getErrorMessage(error: unknown): string {
@@ -490,12 +498,21 @@ function scoreTopicSimilarity(a: string, b: string): number {
   return (tokenScore * 0.55) + (trigramScore * 0.45);
 }
 
-function scoreClaimEvidenceMatch(claim: ResearchClaim, claimTags: readonly string[] | undefined, evidence: ResearchEvidence): number {
+function scoreClaimEvidenceMatch(claim: ResearchClaim, claimTags: readonly string[] | undefined, evidence: ResearchEvidence, sourceById: Map<string, ResearchSource>): number {
   const topicScore = scoreTopicSimilarity(claim.claim, `${evidence.content} ${evidence.context}`);
   const tagScore = jaccard(normalizedTagSet(claimTags), normalizedTagSet(evidence.tags));
   const confidenceScore = Math.max(0, Math.min(1, evidence.confidence)) * 0.06;
   const sameSourceBonus = evidence.sourceId === claim.sourceId ? 0.08 : 0;
-  return (topicScore * 0.72) + (tagScore * 0.18) + confidenceScore + sameSourceBonus;
+
+  // Source-type weighting: boost academic/official sources, slightly reduce spoken content
+  const sourceType = sourceById.get(evidence.sourceId)?.sourceType;
+  const sourceTypeBonus = sourceType === "arxiv" ? 0.04
+    : sourceType === "pdf" ? 0.03
+    : sourceType === "docx" || sourceType === "xlsx" || sourceType === "pptx" ? 0.03
+    : sourceType === "youtube" ? -0.02
+    : 0;
+
+  return (topicScore * 0.72) + (tagScore * 0.18) + confidenceScore + sameSourceBonus + sourceTypeBonus;
 }
 
 function numericTokenSet(text: string): Set<string> {
@@ -577,21 +594,17 @@ function guessSourceType(url: string): ResearchSourceType {
   const lower = url.toLowerCase();
   if (isYouTubeUrl(url)) return "youtube";
   if (isPdfUrl(url)) return "pdf";
+  if (isDocxUrl(url)) return "docx";
+  if (isPptxUrl(url)) return "pptx";
+  if (isXlsxUrl(url)) return "xlsx";
+  if (isEpubUrl(url)) return "epub";
+  if (isArxivUrl(url)) return "arxiv";
+  if (isWikipediaUrl(url)) return "wikipedia";
   if (lower.includes("news") || lower.includes("bbc.com") || lower.includes("reuters.com") || lower.includes("cnn.com") || lower.includes("nytimes.com")) return "news";
   if (lower.includes("docs.") || lower.includes("documentation")) return "docs";
   if (lower.includes("forum") || lower.includes("reddit.com") || lower.includes("stackoverflow.com")) return "forum";
-  if (lower.includes("arxiv.org") || lower.includes("pubmed") || lower.includes("doi.org") || lower.includes("scholar.google")) return "docs";
+  if (lower.includes("pubmed") || lower.includes("doi.org") || lower.includes("scholar.google")) return "docs";
   return "webpage";
-}
-
-function assessDomainAuthority(url: string): number {
-  const lower = url.toLowerCase();
-  // High authority domains
-  if (lower.includes(".edu") || lower.includes(".gov") || lower.includes("arxiv.org") || lower.includes("pubmed.ncbi.nlm.nih.gov") || lower.includes("who.int") || lower.includes("nature.com") || lower.includes("science.org")) return 5;
-  if (lower.includes("wikipedia.org") || lower.includes("reuters.com") || lower.includes("apnews.com") || lower.includes("bbc.com") || lower.includes("economist.com")) return 4;
-  if (lower.includes("github.com") || lower.includes("stackoverflow.com") || lower.includes("medium.com") || lower.includes("substack.com")) return 3;
-  if (lower.includes("blog") || lower.includes("forum") || lower.includes("reddit.com")) return 2;
-  return 3; // Default for unknown
 }
 
 function nowIso(): string {
@@ -678,11 +691,25 @@ const EXTRACT_BATCH_JSON_SYSTEM_STRICT =
 
 function mapFetchedPageToSource(page: FetchedPage): FetchedSource {
   const ok = page.status === "ok";
-  const contentType = isYouTubeUrl(page.url)
-    ? "text/plain"
-    : isPdfUrl(page.url)
-      ? "application/pdf"
-      : "text/html";
+  // Use backend-provided source_type when available, fall back to URL heuristics
+  let contentType: string;
+  if (page.source_type) {
+    switch (page.source_type) {
+      case "youtube": contentType = "text/plain"; break;
+      case "pdf": contentType = "application/pdf"; break;
+      case "docx": contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; break;
+      case "pptx": contentType = "application/vnd.openxmlformats-officedocument.presentationml.presentation"; break;
+      case "xlsx": contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"; break;
+      case "epub": contentType = "application/epub+zip"; break;
+      default: contentType = "text/html";
+    }
+  } else if (isYouTubeUrl(page.url)) {
+    contentType = "text/plain";
+  } else if (isPdfUrl(page.url)) {
+    contentType = "application/pdf";
+  } else {
+    contentType = "text/html";
+  }
   return {
     url: page.url,
     title: page.title ?? page.url,
@@ -704,7 +731,7 @@ function truncateToTokens(text: string, maxTokens: number): string {
 
 function synthesisBudget(depth: ResearchDepth): { evidenceItems: number; outlineChars: number; sectionChars: number } {
   switch (depth) {
-    case "quick":       return { evidenceItems: 40,  outlineChars: 4_000,  sectionChars: 6_000 };
+    case "quick":       return { evidenceItems: 80,  outlineChars: 6_000,  sectionChars: 8_000 };
     case "standard":    return { evidenceItems: 80,  outlineChars: 8_000,  sectionChars: 12_000 };
     case "deep":        return { evidenceItems: 160, outlineChars: 16_000, sectionChars: 24_000 };
     case "exhaustive":  return { evidenceItems: 300, outlineChars: 32_000, sectionChars: 40_000 };
@@ -796,8 +823,57 @@ function chunkSourceText(text: string): string[] {
   return chunks;
 }
 
-function untrustedSourceBlock(label: string, text: string): string {
-  return `<untrusted_source_content label="${label.replace(/"/g, "&quot;")}">\n${text}\n</untrusted_source_content>`;
+function untrustedSourceBlock(label: string, text: string, sourceType?: string): string {
+  const typeAttr = sourceType ? ` type="${sourceType}"` : "";
+  return `<untrusted_source_content label="${label.replace(/"/g, "&quot;")}"${typeAttr}>\n${text}\n</untrusted_source_content>`;
+}
+
+function sourceTypeLabel(sourceType: string | undefined): string {
+  switch (sourceType) {
+    case "youtube": return "YouTube transcript";
+    case "pdf": return "PDF document";
+    case "docx": return "DOCX document";
+    case "pptx": return "PowerPoint slides";
+    case "xlsx": return "Spreadsheet";
+    case "epub": return "EPUB book";
+    case "arxiv": return "ArXiv paper";
+    case "wikipedia": return "Wikipedia article";
+    case "news": return "News article";
+    case "docs": return "Documentation";
+    case "github": return "GitHub";
+    case "forum": return "Forum post";
+    case "package": return "Package";
+    default: return "Web page";
+  }
+}
+
+function sourceClassificationHint(sourceType: string | undefined): string {
+  switch (sourceType) {
+    case "youtube":
+      return "This content is from a YouTube video transcript. Transcripts capture spoken dialogue — treat opinions and claims with skepticism, as they reflect the speaker's views rather than established facts. Timestamps and filler words may be present.";
+    case "pdf":
+      return "This content was extracted from a PDF document. PDFs can range from academic papers to corporate brochures — assess credibility based on the author and publisher.";
+    case "docx":
+      return "This content was extracted from a Word document. Consider who authored it and for what purpose — it could be anything from a research paper to internal notes.";
+    case "pptx":
+      return "This content was extracted from a PowerPoint presentation. Slide text is often bullet-point summaries — the content may be incomplete or lack full context.";
+    case "xlsx":
+      return "This content was extracted from a spreadsheet. Treat numerical data carefully — verify the data source and methodology if possible.";
+    case "epub":
+      return "This content was extracted from an EPUB e-book. Books are generally more thoroughly edited than web content, but assess the author's expertise and publication date.";
+    case "arxiv":
+      return "This content is from an ArXiv preprint. ArXiv papers are academic research that may not yet be peer-reviewed — treat findings as preliminary but cite them as research.";
+    case "wikipedia":
+      return "This content is from Wikipedia. Wikipedia is a curated secondary source — good for overview and established facts, but not a primary source. Verify critical claims independently.";
+    case "news":
+      return "This content is from a news article. News sources vary in editorial standards — assess the outlet's reputation and whether the claims are attributed to named sources.";
+    case "docs":
+      return "This content is from official documentation. Documentation is generally authoritative for technical details about the product or service it describes.";
+    case "github":
+      return "This content is from GitHub. Code and README files reflect the project's current state — assess whether the project is actively maintained.";
+    default:
+      return "This content was extracted from a web page. Assess the author, publication date, and whether claims are supported by evidence.";
+  }
 }
 
 function getSourceNumber(sourceId: string, readSources: ResearchSource[]): number | null {
@@ -1306,7 +1382,8 @@ export async function executeResearchRun(
   }
 
   async function validateSource(source: ResearchSource): Promise<ResearchSource> {
-    const domainScore = assessDomainAuthority(source.url);
+    const credibility = getCredibilityScore(source.url);
+    const domainScore = credibility.score;
     const textToValidate = source.fullText || source.snippet || "";
     const truncated = truncateToTokens(
       getSourceChunks(source).join("\n\n") || textToValidate,
@@ -1317,10 +1394,14 @@ export async function executeResearchRun(
 
 Source: ${source.title}
 URL: ${source.url}
-Initial domain authority hint: ${domainScore}/5 (override as needed based on your own assessment)
+Source type: ${sourceTypeLabel(source.sourceType)}
+Domain credibility: ${domainScore}/5 (${credibility.label})
+Known source type: ${credibility.label}
+
+${sourceClassificationHint(source.sourceType)}
 
 Content excerpt:
-${untrustedSourceBlock(source.url, truncated)}
+${untrustedSourceBlock(source.url, truncated, source.sourceType)}
 
 Evaluate on:
 1. RELEVANCE (1-5): How directly does this source address the research question?
@@ -1477,7 +1558,7 @@ Return ONLY a JSON object:
 
       const scoredEvidence = evidenceList.map((evidence) => ({
         evidence,
-        score: scoreClaimEvidenceMatch(claim, anchorTags, evidence),
+        score: scoreClaimEvidenceMatch(claim, anchorTags, evidence, sourceById),
       }));
 
       const selectedEvidence = scoredEvidence
@@ -1686,30 +1767,50 @@ Return ONLY a bare JSON array (no wrapping object, no markdown) with one entry p
     const discoveredSources = sourceBatch.filter((s) => s.status === "discovered");
 
     if (discoveredSources.length > 0) {
-      const urls = discoveredSources.map((s) => s.url);
+      // Check cache first — avoid redundant fetches
+      const cachedPages: FetchedPage[] = [];
+      const uncachedUrls: string[] = [];
+      for (const source of discoveredSources) {
+        const cached = evidenceCache.get(source.url);
+        if (cached) {
+          cachedPages.push(...cached as FetchedPage[]);
+        } else {
+          uncachedUrls.push(source.url);
+        }
+      }
 
-      let pages: FetchedPage[] = [];
-      try {
-        pages = await invokeFetchAndExtractPages(
-          urls,
-          RESEARCH_FETCH_CONCURRENCY,
-          RESEARCH_FETCH_TIMEOUT_SECS,
-          RESEARCH_FETCH_MAX_CHARS,
-          { advancedSearchBundleEnabled: bundleEnabled },
-        );
-      } catch (bulkErr) {
-        console.warn("[research-runtime] Bulk fetch threw, treating all sources as failed:", bulkErr);
-        for (const source of discoveredSources) {
-          checkAbort();
-          await store.updateSource({
-            id: source.id,
-            status: "failed" as ResearchSourceStatus,
-            error: getErrorMessage(bulkErr),
-          });
-          const idx = sources.findIndex((s) => s.id === source.id);
-          if (idx !== -1) {
-            sources[idx] = { ...sources[idx], status: "failed" as ResearchSourceStatus, error: getErrorMessage(bulkErr) };
+      let pages: FetchedPage[] = [...cachedPages];
+      if (uncachedUrls.length > 0) {
+        try {
+          const fetched = await invokeFetchAndExtractPages(
+            uncachedUrls,
+            RESEARCH_FETCH_CONCURRENCY,
+            RESEARCH_FETCH_TIMEOUT_SECS,
+            RESEARCH_FETCH_MAX_CHARS,
+            { advancedSearchBundleEnabled: bundleEnabled },
+          );
+          // Cache the newly fetched pages
+          for (const page of fetched) {
+            evidenceCache.set(page.url, [page]);
           }
+          pages.push(...fetched);
+        } catch (bulkErr) {
+          console.warn("[research-runtime] Bulk fetch threw, treating all sources as failed:", bulkErr);
+          for (const source of discoveredSources) {
+            if (uncachedUrls.includes(source.url)) {
+              checkAbort();
+              await store.updateSource({
+                id: source.id,
+                status: "failed" as ResearchSourceStatus,
+                error: getErrorMessage(bulkErr),
+              });
+              const idx = sources.findIndex((s) => s.id === source.id);
+              if (idx !== -1) {
+                sources[idx] = { ...sources[idx], status: "failed" as ResearchSourceStatus, error: getErrorMessage(bulkErr) };
+              }
+            }
+          }
+          return;
         }
       }
 
@@ -1898,7 +1999,7 @@ Return ONLY a bare JSON array (no wrapping object, no markdown) with one entry p
         const excerptLabel = items.length > 1
           ? `Chunk 1 of ${items.length} (excerpt, ${excerptTokens} token budget)`
           : "Chunk 1 of 1";
-        return `${excerptLabel}:\n${untrustedSourceBlock(source.url, truncated)}`;
+        return `${excerptLabel}:\n${untrustedSourceBlock(source.url, truncated, source.sourceType)}`;
       };
 
       const sourceBlocks = sourceBatch
@@ -1906,6 +2007,7 @@ Return ONLY a bare JSON array (no wrapping object, no markdown) with one entry p
           const excerpt = buildBatchExcerpt(source);
           return `Source ${sourceIndex + 1}: ${source.title}
 URL: ${source.url}
+Type: ${sourceTypeLabel(source.sourceType)}
 ${excerpt}`;
         })
         .join("\n\n---\n\n");
@@ -1915,6 +2017,13 @@ ${excerpt}`;
 Research Question: "${run.question}"
 
 ${sourceBlocks}
+
+Source type guidance:
+- YouTube transcripts: spoken dialogue, treat opinions as speaker views not established facts
+- ArXiv papers: academic preprints, may not be peer-reviewed, cite as research
+- Wikipedia: curated secondary source, good for overview, verify critical claims
+- PDF/DOCX/PPTX/EPUB: assess author credibility and purpose
+- News articles: assess outlet reputation and source attribution
 
 For EACH piece of evidence, provide:
 - "sourceIndex": 1-based index of the source this evidence came from (matches the "Source N:" labels above)
@@ -1976,10 +2085,11 @@ Research Question: "${run.question}"
 
 Source: ${source.title}
 URL: ${source.url}
+Type: ${sourceTypeLabel(source.sourceType)}
 Chunk: ${it.chunkIndex + 1} of ${items.length}
 
 Content:
-${untrustedSourceBlock(source.url, it.chunk)}
+${untrustedSourceBlock(source.url, it.chunk, source.sourceType)}
 
 Extract only items that pertain to the research question:
 1. DIRECT QUOTES with exact wording (use "type": "quote")
@@ -2861,8 +2971,8 @@ Context: ${e.context}`;
 
     const sourceQualitySummary = shownSources
       .map((s, i) => {
-        const authority = assessDomainAuthority(s.url);
-        return `[${i + 1}] ${s.title} — ${s.url} (Authority: ${authority}/5)`;
+        const { score, label } = getCredibilityScore(s.url);
+        return `[${i + 1}] ${s.title} — ${s.url} (${sourceTypeLabel(s.sourceType)}, Authority: ${score}/5 — ${label})`;
       })
       .join("\n");
 
@@ -3041,6 +3151,132 @@ Output rules:
         console.warn("[research-runtime] Section writing failed:", section.heading, err);
         reportMarkdown += `\n\n*[Section generation failed for "${section.heading}"]*\n\n`;
         await failStep(sectionStep, getErrorMessage(err));
+      }
+    }
+
+    // ── Self-Critique Pass (optional) ──────────────────────────────────────
+    if (config.selfCritiquePass && reportMarkdown.trim().length > 0) {
+      checkAbort();
+      const critiqueStep = await createStep("report", "Self-critique and refinement", "Reviewing draft for gaps and weaknesses");
+      onEvent({ type: "report_progress", percent: 92 });
+      await updateRunStatus("synthesizing", 92);
+
+      try {
+        const critiquePrompt = `You are a critical peer reviewer. Review this research draft and identify specific improvements.
+
+Research Question: "${run.question}"
+
+Draft Report:
+${reportMarkdown.slice(0, 12000)}
+
+Evaluate:
+1. Are there logical gaps or unsupported claims?
+2. Is the structure clear and flowing well?
+3. Are there weaker sections that need more evidence or better argumentation?
+4. Are citations properly integrated?
+
+Return a JSON object:
+{
+  "overallScore": 1-10,
+  "issues": [
+    {"section": "section heading", "issue": "description", "severity": "high|medium|low", "fix": "specific suggestion"}
+  ],
+  "rewriteSections": ["section heading that needs rewriting"]
+}`;
+
+        const critiqueResult = await callResearchAi(
+          [
+            { role: "system", content: "You are a meticulous research peer reviewer. Return ONLY valid JSON." },
+            { role: "user", content: critiquePrompt },
+          ],
+          signal,
+          undefined,
+          2000,
+          { reasoningEnabled: false, temperature: 0.3, ...researchAiOptions("main") },
+        );
+
+        if (critiqueResult.tokens?.totalTokens) totalTokens += critiqueResult.tokens.totalTokens;
+
+        // Parse critique
+        const critiqueJsonMatch = critiqueResult.text.match(/\{[\s\S]*\}/);
+        if (critiqueJsonMatch) {
+          const critique = JSON.parse(critiqueJsonMatch[0]) as {
+            overallScore?: number;
+            issues?: Array<{ section: string; issue: string; severity: string; fix: string }>;
+            rewriteSections?: string[];
+          };
+
+          // Rewrite flagged sections (up to 2 rewrites to avoid excessive time)
+          const sectionsToRewrite = (critique.rewriteSections || []).slice(0, 2);
+          if (sectionsToRewrite.length > 0) {
+            for (const heading of sectionsToRewrite) {
+              const sectionIndex = sections.findIndex((s) => s.heading === heading);
+              if (sectionIndex === -1) continue;
+
+              const section = sections[sectionIndex];
+              const sectionIssues = (critique.issues || [])
+                .filter((issue) => issue.section === heading)
+                .map((issue) => `- ${issue.severity}: ${issue.issue} → ${issue.fix}`)
+                .join("\n");
+
+              const rewritePrompt = `Rewrite section "${heading}" for this research report, addressing these issues:
+
+${sectionIssues || "Improve clarity, add more specific evidence, and strengthen argumentation."}
+
+Research Question: "${run.question}"
+
+Key Points to Cover:
+${(section.keyPoints || []).map((p) => `- ${p}`).join("\n")}
+
+Requirements:
+- Write in formal, objective academic tone
+- Cite claims using citation numbers [1] through [${maxCitationNumber}]
+- Target: ${section.wordCount || 300} words
+
+Sources:
+${sourceQualitySummary}
+
+Output: Return ONLY polished report prose. No headings, no meta-commentary.`;
+
+              try {
+                const rewriteResult = await callResearchAi(
+                  [
+                    { role: "system", content: `You are an expert research writer. Rewrite sections for clarity, accuracy, and flow.\n\n${getTemporalContext()}` },
+                    { role: "user", content: rewritePrompt },
+                  ],
+                  signal,
+                  undefined,
+                  Math.max(1000, (section.wordCount || 300) * 2),
+                  { reasoningEnabled: false, temperature: 0.4, ...researchAiOptions("main") },
+                );
+                if (rewriteResult.tokens?.totalTokens) totalTokens += rewriteResult.tokens.totalTokens;
+
+                const rewritten = prepareReportSection(rewriteResult.text, maxCitationNumber);
+                if (rewritten && rewritten.length > 100) {
+                  // Replace the section in the report markdown
+                  const oldSectionRegex = new RegExp(`## ${escapeRegex(section.heading || "")}\\n\\n[\\s\\S]*?(?=\\n## |\\n---\\n|$)`);
+                  const newSection = `## ${section.heading}\n\n${rewritten}\n\n`;
+                  reportMarkdown = reportMarkdown.replace(oldSectionRegex, newSection);
+                }
+              } catch (rewriteErr) {
+                console.warn("[research-runtime] Section rewrite failed:", heading, rewriteErr);
+              }
+            }
+          }
+
+          console.debug("[research-runtime] Self-critique:", {
+            score: critique.overallScore,
+            issuesFound: critique.issues?.length || 0,
+            sectionsRewritten: sectionsToRewrite.length,
+          });
+
+          await completeStep(critiqueStep, `Score: ${critique.overallScore || "?"}/10, ${(critique.issues?.length || 0)} issues found, ${(sectionsToRewrite.length)} sections rewritten`);
+        } else {
+          await completeStep(critiqueStep, "Critique response not parseable, skipping refinement");
+        }
+      } catch (critiqueErr) {
+        console.warn("[research-runtime] Self-critique failed:", critiqueErr);
+        await failStep(critiqueStep, getErrorMessage(critiqueErr));
       }
     }
 

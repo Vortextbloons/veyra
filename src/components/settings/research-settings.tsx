@@ -18,7 +18,7 @@ import type { ModelInfo } from "@/lib/chat-types";
 const DEPTH_ORDER: ResearchDepth[] = ["quick", "standard", "deep", "exhaustive"];
 
 const DEPTH_DESCRIPTIONS: Record<ResearchDepth, string> = {
-  quick: "3 rounds, no per-source validation. Fastest.",
+  quick: "3 rounds, lightweight quality checks. Fast but capable.",
   standard: "5 rounds, source validation + verify. Balanced.",
   deep: "8 rounds, contradiction + gap follow-ups. Thorough.",
   exhaustive: "10 rounds, stricter source threshold, larger cap.",
@@ -726,6 +726,18 @@ function DepthOverrideEditor({
             <Toggle
               on={resolved.synthesisReasoning}
               onChange={(v) => onUpdate({ synthesisReasoning: v })}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+            <div>
+              <div className="text-[12px] font-medium text-white">Self-critique pass</div>
+              <div className="text-[10.5px] text-[var(--color-text-dim)]">
+                After writing, the AI reviews the draft for gaps and weak sections, then rewrites up to 2 sections. Adds ~10-15s.
+              </div>
+            </div>
+            <Toggle
+              on={resolved.selfCritiquePass}
+              onChange={(v) => onUpdate({ selfCritiquePass: v })}
             />
           </div>
           <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">

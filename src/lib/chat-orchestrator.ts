@@ -11,6 +11,7 @@ import type { MemoryRetrievalInfo } from "@/lib/memory-types";
 import { resolveCharacterBlock } from "@/lib/resolve-character-block";
 import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import {
+  CODE_EXEC_TOOL_NAME,
   DOC_CREATE_TOOL_NAME,
   DOC_READ_TOOL_NAME,
   DOC_UPDATE_TOOL_NAME,
@@ -29,6 +30,7 @@ import type { DocCreateIntent, DocReadIntent, DocUpdateIntent, DocumentType } fr
 import type { ProviderToolCall } from "@/lib/providers/types";
 import { buildMessagePerformance } from "@/lib/performance";
 import type { WebSearchRound } from "@/lib/chat-types";
+import { invokeExecutePythonCode } from "@/lib/code-execution";
 
 /**
  * Optional context threaded through to the chat consumer's onComplete
@@ -49,6 +51,8 @@ type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
   memoryEnabled: boolean;
   /** When false, web search tools are not offered and searches are not run. */
   webSearchEnabled: boolean;
+  /** When false, the Python execution tool is not offered. */
+  codeExecutionEnabled: boolean;
   conversationId?: string;
   projectId?: string;
   onComplete?: (
@@ -90,6 +94,67 @@ function docReadIntentFromToolCall(call: ProviderToolCall): DocReadIntent | null
   const documentId = stringArg(call.arguments, "documentId");
   if (!documentId) return null;
   return { type: "doc.read", documentId };
+}
+
+function stripPythonCodeFence(code: string): string {
+  const trimmed = code.trim();
+  const fenced = trimmed.match(/^```(?:python3?|py)?\s*\r?\n([\s\S]*?)\r?\n```$/i);
+  if (fenced) return fenced[1].trim();
+
+  const inlineFenced = trimmed.match(/^```(?:python3?|py)?\s*([\s\S]*?)```$/i);
+  if (inlineFenced) return inlineFenced[1].trim();
+
+  return trimmed;
+}
+
+function summarizeCodeSnippet(code: string, maxLength = 120): string {
+  const oneLine = code.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= maxLength) return oneLine;
+  return `${oneLine.slice(0, maxLength - 1)}…`;
+}
+
+function summarizePythonExecutionResult(result: {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  durationMs: number;
+}): string {
+  if (result.timedOut) {
+    return `Timed out after ${Math.round(result.durationMs / 1000)}s`;
+  }
+  if (result.exitCode !== 0) {
+    return `Exited with code ${result.exitCode ?? "unknown"}`;
+  }
+
+  const stdout = result.stdout.trim();
+  const stderr = result.stderr.trim();
+  if (stdout && stderr) return "Exited 0 · stdout and stderr captured";
+  if (stderr) return "Exited 0 · stderr captured";
+  if (stdout) return stdout.length > 120 ? "Exited 0 · output captured" : `Exited 0 · ${stdout}`;
+  return "Exited 0 · no output";
+}
+
+function formatPythonExecutionSection(result: {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  pythonPath: string;
+  durationMs: number;
+  workingDirectory: string;
+}): string {
+  const stdout = result.stdout.trim();
+  const stderr = result.stderr.trim();
+
+  return [
+    `Python: ${result.pythonPath}`,
+    `Working directory: ${result.workingDirectory}`,
+    `Duration: ${result.durationMs} ms`,
+    `Exit code: ${result.exitCode ?? "unknown"}${result.timedOut ? " (timed out)" : ""}`,
+    stdout ? `Stdout:\n${stdout}` : "Stdout: (empty)",
+    stderr ? `Stderr:\n${stderr}` : "Stderr: (empty)",
+  ].join("\n\n");
 }
 
 const TOOL_RETRY_LIMIT = 2;
@@ -138,6 +203,7 @@ export async function sendChatRequest({
   messages,
   memoryEnabled,
   webSearchEnabled,
+  codeExecutionEnabled,
   conversationId,
   projectId,
   ...options
@@ -220,10 +286,18 @@ export async function sendChatRequest({
     localServiceReady,
   );
   const effectiveWebSearchEnabled = webSearchEnabled && webSearchAvailability.available;
+  const codeExecutionAvailability = isFeatureAvailable(
+    "codeExecution",
+    effectiveConnectivity,
+    localServiceReady,
+  );
+  const effectiveCodeExecutionEnabled =
+    codeExecutionEnabled && codeExecutionAvailability.available;
 
   const providerTools = buildProviderTools({
     webSearchEnabled: effectiveWebSearchEnabled,
     documentToolsEnabled: settings.documentPanelEnabled,
+    codeExecutionEnabled: effectiveCodeExecutionEnabled,
     activeDocumentId: activeDocument?.id,
   });
 
@@ -473,6 +547,68 @@ export async function sendChatRequest({
     return `Tool result for ${DOC_READ_TOOL_NAME}(${JSON.stringify({ documentId: intent.documentId })}):\n\n${docResult.documentContent}`;
   };
 
+  const executeCodeExecutionCall = async (call: ProviderToolCall): Promise<string> => {
+    const chatStore = useChatStore.getState();
+    const label = getToolCallUi(CODE_EXEC_TOOL_NAME).label;
+    const rawCode = stringArg(call.arguments, "code");
+    const code = stripPythonCodeFence(rawCode);
+    const inputPreview = summarizeCodeSnippet(code);
+
+    chatStore.setStreamingToolState({
+      id: call.id,
+      name: call.name,
+      label,
+      phase: "running",
+      input: inputPreview,
+    });
+
+    if (!code) {
+      const error = "Invalid code_execution tool arguments.";
+      chatStore.setStreamingToolState({
+        id: call.id,
+        name: call.name,
+        label,
+        phase: "error",
+        input: inputPreview,
+        error,
+      });
+      return `Tool result for ${CODE_EXEC_TOOL_NAME}: ${error}`;
+    }
+
+    try {
+      const result = await invokeExecutePythonCode({
+        code,
+        timeoutSecs: settings.codeExecutionTimeoutSecs,
+        pythonPath: settings.customPythonPath.trim() || null,
+      });
+      const detail = summarizePythonExecutionResult(result);
+      const phase = result.exitCode === 0 && !result.timedOut ? "done" : "error";
+
+      chatStore.setStreamingToolState({
+        id: call.id,
+        name: call.name,
+        label,
+        phase,
+        input: inputPreview,
+        detail,
+        ...(phase === "error" ? { error: detail } : {}),
+      });
+
+      return `Tool result for ${CODE_EXEC_TOOL_NAME}(python code):\n\n${formatPythonExecutionSection(result)}`;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      chatStore.setStreamingToolState({
+        id: call.id,
+        name: call.name,
+        label,
+        phase: "error",
+        input: inputPreview,
+        error: message,
+      });
+      return `Tool result for ${CODE_EXEC_TOOL_NAME}: ${message}`;
+    }
+  };
+
   const executeDocMutationCalls = async (
     mutationCalls: ProviderToolCall[],
   ): Promise<{ sections: string[]; streamedChunks: string[] }> => {
@@ -633,12 +769,16 @@ export async function sendChatRequest({
   const executeToolRound = async (toolCalls: ProviderToolCall[]): Promise<ToolRoundResult> => {
     const webSearchCalls = toolCalls.filter((call) => call.name === WEB_SEARCH_TOOL_NAME);
     const docReadCalls = toolCalls.filter((call) => call.name === DOC_READ_TOOL_NAME);
+    const codeExecutionCalls = toolCalls.filter((call) => call.name === CODE_EXEC_TOOL_NAME);
     const docMutationCalls = toolCalls.filter(
       (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
     );
 
     registerStreamingToolCalls(toolCalls, "running", (call) => {
       if (call.name === WEB_SEARCH_TOOL_NAME) return stringArg(call.arguments, "query");
+      if (call.name === CODE_EXEC_TOOL_NAME) {
+        return summarizeCodeSnippet(stripPythonCodeFence(stringArg(call.arguments, "code")));
+      }
       return stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId");
     });
 
@@ -690,6 +830,10 @@ export async function sendChatRequest({
       docReadCalls.map((call) => executeDocReadCall(call)),
     );
     toolResultSections.push(...docReadSections);
+
+    for (const call of codeExecutionCalls) {
+      toolResultSections.push(await executeCodeExecutionCall(call));
+    }
 
     if (docMutationCalls.length > 0) {
       const mutationResult = await executeDocMutationCalls(docMutationCalls);

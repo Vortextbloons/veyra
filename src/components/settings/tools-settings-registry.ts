@@ -1,10 +1,11 @@
 import type { LucideIcon } from "lucide-react";
-import { FileText, Globe } from "lucide-react";
+import { FileText, Globe, TerminalSquare } from "lucide-react";
+import { CodeExecutionSettings } from "./code-execution-settings";
 import { WebSearchSettings } from "./web-search-settings";
 import { DocumentSettings } from "./document-settings";
 import { useToolsSettingsSearch } from "./tools-settings-search-context";
 
-export type ToolSettingsSectionId = "webSearch" | "documents";
+export type ToolSettingsSectionId = "webSearch" | "documents" | "codeExecution";
 
 export type ToolSettingsSection = {
   id: ToolSettingsSectionId;
@@ -17,6 +18,26 @@ export type ToolSettingsSection = {
 };
 
 export const TOOL_SETTINGS_SECTIONS: ToolSettingsSection[] = [
+  {
+    id: "codeExecution",
+    label: "Code Execution",
+    description: "Python interpreter, read-only workspace access, and execution timeout.",
+    icon: TerminalSquare,
+    keywords: [
+      "python",
+      "code",
+      "execute",
+      "terminal",
+      "path",
+      "timeout",
+      "detect",
+      "browse",
+      "workspace",
+      "read only",
+    ],
+    component: CodeExecutionSettings,
+    defaultVisible: true,
+  },
   {
     id: "webSearch",
     label: "Web Search",
@@ -57,6 +78,7 @@ export const TOOL_SETTINGS_SECTIONS: ToolSettingsSection[] = [
 ];
 
 export const DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS: Record<ToolSettingsSectionId, boolean> = {
+  codeExecution: true,
   webSearch: true,
   documents: true,
 };
@@ -78,6 +100,12 @@ export const TOOL_SETTINGS_SUBSECTIONS: Record<
     { title: "Behavior", keywords: ["auto-save", "open"] },
     { title: "Defaults", keywords: ["type"] },
     { title: "Editor", keywords: ["font", "tab", "wrap", "spell"] },
+  ],
+  codeExecution: [
+    { title: "Execution", keywords: ["python", "enable", "workspace"] },
+    { title: "Interpreter", keywords: ["path", "detect", "browse"] },
+    { title: "Timeout", keywords: ["seconds", "limit"] },
+    { title: "Safety", keywords: ["read only", "imports", "blocking"] },
   ],
 };
 

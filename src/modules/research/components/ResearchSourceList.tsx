@@ -24,6 +24,11 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   forum: "Forum",
   package: "Package",
   youtube: "Video",
+  arxiv: "ArXiv",
+  epub: "EPUB",
+  docx: "DOCX",
+  pptx: "Slides",
+  xlsx: "Sheet",
   unknown: "Other",
 };
 
@@ -37,6 +42,11 @@ const SOURCE_TYPE_BADGES: Record<string, string> = {
   forum: "bg-pink-500/10 text-pink-300 border-pink-500/20",
   package: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
   youtube: "bg-rose-500/10 text-rose-300 border-rose-500/20",
+  arxiv: "bg-orange-500/10 text-orange-300 border-orange-500/20",
+  epub: "bg-indigo-500/10 text-indigo-300 border-indigo-500/20",
+  docx: "bg-blue-500/10 text-blue-300 border-blue-500/20",
+  pptx: "bg-violet-500/10 text-violet-300 border-violet-500/20",
+  xlsx: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
   unknown: "bg-[var(--color-text-dim)]/10 text-[var(--color-text-dim)] border-[var(--color-text-dim)]/20",
 };
 

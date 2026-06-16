@@ -3,7 +3,9 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { estimateTokens } from "@/lib/context";
 import { SearXNGProvider } from "../providers/SearXNGProvider";
-import type { SearchContextBundle, SearchSource, SearXNGProviderConfig, FetchedPageSummary } from "../types";
+import { ArXivProvider } from "../providers/ArXivProvider";
+import { WikipediaProvider } from "../providers/WikipediaProvider";
+import type { SearchContextBundle, SearchSource, SearXNGProviderConfig, FetchedPageSummary, SearchResult } from "../types";
 import {
   invokeFetchAndExtractPages,
   type FetchedPage,
@@ -125,12 +127,52 @@ export async function runSearch(
     };
 
     const provider = new SearXNGProvider(config);
-    const results = await provider.search({
-      query,
-      limit: maxResults,
-      timeRange: settings.webSearchTimeRange || undefined,
-      categories: settings.webSearchCategories || undefined,
-    });
+
+    // Run all search providers in parallel
+    const searchPromises: Promise<SearchResult[]>[] = [
+      provider.search({
+        query,
+        limit: maxResults,
+        timeRange: settings.webSearchTimeRange || undefined,
+        categories: settings.webSearchCategories || undefined,
+      }),
+    ];
+
+    // Add ArXiv provider if enabled
+    if (settings.advancedSearchBundleEnabled) {
+      const arxivProvider = new ArXivProvider({
+        id: "arxiv-direct",
+        name: "ArXiv",
+        enabled: true,
+        maxResults: Math.min(3, maxResults),
+      });
+      searchPromises.push(
+        arxivProvider.search({ query, limit: Math.min(3, maxResults) }),
+      );
+    }
+
+    // Add Wikipedia provider if enabled
+    if (settings.advancedSearchBundleEnabled) {
+      const wikipediaProvider = new WikipediaProvider({
+        id: "wikipedia-direct",
+        name: "Wikipedia",
+        enabled: true,
+        maxResults: Math.min(3, maxResults),
+      });
+      searchPromises.push(
+        wikipediaProvider.search({ query, limit: Math.min(3, maxResults) }),
+      );
+    }
+
+    const searchResults = await Promise.allSettled(searchPromises);
+
+    // Merge results: SearXNG first, then ArXiv, then Wikipedia
+    let results: SearchResult[] = [];
+    for (const result of searchResults) {
+      if (result.status === "fulfilled" && result.value.length > 0) {
+        results = results.concat(result.value);
+      }
+    }
 
     if (signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
@@ -184,6 +226,10 @@ export async function runSearch(
         ? {
             status: page.status,
             ...(page.error_reason ? { error_reason: page.error_reason } : {}),
+            ...(page.extraction_method ? { extraction_method: page.extraction_method } : {}),
+            ...(page.via_wayback != null ? { via_wayback: page.via_wayback } : {}),
+            ...(page.char_count != null ? { char_count: page.char_count } : {}),
+            ...(page.source_type ? { source_type: page.source_type } : {}),
           }
         : undefined;
       return {

@@ -59,6 +59,9 @@ type SettingsStoreState = {
   memoryExtractionEnabled: boolean;
   memoryExtractionModel: string;
   defaultWebSearchEnabled: boolean;
+  codeExecutionEnabled: boolean;
+  customPythonPath: string;
+  codeExecutionTimeoutSecs: number;
   webSearchSearxngUrl: string;
   webSearchDefaultMode: "auto" | "always" | "off";
   webSearchMaxResults: number;
@@ -71,6 +74,13 @@ type SettingsStoreState = {
   webSearchPerPageTimeoutSecs: number;
   webSearchFetchMaxCharsPerSource: number;
   advancedSearchBundleEnabled: boolean;
+  bundleExtractDocx: boolean;
+  bundleExtractPptx: boolean;
+  bundleExtractXlsx: boolean;
+  bundleExtractEpub: boolean;
+  bundleWaybackFallback: boolean;
+  bundleArxivSearch: boolean;
+  bundleWikipediaSearch: boolean;
   searxngSetupError: string;
   contextAnchoringEnabled: boolean;
   documentPanelEnabled: boolean;
@@ -139,6 +149,9 @@ type SettingsStore = SettingsStoreState & {
   setMemoryExtractionEnabled: (enabled: boolean) => void;
   setMemoryExtractionModel: (modelId: string) => void;
   setDefaultWebSearchEnabled: (enabled: boolean) => void;
+  setCodeExecutionEnabled: (enabled: boolean) => void;
+  setCustomPythonPath: (path: string) => void;
+  setCodeExecutionTimeoutSecs: (secs: number) => void;
   setWebSearchSearxngUrl: (url: string) => void;
   setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
   setWebSearchMaxResults: (n: number) => void;
@@ -151,6 +164,13 @@ type SettingsStore = SettingsStoreState & {
   setWebSearchPerPageTimeoutSecs: (n: number) => void;
   setWebSearchFetchMaxCharsPerSource: (n: number) => void;
   setAdvancedSearchBundleEnabled: (enabled: boolean) => void;
+  setBundleExtractDocx: (enabled: boolean) => void;
+  setBundleExtractPptx: (enabled: boolean) => void;
+  setBundleExtractXlsx: (enabled: boolean) => void;
+  setBundleExtractEpub: (enabled: boolean) => void;
+  setBundleWaybackFallback: (enabled: boolean) => void;
+  setBundleArxivSearch: (enabled: boolean) => void;
+  setBundleWikipediaSearch: (enabled: boolean) => void;
   setSearxngSetupError: (message: string) => void;
   setContextAnchoringEnabled: (enabled: boolean) => void;
   setDocumentPanelEnabled: (enabled: boolean) => void;
@@ -217,6 +237,9 @@ const DEFAULT_STATE: SettingsStoreState = {
   memoryExtractionEnabled: true,
   memoryExtractionModel: "",
   defaultWebSearchEnabled: false,
+  codeExecutionEnabled: false,
+  customPythonPath: "",
+  codeExecutionTimeoutSecs: 30,
   webSearchSearxngUrl: "",
   webSearchDefaultMode: "auto",
   webSearchMaxResults: 8,
@@ -229,6 +252,13 @@ const DEFAULT_STATE: SettingsStoreState = {
   webSearchPerPageTimeoutSecs: 8,
   webSearchFetchMaxCharsPerSource: 8000,
   advancedSearchBundleEnabled: true,
+  bundleExtractDocx: true,
+  bundleExtractPptx: true,
+  bundleExtractXlsx: true,
+  bundleExtractEpub: true,
+  bundleWaybackFallback: true,
+  bundleArxivSearch: true,
+  bundleWikipediaSearch: true,
   searxngSetupError: "",
   contextAnchoringEnabled: true,
   documentPanelEnabled: true,
@@ -284,6 +314,9 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     memoryExtractionEnabled: state.memoryExtractionEnabled,
     memoryExtractionModel: state.memoryExtractionModel,
     defaultWebSearchEnabled: state.defaultWebSearchEnabled,
+    codeExecutionEnabled: state.codeExecutionEnabled,
+    customPythonPath: state.customPythonPath,
+    codeExecutionTimeoutSecs: state.codeExecutionTimeoutSecs,
     webSearchSearxngUrl: state.webSearchSearxngUrl,
     webSearchDefaultMode: state.webSearchDefaultMode,
     webSearchMaxResults: state.webSearchMaxResults,
@@ -296,6 +329,13 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     webSearchPerPageTimeoutSecs: state.webSearchPerPageTimeoutSecs,
     webSearchFetchMaxCharsPerSource: state.webSearchFetchMaxCharsPerSource,
     advancedSearchBundleEnabled: state.advancedSearchBundleEnabled,
+    bundleExtractDocx: state.bundleExtractDocx,
+    bundleExtractPptx: state.bundleExtractPptx,
+    bundleExtractXlsx: state.bundleExtractXlsx,
+    bundleExtractEpub: state.bundleExtractEpub,
+    bundleWaybackFallback: state.bundleWaybackFallback,
+    bundleArxivSearch: state.bundleArxivSearch,
+    bundleWikipediaSearch: state.bundleWikipediaSearch,
     searxngSetupError: state.searxngSetupError,
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     documentPanelEnabled: state.documentPanelEnabled,
@@ -393,6 +433,10 @@ export const useSettingsStore = create<SettingsStore>()(
       setMemoryExtractionEnabled: (memoryExtractionEnabled) => set({ memoryExtractionEnabled }),
       setMemoryExtractionModel: (memoryExtractionModel) => set({ memoryExtractionModel }),
       setDefaultWebSearchEnabled: (defaultWebSearchEnabled) => set({ defaultWebSearchEnabled }),
+      setCodeExecutionEnabled: (codeExecutionEnabled) => set({ codeExecutionEnabled }),
+      setCustomPythonPath: (customPythonPath) => set({ customPythonPath }),
+      setCodeExecutionTimeoutSecs: (codeExecutionTimeoutSecs) =>
+        set({ codeExecutionTimeoutSecs }),
       setWebSearchSearxngUrl: (webSearchSearxngUrl) => set({ webSearchSearxngUrl }),
       setWebSearchDefaultMode: (webSearchDefaultMode) => set({ webSearchDefaultMode }),
       setWebSearchMaxResults: (webSearchMaxResults) => set({ webSearchMaxResults }),
@@ -408,6 +452,13 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ webSearchFetchMaxCharsPerSource }),
       setAdvancedSearchBundleEnabled: (advancedSearchBundleEnabled) =>
         set({ advancedSearchBundleEnabled }),
+      setBundleExtractDocx: (bundleExtractDocx) => set({ bundleExtractDocx }),
+      setBundleExtractPptx: (bundleExtractPptx) => set({ bundleExtractPptx }),
+      setBundleExtractXlsx: (bundleExtractXlsx) => set({ bundleExtractXlsx }),
+      setBundleExtractEpub: (bundleExtractEpub) => set({ bundleExtractEpub }),
+      setBundleWaybackFallback: (bundleWaybackFallback) => set({ bundleWaybackFallback }),
+      setBundleArxivSearch: (bundleArxivSearch) => set({ bundleArxivSearch }),
+      setBundleWikipediaSearch: (bundleWikipediaSearch) => set({ bundleWikipediaSearch }),
       setSearxngSetupError: (searxngSetupError) => set({ searxngSetupError }),
       setContextAnchoringEnabled: (contextAnchoringEnabled) => set({ contextAnchoringEnabled }),
       setDocumentPanelEnabled: (documentPanelEnabled) => set({ documentPanelEnabled }),

@@ -37,7 +37,7 @@ export type SearchResult = {
   fetchedAt?: string;
   score?: number;
   rank?: number;
-  sourceType?: "webpage" | "docs" | "news" | "github" | "wikipedia" | "pdf" | "forum" | "package";
+  sourceType?: "webpage" | "docs" | "news" | "github" | "wikipedia" | "pdf" | "forum" | "package" | "arxiv" | "epub" | "docx" | "pptx" | "xlsx";
 };
 
 export type FetchedPageSummary = {
@@ -46,6 +46,10 @@ export type FetchedPageSummary = {
   title: string | null;
   content: string | null;
   error_reason: string | null;
+  source_type?: string | null;
+  extraction_method?: string | null;
+  via_wayback?: boolean | null;
+  char_count?: number | null;
 };
 
 export type SearchSource = {
@@ -56,6 +60,10 @@ export type SearchSource = {
   fetch?: {
     status: string;
     error_reason?: string;
+    extraction_method?: string;
+    via_wayback?: boolean;
+    char_count?: number;
+    source_type?: string;
   };
 };
 
