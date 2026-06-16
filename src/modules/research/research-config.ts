@@ -63,7 +63,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
   lightning: {
     id: "lightning",
     name: "Lightning",
-    description: "1 round, snippets only. Fastest possible report.",
+    description: "Single-pass blitz. Snippets only — fast answers when you need them now.",
     builtIn: true,
     baseline: {
       maxSearchRounds: 1,
@@ -102,7 +102,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
   quick: {
     id: "quick",
     name: "Quick",
-    description: "3 rounds, lightweight quality checks. Fast but capable.",
+    description: "Rapid triage across 3 rounds. Lightweight validation keeps it fast without being reckless.",
     builtIn: true,
     baseline: {
       maxSearchRounds: 3,
@@ -141,7 +141,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
   standard: {
     id: "standard",
     name: "Standard",
-    description: "5 rounds, source validation + cross-source verify. Balanced.",
+    description: "5-round investigation with source validation and cross-source verification. The daily driver.",
     builtIn: true,
     baseline: {
       maxSearchRounds: 5,
@@ -180,7 +180,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
   deep: {
     id: "deep",
     name: "Deep",
-    description: "8 rounds, contradiction + gap follow-ups. Thorough.",
+    description: "8-round deep dive. Contradiction hunting, gap analysis, and follow-up searches — no stone unturned.",
     builtIn: true,
     baseline: {
       maxSearchRounds: 8,
@@ -219,7 +219,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
   exhaustive: {
     id: "exhaustive",
     name: "Exhaustive",
-    description: "10 rounds, stricter source threshold, larger contradiction cap.",
+    description: "10-round research marathon. Maximum source depth, aggressive contradiction detection, and exhaustive gap coverage. Brute force meets rigor.",
     builtIn: true,
     baseline: {
       maxSearchRounds: 10,

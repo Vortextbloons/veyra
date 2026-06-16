@@ -1298,6 +1298,8 @@ export async function executeResearchRun(
   let totalTokens = 0;
   let firstSearchError: string | null = null;
   let planContextSummary = "";
+  let activeResearchPlan = run.plan;
+  let clarifiedResearchQuestion = run.clarifiedQuestion;
 
   const existingRun = store.activeRunOrNull();
   if (existingRun?.run.id === run.id) {
@@ -1449,7 +1451,7 @@ export async function executeResearchRun(
       12000,
     );
 
-    const validationPrompt = `You are a research quality analyst. Evaluate this source for the research question: "${run.question}"
+    const validationPrompt = `You are a research quality analyst. Evaluate this source for the research question: "${clarifiedResearchQuestion || run.question}"
 
 ${planContextSummary ? `Context:\n${planContextSummary}\n\n` : ""}Source: ${source.title}
 URL: ${source.url}
@@ -1576,7 +1578,7 @@ Content excerpt:
 ${untrustedSourceBlock(source.url, truncated, source.sourceType)}`;
     }).join("\n\n---\n\n");
 
-    const batchPrompt = `You are a research quality analyst. Evaluate these ${batch.length} sources for the research question: "${run.question}"
+    const batchPrompt = `You are a research quality analyst. Evaluate these ${batch.length} sources for the research question: "${clarifiedResearchQuestion || run.question}"
 
 ${planContextSummary ? `Context:\n${planContextSummary}\n\n` : ""}${sourceBlocks}
 
@@ -2516,8 +2518,8 @@ Question: ${run.question}`;
       title: s.title || `Step ${i + 1}`,
       description: s.description || "",
       searchQueries: s.searchQueries?.length ? s.searchQueries : fallbackSearchQueries(`${run.question} ${s.title ?? ""}`),
-      expectedSources: s.expectedSources || 5,
-      dependsOnStepIds: s.dependsOnStepIds,
+      expectedSources: typeof s.expectedSources === "number" ? s.expectedSources : (Number(s.expectedSources) || 5),
+      dependsOnStepIds: Array.isArray(s.dependsOnStepIds) ? s.dependsOnStepIds : undefined,
       createdAt: nowIso(),
     }));
 
@@ -2537,6 +2539,8 @@ Question: ${run.question}`;
       plan,
       clarifiedQuestion: planJson.clarifiedQuestion || run.question,
     });
+    activeResearchPlan = plan;
+    clarifiedResearchQuestion = planJson.clarifiedQuestion || run.question;
 
     await completeStep(planStep, `Plan: ${planSteps.length} steps, ${planJson.keyConcepts?.length || 0} key concepts`);
     onEvent({ type: "phase_complete", phase: "plan", stepId: planStep.id });
@@ -2565,20 +2569,21 @@ Question: ${run.question}`;
 
       planSteps.length = 0;
       planSteps.push(...approvedPlan.steps);
+      activeResearchPlan = approvedPlan;
+      clarifiedResearchQuestion = store.activeRunOrNull()?.run.clarifiedQuestion || clarifiedResearchQuestion;
       await completeStep(waitStep, "Plan approved by user");
       onEvent({ type: "phase_complete", phase: "wait_approval", stepId: waitStep.id });
     }
     } // end plan else block
 
     // Build plan context for downstream phases (validation, extraction, synthesis).
-    const activePlan = run.plan;
-    if (activePlan?.steps?.length) {
+    if (activeResearchPlan?.steps?.length) {
       const concepts = planSteps
         .flatMap((s) => s.searchQueries ?? [])
         .slice(0, 10);
       planContextSummary = [
-        `Research strategy: ${activePlan.steps.length} planned steps.`,
-        run.clarifiedQuestion ? `Clarified question: ${run.clarifiedQuestion}` : "",
+        `Research strategy: ${activeResearchPlan.steps.length} planned steps.`,
+        clarifiedResearchQuestion ? `Clarified question: ${clarifiedResearchQuestion}` : "",
         concepts.length > 0 ? `Key search angles: ${concepts.join("; ")}` : "",
       ].filter(Boolean).join("\n");
     }
@@ -3021,7 +3026,7 @@ Answer ONLY with a JSON object:
 
       const gapPrompt = `You are a research strategist. Analyze what information is MISSING or INSUFFICIENTLY COVERED.
 
-Research Question: ${run.question}
+Research Question: ${clarifiedResearchQuestion || run.question}
 
 Current Claims:
 ${claimsText}
@@ -3262,8 +3267,8 @@ Context: ${e.context}`;
     // Pass 1: Build outline
     const outlinePrompt = `You are a senior research analyst. Create a detailed outline for a comprehensive research report.
 
-Research Question: ${run.question}
-${run.clarifiedQuestion ? `Clarified Question: ${run.clarifiedQuestion}` : ""}
+Research Question: ${clarifiedResearchQuestion || run.question}
+${clarifiedResearchQuestion ? `Clarified Question: ${clarifiedResearchQuestion}` : ""}
 
 Key Evidence (sorted by confidence):
 ${evidenceSummary.slice(0, budget.outlineChars)}
@@ -3349,8 +3354,7 @@ Return ONLY a JSON object:
       ? sections.findIndex((section) => /contradict|conflict|uncertain|limitation|gap/i.test(section.heading || ""))
       : -1;
 
-    reportMarkdown += `# ${outlineJson?.title || `Research: ${run.question}`}\n\n`;
-    reportMarkdown += `> **Depth:** ${run.depth} | **Sources:** ${sources.length} | **Evidence:** ${evidenceList.length} | **Claims:** ${claims.length} | **Contradictions:** ${contradictions.length}\n\n`;
+    reportMarkdown += `# ${outlineJson?.title || `Research: ${clarifiedResearchQuestion || run.question}`}\n\n`;
 
     // Track section offsets for safe self-critique replacement (avoids fragile regex).
     const sectionOffsets = new Map<string, { start: number; end: number }>();
@@ -3379,7 +3383,7 @@ Return ONLY a JSON object:
 
       const sectionPrompt = `Write section "${section.heading}" for a research report.
 
-Research Question: ${run.question}
+Research Question: ${clarifiedResearchQuestion || run.question}
 
 Key Points to Cover:
 ${(section.keyPoints || []).map((p) => `- ${p}`).join("\n")}
@@ -3459,7 +3463,7 @@ Output rules:
       try {
         const critiquePrompt = `You are a critical peer reviewer. Review this research draft and identify specific improvements.
 
-Research Question: "${run.question}"
+Research Question: "${clarifiedResearchQuestion || run.question}"
 
 Draft Report:
 ${reportMarkdown.slice(0, 12000)}
@@ -3520,7 +3524,7 @@ Return a JSON object:
 
 ${sectionIssues || "Improve clarity, add more specific evidence, and strengthen argumentation."}
 
-Research Question: "${run.question}"
+Research Question: "${clarifiedResearchQuestion || run.question}"
 
 Key Points to Cover:
 ${(section.keyPoints || []).map((p) => `- ${p}`).join("\n")}
@@ -3634,7 +3638,7 @@ Output: Return ONLY polished report prose. No headings, no meta-commentary.`;
 
     const reportInput: CreateResearchReportInput = {
       runId: run.id,
-      title: outlineJson?.title || `Research: ${run.question}`,
+      title: outlineJson?.title || `Research: ${clarifiedResearchQuestion || run.question}`,
       contentMarkdown: reportMarkdown,
       citationMap,
       sourceIds: readSources.map((s) => s.id),
