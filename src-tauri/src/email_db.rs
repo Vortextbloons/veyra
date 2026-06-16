@@ -638,6 +638,7 @@ pub fn save_draft(conn: &Connection, draft: EmailDraftInput) -> Result<EmailDraf
 
 pub fn send_message(conn: &Connection, draft: EmailDraftInput) -> Result<EmailSendResult, String> {
     if draft.to.trim().is_empty() { return Err("recipient is required".into()); }
+    validate_email_headers(&draft)?;
     let account = conn.query_row("SELECT name, email, provider FROM email_accounts WHERE id = ?1", params![draft.account_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))).map_err(|e| e.to_string())?;
     if account.2 == "gmail" {
         let sent_id = send_gmail_message(conn, &draft.account_id, &account.1, &draft)?;
@@ -653,6 +654,23 @@ pub fn send_message(conn: &Connection, draft: EmailDraftInput) -> Result<EmailSe
     conn.execute("INSERT INTO email_messages (id, thread_id, account_id, from_name, from_email, to_json, cc_json, subject, body, snippet, timestamp, is_read, is_archived, is_starred, labels_json, attachments_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, '[]', ?7, ?8, ?9, ?10, 1, 0, 0, '[\"sent\"]', '[]')", params![message_id, thread_id, draft.account_id, account.0, account.1, to_json, draft.subject, draft.body, draft.body.chars().take(160).collect::<String>(), now]).map_err(|e| e.to_string())?;
     if let Some(id) = draft.id { let _ = conn.execute("DELETE FROM email_drafts WHERE id = ?1", params![id]); }
     Ok(EmailSendResult { sent: true, message_id: Some(message_id) })
+}
+
+fn reject_header_control_chars(label: &str, value: &str) -> Result<(), String> {
+    if value.chars().any(|c| matches!(c, '\r' | '\n') || (c.is_control() && c != '\t')) {
+        return Err(format!("{label} contains invalid header characters"));
+    }
+    Ok(())
+}
+
+fn validate_email_headers(draft: &EmailDraftInput) -> Result<(), String> {
+    reject_header_control_chars("recipient", &draft.to)?;
+    reject_header_control_chars("cc", &draft.cc)?;
+    if let Some(bcc) = &draft.bcc {
+        reject_header_control_chars("bcc", bcc)?;
+    }
+    reject_header_control_chars("subject", &draft.subject)?;
+    Ok(())
 }
 
 fn send_gmail_message(conn: &Connection, account_id: &str, from_email: &str, draft: &EmailDraftInput) -> Result<String, String> {

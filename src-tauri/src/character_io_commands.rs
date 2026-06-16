@@ -23,6 +23,34 @@ fn avatar_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+fn resolve_avatar_path(app: &AppHandle, avatar_path: &str, must_exist: bool) -> Result<PathBuf, String> {
+    if avatar_path.is_empty() || avatar_path.contains("..") || avatar_path.starts_with('/') || avatar_path.starts_with('\\') {
+        return Err("avatar path is outside the avatars directory".into());
+    }
+
+    let dir = avatar_dir(app)?;
+    let base = dir.canonicalize().map_err(map_io_error)?;
+    let candidate = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join(avatar_path);
+
+    let resolved = if must_exist {
+        candidate.canonicalize().map_err(map_io_error)?
+    } else {
+        let parent = candidate.parent().ok_or_else(|| "invalid avatar path".to_string())?;
+        let parent = parent.canonicalize().map_err(map_io_error)?;
+        let file_name = candidate.file_name().ok_or_else(|| "invalid avatar path".to_string())?;
+        parent.join(file_name)
+    };
+
+    if !resolved.starts_with(&base) {
+        return Err("avatar path is outside the avatars directory".into());
+    }
+    Ok(resolved)
+}
+
 fn map_io_error(error: std::io::Error) -> String {
     error.to_string()
 }
@@ -136,14 +164,7 @@ pub fn delete_character_avatar(app: AppHandle, avatar_path: String) -> Result<()
     if avatar_path.is_empty() {
         return Ok(());
     }
-    let base = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let candidate = base.join(&avatar_path);
-    if !candidate.starts_with(base.join(CHARACTER_AVATAR_DIR)) {
-        return Err("avatar path is outside the avatars directory".into());
-    }
+    let candidate = resolve_avatar_path(&app, &avatar_path, false)?;
     if candidate.exists() {
         fs::remove_file(&candidate).map_err(map_io_error)?;
     }
@@ -155,14 +176,7 @@ pub fn read_character_avatar(app: AppHandle, avatar_path: String) -> Result<Vec<
     if avatar_path.is_empty() {
         return Err("avatar path is empty".into());
     }
-    let base = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
-    let candidate = base.join(&avatar_path);
-    if !candidate.starts_with(base.join(CHARACTER_AVATAR_DIR)) {
-        return Err("avatar path is outside the avatars directory".into());
-    }
+    let candidate = resolve_avatar_path(&app, &avatar_path, true)?;
     let metadata = fs::metadata(&candidate).map_err(map_io_error)?;
     if metadata.len() > MAX_AVATAR_BYTES as u64 {
         return Err("avatar is too large".into());

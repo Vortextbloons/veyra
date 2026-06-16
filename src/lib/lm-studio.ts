@@ -122,6 +122,20 @@ function extractToolCalls(output: V1OutputItem[] | undefined): ProviderToolCall[
 }
 
 function buildOpenAiMessage(message: ChatMessage): Record<string, unknown> {
+  const imageAttachments = message.attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
+  if (imageAttachments.length > 0) {
+    return {
+      role: message.role,
+      content: [
+        ...(message.content.trim() ? [{ type: "text", text: message.content }] : []),
+        ...imageAttachments.map((attachment) => ({
+          type: "image_url",
+          image_url: { url: attachment.dataUrl },
+        })),
+      ],
+    };
+  }
+
   return {
     role: message.role,
     content: message.content,
@@ -139,6 +153,7 @@ function buildOpenAiChatBody(options: {
   toolChoice?: "auto" | "none";
   stream?: boolean;
   reasoningEnabled?: boolean;
+  responseFormat?: { type: "json_object" | "text" };
 }): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: options.model,
@@ -156,6 +171,9 @@ function buildOpenAiChatBody(options: {
   }
   if (options.reasoningEnabled === false) {
     body.reasoning_effort = "none";
+  }
+  if (options.responseFormat?.type === "json_object") {
+    body.response_format = { type: "json_object" };
   }
 
   return body;
@@ -175,6 +193,7 @@ function buildV1ChatBody(options: {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  responseFormat?: { type: "json_object" | "text" };
 }): Record<string, unknown> {
   const {
     model,
@@ -767,6 +786,7 @@ export async function sendLmStudioChat(options: {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  responseFormat?: { type: "json_object" | "text" };
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
@@ -793,6 +813,7 @@ async function sendLmStudioChatImpl(options: {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  responseFormat?: { type: "json_object" | "text" };
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
@@ -816,6 +837,7 @@ async function sendLmStudioChatImpl(options: {
     tools,
     toolChoice,
     reasoningEnabled,
+    responseFormat,
     signal,
     onChunk,
     onReasoningChunk,
@@ -843,6 +865,7 @@ async function sendLmStudioChatImpl(options: {
       tools,
       toolChoice,
       reasoningEnabled,
+      responseFormat,
       signal,
       startedAt,
       onChunk,
@@ -875,6 +898,7 @@ async function sendLmStudioChatImpl(options: {
             tools,
             toolChoice,
             reasoningEnabled,
+            responseFormat,
           }),
         ),
         signal: fetchSignal,
@@ -954,6 +978,7 @@ async function sendOpenAiCompatibleChat(options: {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  responseFormat?: { type: "json_object" | "text" };
   signal?: AbortSignal;
   startedAt: number;
   onChunk: (content: string, done: boolean) => void;

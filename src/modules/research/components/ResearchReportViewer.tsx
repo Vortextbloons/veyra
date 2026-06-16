@@ -94,10 +94,11 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
 
       const memoryId = crypto.randomUUID();
       const summaryText = `Research report: ${report.title} (${report.wordCount} words, ${report.sourceIds.length} sources)`;
+      const sanitizedMarkdown = sanitizeReportSection(stripCitationAuditSection(report.contentMarkdown));
       const contentText =
-        report.contentMarkdown.length > 20000
-          ? report.contentMarkdown.slice(0, 20000) + "\n\n[Content truncated for memory storage]"
-          : report.contentMarkdown;
+        sanitizedMarkdown.length > 20000
+          ? sanitizedMarkdown.slice(0, 20000) + "\n\n[Content truncated for memory storage]"
+          : sanitizedMarkdown;
 
       await createMemoryNode({
         id: memoryId,

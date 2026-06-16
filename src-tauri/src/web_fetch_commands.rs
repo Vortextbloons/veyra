@@ -25,7 +25,9 @@ const MIN_CONTENT_CHARS: usize = 200;
 static FETCH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .user_agent(USER_AGENT)
-        .redirect(reqwest::redirect::Policy::limited(5))
+        // Do not auto-follow redirects: each target would need its own SSRF
+        // validation, and reqwest's automatic policy cannot enforce that here.
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("failed to build fetch client")
 });

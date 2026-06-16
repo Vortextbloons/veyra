@@ -40,9 +40,8 @@ pub struct TauriSearchResponse {
 
 /// Validate a user-configured SearXNG base URL.
 ///
-/// Unlike URLs fetched from search results (which must be public), the SearXNG
-/// instance URL is explicitly chosen by the user and is commonly localhost or a
-/// LAN address. We only reject truly dangerous schemes here.
+/// Veyra's configured SearXNG instance is local-only. Enforce that at the
+/// command boundary too; frontend checks are not a security boundary.
 fn validate_searxng_url(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
 
@@ -55,8 +54,13 @@ fn validate_searxng_url(url: &str) -> Result<(), String> {
         }
     }
 
-    if parsed.host_str().is_none() {
-        return Err("URL has no host. A valid SearXNG URL is required.".into());
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "URL has no host. A valid SearXNG URL is required.".to_string())?
+        .to_lowercase();
+
+    if !matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1") {
+        return Err("SearXNG URL must point to localhost (127.0.0.1 or localhost).".into());
     }
 
     Ok(())

@@ -765,6 +765,20 @@ function pickContradictionWinner(
   return null;
 }
 
+function normalizeClaimStatus(value: unknown): ResearchClaimStatus {
+  switch (value) {
+    case "verified":
+    case "partially_verified":
+    case "contradicted":
+    case "disputed":
+    case "unverified":
+    case "rejected":
+      return value;
+    default:
+      return "unverified";
+  }
+}
+
 function chunkSourceText(text: string): string[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
@@ -1071,10 +1085,21 @@ export function enqueueResearchRunJob(
       const onEvent = (event: ResearchRuntimeEvent) => {
         useResearchStore.getState().applyRuntimeEvent(event);
       };
-      if (mode === "resume") {
-        await resumeResearchRun(run, combined, onEvent, perRunOverride);
-      } else {
-        await executeResearchRun(run, combined, onEvent, undefined, perRunOverride);
+      try {
+        if (mode === "resume") {
+          await resumeResearchRun(run, combined, onEvent, perRunOverride);
+        } else {
+          await executeResearchRun(run, combined, onEvent, undefined, perRunOverride);
+        }
+      } finally {
+        useResearchStore.getState().setActiveController(null);
+        useResearchStore.setState({
+          isPausing: false,
+          validateProgress: { done: 0, total: 0 },
+          extractProgress: { done: 0, total: 0 },
+          contradictionProgress: { done: 0, total: 0 },
+          auditProgress: { done: 0, total: 0 },
+        });
       }
     },
   });
@@ -1378,7 +1403,17 @@ Return ONLY a JSON object:
       return updatedSource;
     } catch (err) {
       console.warn("[research-runtime] Validation failed for source:", source.id, err);
-      return source; // Include by default if validation fails
+      const skippedSource = await store.updateSource({
+        id: source.id,
+        status: "skipped" as ResearchSourceStatus,
+        sourceQuality: {
+          relevant: false,
+          quality: 0,
+          reason: `Validation failed: ${getErrorMessage(err)}`,
+        },
+      });
+      updateLocalSource(skippedSource);
+      return skippedSource;
     }
   }
 
@@ -1596,7 +1631,7 @@ Return ONLY a bare JSON array (no wrapping object, no markdown) with one entry p
           const verifyJson = resultsByIndex.get(i) ?? {};
           const matched = entry;
 
-          let status = (verifyJson.status as ResearchClaimStatus) || "unverified";
+          let status = normalizeClaimStatus(verifyJson.status);
           const confidence = typeof verifyJson.confidence === "number" ? verifyJson.confidence : matched.claim.confidence;
           const supportingCount = Array.isArray(verifyJson.supportingSources) ? verifyJson.supportingSources.length : 0;
           const contradictingCount = Array.isArray(verifyJson.contradictingSources) ? verifyJson.contradictingSources.length : 0;
@@ -2224,7 +2259,7 @@ Question: ${run.question}`;
     const searchRoundLimit = Math.min(planSteps.length, config.maxSearchRounds);
     const discoveredUrls = new Set<string>(sources.map((s) => s.url));
 
-    if (resumeFromPhase && sources.length > 0) {
+    if (resumeFromPhase && resumeFromPhase !== "search" && sources.length > 0) {
       console.info(`[research-runtime] Resume reusing ${sources.length} persisted sources`);
     } else for (let round = 0; round < searchRoundLimit; round++) {
       const planStepItem = planSteps[round];
@@ -2334,7 +2369,8 @@ Question: ${run.question}`;
     onEvent({ type: "phase_start", phase: "read", stepId: readStep.id });
     await updateRunStatus("reading", 35);
 
-    if (resumeFromPhase && sources.some((s) => s.status === "read")) {
+    const pendingReadSources = sources.filter((s) => s.status === "discovered" || s.status === "fetched");
+    if (resumeFromPhase && resumeFromPhase !== "read" && pendingReadSources.length === 0 && sources.some((s) => s.status === "read")) {
       console.info("[research-runtime] Resume reusing persisted read sources");
     } else {
       await fetchAndReadSources(sources);
@@ -2357,7 +2393,11 @@ Question: ${run.question}`;
       onEvent({ type: "phase_complete", phase: "validate", stepId: validateStep.id });
     }
 
-    const activeSources = sources.filter((s) => s.status === "read" && s.sourceQuality?.relevant !== false);
+    const activeSources = sources.filter((s) =>
+      s.status === "read" &&
+      s.sourceQuality?.relevant !== false &&
+      (typeof s.sourceQuality?.quality !== "number" || s.sourceQuality.quality >= config.minSourceQuality)
+    );
 
     // ── Phase 5: Per-Source Deep Extraction ─────────────────────────────────
     if (config.perSourceRead && activeSources.length > 0 && !(resumeFromPhase && evidenceList.length > 0)) {
