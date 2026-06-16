@@ -62,6 +62,7 @@ export function AgentsPanel({
         projectPath={projectPath}
         onProjectPathChange={onProjectPathChange}
         runtimeAvailable={runtimeAvailable}
+        running={Boolean(runningSession)}
         onCheckRuntime={onCheckRuntime}
       />
 
@@ -95,6 +96,7 @@ function AgentHeader({
   projectPath,
   onProjectPathChange,
   runtimeAvailable,
+  running,
   onCheckRuntime,
 }: {
   mode: AgentMode;
@@ -102,6 +104,7 @@ function AgentHeader({
   projectPath: string;
   onProjectPathChange: (p: string) => void;
   runtimeAvailable: boolean | null;
+  running: boolean;
   onCheckRuntime: () => void;
 }) {
   const handleBrowse = async () => {
@@ -166,15 +169,17 @@ function AgentHeader({
             <input
               value={projectPath}
               onChange={(e) => onProjectPathChange(e.target.value)}
+              disabled={running}
               placeholder="Workspace path (leave empty for default)"
-              className="min-w-0 flex-1 bg-transparent font-mono text-[11.5px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-dim)]/50"
+              className="min-w-0 flex-1 bg-transparent font-mono text-[11.5px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-dim)]/50 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
           <button
             type="button"
             onClick={() => void handleBrowse()}
+            disabled={running}
             title="Browse for folder"
-            className="grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-white/[0.04] hover:text-white"
+            className="grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-white/[0.04] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-[var(--color-border)] disabled:hover:bg-[var(--color-panel)] disabled:hover:text-[var(--color-text-dim)]"
           >
             <FolderOpen className="size-3.5" />
           </button>

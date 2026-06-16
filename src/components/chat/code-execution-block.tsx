@@ -99,7 +99,9 @@ export function CodeExecutionBlock({ state }: { state: ToolCallState }) {
       )}
       {expanded && !result && (state.error || state.detail) && (
         <div className="mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]/50 px-3 py-2 text-[11.5px] text-[var(--color-text-dim)]">
-          {state.error || state.detail}
+          <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed">
+            {state.detail || state.error}
+          </pre>
         </div>
       )}
     </ToolCallShell>

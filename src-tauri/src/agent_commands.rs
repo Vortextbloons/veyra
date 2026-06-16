@@ -463,6 +463,7 @@ fn run_opencode_command(
 ) -> Result<Output, String> {
     let mut errors = Vec::new();
     let data_home = app.map(opencode_data_home).transpose()?;
+    let is_agent_run = args.first().map(|arg| arg == "run").unwrap_or(false);
 
     for candidate in opencode_candidates() {
         let mut command = match candidate {
@@ -507,7 +508,17 @@ fn run_opencode_command(
         }
 
         match run_command(command, app, session_id) {
-            Ok(output) => return Ok(output),
+            Ok(output) if output.status.success() || is_agent_run => return Ok(output),
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                errors.push(format!(
+                    "candidate exited {}{}{}",
+                    output.status.code().map_or_else(|| "without code".to_string(), |code| format!("with code {code}")),
+                    if stderr.is_empty() { "" } else { ": " },
+                    if stderr.is_empty() { stdout } else { stderr },
+                ));
+            }
             Err(error) => errors.push(error.to_string()),
         }
     }

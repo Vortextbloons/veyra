@@ -90,10 +90,35 @@ function stringField(record: Record<string, unknown> | null, key: string): strin
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function numberField(record: Record<string, unknown> | null, key: string): number | undefined {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function textFromUnknown(value: unknown): string | undefined {
+  if (typeof value === "string") return value.trim() || undefined;
+  if (Array.isArray(value)) {
+    const parts = value
+      .map((item) => textFromUnknown(item))
+      .filter((item): item is string => Boolean(item));
+    return parts.length ? parts.join("\n").trim() : undefined;
+  }
+  const record = asRecord(value);
+  if (!record) return undefined;
+  return firstStringField([record], ["text", "content", "delta", "message", "output", "summary"])
+    ?? textFromUnknown(record.content)
+    ?? textFromUnknown(record.parts)
+    ?? textFromUnknown(record.children);
+}
+
 function opencodeErrorMessage(root: Record<string, unknown> | null): string | undefined {
   const error = asRecord(root?.error);
   const data = asRecord(error?.data);
-  return stringField(data, "message") ?? stringField(error, "message") ?? stringField(error, "name");
+  return stringField(data, "message")
+    ?? textFromUnknown(data)
+    ?? stringField(error, "message")
+    ?? stringField(error, "name")
+    ?? textFromUnknown(root?.error);
 }
 
 function nestedRecord(record: Record<string, unknown> | null, key: string): Record<string, unknown> | null {
@@ -175,12 +200,15 @@ function parseOpencodeLiveEvent(input: OpencodeLiveEvent): AgentEvent | null {
       stringField(root, "tool") ??
       stringField(root, "toolName") ??
       stringField(root, "name");
+    const message = asRecord(root?.message);
     const visibleText =
-      stringField(part, "text") ??
-      stringField(part, "content") ??
-      stringField(root, "text") ??
-      stringField(root, "content") ??
-      stringField(root, "delta");
+      textFromUnknown(part?.text) ??
+      textFromUnknown(part?.content) ??
+      textFromUnknown(root?.text) ??
+      textFromUnknown(root?.content) ??
+      textFromUnknown(root?.delta) ??
+      textFromUnknown(message?.content) ??
+      textFromUnknown(root?.message);
 
     if (rootType === "error") {
       return event("error", "OpenCode error", opencodeErrorMessage(root) ?? "OpenCode reported an error.");
@@ -220,18 +248,20 @@ function parseOpencodeJsonOutput(stdout: string): ParsedOpencodeOutput {
     try {
       const parsed = JSON.parse(trimmed) as {
         sessionID?: string;
+        sessionId?: string;
+        session_id?: string;
         type?: string;
         synthetic?: boolean;
         text?: string;
-        content?: string;
-        delta?: string;
+        content?: unknown;
+        delta?: unknown;
         metadata?: { compaction_continue?: boolean };
-        message?: { content?: string };
-        part?: { text?: string; content?: string; sessionID?: string; type?: string; tokens?: { total?: number } };
+        message?: { content?: unknown; text?: unknown };
+        part?: { text?: unknown; content?: unknown; sessionID?: string; sessionId?: string; session_id?: string; type?: string; tokens?: { total?: number } };
         tokens?: { total?: number };
       };
       sawJson = true;
-      sessionId = parsed.sessionID ?? parsed.part?.sessionID ?? sessionId;
+      sessionId = parsed.sessionID ?? parsed.sessionId ?? parsed.session_id ?? parsed.part?.sessionID ?? parsed.part?.sessionId ?? parsed.part?.session_id ?? sessionId;
       const totalTokens = parsed.part?.tokens?.total ?? parsed.tokens?.total;
       if (typeof totalTokens === "number") {
         contextTokens = Math.max(contextTokens ?? 0, totalTokens);
@@ -240,14 +270,15 @@ function parseOpencodeJsonOutput(stdout: string): ParsedOpencodeOutput {
       const type = parsed.part?.type ?? parsed.type;
       if (type === "reasoning" || type === "step-start" || type === "step-finish") continue;
       const visibleText =
-        parsed.part?.text ??
-        parsed.part?.content ??
-        parsed.text ??
-        parsed.content ??
-        parsed.delta ??
-        parsed.message?.content;
-      if (typeof visibleText === "string" && visibleText.trim()) {
-        text.push(visibleText.trim());
+        textFromUnknown(parsed.part?.text) ??
+        textFromUnknown(parsed.part?.content) ??
+        textFromUnknown(parsed.text) ??
+        textFromUnknown(parsed.content) ??
+        textFromUnknown(parsed.delta) ??
+        textFromUnknown(parsed.message?.content) ??
+        textFromUnknown(parsed.message?.text);
+      if (visibleText) {
+        text.push(visibleText);
       }
     } catch {
       text.push(trimmed);
@@ -380,13 +411,13 @@ function sessionFromExport(fallback: AgentSession, exported: unknown): AgentSess
       const part = asRecord(rawPart);
       if (!part) continue;
       const type = stringField(part, "type");
-      const tokens = asRecord(part.tokens);
-      const totalTokens = tokens?.total;
+      const tokens = asRecord(part.tokens) ?? asRecord(part.usage);
+      const totalTokens = numberField(tokens, "total") ?? numberField(tokens, "totalTokens") ?? numberField(tokens, "total_tokens");
       if (typeof totalTokens === "number") {
         contextTokens = Math.max(contextTokens ?? 0, totalTokens);
       }
       if (role === "user" && type === "text") {
-        const text = stringField(part, "text");
+        const text = textFromUnknown(part.text) ?? textFromUnknown(part.content);
         if (text) {
           prompt = text;
           events.push(eventAt("status", "Prompt", text, at));
@@ -395,9 +426,9 @@ function sessionFromExport(fallback: AgentSession, exported: unknown): AgentSess
       }
       if (role !== "assistant") continue;
       if (type === "reasoning") {
-        events.push(eventAt("reasoning", "Reasoning", stringField(part, "text") || "Thinking", at));
+        events.push(eventAt("reasoning", "Reasoning", textFromUnknown(part.text) || textFromUnknown(part.content) || "Thinking", at));
       } else if (type === "text") {
-        const text = stringField(part, "text");
+        const text = textFromUnknown(part.text) ?? textFromUnknown(part.content);
         if (text) events.push(eventAt("output", "Opencode", text, at));
       } else if (type === "tool") {
         const tool = stringField(part, "tool") ?? "tool";
@@ -429,7 +460,14 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   projectPath: "",
   selectedModel: "",
   setMode: (mode) => set({ mode }),
-  setProjectPath: (projectPath) => set({ projectPath, activeSessionId: null, sessions: [] }),
+  setProjectPath: (projectPath) => {
+    for (const session of get().sessions) {
+      if (session.status === "running") {
+        abortAgentSession(session.id);
+      }
+    }
+    set({ projectPath, activeSessionId: null, sessions: [] });
+  },
   setSelectedModel: (selectedModel) => set({ selectedModel }),
   setActiveSessionId: (activeSessionId) => {
     const session = activeSessionId

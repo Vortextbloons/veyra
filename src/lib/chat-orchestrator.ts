@@ -581,7 +581,8 @@ export async function sendChatRequest({
         timeoutSecs: settings.codeExecutionTimeoutSecs,
         pythonPath: settings.customPythonPath.trim() || null,
       });
-      const detail = summarizePythonExecutionResult(result);
+      const summary = summarizePythonExecutionResult(result);
+      const detail = [`Code:\n${code}`, formatPythonExecutionSection(result)].join("\n\n");
       const phase = result.exitCode === 0 && !result.timedOut ? "done" : "error";
 
       chatStore.setStreamingToolState({
@@ -592,7 +593,7 @@ export async function sendChatRequest({
         input: inputPreview,
         detail,
         result: { code, ...result },
-        ...(phase === "error" ? { error: detail } : {}),
+        ...(phase === "error" ? { error: summary } : {}),
       });
 
       return `Tool result for ${CODE_EXEC_TOOL_NAME}(python code):\n\n${formatPythonExecutionSection(result)}`;
