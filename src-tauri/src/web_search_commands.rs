@@ -19,16 +19,20 @@ struct ProviderRateState {
     last_wikipedia: Option<Instant>,
 }
 
-static DIRECT_SOURCE_RATE: LazyLock<Mutex<ProviderRateState>> =
-    LazyLock::new(|| Mutex::new(ProviderRateState {
+type CacheKey = (String, usize);
+type SearchCache<T> = parking_lot::Mutex<HashMap<CacheKey, (T, Instant)>>;
+
+static DIRECT_SOURCE_RATE: LazyLock<Mutex<ProviderRateState>> = LazyLock::new(|| {
+    Mutex::new(ProviderRateState {
         last_arxiv: None,
         last_wikipedia: None,
-    }));
+    })
+});
 
-static ARXIV_CACHE: LazyLock<Mutex<HashMap<(String, usize), (ArxivSearchResponse, Instant)>>> =
+static ARXIV_CACHE: LazyLock<SearchCache<ArxivSearchResponse>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-static WIKIPEDIA_CACHE: LazyLock<Mutex<HashMap<(String, usize), (WikipediaSearchResponse, Instant)>>> =
+static WIKIPEDIA_CACHE: LazyLock<SearchCache<WikipediaSearchResponse>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 async fn throttle_direct_source(provider: &str, min_interval: Duration) {
@@ -62,7 +66,7 @@ fn cache_key(query: &str, limit: usize) -> (String, usize) {
     (query.to_lowercase(), limit)
 }
 
-fn read_cache<T: Clone>(map: &Mutex<HashMap<(String, usize), (T, Instant)>>, key: &(String, usize)) -> Option<T> {
+fn read_cache<T: Clone>(map: &SearchCache<T>, key: &CacheKey) -> Option<T> {
     let guard = map.lock();
     guard.get(key).and_then(|(value, fetched_at)| {
         if fetched_at.elapsed() <= DIRECT_SEARCH_CACHE_TTL {
@@ -73,7 +77,7 @@ fn read_cache<T: Clone>(map: &Mutex<HashMap<(String, usize), (T, Instant)>>, key
     })
 }
 
-fn write_cache<T: Clone>(map: &Mutex<HashMap<(String, usize), (T, Instant)>>, key: (String, usize), value: T) {
+fn write_cache<T: Clone>(map: &SearchCache<T>, key: CacheKey, value: T) {
     let mut guard = map.lock();
     guard.retain(|_, (_, fetched_at)| fetched_at.elapsed() <= DIRECT_SEARCH_CACHE_TTL);
     if guard.len() > 128 {
@@ -99,14 +103,10 @@ async fn get_with_retry(
                 if status.is_success() {
                     return Ok(response);
                 }
-                let retryable = status.as_u16() == 429
-                    || status.as_u16() == 408
-                    || status.is_server_error();
+                let retryable =
+                    status.as_u16() == 429 || status.as_u16() == 408 || status.is_server_error();
                 if !retryable || attempt >= DIRECT_SEARCH_MAX_RETRIES {
-                    return Err(format!(
-                        "{label} returned HTTP {}",
-                        status.as_u16()
-                    ));
+                    return Err(format!("{label} returned HTTP {}", status.as_u16()));
                 }
                 let retry_after = response
                     .headers()
@@ -212,6 +212,7 @@ fn simple_hash(s: &str) -> u64 {
     hasher.finish()
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn web_search_searxng(
     base_url: String,
@@ -397,7 +398,8 @@ fn parse_arxiv_xml_entry(entry_xml: &str) -> Option<ArxivResult> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+            Ok(quick_xml::events::Event::Start(ref e))
+            | Ok(quick_xml::events::Event::Empty(ref e)) => {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 match tag.as_str() {
                     "id" => in_tag = Some("id".into()),
@@ -467,10 +469,7 @@ fn parse_arxiv_xml_entry(entry_xml: &str) -> Option<ArxivResult> {
 }
 
 #[tauri::command]
-pub async fn search_arxiv(
-    query: String,
-    limit: usize,
-) -> Result<ArxivSearchResponse, String> {
+pub async fn search_arxiv(query: String, limit: usize) -> Result<ArxivSearchResponse, String> {
     let normalized_query = normalize_direct_query(&query);
     let effective_limit = limit.clamp(1, MAX_SEARCH_RESULTS);
     let key = cache_key(&normalized_query, effective_limit);
@@ -499,7 +498,9 @@ pub async fn search_arxiv(
     let mut remaining = xml_body.as_str();
 
     while let Some(entry_start) = remaining.find("<entry>") {
-        let entry_end = remaining[entry_start..].find("</entry>").map(|e| entry_start + e + 8);
+        let entry_end = remaining[entry_start..]
+            .find("</entry>")
+            .map(|e| entry_start + e + 8);
         if let Some(end) = entry_end {
             let entry_xml = &remaining[entry_start..end];
             if let Some(result) = parse_arxiv_xml_entry(entry_xml) {
@@ -610,22 +611,27 @@ pub async fn search_wikipedia(
     // Step 2: Get article extracts (optional — fall back to search snippets on rate limit).
     throttle_direct_source("wikipedia", WIKIPEDIA_MIN_INTERVAL).await;
 
-    let ids_str = page_ids.iter().map(|(id, _, _)| id.as_str()).collect::<Vec<_>>().join("|");
+    let ids_str = page_ids
+        .iter()
+        .map(|(id, _, _)| id.as_str())
+        .collect::<Vec<_>>()
+        .join("|");
     let extract_url = format!(
         "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&pageids={}&format=json&origin=*",
         ids_str
     );
 
-    let extract_body: serde_json::Value = match get_with_retry(&WIKIPEDIA_CLIENT, &extract_url, "Wikipedia extract API").await {
-        Ok(extract_response) => extract_response
-            .json()
-            .await
-            .unwrap_or_else(|_| serde_json::json!({})),
-        Err(err) => {
-            eprintln!("[web_search] Wikipedia extract skipped: {err}");
-            serde_json::json!({})
-        }
-    };
+    let extract_body: serde_json::Value =
+        match get_with_retry(&WIKIPEDIA_CLIENT, &extract_url, "Wikipedia extract API").await {
+            Ok(extract_response) => extract_response
+                .json()
+                .await
+                .unwrap_or_else(|_| serde_json::json!({})),
+            Err(err) => {
+                eprintln!("[web_search] Wikipedia extract skipped: {err}");
+                serde_json::json!({})
+            }
+        };
 
     let pages = extract_body
         .get("query")
@@ -641,10 +647,7 @@ pub async fn search_wikipedia(
             .unwrap_or("")
             .to_string();
 
-        let clean_snippet = search_snippet
-            .replace(|c: char| c == '<' || c == '>', "")
-            .trim()
-            .to_string();
+        let clean_snippet = search_snippet.replace(['<', '>'], "").trim().to_string();
 
         let url = format!(
             "https://en.wikipedia.org/wiki/{}",

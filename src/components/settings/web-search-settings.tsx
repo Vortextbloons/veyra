@@ -61,6 +61,12 @@ export function WebSearchSettings() {
   const setAdvancedSearchBundleEnabled = useSettingsStore(
     (s) => s.setAdvancedSearchBundleEnabled,
   );
+  const advancedSearchMultiQueryEnabled = useSettingsStore((s) => s.advancedSearchMultiQueryEnabled);
+  const setAdvancedSearchMultiQueryEnabled = useSettingsStore((s) => s.setAdvancedSearchMultiQueryEnabled);
+  const advancedSearchFusionEnabled = useSettingsStore((s) => s.advancedSearchFusionEnabled);
+  const setAdvancedSearchFusionEnabled = useSettingsStore((s) => s.setAdvancedSearchFusionEnabled);
+  const advancedSearchAdaptiveFallbackEnabled = useSettingsStore((s) => s.advancedSearchAdaptiveFallbackEnabled);
+  const setAdvancedSearchAdaptiveFallbackEnabled = useSettingsStore((s) => s.setAdvancedSearchAdaptiveFallbackEnabled);
   const bundleExtractDocx = useSettingsStore((s) => s.bundleExtractDocx);
   const setBundleExtractDocx = useSettingsStore((s) => s.setBundleExtractDocx);
   const bundleExtractPptx = useSettingsStore((s) => s.bundleExtractPptx);
@@ -570,6 +576,39 @@ export function WebSearchSettings() {
             {/* Content Extractors */}
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
               <div className="mb-2 text-[12.5px] font-medium text-white">
+                Search Intelligence
+              </div>
+              <div className="space-y-2">
+                <Toggle
+                  label="Multi-query expansion"
+                  on={advancedSearchMultiQueryEnabled}
+                  onChange={setAdvancedSearchMultiQueryEnabled}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Runs targeted variants for broad, recent, academic, primary-source, and opposing-view coverage.
+                </p>
+                <Toggle
+                  label="Result fusion and reranking"
+                  on={advancedSearchFusionEnabled}
+                  onChange={setAdvancedSearchFusionEnabled}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Deduplicates results across queries/providers, boosts authority and extraction success, and diversifies domains.
+                </p>
+                <Toggle
+                  label="Adaptive fallback searches"
+                  on={advancedSearchAdaptiveFallbackEnabled}
+                  onChange={setAdvancedSearchAdaptiveFallbackEnabled}
+                />
+                <p className="text-[10.5px] text-[var(--color-text-dim)]">
+                  Automatically broadens weak searches when too few usable results come back.
+                </p>
+              </div>
+            </div>
+
+            {/* Content Extractors */}
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+              <div className="mb-2 text-[12.5px] font-medium text-white">
                 Content Extractors
               </div>
               <div className="space-y-2">
@@ -675,6 +714,9 @@ export function WebSearchSettings() {
               <ul className="space-y-1 text-[11px] text-[var(--color-text-dim)]">
                 <li>• YouTube videos → captions/transcripts</li>
                 <li>• PDF documents → text extraction</li>
+                {advancedSearchMultiQueryEnabled && <li>• Multi-query expansion for broader coverage</li>}
+                {advancedSearchFusionEnabled && <li>• Result fusion, authority boosts, and domain diversification</li>}
+                {advancedSearchAdaptiveFallbackEnabled && <li>• Adaptive fallback when searches are sparse</li>}
                 {bundleExtractDocx && <li>• DOCX documents → text extraction</li>}
                 {bundleExtractPptx && <li>• PowerPoint presentations → slide text</li>}
                 {bundleExtractXlsx && <li>• Excel spreadsheets → cell data</li>}

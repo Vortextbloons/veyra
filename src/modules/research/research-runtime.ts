@@ -749,36 +749,6 @@ function synthesisBudget(depth: ResearchDepth): { evidenceItems: number; outline
   }
 }
 
-function roundRobinSampleBySource<T extends { sourceId: string; confidence: number }>(items: T[], maxItems: number): T[] {
-  if (items.length <= maxItems) return items;
-  const bySource = new Map<string, T[]>();
-  for (const item of items) {
-    const list = bySource.get(item.sourceId) || [];
-    list.push(item);
-    bySource.set(item.sourceId, list);
-  }
-  for (const list of bySource.values()) {
-    list.sort((a, b) => b.confidence - a.confidence);
-  }
-  const sourceIds = Array.from(bySource.keys());
-  const out: T[] = [];
-  let idx = 0;
-  while (out.length < maxItems) {
-    let pushedThisRound = 0;
-    for (const sid of sourceIds) {
-      const list = bySource.get(sid)!;
-      if (idx < list.length) {
-        out.push(list[idx]);
-        pushedThisRound++;
-        if (out.length >= maxItems) break;
-      }
-    }
-    if (pushedThisRound === 0) break;
-    idx++;
-  }
-  return out;
-}
-
 function pickContradictionWinner(
   resolution: string | undefined,
   claimA: ResearchClaim,
@@ -1147,6 +1117,56 @@ async function waitForPlanApproval(
     });
 
   });
+}
+
+function roundRobinSampleBySourceScore<T extends { sourceId: string }>(
+  items: T[],
+  maxItems: number,
+  score: (item: T) => number,
+): T[] {
+  if (items.length <= maxItems) return items;
+  const bySource = new Map<string, T[]>();
+  for (const item of items) {
+    const list = bySource.get(item.sourceId) || [];
+    list.push(item);
+    bySource.set(item.sourceId, list);
+  }
+  for (const list of bySource.values()) {
+    list.sort((a, b) => score(b) - score(a));
+  }
+  const sourceIds = Array.from(bySource.keys()).sort((a, b) => {
+    const aTop = bySource.get(a)?.[0];
+    const bTop = bySource.get(b)?.[0];
+    return (bTop ? score(bTop) : 0) - (aTop ? score(aTop) : 0);
+  });
+  const out: T[] = [];
+  let idx = 0;
+  while (out.length < maxItems) {
+    let pushedThisRound = 0;
+    for (const sid of sourceIds) {
+      const list = bySource.get(sid)!;
+      if (idx < list.length) {
+        out.push(list[idx]);
+        pushedThisRound++;
+        if (out.length >= maxItems) break;
+      }
+    }
+    if (pushedThisRound === 0) break;
+    idx++;
+  }
+  return out;
+}
+
+function sourceSynthesisPriority(source: ResearchSource | undefined): number {
+  if (!source) return 0;
+  let priority = 0;
+  if (source.sourceType === "docs") priority += 0.35;
+  if (source.sourceType === "arxiv") priority += 0.3;
+  if (source.sourceType === "pdf") priority += 0.2;
+  if (source.sourceType === "wikipedia") priority += 0.05;
+  if (source.sourceQuality?.credibilityScore) priority += source.sourceQuality.credibilityScore / 20;
+  if (source.sourceQuality?.depthScore) priority += source.sourceQuality.depthScore / 25;
+  return priority;
 }
 
 export function enqueueResearchRunJob(
@@ -1634,10 +1654,12 @@ If a source is not relevant, set "relevant": false and "quality" to 1.`;
       }>>(batchResponse);
 
       if (Array.isArray(parsed)) {
+        const validatedIndexes = new Set<number>();
         for (const item of parsed) {
           const idx = typeof item.sourceIndex === "number" ? item.sourceIndex - 1 : -1;
           const source = idx >= 0 && idx < batch.length ? batch[idx] : undefined;
           if (!source) continue;
+          validatedIndexes.add(idx);
 
           const credibility = getCredibilityScore(source.url);
           const domainScore = credibility.score;
@@ -1669,6 +1691,12 @@ If a source is not relevant, set "relevant": false and "quality" to 1.`;
           } else {
             updateLocalSource(updatedSource);
           }
+        }
+        for (let idx = 0; idx < batch.length; idx++) {
+          if (validatedIndexes.has(idx)) continue;
+          const source = batch[idx];
+          if (!source) continue;
+          await validateSource(source);
         }
       } else {
         // Parse failed — fall back to individual validation for this batch
@@ -1727,10 +1755,7 @@ If a source is not relevant, set "relevant": false and "quality" to 1.`;
           const idx = cursor++;
           const source = sourceList[idx];
           if (!source) break;
-          const result = await validateSource(source);
-          if (result.status === "read" && result.sourceQuality?.relevant !== false) {
-            validSources.push(result);
-          }
+          await validateSource(source);
           await updateProgress();
         }
       }
@@ -1753,7 +1778,11 @@ If a source is not relevant, set "relevant": false and "quality" to 1.`;
     // Collect valid sources from the local state after batch processing
     for (const source of sourceList) {
       const current = sources.find((s) => s.id === source.id) ?? source;
-      if (current.status === "read" && current.sourceQuality?.relevant !== false) {
+      if (
+        current.status === "read" &&
+        current.sourceQuality?.relevant === true &&
+        (typeof current.sourceQuality.quality !== "number" || current.sourceQuality.quality >= config.minSourceQuality)
+      ) {
         validSources.push(current);
       }
     }
@@ -3176,11 +3205,21 @@ Return ONLY a JSON object:
       disputed: -0.2,
       rejected: -0.5,
     };
+    const evidenceVerificationScore = (evidence: ResearchEvidence): number => {
+      const claim = claimByEvidenceId.get(evidence.id);
+      const source = sources.find((s) => s.id === evidence.sourceId);
+      return evidence.confidence +
+        (verificationBoost[claim?.status ?? "extracted"] ?? 0) +
+        sourceSynthesisPriority(source);
+    };
+
     const weightedEvidence = [...evidenceList].sort((a, b) => {
       const claimA = claimByEvidenceId.get(a.id);
       const claimB = claimByEvidenceId.get(b.id);
-      const scoreA = a.confidence + (verificationBoost[claimA?.status ?? "extracted"] ?? 0);
-      const scoreB = b.confidence + (verificationBoost[claimB?.status ?? "extracted"] ?? 0);
+      const sourceA = sources.find((s) => s.id === a.sourceId);
+      const sourceB = sources.find((s) => s.id === b.sourceId);
+      const scoreA = a.confidence + (verificationBoost[claimA?.status ?? "extracted"] ?? 0) + sourceSynthesisPriority(sourceA);
+      const scoreB = b.confidence + (verificationBoost[claimB?.status ?? "extracted"] ?? 0) + sourceSynthesisPriority(sourceB);
       return scoreB - scoreA;
     });
 
@@ -3228,8 +3267,19 @@ Resolution: ${c.resolution || "Unresolved"}`;
       : "No contradictions detected.";
 
     const budget = synthesisBudget(run.depth);
-    const sortedEvidence = [...evidenceList].sort((a, b) => b.confidence - a.confidence);
-    const shownEvidence = roundRobinSampleBySource(sortedEvidence, budget.evidenceItems);
+    const shownEvidenceBase = roundRobinSampleBySourceScore(weightedEvidence, budget.evidenceItems, evidenceVerificationScore);
+    const shownEvidenceIds = new Set(shownEvidenceBase.map((e) => e.id));
+    const mustIncludeEvidence = weightedEvidence.filter((evidence) => {
+      if (shownEvidenceIds.has(evidence.id)) return false;
+      const claim = claimByEvidenceId.get(evidence.id);
+      const source = sources.find((s) => s.id === evidence.sourceId);
+      return claim?.status === "verified" || claim?.status === "partially_verified" || sourceSynthesisPriority(source) >= 0.45;
+    });
+    const shownEvidence = [
+      ...shownEvidenceBase,
+      ...mustIncludeEvidence.slice(0, Math.max(0, Math.floor(budget.evidenceItems * 0.15))),
+    ];
+    const citationVisibleEvidenceIds = new Set(shownEvidence.map((e) => e.id));
     const shownSourceIds: string[] = [];
     const seen = new Set<string>();
     for (const e of shownEvidence) {
@@ -3348,6 +3398,7 @@ Return ONLY a JSON object:
     ];
     const sections = rawSections.slice(0, config.maxSections).map((s) => ({
       ...s,
+      supportingEvidenceIds: (s.supportingEvidenceIds || []).filter((id) => citationVisibleEvidenceIds.has(id)),
       wordCount: clamp(s.wordCount || 300, 150, config.sectionMaxWords),
     }));
     const contradictionSectionIndex = contradictions.length > 0
@@ -3818,6 +3869,18 @@ Audit: Does this source actually support the claims cited? Answer ONLY with a JS
 
     // Mark unsupported citations in the report
     const unsupportedCitations = auditResults.filter((a) => !a.claimFound);
+    let auditedReportMarkdown = reportMarkdown;
+    if (unsupportedCitations.length > 0) {
+      const sourcesMarker = "\n---\n\n## Sources";
+      const markerIndex = reportMarkdown.indexOf(sourcesMarker);
+      let reportBody = markerIndex === -1 ? reportMarkdown : reportMarkdown.slice(0, markerIndex);
+      const reportTail = markerIndex === -1 ? "" : reportMarkdown.slice(markerIndex);
+      for (const audit of unsupportedCitations) {
+        const citationPattern = new RegExp(`\\[${audit.citationNumber}\\](?!\\s*\\(citation flagged\\))`, "g");
+        reportBody = reportBody.replace(citationPattern, `[${audit.citationNumber}] (citation flagged)`);
+      }
+      auditedReportMarkdown = `${reportBody}${reportTail}`;
+    }
     const auditNotes = unsupportedCitations.length > 0
       ? unsupportedCitations
           .map((a) => `- [${a.citationNumber}] ${a.sourceTitle}: ${a.auditNotes}`)
@@ -3827,11 +3890,11 @@ Audit: Does this source actually support the claims cited? Answer ONLY with a JS
     const auditDetail = `Audited ${auditResults.length} citations, ${unsupportedCitations.length} flagged` +
       (skippedAudit > 0 ? ` (${skippedAudit} citations skipped due to cap)` : "") +
       (unsupportedCitations.length > 0 ? `\n\n${auditNotes}` : "");
-    const auditAppendix = `---\n\n## Citation Audit\n\n${auditDetail}\n`;
+    const auditAppendix = `---\n\n## Citation Audit\n\n${unsupportedCitations.length > 0 ? "Unsupported citations were marked inline as `(citation flagged)`.\n\n" : ""}${auditDetail}\n`;
     await store.updateReport({
       id: report.id,
-      contentMarkdown: `${reportMarkdown}\n${auditAppendix}`,
-      wordCount: `${reportMarkdown}\n${auditAppendix}`.split(/\s+/).filter(Boolean).length,
+      contentMarkdown: `${auditedReportMarkdown}\n${auditAppendix}`,
+      wordCount: `${auditedReportMarkdown}\n${auditAppendix}`.split(/\s+/).filter(Boolean).length,
     });
     await completeStep(auditStep, auditDetail);
     onEvent({ type: "phase_complete", phase: "audit", stepId: auditStep.id });

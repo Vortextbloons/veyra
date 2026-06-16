@@ -381,11 +381,13 @@ fn check_searxng_setup_sync() -> Result<SearxngSetupStatus, String> {
 fn generate_searxng_secret_key() -> String {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).expect("failed to generate SearXNG secret key");
-    bytes.iter().fold(String::with_capacity(64), |mut key, byte| {
-        use std::fmt::Write as _;
-        let _ = write!(key, "{byte:02x}");
-        key
-    })
+    bytes
+        .iter()
+        .fold(String::with_capacity(64), |mut key, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(key, "{byte:02x}");
+            key
+        })
 }
 
 fn load_or_create_searxng_secret(settings_dir: &std::path::Path) -> Result<String, String> {

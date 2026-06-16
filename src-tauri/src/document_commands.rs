@@ -223,7 +223,7 @@ fn strip_markdown(input: &str) -> String {
                     let mut fence_count = 0;
                     loop {
                         match chars.next() {
-                            Some(c) if c == '`' => {
+                            Some('`') => {
                                 fence_count += 1;
                                 if fence_count >= backtick_count {
                                     closed = true;

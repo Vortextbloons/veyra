@@ -301,7 +301,7 @@ pub fn run() {
                 RunEvent::Ready => {
                     // Do not rely on the frontend to reveal the window — if JS fails to
                     // boot or invoke app_ready, the app would stay invisible forever.
-                    reveal_main_window(&app_handle, false);
+                    reveal_main_window(app_handle, false);
                 }
                 RunEvent::ExitRequested { .. } => {
                     agent_commands::stop_all_opencode_agents();

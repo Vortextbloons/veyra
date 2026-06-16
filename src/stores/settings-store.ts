@@ -74,6 +74,9 @@ type SettingsStoreState = {
   webSearchPerPageTimeoutSecs: number;
   webSearchFetchMaxCharsPerSource: number;
   advancedSearchBundleEnabled: boolean;
+  advancedSearchMultiQueryEnabled: boolean;
+  advancedSearchFusionEnabled: boolean;
+  advancedSearchAdaptiveFallbackEnabled: boolean;
   bundleExtractDocx: boolean;
   bundleExtractPptx: boolean;
   bundleExtractXlsx: boolean;
@@ -164,6 +167,9 @@ type SettingsStore = SettingsStoreState & {
   setWebSearchPerPageTimeoutSecs: (n: number) => void;
   setWebSearchFetchMaxCharsPerSource: (n: number) => void;
   setAdvancedSearchBundleEnabled: (enabled: boolean) => void;
+  setAdvancedSearchMultiQueryEnabled: (enabled: boolean) => void;
+  setAdvancedSearchFusionEnabled: (enabled: boolean) => void;
+  setAdvancedSearchAdaptiveFallbackEnabled: (enabled: boolean) => void;
   setBundleExtractDocx: (enabled: boolean) => void;
   setBundleExtractPptx: (enabled: boolean) => void;
   setBundleExtractXlsx: (enabled: boolean) => void;
@@ -252,6 +258,9 @@ const DEFAULT_STATE: SettingsStoreState = {
   webSearchPerPageTimeoutSecs: 8,
   webSearchFetchMaxCharsPerSource: 8000,
   advancedSearchBundleEnabled: true,
+  advancedSearchMultiQueryEnabled: true,
+  advancedSearchFusionEnabled: true,
+  advancedSearchAdaptiveFallbackEnabled: true,
   bundleExtractDocx: true,
   bundleExtractPptx: true,
   bundleExtractXlsx: true,
@@ -329,6 +338,9 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     webSearchPerPageTimeoutSecs: state.webSearchPerPageTimeoutSecs,
     webSearchFetchMaxCharsPerSource: state.webSearchFetchMaxCharsPerSource,
     advancedSearchBundleEnabled: state.advancedSearchBundleEnabled,
+    advancedSearchMultiQueryEnabled: state.advancedSearchMultiQueryEnabled,
+    advancedSearchFusionEnabled: state.advancedSearchFusionEnabled,
+    advancedSearchAdaptiveFallbackEnabled: state.advancedSearchAdaptiveFallbackEnabled,
     bundleExtractDocx: state.bundleExtractDocx,
     bundleExtractPptx: state.bundleExtractPptx,
     bundleExtractXlsx: state.bundleExtractXlsx,
@@ -452,6 +464,12 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ webSearchFetchMaxCharsPerSource }),
       setAdvancedSearchBundleEnabled: (advancedSearchBundleEnabled) =>
         set({ advancedSearchBundleEnabled }),
+      setAdvancedSearchMultiQueryEnabled: (advancedSearchMultiQueryEnabled) =>
+        set({ advancedSearchMultiQueryEnabled }),
+      setAdvancedSearchFusionEnabled: (advancedSearchFusionEnabled) =>
+        set({ advancedSearchFusionEnabled }),
+      setAdvancedSearchAdaptiveFallbackEnabled: (advancedSearchAdaptiveFallbackEnabled) =>
+        set({ advancedSearchAdaptiveFallbackEnabled }),
       setBundleExtractDocx: (bundleExtractDocx) => set({ bundleExtractDocx }),
       setBundleExtractPptx: (bundleExtractPptx) => set({ bundleExtractPptx }),
       setBundleExtractXlsx: (bundleExtractXlsx) => set({ bundleExtractXlsx }),

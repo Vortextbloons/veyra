@@ -41,7 +41,12 @@ pub async fn update_research_run(
         research_db::update_run(conn, input)
     })
     .await?;
-    if result.plan.as_ref().map(|p| p.user_approved).unwrap_or(false) {
+    if result
+        .plan
+        .as_ref()
+        .map(|p| p.user_approved)
+        .unwrap_or(false)
+    {
         let _ = app.emit(
             "research://plan-approved",
             PlanApprovedEvent {

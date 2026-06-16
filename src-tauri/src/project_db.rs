@@ -135,7 +135,7 @@ impl ProjectDb {
 
 pub struct ProjectDbState {
     app: tauri::AppHandle,
-    db: Arc<Mutex<Option<Result<Arc<ProjectDb>, String>>>>,
+    db: crate::db_utils::DbSlot<ProjectDb>,
 }
 
 impl Clone for ProjectDbState {
@@ -358,10 +358,7 @@ pub fn update_project(conn: &Connection, input_json: String) -> Result<ProjectRo
     Ok(updated)
 }
 
-pub fn list_projects(
-    conn: &Connection,
-    status: Option<String>,
-) -> Result<Vec<ProjectRow>, String> {
+pub fn list_projects(conn: &Connection, status: Option<String>) -> Result<Vec<ProjectRow>, String> {
     let mut out = Vec::new();
 
     let (sql, param_values): (String, Vec<Value>) = match status {
@@ -373,7 +370,10 @@ pub fn list_projects(
             vec![Value::Text(s)],
         ),
         None => (
-            format!("SELECT {} FROM projects ORDER BY updated_at DESC", SELECT_COLS),
+            format!(
+                "SELECT {} FROM projects ORDER BY updated_at DESC",
+                SELECT_COLS
+            ),
             vec![],
         ),
     };

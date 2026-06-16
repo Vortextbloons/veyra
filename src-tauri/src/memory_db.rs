@@ -305,7 +305,7 @@ impl MemoryDb {
 
 pub struct MemoryDbState {
     app: tauri::AppHandle,
-    db: Arc<Mutex<Option<Result<Arc<MemoryDb>, String>>>>,
+    db: crate::db_utils::DbSlot<MemoryDb>,
 }
 
 impl Clone for MemoryDbState {
@@ -1051,16 +1051,16 @@ pub fn search_nodes(
     }
 
     let pattern = format!("%{}%", query.to_lowercase());
-    let mut params: Vec<Value> = Vec::new();
-
-    params.push(Value::Text(pattern.clone()));
-    params.push(Value::Text(pattern.clone()));
-    params.push(Value::Text(pattern.clone()));
-    params.push(Value::Text(pattern.clone()));
-    params.push(Value::Text(pattern.clone()));
-    params.push(Value::Text(pattern.clone()));
-    params.push(Value::Text(pattern.clone()));
-    params.push(Value::Text(pattern));
+    let mut params: Vec<Value> = vec![
+        Value::Text(pattern.clone()),
+        Value::Text(pattern.clone()),
+        Value::Text(pattern.clone()),
+        Value::Text(pattern.clone()),
+        Value::Text(pattern.clone()),
+        Value::Text(pattern.clone()),
+        Value::Text(pattern.clone()),
+        Value::Text(pattern),
+    ];
 
     let project_filter = if let Some(pid) = project_id {
         let placeholder = params.len() + 1;

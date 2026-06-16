@@ -66,7 +66,12 @@ pub fn read(url: &str, max_chars: usize, cache_dir: &Path) -> Option<CachedEntry
     Some(entry)
 }
 
-pub fn write(url: &str, max_chars: usize, entry: &CachedEntry, cache_dir: &Path) -> Result<(), String> {
+pub fn write(
+    url: &str,
+    max_chars: usize,
+    entry: &CachedEntry,
+    cache_dir: &Path,
+) -> Result<(), String> {
     ensure_dir(cache_dir)?;
     let path = key_path(url, max_chars, cache_dir);
     let tmp = path.with_extension("json.tmp");
@@ -86,7 +91,10 @@ pub fn clear(cache_dir: &Path) -> Result<(), String> {
 
 pub fn stats(cache_dir: &Path) -> CacheStats {
     if !cache_dir.exists() {
-        return CacheStats { entries: 0, total_bytes: 0 };
+        return CacheStats {
+            entries: 0,
+            total_bytes: 0,
+        };
     }
     let mut entries = 0usize;
     let mut total_bytes = 0u64;
@@ -101,7 +109,10 @@ pub fn stats(cache_dir: &Path) -> CacheStats {
             }
         }
     }
-    CacheStats { entries, total_bytes }
+    CacheStats {
+        entries,
+        total_bytes,
+    }
 }
 
 fn prune_to_cap(cache_dir: &Path) {

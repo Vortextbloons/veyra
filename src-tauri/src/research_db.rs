@@ -547,7 +547,7 @@ impl ResearchDb {
 
 pub struct ResearchDbState {
     app: tauri::AppHandle,
-    db: Arc<Mutex<Option<Result<Arc<ResearchDb>, String>>>>,
+    db: crate::db_utils::DbSlot<ResearchDb>,
 }
 
 impl Clone for ResearchDbState {
@@ -635,8 +635,18 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
             add_column_if_missing(conn, "research_sources", "source_quality_json", "TEXT")?;
         }
         if schema_version < 6 {
-            add_column_if_missing(conn, "research_claims", "disputed_by", "TEXT NOT NULL DEFAULT '[]'")?;
-            add_column_if_missing(conn, "research_claims", "needs_semantic_review", "INTEGER NOT NULL DEFAULT 0")?;
+            add_column_if_missing(
+                conn,
+                "research_claims",
+                "disputed_by",
+                "TEXT NOT NULL DEFAULT '[]'",
+            )?;
+            add_column_if_missing(
+                conn,
+                "research_claims",
+                "needs_semantic_review",
+                "INTEGER NOT NULL DEFAULT 0",
+            )?;
             add_column_if_missing(conn, "research_runs", "search_provider", "TEXT")?;
         }
 
@@ -902,7 +912,10 @@ pub fn create_run(conn: &Connection, input_json: String) -> Result<ResearchRunRo
 
     let created = tx
         .query_row(
-            &format!("SELECT {} FROM research_runs WHERE id = ?1", RUN_SELECT_COLS),
+            &format!(
+                "SELECT {} FROM research_runs WHERE id = ?1",
+                RUN_SELECT_COLS
+            ),
             [&id],
             row_to_run,
         )
@@ -916,7 +929,10 @@ pub fn create_run(conn: &Connection, input_json: String) -> Result<ResearchRunRo
 
 pub fn get_run(conn: &Connection, id: String) -> Result<ResearchRunRow, String> {
     conn.query_row(
-        &format!("SELECT {} FROM research_runs WHERE id = ?1", RUN_SELECT_COLS),
+        &format!(
+            "SELECT {} FROM research_runs WHERE id = ?1",
+            RUN_SELECT_COLS
+        ),
         [&id],
         row_to_run,
     )
@@ -968,7 +984,11 @@ pub fn update_run(conn: &Connection, input_json: String) -> Result<ResearchRunRo
         params.push(Value::Integer(v));
     }
     sets.push(format!("updated_at = ?{}", params.len() + 1));
-    params.push(Value::Text(input.updated_at.unwrap_or_else(|| chrono::Utc::now().to_rfc3339())));
+    params.push(Value::Text(
+        input
+            .updated_at
+            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
+    ));
     if let Some(v) = input.search_provider {
         sets.push(format!("search_provider = ?{}", params.len() + 1));
         params.push(Value::Text(v));
@@ -1094,7 +1114,10 @@ pub fn create_step(conn: &Connection, input_json: String) -> Result<ResearchStep
 
     let created = tx
         .query_row(
-            &format!("SELECT {} FROM research_steps WHERE id = ?1", STEP_SELECT_COLS),
+            &format!(
+                "SELECT {} FROM research_steps WHERE id = ?1",
+                STEP_SELECT_COLS
+            ),
             [&id],
             row_to_step,
         )
@@ -1165,14 +1188,20 @@ pub fn update_step(conn: &Connection, input_json: String) -> Result<ResearchStep
         .map_err(|e| format!("update research_step failed: {}", e))?;
 
     conn.query_row(
-        &format!("SELECT {} FROM research_steps WHERE id = ?1", STEP_SELECT_COLS),
+        &format!(
+            "SELECT {} FROM research_steps WHERE id = ?1",
+            STEP_SELECT_COLS
+        ),
         [&input.id],
         row_to_step,
     )
     .map_err(|e| format!("query after update failed: {}", e))
 }
 
-pub fn list_steps_for_run(conn: &Connection, run_id: String) -> Result<Vec<ResearchStepRow>, String> {
+pub fn list_steps_for_run(
+    conn: &Connection,
+    run_id: String,
+) -> Result<Vec<ResearchStepRow>, String> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {} FROM research_steps WHERE run_id = ?1 ORDER BY created_at ASC",
@@ -1236,7 +1265,10 @@ pub fn create_source(conn: &Connection, input_json: String) -> Result<ResearchSo
 
     let created = tx
         .query_row(
-            &format!("SELECT {} FROM research_sources WHERE id = ?1", SOURCE_SELECT_COLS),
+            &format!(
+                "SELECT {} FROM research_sources WHERE id = ?1",
+                SOURCE_SELECT_COLS
+            ),
             [&id],
             row_to_source,
         )
@@ -1305,14 +1337,20 @@ pub fn update_source(conn: &Connection, input_json: String) -> Result<ResearchSo
         .map_err(|e| format!("update research_source failed: {}", e))?;
 
     conn.query_row(
-        &format!("SELECT {} FROM research_sources WHERE id = ?1", SOURCE_SELECT_COLS),
+        &format!(
+            "SELECT {} FROM research_sources WHERE id = ?1",
+            SOURCE_SELECT_COLS
+        ),
         [&input.id],
         row_to_source,
     )
     .map_err(|e| format!("query after update failed: {}", e))
 }
 
-pub fn list_sources_for_run(conn: &Connection, run_id: String) -> Result<Vec<ResearchSourceRow>, String> {
+pub fn list_sources_for_run(
+    conn: &Connection,
+    run_id: String,
+) -> Result<Vec<ResearchSourceRow>, String> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {} FROM research_sources WHERE run_id = ?1 ORDER BY rank ASC, created_at ASC",
@@ -1333,7 +1371,10 @@ pub fn list_sources_for_run(conn: &Connection, run_id: String) -> Result<Vec<Res
 
 const EVIDENCE_SELECT_COLS: &str = "id, run_id, source_id, step_id, type, content, context, page_number, confidence, tags, created_at";
 
-pub fn create_evidence(conn: &Connection, input_json: String) -> Result<ResearchEvidenceRow, String> {
+pub fn create_evidence(
+    conn: &Connection,
+    input_json: String,
+) -> Result<ResearchEvidenceRow, String> {
     let input: CreateResearchEvidenceInput = serde_json::from_str(&input_json)
         .map_err(|e| format!("invalid create_evidence input: {}", e))?;
     if input.content.is_empty() {
@@ -1373,7 +1414,10 @@ pub fn create_evidence(conn: &Connection, input_json: String) -> Result<Research
 
     let created = tx
         .query_row(
-            &format!("SELECT {} FROM research_evidence WHERE id = ?1", EVIDENCE_SELECT_COLS),
+            &format!(
+                "SELECT {} FROM research_evidence WHERE id = ?1",
+                EVIDENCE_SELECT_COLS
+            ),
             [&id],
             row_to_evidence,
         )
@@ -1385,7 +1429,10 @@ pub fn create_evidence(conn: &Connection, input_json: String) -> Result<Research
     Ok(created)
 }
 
-pub fn list_evidence_for_run(conn: &Connection, run_id: String) -> Result<Vec<ResearchEvidenceRow>, String> {
+pub fn list_evidence_for_run(
+    conn: &Connection,
+    run_id: String,
+) -> Result<Vec<ResearchEvidenceRow>, String> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {} FROM research_evidence WHERE run_id = ?1 ORDER BY created_at ASC",
@@ -1448,7 +1495,10 @@ pub fn create_claim(conn: &Connection, input_json: String) -> Result<ResearchCla
 
     let created = tx
         .query_row(
-            &format!("SELECT {} FROM research_claims WHERE id = ?1", CLAIM_SELECT_COLS),
+            &format!(
+                "SELECT {} FROM research_claims WHERE id = ?1",
+                CLAIM_SELECT_COLS
+            ),
             [&id],
             row_to_claim,
         )
@@ -1521,14 +1571,20 @@ pub fn update_claim(conn: &Connection, input_json: String) -> Result<ResearchCla
         .map_err(|e| format!("update research_claim failed: {}", e))?;
 
     conn.query_row(
-        &format!("SELECT {} FROM research_claims WHERE id = ?1", CLAIM_SELECT_COLS),
+        &format!(
+            "SELECT {} FROM research_claims WHERE id = ?1",
+            CLAIM_SELECT_COLS
+        ),
         [&input.id],
         row_to_claim,
     )
     .map_err(|e| format!("query after update failed: {}", e))
 }
 
-pub fn list_claims_for_run(conn: &Connection, run_id: String) -> Result<Vec<ResearchClaimRow>, String> {
+pub fn list_claims_for_run(
+    conn: &Connection,
+    run_id: String,
+) -> Result<Vec<ResearchClaimRow>, String> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {} FROM research_claims WHERE run_id = ?1 ORDER BY created_at ASC",
@@ -1549,7 +1605,10 @@ pub fn list_claims_for_run(conn: &Connection, run_id: String) -> Result<Vec<Rese
 
 const CONTRADICTION_SELECT_COLS: &str = "id, run_id, claim_a_id, claim_b_id, claim_a_confidence, claim_b_confidence, reason, resolution, created_at";
 
-pub fn create_contradiction(conn: &Connection, input_json: String) -> Result<ResearchContradictionRow, String> {
+pub fn create_contradiction(
+    conn: &Connection,
+    input_json: String,
+) -> Result<ResearchContradictionRow, String> {
     let input: CreateResearchContradictionInput = serde_json::from_str(&input_json)
         .map_err(|e| format!("invalid create_contradiction input: {}", e))?;
 
@@ -1582,7 +1641,10 @@ pub fn create_contradiction(conn: &Connection, input_json: String) -> Result<Res
 
     let created = tx
         .query_row(
-            &format!("SELECT {} FROM research_contradictions WHERE id = ?1", CONTRADICTION_SELECT_COLS),
+            &format!(
+                "SELECT {} FROM research_contradictions WHERE id = ?1",
+                CONTRADICTION_SELECT_COLS
+            ),
             [&id],
             row_to_contradiction,
         )
@@ -1594,7 +1656,10 @@ pub fn create_contradiction(conn: &Connection, input_json: String) -> Result<Res
     Ok(created)
 }
 
-pub fn list_contradictions_for_run(conn: &Connection, run_id: String) -> Result<Vec<ResearchContradictionRow>, String> {
+pub fn list_contradictions_for_run(
+    conn: &Connection,
+    run_id: String,
+) -> Result<Vec<ResearchContradictionRow>, String> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {} FROM research_contradictions WHERE run_id = ?1 ORDER BY created_at ASC",
@@ -1639,8 +1704,11 @@ pub fn create_report(conn: &Connection, input_json: String) -> Result<ResearchRe
         .unchecked_transaction()
         .map_err(|e| format!("begin create_report transaction failed: {}", e))?;
 
-    tx.execute("DELETE FROM research_reports WHERE run_id = ?1", [&input.run_id])
-        .map_err(|e| format!("delete existing research_report failed: {}", e))?;
+    tx.execute(
+        "DELETE FROM research_reports WHERE run_id = ?1",
+        [&input.run_id],
+    )
+    .map_err(|e| format!("delete existing research_report failed: {}", e))?;
 
     tx.execute(
         "INSERT INTO research_reports
@@ -1666,7 +1734,10 @@ pub fn create_report(conn: &Connection, input_json: String) -> Result<ResearchRe
 
     let created = tx
         .query_row(
-            &format!("SELECT {} FROM research_reports WHERE id = ?1", REPORT_SELECT_COLS),
+            &format!(
+                "SELECT {} FROM research_reports WHERE id = ?1",
+                REPORT_SELECT_COLS
+            ),
             [&id],
             row_to_report,
         )
@@ -1749,7 +1820,10 @@ pub fn update_report(conn: &Connection, input_json: String) -> Result<ResearchRe
         .map_err(|e| format!("update research_report failed: {}", e))?;
 
     conn.query_row(
-        &format!("SELECT {} FROM research_reports WHERE id = ?1", REPORT_SELECT_COLS),
+        &format!(
+            "SELECT {} FROM research_reports WHERE id = ?1",
+            REPORT_SELECT_COLS
+        ),
         [&input.id],
         row_to_report,
     )
@@ -1767,7 +1841,10 @@ pub fn get_report_for_run(conn: &Connection, run_id: String) -> Result<ResearchR
 
 // ── Relations ──────────────────────────────────────────────────────────────────
 
-pub fn get_run_with_relations(conn: &Connection, run_id: String) -> Result<ResearchRunWithRelations, String> {
+pub fn get_run_with_relations(
+    conn: &Connection,
+    run_id: String,
+) -> Result<ResearchRunWithRelations, String> {
     let run = get_run(conn, run_id.clone())?;
     let steps = list_steps_for_run(conn, run_id.clone())?;
     let sources = list_sources_for_run(conn, run_id.clone())?;

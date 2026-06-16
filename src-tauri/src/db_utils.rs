@@ -4,6 +4,8 @@ use std::fs;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
+pub type DbSlot<D> = Arc<Mutex<Option<Result<Arc<D>, String>>>>;
+
 pub fn parse_json_array(s: &str) -> Vec<String> {
     serde_json::from_str::<Vec<String>>(s).unwrap_or_default()
 }
@@ -48,12 +50,8 @@ where
         .map_err(|error| format!("{label} db task failed: {error}"))?
 }
 
-pub fn spawn_lazy_db_init<D, I>(
-    app: AppHandle,
-    db_slot: Arc<Mutex<Option<Result<Arc<D>, String>>>>,
-    init: I,
-    db_label: &'static str,
-) where
+pub fn spawn_lazy_db_init<D, I>(app: AppHandle, db_slot: DbSlot<D>, init: I, db_label: &'static str)
+where
     D: Send + Sync + 'static,
     I: FnOnce(&AppHandle) -> Result<D, String> + Send + 'static,
 {

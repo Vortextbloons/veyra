@@ -125,6 +125,7 @@ export class SearXNGProvider implements SearchProvider {
       {
         timeRange: input.timeRange,
         categories: input.categories,
+        safeSearch: input.safeSearch,
         language: input.language,
       },
     );

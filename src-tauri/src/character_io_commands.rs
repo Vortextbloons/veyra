@@ -23,8 +23,16 @@ fn avatar_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-fn resolve_avatar_path(app: &AppHandle, avatar_path: &str, must_exist: bool) -> Result<PathBuf, String> {
-    if avatar_path.is_empty() || avatar_path.contains("..") || avatar_path.starts_with('/') || avatar_path.starts_with('\\') {
+fn resolve_avatar_path(
+    app: &AppHandle,
+    avatar_path: &str,
+    must_exist: bool,
+) -> Result<PathBuf, String> {
+    if avatar_path.is_empty()
+        || avatar_path.contains("..")
+        || avatar_path.starts_with('/')
+        || avatar_path.starts_with('\\')
+    {
         return Err("avatar path is outside the avatars directory".into());
     }
 
@@ -39,9 +47,13 @@ fn resolve_avatar_path(app: &AppHandle, avatar_path: &str, must_exist: bool) -> 
     let resolved = if must_exist {
         candidate.canonicalize().map_err(map_io_error)?
     } else {
-        let parent = candidate.parent().ok_or_else(|| "invalid avatar path".to_string())?;
+        let parent = candidate
+            .parent()
+            .ok_or_else(|| "invalid avatar path".to_string())?;
         let parent = parent.canonicalize().map_err(map_io_error)?;
-        let file_name = candidate.file_name().ok_or_else(|| "invalid avatar path".to_string())?;
+        let file_name = candidate
+            .file_name()
+            .ok_or_else(|| "invalid avatar path".to_string())?;
         parent.join(file_name)
     };
 
@@ -127,9 +139,9 @@ pub fn export_character_card(
             let text = serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?;
             write_text_file(target_path, text)
         }
-        "chara_card_v3_png" => Err(
-            "PNG export is performed by the front-end. Use write_binary_file.".into(),
-        ),
+        "chara_card_v3_png" => {
+            Err("PNG export is performed by the front-end. Use write_binary_file.".into())
+        }
         other => Err(format!("unsupported format: {}", other)),
     }
 }
@@ -149,9 +161,8 @@ pub fn save_character_avatar(
             MAX_AVATAR_BYTES / (1024 * 1024)
         ));
     }
-    let ext = detect_image_extension(&contents).ok_or_else(|| {
-        "unsupported image format; use PNG, JPEG, GIF, or WebP".to_string()
-    })?;
+    let ext = detect_image_extension(&contents)
+        .ok_or_else(|| "unsupported image format; use PNG, JPEG, GIF, or WebP".to_string())?;
     let dir = avatar_dir(&app)?;
     let file_name = sanitize_avatar_name(&character_id, ext);
     let path = dir.join(&file_name);
@@ -213,6 +224,10 @@ fn sanitize_avatar_name(character_id: &str, ext: &str) -> String {
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(80)
         .collect();
-    let id = if safe_id.is_empty() { "character".to_string() } else { safe_id };
+    let id = if safe_id.is_empty() {
+        "character".to_string()
+    } else {
+        safe_id
+    };
     format!("{}.{}", id, ext)
 }

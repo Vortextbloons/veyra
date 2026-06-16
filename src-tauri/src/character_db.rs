@@ -196,7 +196,10 @@ fn validate_name(value: &str) -> Result<(), String> {
         return Err("character name is required".to_string());
     }
     if trimmed.chars().count() > MAX_NAME_CHARS {
-        return Err(format!("character name exceeds {} characters", MAX_NAME_CHARS));
+        return Err(format!(
+            "character name exceeds {} characters",
+            MAX_NAME_CHARS
+        ));
     }
     Ok(())
 }
@@ -255,7 +258,7 @@ impl CharacterDb {
 
 pub struct CharacterDbState {
     app: tauri::AppHandle,
-    db: Arc<Mutex<Option<Result<Arc<CharacterDb>, String>>>>,
+    db: crate::db_utils::DbSlot<CharacterDb>,
 }
 
 impl Clone for CharacterDbState {
@@ -384,7 +387,9 @@ pub fn create_character(conn: &Connection, input_json: String) -> Result<Charact
     let personality = input.personality.unwrap_or_default();
     let scenario = input.scenario.unwrap_or_default();
     let first_message = input.first_message.unwrap_or_default();
-    let alternate_greetings = input.alternate_greetings.unwrap_or_else(|| "[]".to_string());
+    let alternate_greetings = input
+        .alternate_greetings
+        .unwrap_or_else(|| "[]".to_string());
     let system_prompt = input.system_prompt.unwrap_or_default();
     let post_history_instructions = input.post_history_instructions.unwrap_or_default();
     let example_messages = input.example_messages.unwrap_or_else(|| "[]".to_string());
@@ -661,11 +666,8 @@ pub fn list_characters(
     if let Some(t) = filter.tag {
         if !t.is_empty() {
             // tags_json is a JSON array; use LIKE for a simple substring match
-            conds.push(format!(
-                "tags_json LIKE ?{}",
-                param_values.len() + 1
-            ));
-            param_values.push(Value::Text(format!("%\"{}\"%" , t)));
+            conds.push(format!("tags_json LIKE ?{}", param_values.len() + 1));
+            param_values.push(Value::Text(format!("%\"{}\"%", t)));
         }
     }
     if let Some(s) = filter.search {

@@ -168,20 +168,14 @@ fn extract_youtube_video_id(url_str: &str) -> Option<String> {
     let parsed = url::Url::parse(url_str).ok()?;
     let host = parsed.host_str()?.to_lowercase();
     if host.contains("youtube.com") {
-        if let Some((_, v)) = parsed
-            .query_pairs()
-            .find(|(k, _)| k == "v")
-        {
+        if let Some((_, v)) = parsed.query_pairs().find(|(k, _)| k == "v") {
             if is_valid_youtube_id(&v) {
                 return Some(v.into_owned());
             }
         }
         for prefix in ["/shorts/", "/embed/", "/live/", "/v/"] {
             if let Some(rest) = parsed.path().strip_prefix(prefix) {
-                let id = rest
-                    .split(['/', '?', '#', '&'])
-                    .next()
-                    .unwrap_or("");
+                let id = rest.split(['/', '?', '#', '&']).next().unwrap_or("");
                 if is_valid_youtube_id(id) {
                     return Some(id.to_string());
                 }
@@ -425,11 +419,7 @@ fn parse_caption_body(body: &str) -> Vec<String> {
     Vec::new()
 }
 
-async fn handle_youtube(
-    url: &str,
-    max_chars: usize,
-    cache_dir: &PathBuf,
-) -> FetchedPage {
+async fn handle_youtube(url: &str, max_chars: usize, cache_dir: &std::path::Path) -> FetchedPage {
     // Only serve successful YouTube transcripts from cache. Errors are not
     // cached here so handler upgrades and transient failures can retry.
     if let Some(cached) = web_fetch_cache::read(url, max_chars, cache_dir) {
@@ -452,12 +442,7 @@ async fn handle_youtube(
 
     let video_id = match extract_youtube_video_id(url) {
         Some(id) => id,
-        None => {
-            return fail(
-                "invalid_url",
-                "Could not extract YouTube video ID from URL",
-            )
-        }
+        None => return fail("invalid_url", "Could not extract YouTube video ID from URL"),
     };
 
     let player = match fetch_youtube_player_response(&video_id).await {
@@ -481,10 +466,7 @@ async fn handle_youtube(
     let caption_url = match pick_caption_track_url(&player) {
         Some(u) => u,
         None => {
-            return fail(
-                "extraction",
-                "YouTube video has no captions available",
-            );
+            return fail("extraction", "YouTube video has no captions available");
         }
     };
 
@@ -502,7 +484,7 @@ async fn handle_youtube(
                 format!("YouTube caption track request failed: {e}")
             };
             let status = if e.is_timeout() { "timeout" } else { "network" };
-            return fail(&status, &reason);
+            return fail(status, &reason);
         }
     };
 
@@ -529,10 +511,7 @@ async fn handle_youtube(
     let lines = parse_caption_body(&caption_body);
 
     if lines.is_empty() {
-        return fail(
-            "extraction",
-            "YouTube caption track is empty",
-        );
+        return fail("extraction", "YouTube caption track is empty");
     }
 
     let transcript: String = lines
@@ -645,7 +624,7 @@ fn truncate_at_sentence_boundary(text: &str, max_chars: usize) -> String {
     }
     let window_start = byte_index_at_char_limit(text, max_chars.saturating_sub(200));
     let window = &text[window_start..cut_byte];
-    let final_cut = if let Some(idx) = window.rfind(|c| c == '.' || c == '!' || c == '?') {
+    let final_cut = if let Some(idx) = window.rfind(['.', '!', '?']) {
         // Sentence punctuation is ASCII, so idx + 1 stays on a char boundary.
         window_start + idx + 1
     } else {
@@ -812,7 +791,9 @@ async fn fetch_qwen_v2_article(article_id: &str) -> Result<(String, String), Str
         .await
         .map_err(|e| format!("Qwen article API JSON parse failed: {e}"))?;
 
-    let data = payload.get("data").ok_or_else(|| "Qwen article API missing data".to_string())?;
+    let data = payload
+        .get("data")
+        .ok_or_else(|| "Qwen article API missing data".to_string())?;
     let title = data
         .get("title")
         .and_then(|v| v.as_str())
@@ -915,7 +896,7 @@ async fn handle_qwen_ai_blog(
     url: &str,
     parsed: &url::Url,
     max_chars: usize,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> FetchedPage {
     if let Some(cached) = web_fetch_cache::read(url, max_chars, cache_dir) {
         if cached.status == "ok" {
@@ -1085,7 +1066,13 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let parsed = match url::Url::parse(&url) {
         Ok(p) => p,
         Err(e) => {
-            return make_error_page(&url, max_chars, "invalid_url", &format!("Invalid URL: {e}"), &req.cache_dir)
+            return make_error_page(
+                &url,
+                max_chars,
+                "invalid_url",
+                &format!("Invalid URL: {e}"),
+                &req.cache_dir,
+            )
         }
     };
 
@@ -1148,10 +1135,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let timeout = Duration::from_secs(req.timeout_secs.clamp(2, 30));
     let response = match tokio::time::timeout(
         timeout,
-        FETCH_CLIENT
-            .get(parsed.clone())
-            .timeout(timeout)
-            .send(),
+        FETCH_CLIENT.get(parsed.clone()).timeout(timeout).send(),
     )
     .await
     {
@@ -1226,7 +1210,13 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let body_bytes = match response.bytes().await {
         Ok(b) => b,
         Err(e) => {
-            return make_error_page(&url, max_chars, "network", &format!("Failed to read body: {e}"), &req.cache_dir)
+            return make_error_page(
+                &url,
+                max_chars,
+                "network",
+                &format!("Failed to read body: {e}"),
+                &req.cache_dir,
+            )
         }
     };
 
@@ -1413,7 +1403,7 @@ fn handle_pdf(
     url: &str,
     body_bytes: &[u8],
     max_chars: usize,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> FetchedPage {
     let text = match extract_pdf_text(body_bytes) {
         Ok(t) => t,
@@ -1487,7 +1477,8 @@ fn extract_docx_text(bytes: &[u8]) -> Result<String, String> {
     let mut reader = doc;
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+            Ok(quick_xml::events::Event::Start(ref e))
+            | Ok(quick_xml::events::Event::Empty(ref e)) => {
                 if e.name().as_ref() == b"w:p" {
                     if !text.is_empty() && !text.ends_with("\n") {
                         text.push('\n');
@@ -1522,7 +1513,7 @@ fn handle_docx(
     url: &str,
     body_bytes: &[u8],
     max_chars: usize,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> FetchedPage {
     let text = match extract_docx_text(body_bytes) {
         Ok(t) => t,
@@ -1590,7 +1581,8 @@ fn extract_pptx_text(bytes: &[u8]) -> Result<String, String> {
             let mut reader = doc;
             loop {
                 match reader.read_event_into(&mut buf) {
-                    Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                    Ok(quick_xml::events::Event::Start(ref e))
+                    | Ok(quick_xml::events::Event::Empty(ref e)) => {
                         if e.name().as_ref() == b"a:t" {
                             in_text = true;
                         }
@@ -1630,7 +1622,7 @@ fn handle_pptx(
     url: &str,
     body_bytes: &[u8],
     max_chars: usize,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> FetchedPage {
     let text = match extract_pptx_text(body_bytes) {
         Ok(t) => t,
@@ -1679,7 +1671,7 @@ fn handle_xlsx(
     url: &str,
     body_bytes: &[u8],
     max_chars: usize,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> FetchedPage {
     let text = match extract_xlsx_text(body_bytes) {
         Ok(t) => t,
@@ -1728,8 +1720,8 @@ fn extract_xlsx_text(bytes: &[u8]) -> Result<String, String> {
     use calamine::{open_workbook_auto_from_rs, Reader};
 
     let cursor = std::io::Cursor::new(bytes);
-    let mut workbook = open_workbook_auto_from_rs(cursor)
-        .map_err(|e| format!("XLSX open failed: {e}"))?;
+    let mut workbook =
+        open_workbook_auto_from_rs(cursor).map_err(|e| format!("XLSX open failed: {e}"))?;
 
     let sheet_names = workbook.sheet_names().to_vec();
     let mut text_parts: Vec<String> = Vec::new();
@@ -1831,7 +1823,8 @@ fn extract_epub_text(bytes: &[u8]) -> Result<String, String> {
         let mut reader = doc;
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(quick_xml::events::Event::Start(ref e))
+                | Ok(quick_xml::events::Event::Empty(ref e)) => {
                     let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     if tag == "manifest" {
                         in_manifest = true;
@@ -1871,7 +1864,8 @@ fn extract_epub_text(bytes: &[u8]) -> Result<String, String> {
         let mut reader2 = doc2;
         loop {
             match reader2.read_event_into(&mut buf2) {
-                Ok(quick_xml::events::Event::Start(ref e)) | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(quick_xml::events::Event::Start(ref e))
+                | Ok(quick_xml::events::Event::Empty(ref e)) => {
                     let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     if tag == "itemref" {
                         for attr in e.attributes().flatten() {
@@ -1927,7 +1921,7 @@ fn handle_epub(
     url: &str,
     body_bytes: &[u8],
     max_chars: usize,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> FetchedPage {
     let text = match extract_epub_text(body_bytes) {
         Ok(t) => t,
@@ -1977,7 +1971,7 @@ fn handle_epub(
 async fn try_wayback_fallback(
     original_url: &str,
     max_chars: usize,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> Option<FetchedPage> {
     // Query the Wayback Availability API
     let availability_url = format!(
@@ -2020,10 +2014,7 @@ async fn try_wayback_fallback(
     let timeout = Duration::from_secs(15);
     let response = match tokio::time::timeout(
         timeout,
-        FETCH_CLIENT
-            .get(&snapshot_url)
-            .timeout(timeout)
-            .send(),
+        FETCH_CLIENT.get(&snapshot_url).timeout(timeout).send(),
     )
     .await
     {
@@ -2181,7 +2172,7 @@ fn fetch_office_document(
     url: &str,
     body_bytes: &[u8],
     max_chars: usize,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> FetchedPage {
     if contains_ole_compound_signature(body_bytes) && !is_zip_archive(body_bytes) {
         if is_xlsx_url(url) || url_has_extension(url, ".xls") {
@@ -2217,7 +2208,7 @@ fn make_error_page(
     max_chars: usize,
     status: &str,
     reason: &str,
-    cache_dir: &PathBuf,
+    cache_dir: &std::path::Path,
 ) -> FetchedPage {
     let entry = web_fetch_cache::CachedEntry {
         url: url.to_string(),
@@ -2316,6 +2307,8 @@ pub fn clear_web_fetch_cache(cache_dir: PathBuf) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_web_fetch_cache_stats(cache_dir: PathBuf) -> Result<web_fetch_cache::CacheStats, String> {
+pub fn get_web_fetch_cache_stats(
+    cache_dir: PathBuf,
+) -> Result<web_fetch_cache::CacheStats, String> {
     Ok(web_fetch_cache::stats(&cache_dir))
 }

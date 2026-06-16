@@ -60,10 +60,7 @@ pub async fn list_projects(
 }
 
 #[tauri::command]
-pub async fn delete_project(
-    id: String,
-    state: State<'_, ProjectDbState>,
-) -> Result<(), String> {
+pub async fn delete_project(id: String, state: State<'_, ProjectDbState>) -> Result<(), String> {
     run_db_command(state.inner(), "project", move |conn| {
         project_db::delete_project(conn, id)
     })
@@ -97,7 +94,6 @@ pub async fn export_project_manifest(
 
     let json = serde_json::to_string_pretty(&manifest)
         .map_err(|e| format!("failed to serialize manifest: {}", e))?;
-    std::fs::write(&export_path, json)
-        .map_err(|e| format!("failed to write manifest: {}", e))?;
+    std::fs::write(&export_path, json).map_err(|e| format!("failed to write manifest: {}", e))?;
     Ok(())
 }

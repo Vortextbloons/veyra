@@ -57,9 +57,7 @@ pub async fn email_connect_gmail_with_config(
 }
 
 #[tauri::command]
-pub async fn email_has_gmail_oauth_config(
-    state: State<'_, EmailDbState>,
-) -> Result<bool, String> {
+pub async fn email_has_gmail_oauth_config(state: State<'_, EmailDbState>) -> Result<bool, String> {
     run_db_command(state.inner(), "email", email_db::has_gmail_oauth_config).await
 }
 

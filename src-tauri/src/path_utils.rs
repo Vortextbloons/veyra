@@ -2,7 +2,10 @@ use std::path::{Path, PathBuf};
 
 /// Validates a user-chosen export destination before writing.
 /// Blocks relative paths, null bytes, missing parents, and sensitive system directories.
-pub fn validate_export_file_path(target_path: &str, allowed_extensions: &[&str]) -> Result<PathBuf, String> {
+pub fn validate_export_file_path(
+    target_path: &str,
+    allowed_extensions: &[&str],
+) -> Result<PathBuf, String> {
     if target_path.contains('\0') {
         return Err("export path is invalid".into());
     }
@@ -24,7 +27,10 @@ pub fn validate_export_file_path(target_path: &str, allowed_extensions: &[&str])
         .map(str::to_ascii_lowercase)
         .unwrap_or_default();
 
-    if !allowed_extensions.iter().any(|allowed| extension == *allowed) {
+    if !allowed_extensions
+        .iter()
+        .any(|allowed| extension == *allowed)
+    {
         return Err(format!(
             "export path must use one of these extensions: {}",
             allowed_extensions.join(", ")

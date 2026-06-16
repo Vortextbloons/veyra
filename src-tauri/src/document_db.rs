@@ -216,7 +216,7 @@ impl DocumentDb {
 
 pub struct DocumentDbState {
     app: tauri::AppHandle,
-    db: Arc<Mutex<Option<Result<Arc<DocumentDb>, String>>>>,
+    db: crate::db_utils::DbSlot<DocumentDb>,
 }
 
 impl Clone for DocumentDbState {

@@ -440,7 +440,7 @@ fn normalize_path_for_compare(path: &Path) -> String {
     path.canonicalize()
         .unwrap_or_else(|_| path.to_path_buf())
         .to_string_lossy()
-        .trim_end_matches(|ch| ch == '\\' || ch == '/')
+        .trim_end_matches(['\\', '/'])
         .to_ascii_lowercase()
 }
 

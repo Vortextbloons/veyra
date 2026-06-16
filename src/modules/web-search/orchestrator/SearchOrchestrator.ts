@@ -7,12 +7,15 @@ import { SearXNGProvider } from "../providers/SearXNGProvider";
 import { ArXivProvider } from "../providers/ArXivProvider";
 import { WikipediaProvider } from "../providers/WikipediaProvider";
 import type { SearchContextBundle, SearchSource, SearXNGProviderConfig, FetchedPageSummary, SearchResult } from "../types";
+import { planSearchQueries, type PlannedSearchQuery } from "../search-planner";
+import { dedupeAndRankSearchResults } from "../search-ranker";
 import {
   invokeFetchAndExtractPages,
   type FetchedPage,
 } from "../tauri-commands";
 
 const ALLOWED_SEARCH_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const SEARCH_QUERY_CONCURRENCY = 3;
 
 let activeSearch: Promise<SearchContextBundle> | null = null;
 
@@ -48,7 +51,23 @@ export type RunSearchOptions = {
   /** Research depth profile: gates direct ArXiv/Wikipedia APIs (omit for chat). */
   directArxivSearch?: boolean;
   directWikipediaSearch?: boolean;
+  multiQuery?: boolean;
 };
+
+async function runWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  async function loop() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      const item = items[index];
+      if (item === undefined) break;
+      results[index] = await worker(item, index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => loop()));
+  return results;
+}
 
 export async function runSearch(
   query: string,
@@ -58,7 +77,7 @@ export async function runSearch(
     options && typeof (options as AbortSignal).aborted !== "undefined"
       ? { signal: options as AbortSignal }
       : (options as RunSearchOptions) ?? {};
-  const { signal, projectId, onFetchProgress, skipFetch, directArxivSearch, directWikipediaSearch } = opts;
+  const { signal, projectId, onFetchProgress, skipFetch, directArxivSearch, directWikipediaSearch, multiQuery } = opts;
 
   if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
@@ -132,6 +151,12 @@ export async function runSearch(
 
     const provider = new SearXNGProvider(config);
     const directLimit = Math.min(3, maxResults);
+    const fusedSearchEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchFusionEnabled !== false;
+    const multiQueryEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchMultiQueryEnabled !== false && multiQuery !== false;
+    const fallbackEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchAdaptiveFallbackEnabled !== false;
+    const plannedQueries: PlannedSearchQuery[] = multiQueryEnabled
+      ? planSearchQueries(query, Math.min(6, Math.max(2, Math.ceil(maxResults / 2))))
+      : [{ query, lane: "general" }];
     const direct = resolveDirectSearchProviders({
       advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
       bundleArxivSearch: settings.bundleArxivSearch,
@@ -140,35 +165,75 @@ export async function runSearch(
       directWikipediaSearch,
     });
 
-    // SearXNG (local) runs in parallel with direct APIs; Rust serializes ArXiv/Wikipedia safely.
-    const [searxngResults, arxivResults, wikipediaResults] = await Promise.all([
-      provider.search({
-        query,
-        limit: maxResults,
-        timeRange: settings.webSearchTimeRange || undefined,
-        categories: settings.webSearchCategories || undefined,
-      }),
-      direct.arxiv
-        ? new ArXivProvider({
-            id: "arxiv-direct",
-            name: "ArXiv",
-            enabled: true,
-            maxResults: directLimit,
-          }).search({ query, limit: directLimit })
-        : Promise.resolve([] as SearchResult[]),
-      direct.wikipedia
-        ? new WikipediaProvider({
-            id: "wikipedia-direct",
-            name: "Wikipedia",
-            enabled: true,
-            maxResults: directLimit,
-          }).search({ query, limit: directLimit })
-        : Promise.resolve([] as SearchResult[]),
-    ]);
+    const providerResultCounts: Record<string, number> = {};
+    let fallbackUsed = false;
 
-    let results: SearchResult[] = [...searxngResults];
-    if (arxivResults.length > 0) results = results.concat(arxivResults);
-    if (wikipediaResults.length > 0) results = results.concat(wikipediaResults);
+    const searchEntries = await runWithConcurrency(plannedQueries, SEARCH_QUERY_CONCURRENCY, async (planned) => {
+      // SearXNG (local) runs in parallel with direct APIs; Rust serializes ArXiv/Wikipedia safely.
+      const [searxngResults, arxivResults, wikipediaResults] = await Promise.all([
+        provider.search({
+          query: planned.query,
+          limit: maxResults,
+          timeRange: settings.webSearchTimeRange || undefined,
+          categories: settings.webSearchCategories || undefined,
+          safeSearch: settings.webSearchSafeSearch,
+        }),
+        direct.arxiv
+          ? new ArXivProvider({
+              id: "arxiv-direct",
+              name: "ArXiv",
+              enabled: true,
+              maxResults: directLimit,
+            }).search({ query: planned.query, limit: directLimit })
+          : Promise.resolve([] as SearchResult[]),
+        direct.wikipedia
+          ? new WikipediaProvider({
+              id: "wikipedia-direct",
+              name: "Wikipedia",
+              enabled: true,
+              maxResults: directLimit,
+            }).search({ query: planned.query, limit: directLimit })
+          : Promise.resolve([] as SearchResult[]),
+      ]);
+
+      providerResultCounts.searxng = (providerResultCounts.searxng ?? 0) + searxngResults.length;
+      providerResultCounts.arxiv = (providerResultCounts.arxiv ?? 0) + arxivResults.length;
+      providerResultCounts.wikipedia = (providerResultCounts.wikipedia ?? 0) + wikipediaResults.length;
+      return [...searxngResults, ...arxivResults, ...wikipediaResults].map((result, providerOrder) => ({
+        result,
+        query: planned.query,
+        lane: planned.lane,
+        providerOrder,
+      }));
+    });
+
+    let flatEntries = searchEntries.flat();
+
+    if (fallbackEnabled && flatEntries.length < Math.max(3, Math.floor(maxResults / 2))) {
+      const fallbackQueries = planSearchQueries(`${query} overview`, 2).filter((planned) =>
+        !plannedQueries.some((existing) => existing.query.toLowerCase() === planned.query.toLowerCase()),
+      );
+      if (fallbackQueries.length > 0) {
+        fallbackUsed = true;
+        const fallbackEntries = await runWithConcurrency(fallbackQueries, SEARCH_QUERY_CONCURRENCY, async (planned) => {
+          const searxngResults = await provider.search({
+            query: planned.query,
+            limit: maxResults,
+            timeRange: settings.webSearchTimeRange || undefined,
+            categories: settings.webSearchCategories || undefined,
+            safeSearch: settings.webSearchSafeSearch,
+          });
+          providerResultCounts.searxng = (providerResultCounts.searxng ?? 0) + searxngResults.length;
+          return searxngResults.map((result, providerOrder) => ({ result, query: planned.query, lane: planned.lane, providerOrder }));
+        });
+        flatEntries = flatEntries.concat(fallbackEntries.flat());
+        plannedQueries.push(...fallbackQueries);
+      }
+    }
+
+    let results: SearchResult[] = fusedSearchEnabled
+      ? dedupeAndRankSearchResults(flatEntries, new Map(), maxResults)
+      : flatEntries.map((entry) => entry.result).slice(0, maxResults);
 
     if (signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
@@ -215,6 +280,10 @@ export async function runSearch(
       fetchedByUrl.set(page.url, page);
     }
 
+    if (fusedSearchEnabled && fetchedPages.length > 0) {
+      results = dedupeAndRankSearchResults(flatEntries, fetchedByUrl, maxResults);
+    }
+
     const sources: SearchSource[] = results.map((r) => {
       const page = fetchedByUrl.get(r.url);
       const fetchInfo = page
@@ -232,8 +301,15 @@ export async function runSearch(
         title: r.title,
         url: r.url,
         snippet: r.snippet ?? "",
+        providerId: r.providerId,
+        engine: r.engine,
+        sourceType: r.sourceType,
+        publishedAt: r.publishedAt,
         ...(r.score != null ? { score: r.score } : {}),
         ...(r.rank != null ? { rank: r.rank } : {}),
+        ...("rankScore" in r && typeof r.rankScore === "number" ? { rankScore: r.rankScore } : {}),
+        ...("rankReason" in r && typeof r.rankReason === "string" ? { rankReason: r.rankReason } : {}),
+        ...("queryLane" in r && typeof r.queryLane === "string" ? { queryLane: r.queryLane } : {}),
         ...(fetchInfo ? { fetch: fetchInfo } : {}),
       };
     });
@@ -249,6 +325,12 @@ export async function runSearch(
       sources,
       tokenCount,
       fetchedPages,
+      diagnostics: {
+        queries: plannedQueries.map((planned) => ({ query: planned.query, lane: planned.lane })),
+        providerResultCounts,
+        fused: fusedSearchEnabled,
+        fallbackUsed,
+      },
     };
   };
 

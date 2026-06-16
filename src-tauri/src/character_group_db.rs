@@ -106,9 +106,8 @@ CREATE INDEX IF NOT EXISTS idx_character_groups_project_id ON character_groups(p
 CREATE INDEX IF NOT EXISTS idx_character_groups_updated_at ON character_groups(updated_at);
 "#;
 
-const SCHEMA_MIGRATIONS: &[&str] = &[
-    "ALTER TABLE character_groups ADD COLUMN active_speaker_id TEXT NOT NULL DEFAULT ''",
-];
+const SCHEMA_MIGRATIONS: &[&str] =
+    &["ALTER TABLE character_groups ADD COLUMN active_speaker_id TEXT NOT NULL DEFAULT ''"];
 
 // ── Validation ──────────────────────────────────────────────────────────────
 
@@ -175,7 +174,7 @@ impl CharacterGroupDb {
 
 pub struct CharacterGroupDbState {
     app: tauri::AppHandle,
-    db: Arc<Mutex<Option<Result<Arc<CharacterGroupDb>, String>>>>,
+    db: crate::db_utils::DbSlot<CharacterGroupDb>,
 }
 
 impl Clone for CharacterGroupDbState {
@@ -398,7 +397,10 @@ pub fn update_character_group(
     }
     if let Some(v) = input.recent_conversation_ids {
         validate_json_field("recent_conversation_ids", &v)?;
-        sets.push(format!("recent_conversation_ids_json = ?{}", params.len() + 1));
+        sets.push(format!(
+            "recent_conversation_ids_json = ?{}",
+            params.len() + 1
+        ));
         params.push(Value::Text(v));
     }
     if let Some(v) = input.active_speaker_id {
@@ -406,13 +408,8 @@ pub fn update_character_group(
         params.push(Value::Text(v));
     }
 
-    if sets.is_empty() {
-        sets.push(format!("updated_at = ?{}", params.len() + 1));
-        params.push(Value::Text(input.updated_at.clone()));
-    } else {
-        sets.push(format!("updated_at = ?{}", params.len() + 1));
-        params.push(Value::Text(input.updated_at.clone()));
-    }
+    sets.push(format!("updated_at = ?{}", params.len() + 1));
+    params.push(Value::Text(input.updated_at.clone()));
 
     let where_placeholder = params.len() + 1;
     let sql = format!(
@@ -465,11 +462,8 @@ pub fn list_character_groups(
         if !m.is_empty() {
             // member_ids_json is a JSON array of strings; use LIKE for a
             // simple substring match ("character_id").
-            conds.push(format!(
-                "member_ids_json LIKE ?{}",
-                param_values.len() + 1
-            ));
-            param_values.push(Value::Text(format!("%\"{}\"%" , m)));
+            conds.push(format!("member_ids_json LIKE ?{}", param_values.len() + 1));
+            param_values.push(Value::Text(format!("%\"{}\"%", m)));
         }
     }
     if let Some(s) = filter.search {

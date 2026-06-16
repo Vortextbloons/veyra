@@ -12,6 +12,7 @@ export type SearchInput = {
   language?: string;
   categories?: string;
   timeRange?: string;
+  safeSearch?: number;
 };
 
 export type SearXNGProviderConfig = {
@@ -57,8 +58,15 @@ export type SearchSource = {
   title: string;
   url: string;
   snippet: string;
+  providerId?: string;
+  engine?: string;
+  sourceType?: SearchResult["sourceType"];
+  publishedAt?: string;
   score?: number;
   rank?: number;
+  rankScore?: number;
+  rankReason?: string;
+  queryLane?: string;
   fetch?: {
     status: string;
     error_reason?: string;
@@ -75,4 +83,10 @@ export type SearchContextBundle = {
   sources: SearchSource[];
   tokenCount: number;
   fetchedPages?: FetchedPageSummary[];
+  diagnostics?: {
+    queries: Array<{ query: string; lane: string }>;
+    providerResultCounts: Record<string, number>;
+    fused: boolean;
+    fallbackUsed: boolean;
+  };
 };

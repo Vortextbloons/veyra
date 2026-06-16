@@ -64,7 +64,9 @@ impl Drop for TempScriptGuard {
 }
 
 #[tauri::command]
-pub async fn check_python_available(python_path: Option<String>) -> Result<PythonAvailabilityResult, String> {
+pub async fn check_python_available(
+    python_path: Option<String>,
+) -> Result<PythonAvailabilityResult, String> {
     let preferred = python_path
         .as_deref()
         .map(str::trim)
@@ -106,9 +108,11 @@ pub async fn execute_python_code(
     timeout_secs: Option<u64>,
     python_path: Option<String>,
 ) -> Result<PythonExecutionResult, String> {
-    tauri::async_runtime::spawn_blocking(move || execute_python_code_sync(code, timeout_secs, python_path))
-        .await
-        .map_err(|error| format!("python execution task failed: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        execute_python_code_sync(code, timeout_secs, python_path)
+    })
+    .await
+    .map_err(|error| format!("python execution task failed: {error}"))?
 }
 
 pub fn cleanup_stale_temp_files() {
@@ -165,13 +169,16 @@ fn execute_python_code_sync(
         .unwrap_or(DEFAULT_TIMEOUT_SECS)
         .clamp(1, MAX_TIMEOUT_SECS);
 
-    let current_dir = std::env::current_dir().map_err(|error| format!("failed to resolve working directory: {error}"))?;
+    let current_dir = std::env::current_dir()
+        .map_err(|error| format!("failed to resolve working directory: {error}"))?;
     let preferred = python_path
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty());
-    let resolved = resolve_python(preferred, preferred.is_some())
-        .ok_or_else(|| "Python interpreter not found. Set a custom path in settings or click auto-detect.".to_string())?;
+    let resolved = resolve_python(preferred, preferred.is_some()).ok_or_else(|| {
+        "Python interpreter not found. Set a custom path in settings or click auto-detect."
+            .to_string()
+    })?;
 
     cleanup_stale_temp_files();
     let temp_script = write_temp_script(code)?;
@@ -205,9 +212,9 @@ fn execute_python_code_sync(
         Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
             timed_out = true;
             let _ = child.kill();
-            child
-                .wait()
-                .map_err(|wait_error| format!("failed waiting for Python after timeout: {wait_error}"))?
+            child.wait().map_err(|wait_error| {
+                format!("failed waiting for Python after timeout: {wait_error}")
+            })?
         }
         Err(error) => {
             let _ = child.kill();
@@ -262,16 +269,28 @@ fn parse_user_python_path(value: &str) -> Option<PythonCommandSpec> {
 
     if trimmed.eq_ignore_ascii_case("py") || trimmed.eq_ignore_ascii_case("py.exe") {
         return Some(PythonCommandSpec {
-            program: if cfg!(windows) { "py".to_string() } else { trimmed.to_string() },
+            program: if cfg!(windows) {
+                "py".to_string()
+            } else {
+                trimmed.to_string()
+            },
             args: vec!["-3".to_string()],
             source: "custom path".to_string(),
-            display_path: if cfg!(windows) { "py -3".to_string() } else { trimmed.to_string() },
+            display_path: if cfg!(windows) {
+                "py -3".to_string()
+            } else {
+                trimmed.to_string()
+            },
         });
     }
 
     if trimmed.eq_ignore_ascii_case("python") || trimmed.eq_ignore_ascii_case("python.exe") {
         return Some(PythonCommandSpec {
-            program: if cfg!(windows) { "python".to_string() } else { trimmed.to_string() },
+            program: if cfg!(windows) {
+                "python".to_string()
+            } else {
+                trimmed.to_string()
+            },
             args: Vec::new(),
             source: "custom path".to_string(),
             display_path: trimmed.to_string(),
@@ -329,12 +348,16 @@ fn search_python_candidates() -> Vec<PythonCommandSpec> {
         });
     }
 
-    candidates.extend(known_python_install_paths().into_iter().map(|path| PythonCommandSpec {
-        program: path.to_string_lossy().to_string(),
-        args: Vec::new(),
-        source: "known path".to_string(),
-        display_path: path.to_string_lossy().to_string(),
-    }));
+    candidates.extend(
+        known_python_install_paths()
+            .into_iter()
+            .map(|path| PythonCommandSpec {
+                program: path.to_string_lossy().to_string(),
+                args: Vec::new(),
+                source: "known path".to_string(),
+                display_path: path.to_string_lossy().to_string(),
+            }),
+    );
 
     candidates
 }
@@ -406,7 +429,8 @@ fn probe_python_candidate(candidate: PythonCommandSpec) -> Option<PythonDetected
 
 fn write_temp_script(code: &str) -> Result<TempScriptGuard, String> {
     let root = temp_root_dir();
-    fs::create_dir_all(&root).map_err(|error| format!("failed to create temp directory: {error}"))?;
+    fs::create_dir_all(&root)
+        .map_err(|error| format!("failed to create temp directory: {error}"))?;
     let path = root.join(unique_temp_script_name());
     fs::write(&path, code).map_err(|error| format!("failed to write temp script: {error}"))?;
     Ok(TempScriptGuard { path })
@@ -463,16 +487,49 @@ fn wait_with_timeout(
 
 fn scan_python_code(code: &str) -> Result<(), String> {
     let (no_comments, no_strings) = strip_comments_and_strings(code);
-    let blocked_modules = ["os", "subprocess", "shutil", "ctypes", "socket", "multiprocessing", "tempfile", "builtins"];
+    let blocked_modules = [
+        "os",
+        "subprocess",
+        "shutil",
+        "ctypes",
+        "socket",
+        "multiprocessing",
+        "tempfile",
+        "builtins",
+    ];
     let known_safe_modules = [
-        "math", "json", "csv", "re", "collections", "itertools", "functools", "typing",
-        "datetime", "random", "statistics", "decimal", "fractions", "string", "textwrap",
-        "difflib", "hashlib", "base64", "uuid", "dataclasses", "enum", "heapq", "bisect",
-        "array", "struct", "pprint",
+        "math",
+        "json",
+        "csv",
+        "re",
+        "collections",
+        "itertools",
+        "functools",
+        "typing",
+        "datetime",
+        "random",
+        "statistics",
+        "decimal",
+        "fractions",
+        "string",
+        "textwrap",
+        "difflib",
+        "hashlib",
+        "base64",
+        "uuid",
+        "dataclasses",
+        "enum",
+        "heapq",
+        "bisect",
+        "array",
+        "struct",
+        "pprint",
     ];
     let _ = known_safe_modules;
 
-    for (line_index, (plain_line, raw_line)) in no_strings.lines().zip(no_comments.lines()).enumerate() {
+    for (line_index, (plain_line, raw_line)) in
+        no_strings.lines().zip(no_comments.lines()).enumerate()
+    {
         let line_no = line_index + 1;
         for statement in plain_line.split(';') {
             let candidate = statement.trim();
@@ -488,7 +545,7 @@ fn scan_python_code(code: &str) -> Result<(), String> {
 
             if let Some(rest) = import_candidate.strip_prefix("import ") {
                 for item in rest.split(',') {
-                    let module = item.trim().split_whitespace().next().unwrap_or("");
+                    let module = item.split_whitespace().next().unwrap_or("");
                     let root = module.split('.').next().unwrap_or(module);
                     if blocked_modules.contains(&root) {
                         return Err(format!("line {line_no}: import of '{root}' is blocked"));
@@ -504,18 +561,27 @@ fn scan_python_code(code: &str) -> Result<(), String> {
             }
 
             if candidate.contains("__import__") {
-                return Err(format!("line {line_no}: dynamic import via __import__ is blocked"));
+                return Err(format!(
+                    "line {line_no}: dynamic import via __import__ is blocked"
+                ));
             }
             if candidate.contains("importlib.import_module") {
-                return Err(format!("line {line_no}: dynamic import via importlib.import_module is blocked"));
+                return Err(format!(
+                    "line {line_no}: dynamic import via importlib.import_module is blocked"
+                ));
             }
-            if candidate.contains("exec(") || candidate == "exec" || candidate.starts_with("exec ") {
+            if candidate.contains("exec(") || candidate == "exec" || candidate.starts_with("exec ")
+            {
                 return Err(format!("line {line_no}: exec() is blocked"));
             }
-            if candidate.contains("eval(") || candidate == "eval" || candidate.starts_with("eval ") {
+            if candidate.contains("eval(") || candidate == "eval" || candidate.starts_with("eval ")
+            {
                 return Err(format!("line {line_no}: eval() is blocked"));
             }
-            if candidate.contains("compile(") || candidate == "compile" || candidate.starts_with("compile ") {
+            if candidate.contains("compile(")
+                || candidate == "compile"
+                || candidate.starts_with("compile ")
+            {
                 return Err(format!("line {line_no}: compile() is blocked"));
             }
 
@@ -628,10 +694,7 @@ fn blocked_open_mode(line: &str) -> Option<&'static str> {
     while let Some(index) = find_token(line, "open(", search_start) {
         let tail = &line[index + "open(".len()..];
         if let Some(mode) = parse_open_mode(tail) {
-            if mode
-                .chars()
-                .any(|ch| matches!(ch, 'w' | 'a' | 'x' | '+'))
-            {
+            if mode.chars().any(|ch| matches!(ch, 'w' | 'a' | 'x' | '+')) {
                 return Some("file open mode is write-capable; read-only access only");
             }
         } else {
@@ -756,7 +819,7 @@ fn strip_comments_and_strings(code: &str) -> (String, String) {
     while let Some(ch) = chars.next() {
         match ch {
             '#' => {
-                while let Some(next) = chars.next() {
+                for next in chars.by_ref() {
                     if next == '\n' {
                         no_comments.push('\n');
                         no_strings.push('\n');
@@ -785,7 +848,9 @@ fn strip_comments_and_strings(code: &str) -> (String, String) {
 
                 let mut escaped = false;
                 loop {
-                    let Some(next) = chars.next() else { break; };
+                    let Some(next) = chars.next() else {
+                        break;
+                    };
                     no_comments.push(next);
                     no_strings.push(if next == '\n' { '\n' } else { ' ' });
 
