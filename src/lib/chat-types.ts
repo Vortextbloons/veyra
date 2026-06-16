@@ -64,6 +64,7 @@ export type ToolCallState = {
   detail?: string;
   error?: string;
   attempts?: number;
+  result?: unknown;
 };
 
 export interface ChatMessage {

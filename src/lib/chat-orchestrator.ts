@@ -591,6 +591,7 @@ export async function sendChatRequest({
         phase,
         input: inputPreview,
         detail,
+        result: { code, ...result },
         ...(phase === "error" ? { error: detail } : {}),
       });
 

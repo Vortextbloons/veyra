@@ -8,6 +8,7 @@ import { runLmStudioExclusive } from "@/lib/lm-studio-session";
 import { useSettingsStore } from "@/stores/settings-store";
 
 let loadedModelId: string | null = null;
+let loadedContextLength: number | null = null;
 
 export function normalizeLmStudioModelId(id: string): string {
   const trimmed = id.trim();
@@ -34,9 +35,11 @@ function contextLengthFor(modelId: string): number {
 async function loadDirect(modelId: string): Promise<void> {
   const id = modelId.trim();
   if (!id) return;
-  const result = await loadLmStudioModelDirect(id, { contextLength: contextLengthFor(id) });
+  const ctxLen = contextLengthFor(id);
+  const result = await loadLmStudioModelDirect(id, { contextLength: ctxLen });
   if (!result.success) throw new Error(result.message);
   loadedModelId = id;
+  loadedContextLength = ctxLen;
 }
 
 async function loadDirectWithContext(modelId: string, contextLength: number): Promise<void> {
@@ -45,6 +48,7 @@ async function loadDirectWithContext(modelId: string, contextLength: number): Pr
   const result = await loadLmStudioModelDirect(id, { contextLength });
   if (!result.success) throw new Error(result.message);
   loadedModelId = id;
+  loadedContextLength = contextLength;
 }
 
 async function unloadDirect(instanceId: string): Promise<void> {
@@ -53,6 +57,7 @@ async function unloadDirect(instanceId: string): Promise<void> {
   const result = await unloadLmStudioModelDirect(id);
   if (!result.success) throw new Error(result.message);
   loadedModelId = null;
+  loadedContextLength = null;
 }
 
 /** Unload every model instance Veyra (or LM Studio) has in memory. */
@@ -70,6 +75,7 @@ export async function unloadAllLmStudioModels(): Promise<void> {
       }
     }
     loadedModelId = null;
+    loadedContextLength = null;
   });
 }
 
@@ -97,6 +103,22 @@ export async function ensureLmStudioModel(
     const targetInstances = actualLoadedInstances.filter((instance) =>
       sameLmStudioModel(instance.modelId, next),
     );
+
+    // When forceReload is requested with a specific context length, check if the
+    // model is already loaded with the same context length — skip the expensive
+    // unload+reload cycle if nothing changed.
+    const contextMatches =
+      options?.forceReload &&
+      options?.contextLength != null &&
+      loadedModelId != null &&
+      sameLmStudioModel(loadedModelId, next) &&
+      loadedContextLength === options.contextLength;
+
+    if (contextMatches) {
+      onProgress?.("ready");
+      return;
+    }
+
     const soleTargetLoaded =
       !options?.forceReload &&
       targetInstances.length > 0 &&

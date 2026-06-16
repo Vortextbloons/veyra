@@ -1,6 +1,5 @@
-import { lazy, Suspense, useMemo } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { lazy, Suspense } from "react";
+import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 
 const SchedulerPopover = lazy(() =>
   import("@/components/scheduler/scheduler-popover").then((module) => ({
@@ -28,39 +27,11 @@ export function TitleBar({
   onZoomReset,
 }: TitleBarProps) {
   const showZoom = zoom !== 1;
-  const appWindow = useMemo(() => getCurrentWindow(), []);
 
   return (
     <div
       className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4"
     >
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={() => void appWindow.close()}
-          className="grid size-3 place-items-center rounded-full bg-[#ff5f57] hover:brightness-110"
-        >
-          <X className="size-2 text-black/60 opacity-0 hover:opacity-100" />
-        </button>
-        <button
-          type="button"
-          aria-label="Minimize"
-          onClick={() => void appWindow.minimize()}
-          className="grid size-3 place-items-center rounded-full bg-[#febc2e] hover:brightness-110"
-        >
-          <Minus className="size-2 text-black/60 opacity-0 hover:opacity-100" />
-        </button>
-        <button
-          type="button"
-          aria-label="Maximize"
-          onClick={() => void appWindow.toggleMaximize()}
-          className="grid size-3 place-items-center rounded-full bg-[#28c840] hover:brightness-110"
-        >
-          <Square className="size-1.5 text-black/60 opacity-0 hover:opacity-100" />
-        </button>
-      </div>
-
       <div className="flex flex-1 items-center justify-center gap-2 self-stretch">
         <Suspense fallback={<span className="size-5" aria-hidden="true" />}>
           <ConnectivityPopover />

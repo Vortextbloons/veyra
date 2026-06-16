@@ -7,9 +7,7 @@ import {
 } from "react";
 import {
   Bell,
-  MoreHorizontal,
   Sparkles,
-  Star,
 } from "lucide-react";
 import type { ChatMode, ChatPanelProps } from "@/lib/chat-types";
 import { ProviderConnectionBanner } from "@/components/provider-connection-banner";
@@ -269,18 +267,6 @@ export function ChatPanel({
         </div>
         <div className="flex items-center gap-1">
           {headerActions}
-          <button
-            aria-label="More"
-            className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
-          <button
-            aria-label="Star"
-            className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-          >
-            <Star className="size-4" />
-          </button>
         </div>
       </div>
 

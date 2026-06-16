@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@/lib/chat-types";
+import { CodeExecutionBlock } from "@/components/chat/code-execution-block";
 import { ToolCallIndicator } from "@/components/chat/tool-call-indicator";
 import { WebSearchToolCallBlock } from "@/components/chat/web-search-block";
 import { webSearchRoundForToolCall } from "@/lib/web-search-state";
@@ -34,6 +35,10 @@ export function ToolCallList({ message }: ToolCallListProps) {
               roundTotal={webSearchRoundTotal > 1 ? webSearchRoundTotal : undefined}
             />
           );
+        }
+
+        if (toolState.name === "code_execution") {
+          return <CodeExecutionBlock key={toolState.id} state={toolState} />;
         }
 
         return <ToolCallIndicator key={toolState.id} state={toolState} />;
