@@ -233,6 +233,9 @@ CREATE INDEX IF NOT EXISTS idx_memory_nodes_type ON memory_nodes(node_type);
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_file ON memory_nodes(file_id);
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_updated ON memory_nodes(updated_at);
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_search_order ON memory_nodes(status, is_pinned, importance, updated_at);
+CREATE INDEX IF NOT EXISTS idx_memory_files_folder_updated ON memory_files(folder_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_folders_sort ON memory_folders(sort_order, name);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_list_order ON memory_nodes(status, folder_id, file_id, project_id, is_pinned, importance, created_at DESC);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS memory_nodes_fts USING fts5(
   title,

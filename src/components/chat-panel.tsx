@@ -21,6 +21,10 @@ import { Composer } from "@/components/chat/composer";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { useSettingsStore } from "@/stores/settings-store";
 
+const VIRTUALIZE_AFTER_MESSAGES = 80;
+const ESTIMATED_MESSAGE_HEIGHT = 180;
+const MESSAGE_OVERSCAN = 8;
+
 function chatLayoutClasses(sidebarsCollapsed: number) {
   const wide = sidebarsCollapsed >= 1;
   const widest = sidebarsCollapsed >= 2;
@@ -99,6 +103,7 @@ export function ChatPanel({
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const prevMessageCountRef = useRef(messages.length);
+  const [scrollState, setScrollState] = useState({ top: 0, height: 0 });
 
   const scrollMessagesToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const el = messagesScrollRef.current;
@@ -111,7 +116,14 @@ export function ChatPanel({
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     stickToBottomRef.current = distanceFromBottom < 80;
+    setScrollState({ top: el.scrollTop, height: el.clientHeight });
   }, []);
+
+  useLayoutEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    setScrollState({ top: el.scrollTop, height: el.clientHeight });
+  }, [messages.length, mode]);
 
   useLayoutEffect(() => {
     if (isStreaming) {
@@ -163,6 +175,25 @@ export function ChatPanel({
     }
     return null;
   }, [messages]);
+
+  const shouldVirtualizeMessages =
+    mode !== "agents" && !isStreaming && messages.length > VIRTUALIZE_AFTER_MESSAGES;
+  const visibleMessageWindow = useMemo(() => {
+    if (!shouldVirtualizeMessages) {
+      return { items: messages, before: 0, after: 0 };
+    }
+    const first = Math.max(
+      0,
+      Math.floor(scrollState.top / ESTIMATED_MESSAGE_HEIGHT) - MESSAGE_OVERSCAN,
+    );
+    const visibleCount = Math.ceil(scrollState.height / ESTIMATED_MESSAGE_HEIGHT) + MESSAGE_OVERSCAN * 2;
+    const last = Math.min(messages.length, first + visibleCount);
+    return {
+      items: messages.slice(first, last),
+      before: first * ESTIMATED_MESSAGE_HEIGHT,
+      after: Math.max(0, (messages.length - last) * ESTIMATED_MESSAGE_HEIGHT),
+    };
+  }, [messages, scrollState.height, scrollState.top, shouldVirtualizeMessages]);
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
@@ -285,7 +316,10 @@ export function ChatPanel({
           <div
             className={`relative z-10 flex w-full flex-col gap-5 pb-6 pt-5 transition-[padding] duration-200 ease-out ${layout.messagesPx}`}
           >
-            {messages.map((m) => (
+            {visibleMessageWindow.before > 0 && (
+              <div aria-hidden style={{ height: visibleMessageWindow.before }} />
+            )}
+            {visibleMessageWindow.items.map((m) => (
               <div key={m.id} style={{ contentVisibility: "auto", containIntrinsicSize: "0 180px" }}>
                 <MessageBubble
                   message={m}
@@ -301,6 +335,9 @@ export function ChatPanel({
                 />
               </div>
             ))}
+            {visibleMessageWindow.after > 0 && (
+              <div aria-hidden style={{ height: visibleMessageWindow.after }} />
+            )}
           </div>
         )}
       </div>

@@ -1116,7 +1116,7 @@ function App() {
           onDeleteAll={handleDeleteAllChats}
           collapsed={recentChatsCollapsed}
           onCollapsedChange={setRecentChatsCollapsed}
-          hidden={!isChatMode || activeNav === "projects"}
+          hidden={!isChatMode || activeNav === "projects" || workspaceChatMode === "agents"}
         />
         <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
           <Suspense fallback={null}>

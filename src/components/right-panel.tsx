@@ -169,17 +169,19 @@ export function RightPanel({
           ) : (
             <>
               <ContextPanel stats={contextStats} breakdown={contextBreakdown} />
-              <ToolsPanel
-                webSearch={webSearchEnabled}
-                onWebSearchChange={(on) => onWebSearchChange?.(on)}
-                webSearchDisabled={webSearchDisabled}
-                webSearchDisabledReason={webSearchDisabledReason}
-                codeExecution={codeExecutionEnabled}
-                onCodeExecutionChange={(on) => onCodeExecutionChange?.(on)}
-                codeExecutionDisabled={codeExecutionDisabled}
-                codeExecutionDisabledReason={codeExecutionDisabledReason}
-              />
-              <DocumentsPanel />
+              {!isAgentsMode && (
+                <ToolsPanel
+                  webSearch={webSearchEnabled}
+                  onWebSearchChange={(on) => onWebSearchChange?.(on)}
+                  webSearchDisabled={webSearchDisabled}
+                  webSearchDisabledReason={webSearchDisabledReason}
+                  codeExecution={codeExecutionEnabled}
+                  onCodeExecutionChange={(on) => onCodeExecutionChange?.(on)}
+                  codeExecutionDisabled={codeExecutionDisabled}
+                  codeExecutionDisabledReason={codeExecutionDisabledReason}
+                />
+              )}
+              {!isAgentsMode && <DocumentsPanel />}
             </>
           )}
         </div>

@@ -112,6 +112,9 @@ CREATE INDEX IF NOT EXISTS idx_documents_conversation ON documents(conversation_
 CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(updated_at);
+CREATE INDEX IF NOT EXISTS idx_documents_project_updated ON documents(project_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_conversation_updated ON documents(conversation_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_documents_global_updated ON documents(is_global, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS document_versions (
   id TEXT PRIMARY KEY,
@@ -201,7 +204,10 @@ impl DocumentDb {
             "ALTER TABLE documents ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0;",
         );
         conn.execute_batch(
-            "CREATE INDEX IF NOT EXISTS idx_documents_global ON documents(is_global);",
+            "CREATE INDEX IF NOT EXISTS idx_documents_global ON documents(is_global);
+             CREATE INDEX IF NOT EXISTS idx_documents_project_updated ON documents(project_id, updated_at DESC);
+             CREATE INDEX IF NOT EXISTS idx_documents_conversation_updated ON documents(conversation_id, updated_at DESC);
+             CREATE INDEX IF NOT EXISTS idx_documents_global_updated ON documents(is_global, updated_at DESC);",
         )
         .map_err(|e| format!("document is_global index migration failed: {}", e))?;
         if cfg!(debug_assertions) {
