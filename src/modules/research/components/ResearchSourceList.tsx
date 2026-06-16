@@ -1,10 +1,9 @@
 import { ExternalLink } from "lucide-react";
 import type { ResearchSource, ResearchSourceStatus } from "../research-types";
 import {
-  countExtractions,
-  formatExtractionSummary,
   resolveResearchExtraction,
   SourceExtractionBadge,
+  summarizeResearchExtractions,
 } from "@/lib/source-extraction-ui";
 
 const STATUS_DOTS: Record<ResearchSourceStatus, string> = {
@@ -47,9 +46,7 @@ type Props = {
 
 export function ResearchSourceList({ sources }: Props) {
   const sorted = [...sources].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
-  const extractionSummary = formatExtractionSummary(
-    countExtractions(sorted.map((source) => resolveResearchExtraction(source))),
-  );
+  const { summary: extractionSummary } = summarizeResearchExtractions(sorted);
 
   return (
     <div className="flex flex-col p-4">

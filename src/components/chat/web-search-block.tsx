@@ -6,7 +6,7 @@ import {
   AlertTriangle,
   Minus,
 } from "lucide-react";
-import type { SourceFetchStatus, ToolCallState, WebSearchState } from "@/lib/chat-types";
+import type { SourceFetchStatus, ToolCallState, WebSearchRound } from "@/lib/chat-types";
 import { ToolCallShell } from "@/components/chat/tool-call-shell";
 import { toolCallPhaseLabel } from "@/lib/tool-call-ui";
 import {
@@ -18,7 +18,9 @@ import {
 
 type WebSearchToolCallBlockProps = {
   toolState: ToolCallState;
-  state: WebSearchState;
+  round: WebSearchRound;
+  roundIndex?: number;
+  roundTotal?: number;
 };
 
 function fetchStatusLabel(status: SourceFetchStatus | string | undefined): string {
@@ -66,7 +68,12 @@ function extractionTooltip(
   return undefined;
 }
 
-export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBlockProps) {
+export function WebSearchToolCallBlock({
+  toolState,
+  round: state,
+  roundIndex,
+  roundTotal,
+}: WebSearchToolCallBlockProps) {
   const [expanded, setExpanded] = useState(false);
 
   const isSearching = state.phase === "searching";
@@ -105,10 +112,15 @@ export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBl
       ? toolCallPhaseLabel(toolState.phase, toolState.attempts)
       : phaseLabel;
 
+  const roundLabel =
+    roundTotal && roundTotal > 1 && roundIndex
+      ? `Search ${roundIndex}/${roundTotal}`
+      : "Web Search";
+
   return (
     <ToolCallShell
       icon={<Search className="size-3 text-cyan-400" />}
-      label="Web Search"
+      label={roundLabel}
       phaseLabel={displayPhase}
       accent="cyan"
       isActive={isActive}

@@ -109,6 +109,64 @@ export function formatExtractionSummary(counts: {
   return parts.join(" · ");
 }
 
+type ResearchExtractionSource = Parameters<typeof resolveResearchExtraction>[0];
+
+export function summarizeResearchExtractions(sources: ResearchExtractionSource[]): {
+  counts: { transcripts: number; pdfs: number };
+  kinds: SourceExtractionKind[];
+  summary: string;
+  hasIndicators: boolean;
+} {
+  const kinds = sources
+    .map((source) => resolveResearchExtraction(source))
+    .filter((kind): kind is SourceExtractionKind => kind !== null);
+  const counts = countExtractions(kinds);
+  const summary = formatExtractionSummary(counts);
+  return {
+    counts,
+    kinds,
+    summary,
+    hasIndicators: kinds.length > 0,
+  };
+}
+
+type ResearchExtractionIndicatorsProps = {
+  sources: ResearchExtractionSource[];
+  className?: string;
+};
+
+/** Run-level pills for Deep Research (header, progress area). */
+export function ResearchExtractionIndicators({
+  sources,
+  className = "",
+}: ResearchExtractionIndicatorsProps) {
+  const { counts, hasIndicators } = summarizeResearchExtractions(sources);
+  if (!hasIndicators) return null;
+
+  return (
+    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      {counts.transcripts > 0 && (
+        <span
+          title="YouTube transcripts extracted via Advanced Search Bundle"
+          className="inline-flex items-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[10.5px] font-medium text-rose-300"
+        >
+          <Youtube className="size-3" />
+          {counts.transcripts} transcript{counts.transcripts !== 1 ? "s" : ""}
+        </span>
+      )}
+      {counts.pdfs > 0 && (
+        <span
+          title="PDF text extracted via Advanced Search Bundle"
+          className="inline-flex items-center gap-1 rounded-md border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[10.5px] font-medium text-red-300"
+        >
+          <FileText className="size-3" />
+          {counts.pdfs} PDF{counts.pdfs !== 1 ? "s" : ""}
+        </span>
+      )}
+    </div>
+  );
+}
+
 type SourceExtractionBadgeProps = {
   kind: SourceExtractionKind;
   title?: string;

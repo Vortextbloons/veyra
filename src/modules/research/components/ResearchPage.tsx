@@ -29,6 +29,12 @@ import { NewResearchDialog } from "./NewResearchDialog";
 import { enqueueResearchResume } from "../research-runtime";
 import { useResearchElapsed } from "../use-research-elapsed";
 import { Clock } from "lucide-react";
+import {
+  ResearchExtractionIndicators,
+  resolveResearchExtraction,
+  summarizeResearchExtractions,
+} from "@/lib/source-extraction-ui";
+import { isPdfUrl, isYouTubeUrl } from "@/lib/url-classifiers";
 
 const TAB_ITEMS = [
   { id: "plan", label: "Plan", icon: <LayoutList className="size-3.5" /> },
@@ -130,6 +136,19 @@ export function ResearchPage() {
   const isActive = run && ["planning", "searching", "reading", "extracting", "verifying", "synthesizing"].includes(run.status);
   const canResume = run && (run.status === "paused" || run.status === "failed");
   const elapsed = useResearchElapsed(run);
+  const extractionStats = summarizeResearchExtractions(sources);
+  const pendingBundleSources =
+    run?.status === "reading"
+      ? sources.filter((source) => {
+          if (resolveResearchExtraction(source)) return false;
+          return (
+            source.sourceType === "youtube" ||
+            source.sourceType === "pdf" ||
+            isYouTubeUrl(source.url) ||
+            isPdfUrl(source.url)
+          );
+        }).length
+      : 0;
 
   const firstRunNoticeDismissed = useSettingsStore((s) => s.researchFirstRunNoticeDismissed);
   const setFirstRunNoticeDismissed = useSettingsStore((s) => s.setResearchFirstRunNoticeDismissed);
@@ -275,7 +294,22 @@ export function ResearchPage() {
                 </div>
 
                 {/* Progress bar */}
-                <LiveProgressBar status={run.status} percent={run.progressPercent} />
+                <LiveProgressBar
+                  status={run.status}
+                  percent={run.progressPercent}
+                  pendingBundleSources={pendingBundleSources}
+                />
+                {(extractionStats.hasIndicators || pendingBundleSources > 0) && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ResearchExtractionIndicators sources={sources} />
+                    {pendingBundleSources > 0 && (
+                      <span className="text-[10.5px] text-[var(--color-text-dim)]">
+                        {pendingBundleSources} more YouTube/PDF source
+                        {pendingBundleSources !== 1 ? "s" : ""} fetching…
+                      </span>
+                    )}
+                  </div>
+                )}
                 {(run.totalTokensUsed !== undefined && run.totalTokensUsed > 0) ||
                 (run.completedAt && (run.status === "completed" || run.status === "failed")) ? (
                   <div className="flex items-center justify-end gap-3 text-[11px] text-[var(--color-text-dim)]">
@@ -296,6 +330,10 @@ export function ResearchPage() {
               <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[var(--color-border)] px-3">
                 {TAB_ITEMS.map((tab) => {
                   const count = getTabCount(tab.id, sources, evidence, contradictions, report, run.plan);
+                  const tabExtractionHint =
+                    tab.id === "sources" && extractionStats.summary
+                      ? extractionStats.summary
+                      : null;
                   return (
                     <button
                       key={tab.id}
@@ -312,6 +350,14 @@ export function ResearchPage() {
                       {count > 0 && (
                         <span className="ml-0.5 rounded-full bg-white/[0.06] px-1.5 py-px text-[10px] text-[var(--color-text-dim)]">
                           {count}
+                        </span>
+                      )}
+                      {tabExtractionHint && (
+                        <span
+                          className="ml-0.5 hidden text-[9.5px] text-rose-300/80 sm:inline"
+                          title="Advanced Search Bundle extractions"
+                        >
+                          · {tabExtractionHint}
                         </span>
                       )}
                     </button>
@@ -532,9 +578,11 @@ function getTabCount(
 function LiveProgressBar({
   status,
   percent,
+  pendingBundleSources = 0,
 }: {
   status: string;
   percent: number;
+  pendingBundleSources?: number;
 }) {
   const validateProgress = useResearchStore((s) => s.validateProgress);
   const extractProgress = useResearchStore((s) => s.extractProgress);
@@ -592,6 +640,14 @@ function LiveProgressBar({
           <Loader2 className="size-3 animate-spin text-amber-400" />
           <span>{phaseLabel}</span>
           <span className="font-mono text-amber-300">{phasePct}%</span>
+        </div>
+      )}
+      {status === "reading" && pendingBundleSources > 0 && (
+        <div className="flex items-center gap-2 text-[10.5px] text-[var(--color-text-dim)]">
+          <Loader2 className="size-3 animate-spin text-rose-300" />
+          <span>
+            Advanced Search Bundle: reading YouTube transcripts &amp; PDF text…
+          </span>
         </div>
       )}
     </div>

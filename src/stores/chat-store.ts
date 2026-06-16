@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchState } from "@/lib/chat-types";
+import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchRound, WebSearchState } from "@/lib/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 
 type ConversationHydrationState = "loading" | "ready";
@@ -40,6 +40,8 @@ type ChatStore = {
   resetAfterRePrompt: () => void;
   setModelLoadProgress: (progress: ModelLoadProgress) => void;
   setStreamingWebSearchState: (state: WebSearchState) => void;
+  upsertStreamingWebSearchRound: (round: WebSearchRound) => void;
+  completeStreamingWebSearchRounds: () => void;
   setStreamingToolState: (state: ToolCallState) => void;
   commitAssistantMessage: (
     conversationId: string,
@@ -194,6 +196,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set((state) => {
       if (!state.streamingBuffer) return state;
       return { streamingBuffer: { ...state.streamingBuffer, webSearchState } };
+    });
+  },
+  upsertStreamingWebSearchRound: (round) => {
+    set((state) => {
+      const buffer = state.streamingBuffer;
+      if (!buffer) return state;
+      const existing = buffer.webSearchState?.rounds ?? [];
+      const rounds = existing.some((item) => item.id === round.id)
+        ? existing.map((item) => (item.id === round.id ? { ...item, ...round } : item))
+        : [...existing, round];
+      return {
+        streamingBuffer: {
+          ...buffer,
+          webSearchState: { rounds },
+        },
+      };
+    });
+  },
+  completeStreamingWebSearchRounds: () => {
+    set((state) => {
+      const buffer = state.streamingBuffer;
+      if (!buffer?.webSearchState?.rounds?.length) return state;
+      return {
+        streamingBuffer: {
+          ...buffer,
+          webSearchState: {
+            rounds: buffer.webSearchState.rounds.map((round) => ({
+              ...round,
+              phase: round.phase === "error" ? "error" : "done",
+            })),
+          },
+        },
+      };
     });
   },
   setStreamingToolState: (toolState) => {

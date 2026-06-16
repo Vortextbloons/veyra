@@ -5,6 +5,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { ChatMessage, MessagePerformance } from "@/lib/chat-types";
+import { hasWebSearchActivity } from "@/lib/web-search-state";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/lib/memory-types";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
@@ -89,13 +90,13 @@ export const MessageBubble = memo(function MessageBubble({
     );
   }
   const rawBody = message.content.trim();
-  const body = message.webSearchState
+  const body = hasWebSearchActivity(message.webSearchState)
     ? rawBody.replace(/\{[\s\S]*?"tool"\s*:\s*"web\.search"[\s\S]*?"args"\s*:\s*\{[\s\S]*?"query"\s*:\s*"[^"]*"[\s\S]*?\}[\s\S]*?\}/, "").replace(/\n{3,}/g, "\n\n").trim()
     : rawBody;
   const reasoning = message.reasoning?.trim() ?? "";
   const hasReasoning = reasoning.length > 0;
   const reasoningOnlyStreaming = isStreaming && hasReasoning && !body;
-  const hasToolActivity = (message.toolStates?.length ?? 0) > 0 || Boolean(message.webSearchState);
+  const hasToolActivity = (message.toolStates?.length ?? 0) > 0 || hasWebSearchActivity(message.webSearchState);
   const showReplyBubble = Boolean(body) || (isStreaming && !reasoningOnlyStreaming && !hasToolActivity);
   const showPulseInReply = isStreaming && !reasoningOnlyStreaming && Boolean(body);
 
@@ -135,7 +136,7 @@ export const MessageBubble = memo(function MessageBubble({
             messageTextClass={layout.messageText}
           />
         )}
-        {message.toolStates?.length || message.webSearchState ? (
+        {(message.toolStates?.length || hasWebSearchActivity(message.webSearchState)) ? (
           <ToolCallList message={message} />
         ) : null}
         {showReplyBubble && (

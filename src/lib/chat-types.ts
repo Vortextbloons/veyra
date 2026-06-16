@@ -35,12 +35,18 @@ export type SourceFetch = {
 
 export type WebSearchPhase = "searching" | "fetching" | "reading" | "done" | "error";
 
-export type WebSearchState = {
+/** One web_search tool invocation (supports multi-search tool chains). */
+export type WebSearchRound = {
+  id: string;
   query: string;
   phase: WebSearchPhase;
   sources: WebSearchSource[];
   fetch_progress?: { completed: number; total: number };
   error?: string;
+};
+
+export type WebSearchState = {
+  rounds: WebSearchRound[];
 };
 
 export type ToolCallPhase = "pending" | "running" | "retrying" | "done" | "error";
