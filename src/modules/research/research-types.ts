@@ -59,6 +59,7 @@ export type ResearchSourceType =
   | "wikipedia"
   | "forum"
   | "package"
+  | "youtube"
   | "unknown";
 
 export type ResearchEvidenceType =
@@ -314,6 +315,7 @@ export interface CreateResearchClaimInput {
   sourceId: string;
   claim: string;
   confidence: number;
+  needsSemanticReview?: boolean;
 }
 
 export interface UpdateResearchClaimInput {

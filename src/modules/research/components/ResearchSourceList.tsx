@@ -1,5 +1,11 @@
 import { ExternalLink } from "lucide-react";
 import type { ResearchSource, ResearchSourceStatus } from "../research-types";
+import {
+  countExtractions,
+  formatExtractionSummary,
+  resolveResearchExtraction,
+  SourceExtractionBadge,
+} from "@/lib/source-extraction-ui";
 
 const STATUS_DOTS: Record<ResearchSourceStatus, string> = {
   discovered: "bg-[var(--color-text-dim)]/40",
@@ -18,6 +24,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   wikipedia: "Wiki",
   forum: "Forum",
   package: "Package",
+  youtube: "Video",
   unknown: "Other",
 };
 
@@ -30,6 +37,7 @@ const SOURCE_TYPE_BADGES: Record<string, string> = {
   wikipedia: "bg-cyan-500/10 text-cyan-300 border-cyan-500/20",
   forum: "bg-pink-500/10 text-pink-300 border-pink-500/20",
   package: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+  youtube: "bg-rose-500/10 text-rose-300 border-rose-500/20",
   unknown: "bg-[var(--color-text-dim)]/10 text-[var(--color-text-dim)] border-[var(--color-text-dim)]/20",
 };
 
@@ -39,16 +47,24 @@ type Props = {
 
 export function ResearchSourceList({ sources }: Props) {
   const sorted = [...sources].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+  const extractionSummary = formatExtractionSummary(
+    countExtractions(sorted.map((source) => resolveResearchExtraction(source))),
+  );
 
   return (
     <div className="flex flex-col p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-semibold text-[var(--color-text)]">
           Sources
         </h2>
-        <span className="text-[11px] text-[var(--color-text-dim)]">
-          {sources.length} total
-        </span>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="text-[11px] text-[var(--color-text-dim)]">
+            {sources.length} total
+          </span>
+          {extractionSummary && (
+            <span className="text-[10.5px] text-rose-300/80">{extractionSummary}</span>
+          )}
+        </div>
       </div>
 
       {sorted.length === 0 ? (
@@ -57,7 +73,9 @@ export function ResearchSourceList({ sources }: Props) {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {sorted.map((source) => (
+          {sorted.map((source) => {
+            const extractionKind = resolveResearchExtraction(source);
+            return (
             <div
               key={source.id}
               className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5"
@@ -85,7 +103,19 @@ export function ResearchSourceList({ sources }: Props) {
                   <ExternalLink className="size-2.5" />
                   {source.url}
                 </a>
+                {(source.error || source.fetchStatus) && (
+                  <span
+                    className="mt-1 truncate text-[10.5px] text-amber-300/80"
+                    title={source.error || source.fetchStatus}
+                  >
+                    {source.error || `Fetch: ${source.fetchStatus}`}
+                  </span>
+                )}
               </div>
+
+              <span className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide text-[var(--color-text-dim)]">
+                {source.status}
+              </span>
 
               {/* Type badge */}
               <span
@@ -95,6 +125,10 @@ export function ResearchSourceList({ sources }: Props) {
               >
                 {SOURCE_TYPE_LABELS[source.sourceType] || source.sourceType}
               </span>
+
+              {extractionKind && (
+                <SourceExtractionBadge kind={extractionKind} />
+              )}
 
               {source.sourceQuality && (
                 <div
@@ -140,7 +174,8 @@ export function ResearchSourceList({ sources }: Props) {
                 </span>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

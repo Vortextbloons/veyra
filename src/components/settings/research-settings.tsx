@@ -140,7 +140,6 @@ export function ResearchSettings() {
 
   const providers = useProviderStore((s) => s.providers);
   const models = useProviderStore((s) => s.models);
-  const selectedModel = useProviderStore((s) => s.selectedModel);
 
   // The depth whose overrides we are currently editing.
   const [editingDepth, setEditingDepth] = useState<ResearchDepth>(
@@ -197,14 +196,9 @@ export function ResearchSettings() {
   }
 
   const liteModelOptions = useMemo(
-    () => [
-      ...providers.flatMap(() => models.filter((m) => m.id).map((m) => ({ ...m, id: m.id }))),
-    ],
-    [providers, models],
+    () => models.filter((m) => m.id).map((m) => ({ ...m, id: m.id })),
+    [models],
   );
-
-  // Default model (pre-fill for new research dialog).
-  const defaultModel = research.defaultModelId ?? selectedModel;
 
   return (
     <div className="space-y-8">
@@ -393,7 +387,7 @@ export function ResearchSettings() {
           </div>
           <ModelDropdown
             models={modelOptionsFromProvider(models)}
-            value={research.defaultModelId ?? defaultModel}
+            value={research.defaultModelId ?? ""}
             onChange={(v) => setDefaultModelId(v || null)}
             placeholder="(use current chat model)"
           />
@@ -573,7 +567,7 @@ function DepthOverrideEditor({
             <div>
               <div className="text-[12px] font-medium text-white">Per-source deep read</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                Skip source validation and per-source extraction for big speedup.
+                Enable source validation and per-source extraction for higher-quality reports.
               </div>
             </div>
             <Toggle on={resolved.perSourceRead} onChange={(v) => onUpdate({ perSourceRead: v })} />
@@ -674,7 +668,7 @@ function DepthOverrideEditor({
             <div className="mb-1.5">
               <div className="text-[12px] font-medium text-white">Contradiction strategy</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                Top-K checks the K most-confident claims; All-Pairs is exhaustive.
+                Top-K checks the K most-confident claims; All-Pairs can grow very quickly and is capped below.
               </div>
             </div>
             <Segmented
@@ -697,10 +691,10 @@ function DepthOverrideEditor({
           />
           <Slider
             label="Max contradiction pairs"
-            description="Hard cap on pairs checked. 0 = unlimited."
+            description="Hard cap on AI pair checks. 0 = unlimited and can be very slow on local models."
             value={resolved.contradictionMaxPairs}
             min={0}
-            max={1000}
+            max={500}
             step={10}
             onChange={(v) => onUpdate({ contradictionMaxPairs: v })}
           />
@@ -734,20 +728,18 @@ function DepthOverrideEditor({
               onChange={(v) => onUpdate({ synthesisReasoning: v })}
             />
           </div>
-          {resolved.auditMaxCitations > 0 && (
-            <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
-              <div>
-                <div className="text-[12px] font-medium text-white">Use reasoning for citation audit</div>
-                <div className="text-[10.5px] text-[var(--color-text-dim)]">
-                  Per-citation JSON audit — on for Deep/Exhaustive presets; off on Quick/Standard for speed.
-                </div>
+          <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+            <div>
+              <div className="text-[12px] font-medium text-white">Use reasoning for citation audit</div>
+              <div className="text-[10.5px] text-[var(--color-text-dim)]">
+                Per-citation JSON audit — on for Deep/Exhaustive presets; off on Quick/Standard for speed.
               </div>
-              <Toggle
-                on={resolved.auditReasoning}
-                onChange={(v) => onUpdate({ auditReasoning: v })}
-              />
             </div>
-          )}
+            <Toggle
+              on={resolved.auditReasoning}
+              onChange={(v) => onUpdate({ auditReasoning: v })}
+            />
+          </div>
           <Slider
             label="Max citations to audit"
             description="Hard cap. Long reports audit only the first N citations. 0 = unlimited."

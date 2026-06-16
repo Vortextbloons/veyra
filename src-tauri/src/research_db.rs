@@ -295,6 +295,7 @@ pub struct CreateResearchClaimInput {
     pub source_id: String,
     pub claim: String,
     pub confidence: f64,
+    pub needs_semantic_review: Option<bool>,
     pub created_at: Option<String>,
 }
 
@@ -503,7 +504,11 @@ CREATE INDEX IF NOT EXISTS idx_research_sources_status ON research_sources(statu
 CREATE INDEX IF NOT EXISTS idx_research_evidence_run ON research_evidence(run_id);
 CREATE INDEX IF NOT EXISTS idx_research_evidence_source ON research_evidence(source_id);
 CREATE INDEX IF NOT EXISTS idx_research_claims_run ON research_claims(run_id);
+CREATE INDEX IF NOT EXISTS idx_research_claims_evidence ON research_claims(evidence_id);
+CREATE INDEX IF NOT EXISTS idx_research_claims_source ON research_claims(source_id);
 CREATE INDEX IF NOT EXISTS idx_research_contradictions_run ON research_contradictions(run_id);
+CREATE INDEX IF NOT EXISTS idx_research_contradictions_claim_a ON research_contradictions(claim_a_id);
+CREATE INDEX IF NOT EXISTS idx_research_contradictions_claim_b ON research_contradictions(claim_b_id);
 CREATE INDEX IF NOT EXISTS idx_research_reports_run ON research_reports(run_id);
 "#;
 
@@ -931,10 +936,8 @@ pub fn update_run(conn: &Connection, input_json: String) -> Result<ResearchRunRo
         sets.push(format!("total_tokens_used = ?{}", params.len() + 1));
         params.push(Value::Integer(v));
     }
-    if let Some(v) = input.updated_at {
-        sets.push(format!("updated_at = ?{}", params.len() + 1));
-        params.push(Value::Text(v));
-    }
+    sets.push(format!("updated_at = ?{}", params.len() + 1));
+    params.push(Value::Text(input.updated_at.unwrap_or_else(|| chrono::Utc::now().to_rfc3339())));
     if let Some(v) = input.search_provider {
         sets.push(format!("search_provider = ?{}", params.len() + 1));
         params.push(Value::Text(v));
@@ -1393,9 +1396,9 @@ pub fn create_claim(conn: &Connection, input_json: String) -> Result<ResearchCla
 
     tx.execute(
         "INSERT INTO research_claims
-           (id, run_id, evidence_id, source_id, claim, status, confidence, verified_by, contradicted_by, created_at)
+           (id, run_id, evidence_id, source_id, claim, status, confidence, verified_by, contradicted_by, created_at, needs_semantic_review)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         rusqlite::params![
             id,
             input.run_id,
@@ -1407,6 +1410,7 @@ pub fn create_claim(conn: &Connection, input_json: String) -> Result<ResearchCla
             verified_by_json,
             contradicted_by_json,
             created_at,
+            if input.needs_semantic_review.unwrap_or(false) { 1 } else { 0 },
         ],
     )
     .map_err(|e| format!("insert research_claim failed: {}", e))?;
@@ -1604,6 +1608,9 @@ pub fn create_report(conn: &Connection, input_json: String) -> Result<ResearchRe
         .unchecked_transaction()
         .map_err(|e| format!("begin create_report transaction failed: {}", e))?;
 
+    tx.execute("DELETE FROM research_reports WHERE run_id = ?1", [&input.run_id])
+        .map_err(|e| format!("delete existing research_report failed: {}", e))?;
+
     tx.execute(
         "INSERT INTO research_reports
            (id, run_id, title, content_markdown, citation_map, source_ids, evidence_ids, word_count, format, exported_to_memory_ids, created_at, updated_at)
@@ -1720,7 +1727,7 @@ pub fn update_report(conn: &Connection, input_json: String) -> Result<ResearchRe
 
 pub fn get_report_for_run(conn: &Connection, run_id: String) -> Result<ResearchReportRow, String> {
     conn.query_row(
-        &format!("SELECT {} FROM research_reports WHERE run_id = ?1", REPORT_SELECT_COLS),
+            &format!("SELECT {} FROM research_reports WHERE run_id = ?1 ORDER BY updated_at DESC, created_at DESC LIMIT 1", REPORT_SELECT_COLS),
         [&run_id],
         row_to_report,
     )

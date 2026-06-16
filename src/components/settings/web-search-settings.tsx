@@ -55,6 +55,12 @@ export function WebSearchSettings() {
   const setWebSearchFetchMaxCharsPerSource = useSettingsStore(
     (s) => s.setWebSearchFetchMaxCharsPerSource,
   );
+  const advancedSearchBundleEnabled = useSettingsStore(
+    (s) => s.advancedSearchBundleEnabled,
+  );
+  const setAdvancedSearchBundleEnabled = useSettingsStore(
+    (s) => s.setAdvancedSearchBundleEnabled,
+  );
 
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testError, setTestError] = useState<string>("");
@@ -521,6 +527,35 @@ export function WebSearchSettings() {
               <span>8000</span>
             </div>
           </div>
+        </div>
+      </CollapsibleSettingsSection>
+
+      {/* ── Advanced Search Bundle ───────────────────────────────────────────── */}
+      <CollapsibleSettingsSection
+        subsectionKey="webSearch:bundle"
+        title="Advanced Search Bundle"
+        description="Optional extractors for non-HTML sources (YouTube transcripts, PDF text, future additions)."
+        keywords={["youtube", "transcript", "pdf", "bundle", "advanced"]}
+      >
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+          <Toggle
+            label="Enable Advanced Search Bundle"
+            on={advancedSearchBundleEnabled}
+            onChange={setAdvancedSearchBundleEnabled}
+          />
+          <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
+            When on, search results from YouTube and PDF documents are
+            extracted using dedicated handlers (YouTube captions, PDF text
+            parsing). When off, those URLs fall back to standard HTML
+            fetching — YouTube videos will return an empty body and PDFs
+            will be skipped.
+          </p>
+          {advancedSearchBundleEnabled && (
+            <ul className="mt-3 space-y-1 text-[11px] text-[var(--color-text-dim)]">
+              <li>• YouTube videos → captions/transcripts (free public API, no key)</li>
+              <li>• PDF documents → text extraction (cached locally for 7 days)</li>
+            </ul>
+          )}
         </div>
       </CollapsibleSettingsSection>
 

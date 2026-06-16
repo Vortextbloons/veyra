@@ -144,6 +144,7 @@ export async function runSearch(
 
     let fetchedPages: FetchedPageSummary[] = [];
     const topForFetch = results.slice(0, fetchCount).map((r) => r.url);
+    const bundleEnabled = settings.advancedSearchBundleEnabled;
     if (!skipFetch && fetchEnabled && topForFetch.length > 0) {
       onFetchProgress?.(0, topForFetch.length);
       try {
@@ -152,6 +153,7 @@ export async function runSearch(
           3,
           perPageTimeoutSecs,
           maxCharsPerSource,
+          { advancedSearchBundleEnabled: bundleEnabled },
         );
         onFetchProgress?.(pages.length, topForFetch.length);
         fetchedPages = pages.map((p: FetchedPage) => ({

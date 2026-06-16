@@ -131,9 +131,19 @@ function ClaimCard({
         {claim?.claim || "Unknown claim"}
       </p>
       {source && (
-        <p className="mt-1.5 truncate text-[10.5px] text-[var(--color-text-dim)]">
-          {source.title}
-        </p>
+        <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5">
+          <p className="truncate text-[10.5px] font-medium text-[var(--color-text-dim)]">
+            {source.title}
+          </p>
+          <p className="mt-0.5 truncate text-[9.5px] text-[var(--color-text-muted)]">
+            {source.url}
+          </p>
+          {claim?.status && (
+            <p className="mt-1 text-[9.5px] font-mono uppercase tracking-wide text-amber-300/80">
+              {claim.status.replace(/_/g, " ")}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

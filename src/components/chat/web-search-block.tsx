@@ -9,6 +9,12 @@ import {
 import type { SourceFetchStatus, ToolCallState, WebSearchState } from "@/lib/chat-types";
 import { ToolCallShell } from "@/components/chat/tool-call-shell";
 import { toolCallPhaseLabel } from "@/lib/tool-call-ui";
+import {
+  countExtractions,
+  formatExtractionSummary,
+  resolveWebSearchExtraction,
+  SourceExtractionBadge,
+} from "@/lib/source-extraction-ui";
 
 type WebSearchToolCallBlockProps = {
   toolState: ToolCallState;
@@ -40,6 +46,26 @@ function fetchStatusLabel(status: SourceFetchStatus | string | undefined): strin
   }
 }
 
+function extractionTooltip(
+  kind: ReturnType<typeof resolveWebSearchExtraction>,
+  fetch: { status: string; error_reason?: string } | undefined,
+): string | undefined {
+  if (!kind) return undefined;
+  if (kind === "youtube_transcript") {
+    return "Full YouTube transcript was extracted and injected into the AI context";
+  }
+  if (kind === "pdf_text") {
+    return "PDF text was extracted and injected into the AI context";
+  }
+  if (kind === "youtube_failed") {
+    return `YouTube transcript unavailable: ${fetchStatusLabel(fetch?.status)}${fetch?.error_reason ? ` — ${fetch.error_reason}` : ""}`;
+  }
+  if (kind === "pdf_failed") {
+    return `PDF text unavailable: ${fetchStatusLabel(fetch?.status)}${fetch?.error_reason ? ` — ${fetch.error_reason}` : ""}`;
+  }
+  return undefined;
+}
+
 export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBlockProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -51,6 +77,9 @@ export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBl
     isSearching || isFetching || isReading || toolState.phase === "retrying" || toolState.phase === "pending";
 
   const fetchedCount = state.sources.filter((s) => s.fetch?.status === "ok").length;
+  const extractionKinds = state.sources.map((s) => resolveWebSearchExtraction(s));
+  const extractionCounts = countExtractions(extractionKinds);
+  const extractionSummary = formatExtractionSummary(extractionCounts);
   const unavailableCount = state.sources.filter(
     (s) => s.fetch && s.fetch.status !== "ok",
   ).length;
@@ -68,7 +97,8 @@ export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBl
             : `${state.sources.length} source${state.sources.length !== 1 ? "s" : ""}` +
               (fetchedCount > 0
                 ? ` · ${fetchedCount} page${fetchedCount !== 1 ? "s" : ""} read`
-                : "");
+                : "") +
+              (extractionSummary ? ` · ${extractionSummary}` : "");
 
   const displayPhase =
     toolState.phase === "retrying" || toolState.phase === "pending"
@@ -95,15 +125,18 @@ export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBl
             {state.sources.map((source, index) => {
               const fetch = source.fetch;
               const fetchedOk = fetch?.status === "ok";
+              const extractionKind = resolveWebSearchExtraction(source);
               const isUnavailable = fetch && fetch.status !== "ok";
               const noFetchAttempt = !fetch;
-              const tooltip = isUnavailable
-                ? `Page not fetched: ${fetchStatusLabel(fetch.status)}${fetch.error_reason ? ` — ${fetch.error_reason}` : ""}`
-                : noFetchAttempt
-                  ? "Only the search snippet is used for this source (beyond the page-fetch limit)"
-                  : fetchedOk
-                    ? "Full extracted article content was injected into the AI context"
-                    : fetchStatusLabel(fetch?.status);
+              const tooltip =
+                extractionTooltip(extractionKind, fetch) ??
+                (isUnavailable
+                  ? `Page not fetched: ${fetchStatusLabel(fetch.status)}${fetch.error_reason ? ` — ${fetch.error_reason}` : ""}`
+                  : noFetchAttempt
+                    ? "Only the search snippet is used for this source (beyond the page-fetch limit)"
+                    : fetchedOk
+                      ? "Full extracted article content was injected into the AI context"
+                      : fetchStatusLabel(fetch?.status));
               const Icon = fetchedOk
                 ? CheckCircle2
                 : isUnavailable
@@ -121,7 +154,7 @@ export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBl
                       {index + 1}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <a
                           href={source.url}
                           target="_blank"
@@ -137,6 +170,12 @@ export function WebSearchToolCallBlock({ toolState, state }: WebSearchToolCallBl
                         >
                           <Icon className="size-3" />
                         </span>
+                        {extractionKind && (
+                          <SourceExtractionBadge
+                            kind={extractionKind}
+                            title={tooltip}
+                          />
+                        )}
                       </div>
                       <div className="mt-0.5 truncate text-[10.5px] text-[var(--color-accent)]/70">
                         {source.url}

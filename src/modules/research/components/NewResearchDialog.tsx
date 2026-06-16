@@ -114,7 +114,7 @@ export function NewResearchDialog({ onClose }: Props) {
   const models = useProviderStore((s) => s.models);
   const selectedModel = useProviderStore((s) => s.selectedModel);
   const selectedProvider = useProviderStore((s) => s.selectedProvider);
-  const setSelectedModel = useProviderStore((s) => s.setSelectedModel);
+  const [runModel, setRunModel] = useState(researchConfig.defaultModelId || selectedModel || "");
 
   // Effective resolved profile for the current depth (used to preview override impact).
   const resolvedPreview = useMemo(
@@ -151,15 +151,10 @@ export function NewResearchDialog({ onClose }: Props) {
         return;
       }
 
-      // Use the configured default model if the user hasn't picked one.
-      const chosenModel = researchConfig.defaultModelId
-        ? researchConfig.defaultModelId
-        : selectedModel;
-
       const run = await createRun({
         question: question.trim(),
         depth,
-        modelUsed: chosenModel,
+        modelUsed: runModel || selectedModel,
         providerId: selectedProvider,
       });
 
@@ -298,8 +293,8 @@ export function NewResearchDialog({ onClose }: Props) {
             </label>
             <div className="flex items-center gap-2">
               <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
+                value={runModel}
+                onChange={(e) => setRunModel(e.target.value)}
                 className="h-9 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 text-[13px] text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none"
               >
                 {models.length === 0 && (
@@ -529,10 +524,10 @@ function PerRunOverridePanel({
           onChange={(v) => onUpdate({ validateConcurrency: v })}
         />
         <OverrideSlider
-          label="Contradiction max pairs"
+          label={resolved.contradictionDetect ? "Contradiction max pairs" : "Contradiction max pairs (inactive)"}
           value={resolved.contradictionMaxPairs}
           min={0}
-          max={1000}
+          max={500}
           step={10}
           onChange={(v) => onUpdate({ contradictionMaxPairs: v })}
         />
@@ -555,7 +550,7 @@ function PerRunOverridePanel({
           />
         )}
         <OverrideSlider
-          label="Extract batch size"
+          label={resolved.perSourceRead ? "Extract batch size" : "Extract batch size (inactive)"}
           value={resolved.extractBatchSize}
           min={1}
           max={10}
@@ -563,7 +558,7 @@ function PerRunOverridePanel({
           onChange={(v) => onUpdate({ extractBatchSize: v })}
         />
         <OverrideSlider
-          label="Contradiction min claims"
+          label={resolved.contradictionDetect ? "Contradiction min claims" : "Contradiction min claims (inactive)"}
           value={resolved.contradictionMinClaims}
           min={0}
           max={50}

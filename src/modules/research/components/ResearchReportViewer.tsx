@@ -29,6 +29,7 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
     number: string;
     sourceId?: string;
   } | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
 
   const createDocument = useDocumentStore((s) => s.createDocument);
   const createMemoryNode = useMemoryStore((s) => s.createNode);
@@ -57,6 +58,7 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
 
   const handleExportToDocument = async () => {
     try {
+      setExportStatus(null);
       const exportMarkdown = sanitizeReportSection(stripCitationAuditSection(report.contentMarkdown));
       const doc = await createDocument({
         title: report.title,
@@ -68,13 +70,16 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
         id: report.id,
         exportedToDocumentId: doc.id,
       });
+      setExportStatus("Exported to Documents.");
     } catch (err) {
       console.error("Failed to export report to document:", err);
+      setExportStatus(err instanceof Error ? err.message : "Failed to export report to document.");
     }
   };
 
   const handleExportToMemory = async () => {
     try {
+      setExportStatus(null);
       // Ensure memory folders are loaded and find the first available folder
       const memoryStore = useMemoryStore.getState();
       if (memoryStore.folders.length === 0) {
@@ -83,6 +88,7 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
       const firstFolder = memoryStore.folders[0];
       if (!firstFolder) {
         console.error("No memory folders available for export");
+        setExportStatus("No memory folder is available for export.");
         return;
       }
 
@@ -115,8 +121,10 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
         id: report.id,
         exportedToMemoryIds: [...currentMemoryIds, memoryId],
       });
+      setExportStatus("Exported to Memory.");
     } catch (err) {
       console.error("Failed to export report to memory:", err);
+      setExportStatus(err instanceof Error ? err.message : "Failed to export report to memory.");
     }
   };
 
@@ -178,6 +186,9 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
         </div>
 
         <div className="flex items-center gap-1.5">
+          {exportStatus && (
+            <span className="text-[11px] text-[var(--color-text-dim)]">{exportStatus}</span>
+          )}
           <button
             type="button"
             onClick={handleExportToDocument}

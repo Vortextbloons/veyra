@@ -74,6 +74,7 @@ type ResearchStore = {
   // Sources
   createSource: (input: CreateResearchSourceInput) => Promise<ResearchSource>;
   updateSource: (input: UpdateResearchSourceInput) => Promise<ResearchSource>;
+  syncSource: (source: ResearchSource) => void;
 
   // Evidence
   createEvidence: (input: CreateResearchEvidenceInput) => Promise<ResearchEvidence>;
@@ -282,6 +283,21 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
       set({ error: String(error) });
       throw error;
     }
+  },
+
+  syncSource: (source) => {
+    set((state) => {
+      if (!state.activeRun) return state;
+      const exists = state.activeRun.sources.some((s) => s.id === source.id);
+      return {
+        activeRun: {
+          ...state.activeRun,
+          sources: exists
+            ? state.activeRun.sources.map((s) => (s.id === source.id ? source : s))
+            : [...state.activeRun.sources, source],
+        },
+      };
+    });
   },
 
   createEvidence: async (input) => {
