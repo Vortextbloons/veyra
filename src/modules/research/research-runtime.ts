@@ -1855,24 +1855,13 @@ Research Question: ${run.question}
 ${claimBlocks}
 
 For EACH claim, analyze:
-1. Which sources SUPPORT the claim? (list by source name as they appear in the evidence)
-2. Which sources CONTRADICT the claim? (list by source name)
-3. What is the overall strength of evidence? (strong|moderate|weak|none)
-4. Are there any methodological issues or biases?
+1. Which sources SUPPORT the claim?
+2. Which sources CONTRADICT the claim?
 
-Return ONLY a bare JSON array (no wrapping object, no markdown) with one entry per claim in the SAME ORDER as presented:
-[
-  {
-    "claimIndex": 1,
-    "status": "verified|contradicted|unverified|partially_verified",
-    "confidence": 0.0-1.0,
-    "supportingSources": ["source name 1", "source name 2"],
-    "contradictingSources": ["source name 1"],
-    "reason": "Detailed explanation of the verification result",
-    "strength": "strong|moderate|weak|none",
-    "issues": ["methodological issue 1", "bias concern 2"]
-  }
-]`;
+Return ONLY this JSON object with one entry per claim in the SAME ORDER as presented:
+{"verifications":[{"claimIndex":1,"status":"verified","confidence":0.85,"supportingCount":2,"contradictingCount":0,"reason":"Two independent sources confirm this claim."}]}
+Status must be one of: "verified", "contradicted", "unverified", "partially_verified".
+Do NOT fabricate source names — only count sources that actually appear in the evidence above.`;
 
       try {
         const batchLabel = batch.length === 1
@@ -1885,7 +1874,7 @@ Return ONLY a bare JSON array (no wrapping object, no markdown) with one entry p
           () =>
             callResearchAi(
               [
-                { role: "system", content: `You are a rigorous fact-checker. Cross-reference sources carefully. Flag uncertainty and reasoning transparently; be conservative with confidence scores. Return valid JSON only — a bare array, not wrapped in an object.\n\n${getTemporalContext()}` },
+                { role: "system", content: `You are a rigorous fact-checker. Cross-reference sources carefully. Flag uncertainty transparently; be conservative with confidence scores. Return valid JSON only.\n\n${getTemporalContext()}` },
                 { role: "user", content: verifyPrompt },
               ],
               signal,
@@ -1917,8 +1906,12 @@ Return ONLY a bare JSON array (no wrapping object, no markdown) with one entry p
 
           let status = normalizeClaimStatus(verifyJson.status);
           const confidence = typeof verifyJson.confidence === "number" ? verifyJson.confidence : matched.claim.confidence;
-          const supportingCount = Array.isArray(verifyJson.supportingSources) ? verifyJson.supportingSources.length : 0;
-          const contradictingCount = Array.isArray(verifyJson.contradictingSources) ? verifyJson.contradictingSources.length : 0;
+          const supportingCount = typeof verifyJson.supportingCount === "number"
+            ? verifyJson.supportingCount
+            : Array.isArray(verifyJson.supportingSources) ? verifyJson.supportingSources.length : 0;
+          const contradictingCount = typeof verifyJson.contradictingCount === "number"
+            ? verifyJson.contradictingCount
+            : Array.isArray(verifyJson.contradictingSources) ? verifyJson.contradictingSources.length : 0;
           const independentSupport = matched.independentEvidenceCount > 0 || supportingCount > 1;
           const verificationReason = (typeof verifyJson.reason === "string" && verifyJson.reason)
             ? verifyJson.reason
