@@ -32,6 +32,7 @@ export interface ResearchProfileOverride {
   contradictionMinClaims?: number;
   contradictionStrategy?: ResearchContradictionStrategy;
   contradictionTopK?: number;
+  contradictionConcurrency?: number;
 
   // Synthesis & Audit
   synthesisReasoning?: boolean;
@@ -69,7 +70,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       maxSources: 15,
       maxSourcesPerRound: 15,
       adaptiveDeepening: false,
-      minSourceQuality: 1,
+      minSourceQuality: 2,
       perSourceRead: false,
       directArxivSearch: false,
       directWikipediaSearch: false,
@@ -85,6 +86,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       contradictionMinClaims: 0,
       contradictionStrategy: "top_k",
       contradictionTopK: 10,
+      contradictionConcurrency: 2,
       synthesisReasoning: false,
       selfCritiquePass: false,
       auditReasoning: false,
@@ -114,7 +116,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       validateConcurrency: 5,
       validateReasoning: false,
       validateBatchSize: 3,
-      crossSourceVerify: false,
+      crossSourceVerify: true,
       verifyBatchSize: 15,
       verifyReasoning: false,
       extractBatchSize: 5,
@@ -123,6 +125,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 20,
+      contradictionConcurrency: 2,
       synthesisReasoning: false,
       selfCritiquePass: false,
       auditReasoning: false,
@@ -161,12 +164,13 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 30,
+      contradictionConcurrency: 3,
       synthesisReasoning: true,
       selfCritiquePass: true,
       auditReasoning: true,
       auditMaxCitations: 20,
       auditConcurrency: 3,
-      gapAnalysis: false,
+      gapAnalysis: true,
       sectionMaxWords: 600,
       maxSections: 7,
       liteModelId: "",
@@ -199,6 +203,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 50,
+      contradictionConcurrency: 4,
       synthesisReasoning: true,
       selfCritiquePass: true,
       auditReasoning: true,
@@ -237,6 +242,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       contradictionMinClaims: 5,
       contradictionStrategy: "top_k",
       contradictionTopK: 80,
+      contradictionConcurrency: 6,
       synthesisReasoning: true,
       selfCritiquePass: true,
       auditReasoning: true,
@@ -325,7 +331,7 @@ export function resolveResearchProfile(
       "validateConcurrency", "validateReasoning", "validateBatchSize",
       "crossSourceVerify", "verifyBatchSize", "verifyReasoning", "extractBatchSize",
       "contradictionDetect", "contradictionMaxPairs", "contradictionMinClaims",
-      "contradictionStrategy", "contradictionTopK", "synthesisReasoning", "selfCritiquePass",
+      "contradictionStrategy", "contradictionTopK", "contradictionConcurrency", "synthesisReasoning", "selfCritiquePass",
       "auditReasoning", "auditMaxCitations", "auditConcurrency", "gapAnalysis",
       "sectionMaxWords", "maxSections", "liteModelId", "liteModelProviderId",
     ];
@@ -371,38 +377,6 @@ export type ResearchConfigSetter =
   | { kind: "setLiteModel"; modelId: string; providerId: string }
   | { kind: "reset" };
 
-export const STANDARD_BASELINE: ResearchProfileOverride = {
-  maxSearchRounds: 5,
-  maxSources: 75,
-  maxSourcesPerRound: 15,
-  adaptiveDeepening: false,
-  minSourceQuality: 3,
-  perSourceRead: true,
-  directArxivSearch: false,
-  directWikipediaSearch: true,
-  validateConcurrency: 3,
-  validateReasoning: false,
-  validateBatchSize: 2,
-  crossSourceVerify: true,
-  verifyBatchSize: 1,
-  verifyReasoning: false,
-  extractBatchSize: 3,
-  contradictionDetect: false,
-  contradictionMaxPairs: 0,
-  contradictionMinClaims: 5,
-  contradictionStrategy: "top_k",
-  contradictionTopK: 30,
-  synthesisReasoning: true,
-  selfCritiquePass: true,
-  auditReasoning: false,
-  auditMaxCitations: 20,
-  auditConcurrency: 3,
-  gapAnalysis: false,
-  sectionMaxWords: 600,
-  maxSections: 6,
-  liteModelId: "",
-  liteModelProviderId: "",
-};
 
 export function applyResearchConfig(
   state: ResearchConfigState,

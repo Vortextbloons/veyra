@@ -57,6 +57,8 @@ export type SearchSource = {
   title: string;
   url: string;
   snippet: string;
+  score?: number;
+  rank?: number;
   fetch?: {
     status: string;
     error_reason?: string;

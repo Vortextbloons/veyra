@@ -69,6 +69,7 @@ type DepthConfig = {
   contradictionMinClaims: number;
   contradictionStrategy: "all_pairs" | "top_k";
   contradictionTopK: number;
+  contradictionConcurrency: number;
   synthesisReasoning: boolean;
   selfCritiquePass: boolean;
   auditReasoning: boolean;
@@ -109,6 +110,7 @@ function profileToDepthConfig(p: ResearchProfileOverride): DepthConfig {
     contradictionMinClaims: Math.max(0, p.contradictionMinClaims ?? 5),
     contradictionStrategy: p.contradictionStrategy ?? "top_k",
     contradictionTopK: clamp(p.contradictionTopK ?? 50, 5, 500),
+    contradictionConcurrency: clamp(p.contradictionConcurrency ?? 2, 1, 8),
     synthesisReasoning: p.synthesisReasoning ?? false,
     selfCritiquePass: p.selfCritiquePass ?? false,
     auditReasoning: p.auditReasoning ?? false,
@@ -169,10 +171,6 @@ function safeJsonParse<T>(text: string): T | null {
     }
   }
   return null;
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getErrorMessage(error: unknown): string {
@@ -373,11 +371,13 @@ function parseResearchEvidenceArray(text: string): Array<Record<string, unknown>
 
 function fallbackSearchQueries(question: string): string[] {
   const cleaned = question.trim().replace(/\s+/g, " ");
+  const year = new Date().getFullYear();
   return [
     cleaned,
     `${cleaned} official documentation`,
-    `${cleaned} recent analysis`,
-    `${cleaned} evidence sources`,
+    `${cleaned} ${year} latest research`,
+    `${cleaned} expert analysis review`,
+    `${cleaned} comparison debate limitations`,
   ];
 }
 
@@ -608,10 +608,12 @@ function guessSourceType(url: string): ResearchSourceType {
   if (isEpubUrl(url)) return "epub";
   if (isArxivUrl(url)) return "arxiv";
   if (isWikipediaUrl(url)) return "wikipedia";
-  if (lower.includes("news") || lower.includes("bbc.com") || lower.includes("reuters.com") || lower.includes("cnn.com") || lower.includes("nytimes.com")) return "news";
-  if (lower.includes("docs.") || lower.includes("documentation")) return "docs";
-  if (lower.includes("forum") || lower.includes("reddit.com") || lower.includes("stackoverflow.com")) return "forum";
-  if (lower.includes("pubmed") || lower.includes("doi.org") || lower.includes("scholar.google")) return "docs";
+  if (lower.includes("news") || lower.includes("bbc.com") || lower.includes("reuters.com") || lower.includes("cnn.com") || lower.includes("nytimes.com") || lower.includes("theguardian.com") || lower.includes("washingtonpost.com") || lower.includes("apnews.com") || lower.includes("bloomberg.com") || lower.includes("ft.com")) return "news";
+  if (lower.includes("docs.") || lower.includes("documentation") || lower.includes("developer.mozilla.org") || lower.includes("learn.microsoft.com") || lower.includes("readthedocs.io")) return "docs";
+  if (lower.includes("forum") || lower.includes("reddit.com") || lower.includes("stackoverflow.com") || lower.includes("discourse.org") || lower.includes("news.ycombinator.com") || lower.includes("quora.com")) return "forum";
+  if (lower.includes("pubmed") || lower.includes("doi.org") || lower.includes("scholar.google") || lower.includes("semanticscholar.org") || lower.includes("jstor.org") || lower.includes("researchgate.net")) return "docs";
+  if (lower.includes("github.com") || lower.includes("gitlab.com") || lower.includes("bitbucket.org")) return "github";
+  if (lower.includes("npmjs.com") || lower.includes("pypi.org") || lower.includes("crates.io") || lower.includes("rubygems.org") || lower.includes("nuget.org")) return "package";
   return "webpage";
 }
 
@@ -1188,6 +1190,7 @@ export function enqueueResearchRunJob(
           extractProgress: { done: 0, total: 0 },
           contradictionProgress: { done: 0, total: 0 },
           auditProgress: { done: 0, total: 0 },
+          filteredEvidenceCount: { lowSignificance: 0, tooShort: 0, emptyContent: 0 },
         });
       }
     },
@@ -1251,6 +1254,11 @@ export async function executeResearchRun(
 ): Promise<void> {
   const store = useResearchStore.getState();
   const config = buildDepthConfig(run.depth, perRunOverride);
+
+  // Clear module-level caches between runs to prevent stale data bleeding across runs.
+  claimTrigramCache.clear();
+  similarityTokenCache.clear();
+
   const directSearchSources = {
     directArxivSearch: config.directArxivSearch,
     directWikipediaSearch: config.directWikipediaSearch,
@@ -1289,6 +1297,7 @@ export async function executeResearchRun(
   const searchQueriesUsed: string[] = [];
   let totalTokens = 0;
   let firstSearchError: string | null = null;
+  let planContextSummary = "";
 
   const existingRun = store.activeRunOrNull();
   if (existingRun?.run.id === run.id) {
@@ -1442,11 +1451,12 @@ export async function executeResearchRun(
 
     const validationPrompt = `You are a research quality analyst. Evaluate this source for the research question: "${run.question}"
 
-Source: ${source.title}
+${planContextSummary ? `Context:\n${planContextSummary}\n\n` : ""}Source: ${source.title}
 URL: ${source.url}
 Source type: ${sourceTypeLabel(source.sourceType)}
 Domain credibility: ${domainScore}/5 (${credibility.label})
 Known source type: ${credibility.label}
+Search ranking: #${source.rank ?? "unknown"} (score: ${source.score ?? 0})
 
 ${sourceClassificationHint(source.sourceType)}
 
@@ -1568,7 +1578,7 @@ ${untrustedSourceBlock(source.url, truncated, source.sourceType)}`;
 
     const batchPrompt = `You are a research quality analyst. Evaluate these ${batch.length} sources for the research question: "${run.question}"
 
-${sourceBlocks}
+${planContextSummary ? `Context:\n${planContextSummary}\n\n` : ""}${sourceBlocks}
 
 For EACH source, evaluate:
 1. RELEVANCE (1-5): How directly does this source address the research question?
@@ -2075,6 +2085,7 @@ Do NOT fabricate source names — only count sources that actually appear in the
     sourceList: ResearchSource[],
     stepId: string,
     followUp: boolean,
+    gapContext?: string,
   ): Promise<{ extracted: number; parseFailed: number; filteredOut: number; skippedEmpty: number }> {
     const batchSize = Math.max(1, config.extractBatchSize);
 
@@ -2136,8 +2147,8 @@ Do NOT fabricate source names — only count sources that actually appear in the
         return false;
       }
       const significance = (item.significance as string) || "medium";
-      if (significance === "low") {
-        filteredOut++;
+      const isLowSignificance = significance === "low";
+      if (isLowSignificance) {
         onEvent({
           type: "evidence_filtered",
           reason: "low_significance",
@@ -2146,8 +2157,11 @@ Do NOT fabricate source names — only count sources that actually appear in the
           sourceTitle: source.title,
           confidence: typeof item.confidence === "number" ? item.confidence : 0,
         });
-        return false;
       }
+      const rawConfidence = typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : 0.7;
+      // Deprioritize low-significance evidence: cap confidence at 0.5 so it sorts lower
+      // but remains available for citation if needed.
+      const evidenceConfidence = isLowSignificance ? Math.min(rawConfidence, 0.5) : rawConfidence;
       const evidence = await store.createEvidence({
         runId: run.id,
         sourceId: source.id,
@@ -2155,14 +2169,14 @@ Do NOT fabricate source names — only count sources that actually appear in the
         type: (item.type as ResearchEvidenceType) || "fact",
         content: String(item.content).slice(0, 1000),
         context: String(item.context || "").slice(0, 500),
-        confidence: typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : 0.7,
+        confidence: evidenceConfidence,
         tags: Array.isArray(item.tags) ? item.tags.slice(0, 5) : [],
       });
       evidenceList.push(evidence);
       extracted++;
       onEvent({ type: "evidence_extracted", evidenceId: evidence.id, evidenceType: evidence.type, content: evidence.content });
 
-      if (significance === "high" || evidence.confidence >= 0.75) {
+      if (!isLowSignificance && (significance === "high" || evidence.confidence >= 0.75)) {
         const claimText = evidence.content.slice(0, 500);
         if (!isSimilarToExistingClaim(claimText, claims)) {
           const borderline = findBorderlineSimilarClaim(claimText, claims);
@@ -2211,7 +2225,7 @@ ${excerpt}`;
       const batchPrompt = `You are a meticulous research analyst. Extract ${followUp ? "NEW " : ""}evidence from these ${sourceBatch.length} source${sourceBatch.length === 1 ? "" : "s"} that is DIRECTLY RELEVANT to the research question.
 
 Research Question: "${run.question}"
-
+${followUp && gapContext ? `\nResearch Gaps to Fill:\n${gapContext}\n` : ""}
 ${sourceBlocks}
 
 Source type guidance:
@@ -2278,7 +2292,7 @@ If no evidence is relevant, return {"evidence":[]}.`;
             const singlePrompt = `You are a meticulous research analyst. Extract ${followUp ? "NEW " : ""}evidence from this source that is DIRECTLY RELEVANT to the research question.
 
 Research Question: "${run.question}"
-
+${followUp && gapContext ? `\nResearch Gaps to Fill:\n${gapContext}\n` : ""}
 Source: ${source.title}
 URL: ${source.url}
 Type: ${sourceTypeLabel(source.sourceType)}
@@ -2556,6 +2570,19 @@ Question: ${run.question}`;
     }
     } // end plan else block
 
+    // Build plan context for downstream phases (validation, extraction, synthesis).
+    const activePlan = run.plan;
+    if (activePlan?.steps?.length) {
+      const concepts = planSteps
+        .flatMap((s) => s.searchQueries ?? [])
+        .slice(0, 10);
+      planContextSummary = [
+        `Research strategy: ${activePlan.steps.length} planned steps.`,
+        run.clarifiedQuestion ? `Clarified question: ${run.clarifiedQuestion}` : "",
+        concepts.length > 0 ? `Key search angles: ${concepts.join("; ")}` : "",
+      ].filter(Boolean).join("\n");
+    }
+
     // ── Phase 2: Multi-Round Search ─────────────────────────────────────────
     checkAbort();
     const searchRoundLimit = Math.min(planSteps.length, config.maxSearchRounds);
@@ -2614,8 +2641,8 @@ Question: ${run.question}`;
             snippet: src.snippet,
             sourceType: guessSourceType(src.url),
             engine: run.searchProvider ?? "searxng",
-            score: 0,
-            rank: sources.length + pendingSources.length + 1,
+            score: src.score ?? 0,
+            rank: src.rank ?? (sources.length + pendingSources.length + 1),
             ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
           });
         }
@@ -2674,8 +2701,8 @@ Question: ${run.question}`;
               snippet: src.snippet,
               sourceType: guessSourceType(src.url),
               engine: run.searchProvider ?? "searxng",
-              score: 0,
-              rank: sources.length + 1,
+              score: src.score ?? 0,
+              rank: src.rank ?? (sources.length + 1),
               ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
             });
             sources.push(source);
@@ -2944,7 +2971,7 @@ Answer ONLY with a JSON object:
         }
 
         // Bounded concurrent loop for contradiction checks.
-        const cconcurrency = Math.max(1, config.auditConcurrency);
+        const cconcurrency = Math.max(1, config.contradictionConcurrency);
         let cursor = 0;
         async function cworker() {
           while (cursor < pairs.length) {
@@ -3039,6 +3066,11 @@ Return ONLY a JSON object:
           followUpQueries?: string[];
         }>(gapResponse);
 
+        const gapContextText = [
+          gapJson?.gaps?.length ? `Missing coverage: ${gapJson.gaps.join("; ")}` : "",
+          gapJson?.missingSourceTypes?.length ? `Needed source types: ${gapJson.missingSourceTypes.join(", ")}` : "",
+        ].filter(Boolean).join("\n") || "";
+
         const followUpQueries = gapJson?.followUpQueries || [];
         const discoveredUrls = new Set<string>(sources.map((s) => s.url));
         const followUpSources: ResearchSource[] = [];
@@ -3068,8 +3100,8 @@ Return ONLY a JSON object:
                 snippet: src.snippet,
                 sourceType: guessSourceType(src.url),
                 engine: run.searchProvider ?? "searxng",
-                score: 0,
-                rank: sources.length + 1,
+                score: src.score ?? 0,
+                rank: src.rank ?? (sources.length + 1),
                 ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
               });
               sources.push(source);
@@ -3093,7 +3125,7 @@ Return ONLY a JSON object:
             if (validatedFollowUps.length > 0) {
               const followUpClaimIds = new Set(claims.map((claim) => claim.id));
               const followUpSourceIds = new Set(validatedFollowUps.map((source) => source.id));
-              await extractFromSourcesBatch(validatedFollowUps, gapStep.id, true);
+              await extractFromSourcesBatch(validatedFollowUps, gapStep.id, true, gapContextText);
 
               const newFollowUpClaims = claims.filter((claim) => !followUpClaimIds.has(claim.id) && followUpSourceIds.has(claim.sourceId));
               if (newFollowUpClaims.length > 0) {
@@ -3128,12 +3160,31 @@ Return ONLY a JSON object:
     onEvent({ type: "phase_start", phase: "synthesize", stepId: synthesizeStep.id });
     await updateRunStatus("synthesizing", 80);
 
-    // Build a comprehensive evidence summary
-    const evidenceSummary = evidenceList
-      .sort((a, b) => b.confidence - a.confidence)
+    // Build a comprehensive evidence summary, weighted by claim verification status.
+    const claimByEvidenceId = new Map(claims.map((c) => [c.evidenceId, c]));
+    const verificationBoost: Record<string, number> = {
+      verified: 1.0,
+      partially_verified: 0.6,
+      extracted: 0.3,
+      unverified: 0.0,
+      contradicted: -0.3,
+      disputed: -0.2,
+      rejected: -0.5,
+    };
+    const weightedEvidence = [...evidenceList].sort((a, b) => {
+      const claimA = claimByEvidenceId.get(a.id);
+      const claimB = claimByEvidenceId.get(b.id);
+      const scoreA = a.confidence + (verificationBoost[claimA?.status ?? "extracted"] ?? 0);
+      const scoreB = b.confidence + (verificationBoost[claimB?.status ?? "extracted"] ?? 0);
+      return scoreB - scoreA;
+    });
+
+    const evidenceSummary = weightedEvidence
       .map((e, i) => {
         const source = sources.find((s) => s.id === e.sourceId);
-        return `Evidence ${i + 1} [${e.id}]:
+        const claim = claimByEvidenceId.get(e.id);
+        const claimStatus = claim ? `[Claim: ${claim.status}]` : "";
+        return `Evidence ${i + 1} [${e.id}] ${claimStatus}:
 Source: ${source?.title || "Unknown"} (${source?.url || "N/A"})
 Type: ${e.type}
 Confidence: ${e.confidence}
@@ -3192,8 +3243,10 @@ Resolution: ${c.resolution || "Unresolved"}`;
       .map((e) => {
         const source = sources.find((s) => s.id === e.sourceId);
         const sourceNumber = getSourceNumber(e.sourceId, shownSources);
+        const claim = claimByEvidenceId.get(e.id);
+        const claimStatus = claim ? ` | Claim: ${claim.status}` : "";
         return `Citation ${sourceNumber ? `[${sourceNumber}]` : "uncited-source"} — ${source?.title || "Unknown"} (${source?.url || "N/A"})
-Type: ${e.type} | Confidence: ${e.confidence}
+Type: ${e.type} | Confidence: ${e.confidence}${claimStatus}
 Evidence: ${e.content}
 Context: ${e.context}`;
       })
@@ -3297,6 +3350,10 @@ Return ONLY a JSON object:
       : -1;
 
     reportMarkdown += `# ${outlineJson?.title || `Research: ${run.question}`}\n\n`;
+    reportMarkdown += `> **Depth:** ${run.depth} | **Sources:** ${sources.length} | **Evidence:** ${evidenceList.length} | **Claims:** ${claims.length} | **Contradictions:** ${contradictions.length}\n\n`;
+
+    // Track section offsets for safe self-critique replacement (avoids fragile regex).
+    const sectionOffsets = new Map<string, { start: number; end: number }>();
 
     for (let i = 0; i < sections.length; i++) {
       checkAbort();
@@ -3372,11 +3429,15 @@ Output rules:
         const sectionResponse = prepareReportSection(sectionResult.text, maxCitationNumber);
         const wordCount = sectionResponse.split(/\s+/).filter(Boolean).length;
         if (sectionResponse) {
+          const sectionStart = reportMarkdown.length;
           reportMarkdown += `## ${section.heading}\n\n`;
           reportMarkdown += sectionResponse;
           reportMarkdown += "\n\n";
+          sectionOffsets.set(section.heading ?? "", { start: sectionStart, end: reportMarkdown.length });
         } else {
+          const sectionStart = reportMarkdown.length;
           reportMarkdown += `## ${section.heading}\n\n*[Section content could not be generated]*\n\n`;
+          sectionOffsets.set(section.heading ?? "", { start: sectionStart, end: reportMarkdown.length });
         }
         await completeStep(sectionStep, `${wordCount} words written`, sectionResult.tokens?.totalTokens);
       } catch (err) {
@@ -3489,10 +3550,25 @@ Output: Return ONLY polished report prose. No headings, no meta-commentary.`;
 
                 const rewritten = prepareReportSection(rewriteResult.text, maxCitationNumber);
                 if (rewritten && rewritten.length > 100) {
-                  // Replace the section in the report markdown
-                  const oldSectionRegex = new RegExp(`## ${escapeRegex(section.heading || "")}\\n\\n[\\s\\S]*?(?=\\n## |\\n---\\n|$)`);
-                  const newSection = `## ${section.heading}\n\n${rewritten}\n\n`;
-                  reportMarkdown = reportMarkdown.replace(oldSectionRegex, newSection);
+                  // Replace the section using tracked offsets (avoids fragile regex).
+                  const offsets = sectionOffsets.get(heading);
+                  if (offsets) {
+                    const newSection = `## ${heading}\n\n${rewritten}\n\n`;
+                    reportMarkdown = reportMarkdown.slice(0, offsets.start) + newSection + reportMarkdown.slice(offsets.end);
+                    // Recalculate all offsets after the replacement since the string changed.
+                    // Simple approach: re-scan for all section headings.
+                    sectionOffsets.clear();
+                    const headingPattern = /^## (.+)$/gm;
+                    let m: RegExpExecArray | null;
+                    while ((m = headingPattern.exec(reportMarkdown)) !== null) {
+                      const hStart = m.index;
+                      // Find the start of the next heading or end of string
+                      const nextHeading = headingPattern.exec(reportMarkdown);
+                      const hEnd = nextHeading ? nextHeading.index : reportMarkdown.length;
+                      sectionOffsets.set(m[1], { start: hStart, end: hEnd });
+                      if (nextHeading) headingPattern.lastIndex = nextHeading.index;
+                    }
+                  }
                 }
               } catch (rewriteErr) {
                 console.warn("[research-runtime] Section rewrite failed:", heading, rewriteErr);

@@ -103,6 +103,7 @@ type ResearchStore = {
   extractProgress: { done: number; total: number };
   contradictionProgress: { done: number; total: number };
   auditProgress: { done: number; total: number };
+  filteredEvidenceCount: { lowSignificance: number; tooShort: number; emptyContent: number };
   interruptActiveResearchOnShutdown: () => Promise<void>;
 };
 
@@ -121,6 +122,7 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
   extractProgress: { done: 0, total: 0 },
   contradictionProgress: { done: 0, total: 0 },
   auditProgress: { done: 0, total: 0 },
+  filteredEvidenceCount: { lowSignificance: 0, tooShort: 0, emptyContent: 0 },
 
   setActiveController: (controller) => {
     set({ activeController: controller, isPausing: false });
@@ -440,6 +442,14 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
         return;
       case "audit_progress":
         set({ auditProgress: { done: event.done, total: event.total } });
+        return;
+      case "evidence_filtered":
+        set((state) => ({
+          filteredEvidenceCount: {
+            ...state.filteredEvidenceCount,
+            [event.reason === "low_significance" ? "lowSignificance" : event.reason === "too_short" ? "tooShort" : "emptyContent"]: state.filteredEvidenceCount[event.reason === "low_significance" ? "lowSignificance" : event.reason === "too_short" ? "tooShort" : "emptyContent"] + 1,
+          },
+        }));
         return;
       case "source_validated":
       case "evidence_extracted":

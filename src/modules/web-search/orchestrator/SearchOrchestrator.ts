@@ -232,6 +232,8 @@ export async function runSearch(
         title: r.title,
         url: r.url,
         snippet: r.snippet ?? "",
+        ...(r.score != null ? { score: r.score } : {}),
+        ...(r.rank != null ? { rank: r.rank } : {}),
         ...(fetchInfo ? { fetch: fetchInfo } : {}),
       };
     });
