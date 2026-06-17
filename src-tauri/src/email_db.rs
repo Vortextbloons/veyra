@@ -310,7 +310,7 @@ pub fn connect_gmail_with_config(
         .map_err(|e| format!("failed to start Gmail OAuth callback server: {e}"))?;
     let scope = "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/gmail.send openid email profile";
     let auth_url = format!(
-        "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&prompt=consent&login_hint=",
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id={}&redirect_uri={}&response_type=code&scope={}&access_type=offline&include_granted_scopes=true&prompt=consent%20select_account",
         urlencoding::encode(client_id.trim()),
         urlencoding::encode(redirect_uri),
         urlencoding::encode(scope),
@@ -318,26 +318,36 @@ pub fn connect_gmail_with_config(
     open_url(&auth_url)?;
     let code = wait_for_oauth_code(listener)?;
     let token = exchange_gmail_code(client_id.trim(), client_secret.trim(), redirect_uri, &code)?;
-    let profile = gmail_request(
+    let profile = google_api_request_json(
         &token.access_token,
         reqwest::blocking::Client::new()
-            .get("https://gmail.googleapis.com/gmail/v1/users/me/profile"),
+            .get("https://openidconnect.googleapis.com/v1/userinfo"),
     )?;
     let email = profile
         .get("emailAddress")
+        .or_else(|| profile.get("email"))
         .and_then(Value::as_str)
-        .ok_or_else(|| "Gmail profile did not include an email address".to_string())?
+        .ok_or_else(|| "Google userinfo did not include an email address".to_string())?
         .to_string();
     let account = upsert_gmail_account(conn, email, token)?;
-    sync_gmail_account(conn, account.id.clone())?;
+    if let Err(error) = sync_gmail_account(conn, account.id.clone()) {
+        if error.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT")
+            || error.contains("insufficient authentication scopes")
+            || error.contains("Insufficient Permission")
+        {
+            return Ok(account);
+        }
+        let _ = remove_account(conn, account.id.clone());
+        return Err(error);
+    }
     Ok(account)
 }
 
 fn open_url(url: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
+        std::process::Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", url])
             .spawn()
             .map_err(|e| format!("failed to open browser: {e}"))?;
         Ok(())
@@ -471,18 +481,21 @@ fn refresh_gmail_token(conn: &Connection, account_id: &str) -> Result<String, St
     Ok(access_token)
 }
 
-fn gmail_request(
+fn google_api_request_json(
     builder_token: &str,
     builder: reqwest::blocking::RequestBuilder,
 ) -> Result<Value, String> {
-    builder
+    let response = builder
         .bearer_auth(builder_token)
         .send()
-        .map_err(|e| e.to_string())?
-        .error_for_status()
-        .map_err(|e| e.to_string())?
-        .json()
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    let status = response.status();
+    let body = response.text().map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        return Err(format!("Google API request failed ({status}): {body}"));
+    }
+    serde_json::from_str(&body)
+        .map_err(|e| format!("failed to parse Google API response: {e}; body: {body}"))
 }
 
 fn upsert_gmail_account(
@@ -515,7 +528,7 @@ fn upsert_gmail_account(
 pub fn sync_gmail_account(conn: &Connection, account_id: String) -> Result<(), String> {
     let token = refresh_gmail_token(conn, &account_id)?;
     let client = reqwest::blocking::Client::new();
-    let list: Value = gmail_request(
+    let list: Value = google_api_request_json(
         &token,
         client
             .get("https://gmail.googleapis.com/gmail/v1/users/me/messages")
@@ -528,7 +541,7 @@ pub fn sync_gmail_account(conn: &Connection, account_id: String) -> Result<(), S
         let Some(message_id) = item.get("id").and_then(Value::as_str) else {
             continue;
         };
-        let message = gmail_request(
+        let message = google_api_request_json(
             &token,
             client
                 .get(format!(

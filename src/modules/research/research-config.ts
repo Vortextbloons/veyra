@@ -119,7 +119,7 @@ export const RESEARCH_DEPTH_PRESETS: Record<ResearchDepth, ResearchDepthProfile>
       crossSourceVerify: true,
       verifyBatchSize: 15,
       verifyReasoning: false,
-      extractBatchSize: 5,
+      extractBatchSize: 2,
       contradictionDetect: false,
       contradictionMaxPairs: 0,
       contradictionMinClaims: 5,

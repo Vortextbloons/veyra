@@ -47,6 +47,10 @@ import {
   type ResearchProfileOverride,
 } from "./research-config";
 import { getCredibilityScore } from "./source-credibility";
+import {
+  maxEvidenceItemsPerSource,
+  parseResearchEvidenceArray,
+} from "./extraction-json";
 
 type DepthConfig = {
   maxSearchRounds: number;
@@ -199,21 +203,6 @@ function normalizeBatchVerifyArray(parsed: unknown): Array<Record<string, unknow
   return null;
 }
 
-function normalizeBatchExtractArray(parsed: unknown): Array<Record<string, unknown>> | null {
-  if (Array.isArray(parsed)) return parsed as Array<Record<string, unknown>>;
-  if (parsed && typeof parsed === "object") {
-    const obj = parsed as Record<string, unknown>;
-    for (const key of ["evidence", "extractions", "items", "results", "findings", "data"]) {
-      const val = obj[key];
-      if (Array.isArray(val)) return val as Array<Record<string, unknown>>;
-    }
-    if ("content" in obj || "type" in obj) {
-      return [obj];
-    }
-  }
-  return null;
-}
-
 function pickResearchAiOutputText(content: string, reasoning: string): string {
   const trimmedContent = content.trim();
   const trimmedReasoning = reasoning.trim();
@@ -272,100 +261,6 @@ function extractBalancedJson(text: string, open: "{" | "[", close: "}" | "]"): s
       if (depth === 0) return text.slice(start, i + 1);
     }
   }
-  return null;
-}
-
-function stripThinkingBlocks(text: string): string {
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
-    .trim();
-}
-
-function repairTrailingCommas(json: string): string {
-  return json.replace(/,\s*([}\]])/g, "$1");
-}
-
-function extractAllBalancedJsonArrays(text: string): string[] {
-  const results: string[] = [];
-  let searchFrom = 0;
-  while (searchFrom < text.length) {
-    const sub = text.slice(searchFrom);
-    const start = sub.indexOf("[");
-    if (start === -1) break;
-    const candidate = extractBalancedJson(sub.slice(start), "[", "]");
-    if (candidate) {
-      results.push(candidate);
-      searchFrom += start + candidate.length;
-    } else {
-      searchFrom += start + 1;
-    }
-  }
-  return results;
-}
-
-function salvageTruncatedArrayObjects(text: string): Array<Record<string, unknown>> | null {
-  const trimmed = text.trim();
-  const start = trimmed.indexOf("[");
-  if (start === -1) return null;
-
-  const body = trimmed.slice(start + 1);
-  const objects: Array<Record<string, unknown>> = [];
-  let i = 0;
-  while (i < body.length) {
-    while (i < body.length && /[\s,]/.test(body[i]!)) i++;
-    if (i >= body.length || body[i] !== "{") break;
-    const objStr = extractBalancedJson(body.slice(i), "{", "}");
-    if (!objStr) break;
-    try {
-      const parsed = JSON.parse(repairTrailingCommas(objStr)) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        objects.push(parsed as Record<string, unknown>);
-      }
-    } catch {
-      break;
-    }
-    i += objStr.length;
-  }
-  return objects.length > 0 ? objects : null;
-}
-
-function parseResearchEvidenceArray(text: string): Array<Record<string, unknown>> | null {
-  const cleaned = stripThinkingBlocks(text);
-  if (!cleaned) return null;
-
-  const candidates: string[] = [];
-  const codeBlockMatches = cleaned.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi);
-  for (const match of codeBlockMatches) {
-    if (match[1]?.trim()) candidates.push(match[1].trim());
-  }
-  candidates.push(cleaned);
-  for (const arr of extractAllBalancedJsonArrays(cleaned)) {
-    candidates.push(arr);
-  }
-
-  for (const candidate of Array.from(new Set(candidates))) {
-    for (const attempt of [candidate, repairTrailingCommas(candidate)]) {
-      try {
-        const parsed = JSON.parse(attempt) as unknown;
-        if (Array.isArray(parsed)) {
-          return parsed as Array<Record<string, unknown>>;
-        }
-        const normalized = normalizeBatchExtractArray(parsed);
-        if (normalized) return normalized;
-      } catch {
-        // Try the next candidate.
-      }
-    }
-  }
-
-  const salvaged = salvageTruncatedArrayObjects(cleaned);
-  if (salvaged) return salvaged;
-
-  if (/\[\s*\]/.test(cleaned)) {
-    return [];
-  }
-
   return null;
 }
 
@@ -699,6 +594,8 @@ const EXTRACT_BATCH_JSON_SYSTEM =
 const EXTRACT_BATCH_JSON_SYSTEM_STRICT =
   'You are a meticulous research analyst. Output must start with { and end with }. No prose, no markdown, no explanation. Return exactly one JSON object with an "evidence" array.';
 
+const EXTRACT_JSON_RESPONSE_FORMAT = { type: "json_object" as const };
+
 function mapFetchedPageToSource(page: FetchedPage): FetchedSource {
   const ok = page.status === "ok";
   // Use backend-provided source_type when available, fall back to URL heuristics
@@ -919,13 +816,17 @@ async function callResearchAi(
   }
   const adapterRef = adapter;
 
-  await prepareProviderModel(selectedProvider, selectedModel, { signal });
+  const settings = useSettingsStore.getState();
+  const modelSettings = settings.getModelSettings(selectedModel);
+
+  await prepareProviderModel(selectedProvider, selectedModel, {
+    signal,
+    contextLength: modelSettings.contextLength || undefined,
+    forceReload: true,
+  });
   if (signal.aborted) {
     throw new DOMException("Research aborted", "AbortError");
   }
-
-  const settings = useSettingsStore.getState();
-  const modelSettings = settings.getModelSettings(selectedModel);
 
   const reservedOutput = maxTokens ?? modelSettings.maxTokens ?? 512;
   const contextWindow = modelSettings.contextLength;
@@ -2225,11 +2126,15 @@ Do NOT fabricate source names — only count sources that actually appear in the
       return true;
     };
 
-    for (const sourceBatch of sourceBatches) {
-      checkAbort();
-      if (sourceBatch.length === 0) continue;
+    const extractAiOptions = (temperature = 0) => ({
+      reasoningEnabled: false as const,
+      responseFormat: EXTRACT_JSON_RESPONSE_FORMAT,
+      temperature,
+      ...researchAiOptions("main"),
+    });
 
-      const batchSourceCount = sourceBatch.length;
+    const buildBatchPrompt = (batch: ResearchSource[]): string => {
+      const batchSourceCount = batch.length;
       const excerptTokens = tokensPerSourceForBatchCount(batchSourceCount);
 
       const buildBatchExcerpt = (source: ResearchSource): string => {
@@ -2243,7 +2148,7 @@ Do NOT fabricate source names — only count sources that actually appear in the
         return `${excerptLabel}:\n${untrustedSourceBlock(source.url, truncated, source.sourceType)}`;
       };
 
-      const sourceBlocks = sourceBatch
+      const sourceBlocks = batch
         .map((source, sourceIndex) => {
           const excerpt = buildBatchExcerpt(source);
           return `Source ${sourceIndex + 1}: ${source.title}
@@ -2253,7 +2158,9 @@ ${excerpt}`;
         })
         .join("\n\n---\n\n");
 
-      const batchPrompt = `You are a meticulous research analyst. Extract ${followUp ? "NEW " : ""}evidence from these ${sourceBatch.length} source${sourceBatch.length === 1 ? "" : "s"} that is DIRECTLY RELEVANT to the research question.
+      const maxPerSource = maxEvidenceItemsPerSource(batchSourceCount);
+
+      return `You are a meticulous research analyst. Extract ${followUp ? "NEW " : ""}evidence from these ${batchSourceCount} source${batchSourceCount === 1 ? "" : "s"} that is DIRECTLY RELEVANT to the research question.
 
 Research Question: "${run.question}"
 ${followUp && gapContext ? `\nResearch Gaps to Fill:\n${gapContext}\n` : ""}
@@ -2269,16 +2176,29 @@ Source type guidance:
 For EACH piece of evidence, provide:
 - "sourceIndex": 1-based index of the source this evidence came from (matches the "Source N:" labels above)
 - "type": one of "quote", "statistic", "claim", "fact"
-- "content": 1-3 sentences — the specific text or a precise summary
+- "content": 1-3 sentences — the specific text or a precise summary (keep each under ~200 characters)
 - "confidence": 0.0-1.0 — use 0.9+ for verified facts, 0.7-0.9 for reliable sources, 0.5-0.7 for unverified claims
 - "significance": "high", "medium", or "low" — how important is this to the research question?
 
 If a source has no relevant evidence, include ZERO items for that source — do not fabricate evidence.
-${batchSourceCount > 1 ? `Return at most ${Math.max(4, 10 - batchSourceCount)} evidence items per source — prioritize the highest-significance findings only.\n` : ""}Return ONLY this JSON object:
+${batchSourceCount > 1 ? `Return at most ${maxPerSource} evidence items per source — prioritize the highest-significance findings only.\n` : ""}Return ONLY this JSON object:
 {"evidence":[{"sourceIndex":1,"type":"fact","content":"The study found a 37% increase in adoption.","confidence":0.9,"significance":"high"}]}
 If no evidence is relevant, return {"evidence":[]}.`;
+    };
 
-      const tryParseAndPersist = async (response: string): Promise<"ok" | "empty" | "failed"> => {
+    const processSourceBatch = async (
+      sourceBatch: ResearchSource[],
+      sharedEvidenceIds?: Set<string>,
+    ): Promise<boolean> => {
+      if (sourceBatch.length === 0) return false;
+
+      const batchSourceCount = sourceBatch.length;
+      const batchPrompt = buildBatchPrompt(sourceBatch);
+      const sourcesWithEvidence = sharedEvidenceIds ?? new Set<string>();
+
+      type ParseStatus = "ok" | "empty" | "failed";
+
+      const tryParseAndPersist = async (response: string): Promise<ParseStatus> => {
         const arr = parseResearchEvidenceArray(response);
         if (arr === null) {
           if (response.trim().length > 0) {
@@ -2302,7 +2222,10 @@ If no evidence is relevant, return {"evidence":[]}.`;
           } else if (sourceBatch.length === 1) {
             source = sourceBatch[0]!;
           }
-          if (await persistOne(item, source)) persisted++;
+          if (await persistOne(item, source)) {
+            persisted++;
+            sourcesWithEvidence.add(source.id);
+          }
         }
         return persisted > 0 ? "ok" : "empty";
       };
@@ -2312,7 +2235,7 @@ If no evidence is relevant, return {"evidence":[]}.`;
         chunkFilter: (it: WorkItem) => boolean,
         detail: string,
         systemMessage = EXTRACT_JSON_SYSTEM,
-        temperature?: number,
+        temperature = 0,
       ) => {
         for (const source of sources) {
           checkAbort();
@@ -2339,7 +2262,7 @@ Extract only items that pertain to the research question:
 4. VERIFIABLE FACTS (use "type": "fact")
 
 For EACH piece of evidence, provide:
-- "content": 1-3 sentences — the specific text or a precise summary
+- "content": 1-3 sentences — the specific text or a precise summary (keep each under ~200 characters)
 - "confidence": 0.0-1.0 — use 0.9+ for verified facts, 0.7-0.9 for reliable sources, 0.5-0.7 for unverified claims
 - "significance": "high", "medium", or "low" — how important is this to the research question?
 
@@ -2360,7 +2283,7 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
                     signal,
                     undefined,
                     followUp ? 6000 : 12000,
-                    { reasoningEnabled: false, jsonModeHint: true, ...(temperature !== undefined ? { temperature } : {}), ...researchAiOptions("main") },
+                    { ...extractAiOptions(temperature) },
                   ),
                 (v) => `${v.length} chars parsed`,
               );
@@ -2376,7 +2299,7 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
 
       const runBatchExtract = async (
         systemMessage: string,
-        temperature?: number,
+        temperature = 0,
       ): Promise<string> => {
         const batchMaxTokens = maxOutputTokensForExtractBatch(batchSourceCount, followUp);
         const { value } = await runAiStep(
@@ -2392,38 +2315,68 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
               signal,
               undefined,
               batchMaxTokens,
-              { reasoningEnabled: false, jsonModeHint: true, ...(temperature !== undefined ? { temperature } : {}), ...researchAiOptions("main") },
+              { ...extractAiOptions(temperature) },
             ),
           (v) => `${v.length} chars parsed`,
         );
         return value;
       };
 
-      let batchSucceeded = false;
-      try {
-        const extractResponse = await runBatchExtract(EXTRACT_BATCH_JSON_SYSTEM);
-        let batchResult = await tryParseAndPersist(extractResponse);
+      const runBatchAttempts = async (): Promise<ParseStatus> => {
+        let result = await tryParseAndPersist(await runBatchExtract(EXTRACT_BATCH_JSON_SYSTEM, 0));
+        if (result === "failed") {
+          result = await tryParseAndPersist(await runBatchExtract(EXTRACT_BATCH_JSON_SYSTEM_STRICT, 0));
+        }
+        return result;
+      };
 
-        if (batchResult === "failed") {
-          const retryResponse = await runBatchExtract(EXTRACT_BATCH_JSON_SYSTEM_STRICT, 0);
-          batchResult = await tryParseAndPersist(retryResponse);
+      const sourcesMissingEvidence = () =>
+        sourceBatch.filter((source) => !sourcesWithEvidence.has(source.id));
+
+      let batchSucceeded = false;
+
+      try {
+        let batchResult = await runBatchAttempts();
+        const truncated = batchResult === "ok" && sourcesMissingEvidence().length > 0;
+
+        if (batchResult === "failed" && batchSourceCount > 1) {
+          const mid = Math.ceil(batchSourceCount / 2);
+          const halves = [sourceBatch.slice(0, mid), sourceBatch.slice(mid)];
+          for (const half of halves) {
+            if (half.length === 0) continue;
+            checkAbort();
+            const halfSucceeded = await processSourceBatch(half, sourcesWithEvidence);
+            if (halfSucceeded) batchResult = "ok";
+          }
         }
 
-        if (batchResult === "failed") {
-          parseFailed++;
-          console.warn(
-            "[research-runtime] Batched extraction failed, falling back to per-source:",
-            sourceBatch.map((s) => s.id).join(","),
-            "batch response was not valid JSON",
-          );
+        const stillMissing = sourcesMissingEvidence();
+        if (stillMissing.length > 0 && batchSourceCount > 1) {
+          for (const source of stillMissing) {
+            checkAbort();
+            const singleSucceeded = await processSourceBatch([source], sourcesWithEvidence);
+            if (singleSucceeded) batchResult = "ok";
+          }
+        }
+
+        const needChunkFallback = sourcesMissingEvidence();
+        if (needChunkFallback.length > 0) {
+          if (batchResult === "failed") {
+            parseFailed++;
+            console.warn(
+              "[research-runtime] Batched extraction failed, falling back to per-source:",
+              needChunkFallback.map((s) => s.id).join(","),
+              truncated ? "partial batch response" : "batch response was not valid JSON",
+            );
+          }
           await extractChunksForSources(
-            sourceBatch,
+            needChunkFallback,
             (it) => it.chunkIndex === 0,
-            "Per-source fallback (chunk 1)",
+            batchResult === "failed" ? "Per-source fallback (chunk 1)" : "Per-source retry (missing sources)",
           );
         } else {
-          batchSucceeded = true;
-          if (batchResult === "empty" && sourceBatch.length > 1) {
+          batchSucceeded = batchResult === "ok" || sourcesWithEvidence.size > 0;
+          if (batchResult === "empty" && batchSourceCount > 1 && sourcesWithEvidence.size === 0) {
             await extractChunksForSources(
               sourceBatch,
               (it) => it.chunkIndex === 0,
@@ -2439,11 +2392,87 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
           err,
         );
         await extractChunksForSources(
-          sourceBatch,
+          sourcesMissingEvidence().length > 0 ? sourcesMissingEvidence() : sourceBatch,
           (it) => it.chunkIndex === 0,
           "Per-source fallback (batch error)",
         );
       }
+
+      return batchSucceeded || sourcesWithEvidence.size > 0;
+    };
+
+    for (const sourceBatch of sourceBatches) {
+      checkAbort();
+      if (sourceBatch.length === 0) continue;
+
+      let batchSucceeded = false;
+      try {
+        batchSucceeded = await processSourceBatch(sourceBatch);
+      } catch (err) {
+        parseFailed++;
+        console.warn("[research-runtime] Source batch extraction failed:", sourceBatch.map((s) => s.id).join(","), err);
+      }
+
+      const extractChunksForBatch = async (
+        sources: ResearchSource[],
+        chunkFilter: (it: WorkItem) => boolean,
+        detail: string,
+      ) => {
+        for (const source of sources) {
+          checkAbort();
+          const items = workBySource.get(source.id) || [];
+          for (const it of items) {
+            if (!chunkFilter(it)) continue;
+            checkAbort();
+            const singlePrompt = `You are a meticulous research analyst. Extract ${followUp ? "NEW " : ""}evidence from this source that is DIRECTLY RELEVANT to the research question.
+
+Research Question: "${run.question}"
+${followUp && gapContext ? `\nResearch Gaps to Fill:\n${gapContext}\n` : ""}
+Source: ${source.title}
+URL: ${source.url}
+Type: ${sourceTypeLabel(source.sourceType)}
+Chunk: ${it.chunkIndex + 1} of ${items.length}
+
+Content:
+${untrustedSourceBlock(source.url, it.chunk, source.sourceType)}
+
+For EACH piece of evidence, provide content, confidence, and significance. Keep each content under ~200 characters.
+If nothing is relevant, return {"evidence":[]}.
+Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confidence":0.8,"significance":"medium"}]}.`;
+
+            try {
+              const { value: singleResponse } = await runAiStep(
+                "extract",
+                `Extract chunk ${it.chunkIndex + 1}/${items.length}: ${source.title.length > 60 ? `${source.title.slice(0, 57)}…` : source.title}`,
+                detail,
+                () =>
+                  callResearchAi(
+                    [
+                      { role: "system", content: EXTRACT_JSON_SYSTEM },
+                      { role: "user", content: singlePrompt },
+                    ],
+                    signal,
+                    undefined,
+                    followUp ? 6000 : 12000,
+                    { ...extractAiOptions(0) },
+                  ),
+                (v) => `${v.length} chars parsed`,
+              );
+              const arr = parseResearchEvidenceArray(singleResponse);
+              if (arr === null) {
+                parseFailed++;
+                continue;
+              }
+              for (const item of arr) {
+                await persistOne(item, source);
+              }
+            } catch (innerErr) {
+              console.warn("[research-runtime] Additional chunk extraction failed:", source.id, it.chunkIndex + 1, innerErr);
+              parseFailed++;
+            }
+          }
+        }
+      };
 
       // Additional chunks beyond the batch excerpt.
       const hasAdditionalChunks = sourceBatch.some((source) => {
@@ -2451,7 +2480,7 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
         return items.length > 1;
       });
       if (hasAdditionalChunks) {
-        await extractChunksForSources(
+        await extractChunksForBatch(
           sourceBatch,
           (it) => it.chunkIndex >= 1,
           batchSucceeded ? "Additional chunk extraction" : "Additional chunk extraction (post-fallback)",

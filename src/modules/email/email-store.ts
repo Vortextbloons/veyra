@@ -56,6 +56,15 @@ type EmailStore = {
 
 let hydrationPromise: Promise<void> | null = null;
 
+function isGmailScopeIssue(error: unknown): boolean {
+  const message = String(error);
+  return (
+    message.includes("ACCESS_TOKEN_SCOPE_INSUFFICIENT") ||
+    message.includes("insufficient authentication scopes") ||
+    message.includes("Insufficient Permission")
+  );
+}
+
 export const useEmailStore = create<EmailStore>((set, get) => ({
   accounts: [],
   threads: [],
@@ -173,6 +182,17 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         ),
       }));
     } catch (error) {
+      if (isGmailScopeIssue(error)) {
+        set((state) => ({
+          error:
+            "Google connected, but Gmail scopes were not granted. Revoke Veyra access, reconnect with the correct test user, and confirm gmail.modify / gmail.send / gmail.compose are saved in Google Cloud.",
+          isLoading: false,
+          accounts: state.accounts.map((a) =>
+            a.id === accountId ? { ...a, status: "connected" as const } : a,
+          ),
+        }));
+        return;
+      }
       set((state) => ({
         error: String(error),
         isLoading: false,
