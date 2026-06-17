@@ -38,7 +38,7 @@ export function buildAgentChatTurns(
       continue;
     }
 
-    if (evt.type === "output" && (evt.title === "Opencode" || evt.title === "OpenCode stream")) {
+    if (evt.type === "output" && (evt.title === "Pi" || evt.title === "Pi stream")) {
       const content = evt.detail?.trim();
       if (!content) continue;
       const last = turns.at(-1);
@@ -62,7 +62,7 @@ export function buildAgentChatTurns(
         id: evt.id,
         role: "error",
         title: evt.title,
-        content: evt.detail?.trim() || "OpenCode failed.",
+        content: evt.detail?.trim() || "Pi failed.",
       });
       continue;
     }

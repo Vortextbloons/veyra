@@ -2,7 +2,7 @@
 
 [![GitHub](https://img.shields.io/github/license/Vortextbloons/veyra)](https://github.com/Vortextbloons/veyra/blob/main/LICENSE)
 
-Local-first AI desktop workspace built with **Tauri v2**, **React**, and **TypeScript**. Veyra targets [LM Studio](https://lmstudio.ai/) as the primary model provider and supports optional web search (SearXNG via Docker) and Agents mode (OpenCode CLI).
+Local-first AI desktop workspace built with **Tauri v2**, **React**, and **TypeScript**. Veyra targets [LM Studio](https://lmstudio.ai/) as the primary model provider and supports optional web search (SearXNG via Docker) and Agents mode (Pi CLI).
 
 **Platform:** Windows is the supported development and build target for now.
 
@@ -73,9 +73,7 @@ These are **not** required for basic chat:
 |---------|-------------|
 | Local models | [LM Studio](https://lmstudio.ai/) and `lms` on PATH |
 | Web search (SearXNG) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) |
-| Agents mode | [OpenCode](https://opencode.ai/) CLI on PATH |
-
-See [Opencode/agentsmode.md](Opencode/agentsmode.md) for Agents mode design notes.
+| Agents mode | [Pi](https://pi.dev/) CLI on PATH |
 
 ## Versioning
 

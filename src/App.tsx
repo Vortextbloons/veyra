@@ -11,7 +11,6 @@ import type { ChatMessage, ContextStats, RecentChatsItem, RequestStatus } from "
 import { isChatModeNav } from "@/lib/chat-types";
 import { useWorkspaceModeChange } from "@/lib/workspace-mode";
 import type { MessageAttachment } from "@/lib/message-attachments";
-import { estimateTokens } from "@/lib/context";
 import { getContextBreakdown, getContextStatsFromBreakdown } from "@/lib/context-breakdown";
 import { buildContextPanelOptions } from "@/lib/context-panel-options";
 import { ShutdownOverlay } from "@/components/shutdown-overlay";
@@ -52,23 +51,14 @@ const ResearchPage = lazy(() => import("@/modules/research/components/ResearchPa
 const EmailPage = lazy(() => import("@/modules/email/components/EmailPage").then(m => ({ default: m.EmailPage })));
 const CharacterPage = lazy(() => import("@/modules/characters/components/CharacterPage").then(m => ({ default: m.CharacterPage })));
 
-const OPENCODE_AGENT_BASE_TOKENS = 9_000;
-const OPENCODE_AGENT_TOOL_OVERHEAD_TOKENS = 1_200;
-
 function getAgentContextStats(
   session: AgentSession,
   contextLimit: number,
   reservedOutputTokens: number,
 ): ContextStats {
-  const eventTokens = session.events.reduce((sum, item) => {
-    const detailTokens = estimateTokens([item.title, item.detail].filter(Boolean).join("\n"));
-    const multiplier = item.type === "tool" || item.type === "reasoning" ? 2 : 1;
-    return sum + detailTokens * multiplier;
-  }, 0);
-  const toolEvents = session.events.filter((item) => item.type === "tool").length;
   const estimatedTokens = Math.max(
     session.contextTokens ?? 0,
-    OPENCODE_AGENT_BASE_TOKENS + eventTokens + toolEvents * OPENCODE_AGENT_TOOL_OVERHEAD_TOKENS,
+    0,
   );
 
   return {
@@ -80,8 +70,8 @@ function getAgentContextStats(
     reservedOutputTokens,
     includedLabel: "agent events",
     contextNote: session.contextTokens
-      ? "Uses OpenCode-reported tokens when available."
-      : "Includes estimated OpenCode system, tool, repo, and reasoning overhead.",
+      ? "Uses Pi-reported tokens when available."
+      : "Includes Pi system and tool overhead.",
   };
 }
 
@@ -458,7 +448,7 @@ function App() {
   const setActiveAgentSessionId = useAgentStore((state) => state.setActiveSessionId);
   const checkAgentRuntime = useAgentStore((state) => state.checkRuntime);
   const loadAgentProjectSessions = useAgentStore((state) => state.loadProjectSessions);
-  const loadOpencodeSession = useAgentStore((state) => state.loadOpencodeSession);
+  const loadPiSession = useAgentStore((state) => state.loadPiSession);
   const newAgentSession = useAgentStore((state) => state.newSession);
   const startAgentSession = useAgentStore((state) => state.startSession);
   const stopAgentSession = useAgentStore((state) => state.stopSession);
@@ -499,15 +489,15 @@ function App() {
   const handleAgentSessionSelect = useCallback(
     (id: string) => {
       setActiveAgentSessionId(id);
-      void loadOpencodeSession(id);
+      void loadPiSession(id);
     },
-    [loadOpencodeSession, setActiveAgentSessionId],
+    [loadPiSession, setActiveAgentSessionId],
   );
 
   useEffect(() => {
     if (workspaceChatMode !== "agents" || !activeAgentSessionId) return;
-    void loadOpencodeSession(activeAgentSessionId);
-  }, [activeAgentSessionId, workspaceChatMode, loadOpencodeSession]);
+    void loadPiSession(activeAgentSessionId);
+  }, [activeAgentSessionId, workspaceChatMode, loadPiSession]);
 
   const handleSend = useCallback(
     (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
@@ -522,9 +512,9 @@ function App() {
         if (!trimmed) return;
         aiScheduler.abortActiveBackgroundJob();
         aiScheduler.enqueueAiJob({
-          type: "agent_opencode",
+          type: "agent_pi",
           priority: 0,
-          title: "Running OpenCode agent",
+          title: "Running Pi agent",
           description: trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed,
           prompt: trimmed,
           model: selectedModel,
@@ -703,6 +693,7 @@ function App() {
       supportsImages,
       effectiveWebSearchEnabled,
       effectiveCodeExecutionEnabled,
+      reasoningEnabled,
     ],
   );
 

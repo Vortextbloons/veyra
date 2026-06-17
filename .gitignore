@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+.opencode/
 node_modules
 dist
 dist-ssr
@@ -28,10 +28,6 @@ src-tauri/gen/
 *.sln
 *.sw?
 .cursor/
-.opencode/node_modules/
-.opencode/package.json
-.opencode/package-lock.json
-!.opencode/agents/
 # Windows / build artifacts
 Thumbs.db
 Desktop.ini

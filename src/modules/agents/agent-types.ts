@@ -9,7 +9,7 @@ export type AgentStatus =
   | "failed"
   | "stopped";
 
-export type AgentRuntimeId = "opencode";
+export type AgentRuntimeId = "pi";
 
 export type AgentEventType = "status" | "reasoning" | "tool" | "output" | "error" | "result";
 
@@ -29,7 +29,7 @@ export type AgentSession = {
   projectPath: string;
   prompt: string;
   model: string;
-  opencodeSessionId?: string;
+  piSessionId?: string;
   title: string;
   summary?: string;
   startedAt: number;
@@ -47,21 +47,20 @@ export type StartAgentSessionInput = {
   contextLength?: number;
   reservedOutputTokens?: number;
   providerId?: string;
-  opencodeSessionId?: string;
+  piSessionId?: string;
   reasoningEnabled?: boolean;
 };
 
-export type OpencodeRunResult = {
+export type PiRunResult = {
   stdout: string;
   stderr: string;
   exitCode: number | null;
 };
 
-export type OpencodeProjectSession = {
+export type PiSession = {
   id: string;
   title: string;
   updated: number;
   created: number;
-  projectId?: string;
   directory?: string;
 };

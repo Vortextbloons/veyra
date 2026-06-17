@@ -87,7 +87,7 @@ export function jobTypeIcon(type: AiJobType): ReactNode {
   switch (type) {
     case "user_chat":
       return <MessageSquare className="size-3.5" />;
-    case "agent_opencode":
+    case "agent_pi":
       return <Bot className="size-3.5" />;
     case "auto_name_chat":
     case "summarize_chat":

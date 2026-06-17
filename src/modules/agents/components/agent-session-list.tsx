@@ -68,7 +68,7 @@ export function AgentSessionList({
                   {session.title}
                 </p>
                 <p className="mt-0.5 line-clamp-1 text-[10.5px] text-[var(--color-text-dim)]">
-                  {session.opencodeSessionId ? "OpenCode" : session.mode.toUpperCase()}
+                  {session.piSessionId ? "Pi" : session.mode.toUpperCase()}
                   {isRunning && " · Running..."}
                 </p>
               </div>

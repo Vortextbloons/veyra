@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Code2 } from "lucide-react";
 import type { ToolCallState } from "@/lib/chat-types";
+import { HighlightedCode } from "@/components/ui/highlighted-code";
 import {
   getToolCallUi,
   isToolCallActive,
@@ -55,7 +56,7 @@ function OutputBlock({ label, value, tone = "default" }: { label: string; value:
 }
 
 export function CodeExecutionBlock({ state }: { state: ToolCallState }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const meta = getToolCallUi(state.name, state.label);
   const result = isCodeExecutionResult(state.result) ? state.result : null;
   const isActive = isToolCallActive(state.phase);
@@ -92,7 +93,12 @@ export function CodeExecutionBlock({ state }: { state: ToolCallState }) {
             <div>Exit: <span className="font-mono text-[var(--color-text)]">{result.exitCode ?? "unknown"}</span></div>
             <div className="truncate">CWD: <span className="font-mono text-[var(--color-text)]">{result.workingDirectory}</span></div>
           </div>
-          <OutputBlock label="Code" value={result.code} />
+          <div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]/70">
+              Code
+            </div>
+            <HighlightedCode code={result.code} language="python" />
+          </div>
           <OutputBlock label="Stdout" value={result.stdout} />
           <OutputBlock label="Stderr" value={result.stderr} tone={result.stderr.trim() ? "error" : "default"} />
         </div>

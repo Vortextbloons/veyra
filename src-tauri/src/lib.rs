@@ -145,12 +145,12 @@ pub fn run() {
             save_conversation_key,
             app_ready,
             exit_app,
-            agent_commands::check_opencode_available,
-            agent_commands::list_opencode_project_sessions,
-            agent_commands::export_opencode_session,
-            agent_commands::delete_opencode_session,
-            agent_commands::run_opencode_agent,
-            agent_commands::stop_opencode_agent,
+            agent_commands::check_pi_available,
+            agent_commands::run_pi_agent,
+            agent_commands::stop_pi_agent,
+            agent_commands::list_pi_sessions,
+            agent_commands::switch_pi_session,
+            agent_commands::delete_pi_session,
             code_execution_commands::check_python_available,
             code_execution_commands::execute_python_code,
             memory_commands::list_memory_folders,
@@ -304,7 +304,7 @@ pub fn run() {
                     reveal_main_window(app_handle, false);
                 }
                 RunEvent::ExitRequested { .. } => {
-                    agent_commands::stop_all_opencode_agents();
+                    agent_commands::stop_all_pi_agents();
                     if let Some(state) = app_handle.try_state::<searxng_setup::SearxngState>() {
                         if state.was_started_by_us() {
                             searxng_setup::stop_container();
