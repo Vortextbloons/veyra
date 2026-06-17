@@ -438,6 +438,21 @@ fn run_pi_agent_blocking(
         }
     });
 
+    // If we saw agent_end, the kill was intentional — override non-zero exit code
+    let exit_status = if ended_flag.load(Ordering::Relaxed) && !exit_status.success() {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::ExitStatusExt;
+            std::process::ExitStatus::from_raw(0)
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::ExitStatus::from_raw(0)
+        }
+    } else {
+        exit_status
+    };
+
     Ok(PiAgentOutput {
         exit_status,
         stdout,

@@ -68,13 +68,21 @@ export function buildAgentChatTurns(
     }
 
     if (evt.type === "reasoning") {
-      turns.push({
-        id: evt.id,
-        role: "assistant",
-        kind: "reasoning",
-        title: "Reasoning",
-        content: evt.detail?.trim() || "Thinking",
-      });
+      const last = turns.at(-1);
+      if (last?.kind === "reasoning") {
+        const content = evt.detail?.trim() || "";
+        if (content) {
+          last.content = [last.content, content].filter(Boolean).join("\n\n");
+        }
+      } else {
+        turns.push({
+          id: evt.id,
+          role: "assistant",
+          kind: "reasoning",
+          title: "Reasoning",
+          content: evt.detail?.trim() || "Thinking",
+        });
+      }
       continue;
     }
 

@@ -11,7 +11,7 @@ export type AgentStatus =
 
 export type AgentRuntimeId = "pi";
 
-export type AgentEventType = "status" | "reasoning" | "tool" | "output" | "error" | "result";
+export type AgentEventType = "status" | "reasoning" | "tool" | "output" | "error" | "result" | "token_update";
 
 export type AgentEvent = {
   id: string;
@@ -19,6 +19,7 @@ export type AgentEvent = {
   title: string;
   detail?: string;
   at: number;
+  toolCallId?: string;
 };
 
 export type AgentSession = {

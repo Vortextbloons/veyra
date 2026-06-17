@@ -53,13 +53,14 @@ function titleFromPrompt(prompt: string) {
   return trimmed.length > 64 ? `${trimmed.slice(0, 61)}...` : trimmed || "Agent task";
 }
 
-function event(type: AgentEvent["type"], title: string, detail?: string): AgentEvent {
+function event(type: AgentEvent["type"], title: string, detail?: string, toolCallId?: string): AgentEvent {
   return {
     id: crypto.randomUUID(),
     type,
     title,
     detail,
     at: Date.now(),
+    ...(toolCallId ? { toolCallId } : {}),
   };
 }
 
@@ -114,7 +115,7 @@ function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string }): Agent
 
     switch (type) {
       case "agent_start":
-        return event("status", "Started");
+        return null;
 
       case "turn_start":
         return null;
@@ -143,25 +144,39 @@ function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string }): Agent
 
       case "tool_execution_start": {
         const toolName = typeof parsed.toolName === "string" ? parsed.toolName : "tool";
+        const toolCallId = typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined;
         const args = asRecord(parsed.args);
-        return event("tool", toolName, toolDetail(args, null, false));
+        return event("tool", toolName, toolDetail(args, null, false), toolCallId);
       }
 
       case "tool_execution_update": {
         const toolName = typeof parsed.toolName === "string" ? parsed.toolName : "tool";
+        const toolCallId = typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined;
         const partial = asRecord(parsed.partialResult);
-        return event("tool", toolName, toolDetail(null, partial, false));
+        return event("tool", toolName, toolDetail(null, partial, false), toolCallId);
       }
 
       case "tool_execution_end": {
         const toolName = typeof parsed.toolName === "string" ? parsed.toolName : "tool";
+        const toolCallId = typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined;
         const result = asRecord(parsed.result);
         const isError = parsed.isError === true;
-        return event("tool", toolName, toolDetail(null, result, isError));
+        return event("tool", toolName, toolDetail(null, result, isError), toolCallId);
       }
 
       case "turn_end":
         return null;
+
+      case "message_end": {
+        const msg = asRecord(parsed.message);
+        if (msg && typeof msg.role === "string" && msg.role === "assistant") {
+          const usage = asRecord(msg.usage);
+          if (usage && typeof usage.input === "number") {
+            return event("token_update", "Token update", String(usage.input));
+          }
+        }
+        return null;
+      }
 
       case "agent_end":
         return event("result", "Completed");
@@ -196,7 +211,43 @@ function patchSession(
 }
 
 function appendLiveOutput(events: AgentEvent[], nextEvent: AgentEvent): AgentEvent[] {
-  if (nextEvent.type !== "output" || nextEvent.title !== "Pi stream" || !nextEvent.detail) {
+  if (!nextEvent.detail) {
+    return [...events, nextEvent];
+  }
+
+  // Merge consecutive reasoning events
+  if (nextEvent.type === "reasoning" && nextEvent.title === "Reasoning") {
+    const lastReasoningIndex = events.findLastIndex(
+      (item) => item.type === "reasoning" && item.title === "Reasoning",
+    );
+    if (lastReasoningIndex !== -1) {
+      const current = events[lastReasoningIndex];
+      const currentText = current.detail ?? "";
+      const nextText = nextEvent.detail;
+      const detail = nextText.startsWith(currentText)
+        ? nextText
+        : [currentText, nextText].filter(Boolean).join("");
+      const updated = events.slice();
+      updated[lastReasoningIndex] = { ...current, detail, at: nextEvent.at };
+      return updated;
+    }
+    return [...events, nextEvent];
+  }
+
+  // Merge tool events by toolCallId — update existing start/update with later update/end
+  if (nextEvent.type === "tool" && nextEvent.toolCallId) {
+    const existingIndex = events.findLastIndex(
+      (item) => item.type === "tool" && item.toolCallId === nextEvent.toolCallId,
+    );
+    if (existingIndex !== -1) {
+      const updated = events.slice();
+      updated[existingIndex] = { ...nextEvent };
+      return updated;
+    }
+    return [...events, nextEvent];
+  }
+
+  if (nextEvent.type !== "output" || nextEvent.title !== "Pi stream") {
     return [...events, nextEvent];
   }
 
@@ -430,6 +481,21 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
           (rawEvent) => {
             const parsedEvent = parsePiEvent(rawEvent);
             if (!parsedEvent) return;
+            if (parsedEvent.type === "token_update") {
+              const tokens = parseInt(parsedEvent.detail ?? "0", 10);
+              if (tokens > 0) {
+                set((state) => {
+                  const current = state.sessions.find((item) => item.id === id);
+                  if (!current || current.status !== "running") return state;
+                  return {
+                    sessions: patchSession(state.sessions, id, {
+                      contextTokens: tokens,
+                    }),
+                  };
+                });
+              }
+              return;
+            }
             set((state) => {
               const current = state.sessions.find((item) => item.id === id);
               if (!current || current.status !== "running") return state;
