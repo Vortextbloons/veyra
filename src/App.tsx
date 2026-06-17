@@ -173,6 +173,7 @@ function App() {
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
   const codeExecutionEnabled = useSettingsStore((state) => state.codeExecutionEnabled);
   const setCodeExecutionEnabled = useSettingsStore((state) => state.setCodeExecutionEnabled);
+  const reasoningEnabled = useSettingsStore((state) => state.reasoningEnabled);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
   const workspaceChatMode = useSettingsStore((state) => state.workspaceChatMode);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
@@ -550,6 +551,7 @@ function App() {
               contextLength: resolvedContextLength,
               reservedOutputTokens: resolvedReservedOutputTokens,
               providerId: selectedProvider,
+              reasoningEnabled,
             });
             const session = useAgentStore.getState().sessions.find((item) => item.id === sessionId);
             return {

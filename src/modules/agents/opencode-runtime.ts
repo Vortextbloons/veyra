@@ -12,6 +12,7 @@ type StartOpencodeAgentInput = {
   reservedOutputTokens?: number;
   providerId?: string;
   opencodeSessionId?: string;
+  reasoningEnabled?: boolean;
 };
 
 type OpencodeRunFinishedEvent = {

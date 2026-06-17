@@ -48,6 +48,7 @@ export type StartAgentSessionInput = {
   reservedOutputTokens?: number;
   providerId?: string;
   opencodeSessionId?: string;
+  reasoningEnabled?: boolean;
 };
 
 export type OpencodeRunResult = {

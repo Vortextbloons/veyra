@@ -585,9 +585,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     const inputProjectPath = input.projectPath.trim();
     const activeProjectPath = activeSession?.projectPath.trim() ?? "";
     const projectPath = activeSession && inputProjectPath === "" ? activeProjectPath : inputProjectPath;
-    const mode = activeSession?.opencodeSessionId && activeSession.status !== "running"
-      ? activeSession.mode
-      : input.mode;
+    const mode = input.mode;
     const shouldContinue = Boolean(
       activeSession &&
         activeSession.status !== "running" &&
@@ -653,6 +651,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
           reservedOutputTokens: input.reservedOutputTokens,
           providerId: input.providerId,
           opencodeSessionId: shouldContinue ? activeSession?.opencodeSessionId : undefined,
+          reasoningEnabled: input.reasoningEnabled,
         },
         (rawEvent) => {
           const parsedEvent = parseOpencodeLiveEvent(rawEvent);

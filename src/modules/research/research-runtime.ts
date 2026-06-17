@@ -3604,27 +3604,23 @@ Output: Return ONLY polished report prose. No headings, no meta-commentary.`;
                 if (rewriteResult.tokens?.totalTokens) totalTokens += rewriteResult.tokens.totalTokens;
 
                 const rewritten = prepareReportSection(rewriteResult.text, maxCitationNumber);
-                if (rewritten && rewritten.length > 100) {
-                  // Replace the section using tracked offsets (avoids fragile regex).
-                  const offsets = sectionOffsets.get(heading);
-                  if (offsets) {
-                    const newSection = `## ${heading}\n\n${rewritten}\n\n`;
-                    reportMarkdown = reportMarkdown.slice(0, offsets.start) + newSection + reportMarkdown.slice(offsets.end);
-                    // Recalculate all offsets after the replacement since the string changed.
-                    // Simple approach: re-scan for all section headings.
-                    sectionOffsets.clear();
-                    const headingPattern = /^## (.+)$/gm;
-                    let m: RegExpExecArray | null;
-                    while ((m = headingPattern.exec(reportMarkdown)) !== null) {
-                      const hStart = m.index;
-                      // Find the start of the next heading or end of string
-                      const nextHeading = headingPattern.exec(reportMarkdown);
-                      const hEnd = nextHeading ? nextHeading.index : reportMarkdown.length;
-                      sectionOffsets.set(m[1], { start: hStart, end: hEnd });
-                      if (nextHeading) headingPattern.lastIndex = nextHeading.index;
+                  if (rewritten && rewritten.length > 100) {
+                    // Replace the section using tracked offsets (avoids fragile regex).
+                    const offsets = sectionOffsets.get(heading);
+                    if (offsets) {
+                      const newSection = `## ${heading}\n\n${rewritten}\n\n`;
+                      reportMarkdown = reportMarkdown.slice(0, offsets.start) + newSection + reportMarkdown.slice(offsets.end);
+                      // Recalculate all offsets after the replacement using matchAll
+                      // (avoids lastIndex state bugs with exec() + g flag).
+                      sectionOffsets.clear();
+                      const headingMatches = [...reportMarkdown.matchAll(/^## (.+)$/gm)];
+                      for (let i = 0; i < headingMatches.length; i++) {
+                        const hStart = headingMatches[i].index;
+                        const hEnd = i + 1 < headingMatches.length ? headingMatches[i + 1].index : reportMarkdown.length;
+                        sectionOffsets.set(headingMatches[i][1], { start: hStart, end: hEnd });
+                      }
                     }
                   }
-                }
               } catch (rewriteErr) {
                 console.warn("[research-runtime] Section rewrite failed:", heading, rewriteErr);
               }

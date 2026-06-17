@@ -30,6 +30,7 @@ pub struct StartOpencodeAgentInput {
     pub reserved_output_tokens: Option<u32>,
     pub provider_id: Option<String>,
     pub opencode_session_id: Option<String>,
+    pub reasoning_enabled: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -279,6 +280,7 @@ fn run_opencode_agent_blocking(
     let requested_model = input.model.trim();
     let provider_id = input.provider_id.as_deref().unwrap_or_default().trim();
     let route_to_lm_studio = should_route_to_lm_studio(provider_id, requested_model);
+    let reasoning_enabled = input.reasoning_enabled.unwrap_or(true);
     let model = opencode_model_for_selected_model(requested_model, route_to_lm_studio);
     let config_content = route_to_lm_studio
         .then(|| {
@@ -286,6 +288,7 @@ fn run_opencode_agent_blocking(
                 requested_model,
                 input.context_length,
                 input.reserved_output_tokens,
+                reasoning_enabled,
             )
         })
         .transpose()?;
@@ -301,8 +304,10 @@ fn run_opencode_agent_blocking(
         "json".to_string(),
         "--agent".to_string(),
         opencode_agent.to_string(),
-        "--thinking".to_string(),
     ];
+    if reasoning_enabled {
+        args.push("--thinking".to_string());
+    }
     if let Some(session_id) = opencode_session_id {
         args.push("--session".to_string());
         args.push(session_id.to_string());
@@ -376,6 +381,7 @@ fn lm_studio_opencode_config_content(
     model: &str,
     context_length: Option<u32>,
     reserved_output_tokens: Option<u32>,
+    reasoning_enabled: bool,
 ) -> Result<String, String> {
     let model_id = model.trim().trim_end_matches('/').trim_end_matches('\\');
     if model_id.is_empty() {
@@ -399,6 +405,7 @@ fn lm_studio_opencode_config_content(
                 "models": {
                     model_id: {
                         "name": model_id,
+                        "reasoning": reasoning_enabled,
                         "tool_call": true,
                         "temperature": true,
                         "limit": {
