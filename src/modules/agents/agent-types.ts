@@ -1,4 +1,4 @@
-export type AgentMode = "ask" | "plan" | "build";
+export type AgentMode = "plan" | "build";
 
 export type AgentStatus =
   | "idle"
@@ -19,6 +19,7 @@ export type AgentEvent = {
   title: string;
   detail?: string;
   at: number;
+  sequence?: number;
   toolCallId?: string;
 };
 

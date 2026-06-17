@@ -83,6 +83,8 @@ type ComposerProps = {
     options?: { memoryEnabled: boolean },
   ) => void;
   disabled?: boolean;
+  controlsDisabled?: boolean;
+  busy?: boolean;
   supportsImages?: boolean;
   composerTextClass?: string;
   editMessageId?: string | null;
@@ -101,6 +103,8 @@ export function Composer({
   onModeChange,
   onSend,
   disabled,
+  controlsDisabled = false,
+  busy = false,
   supportsImages = false,
   composerTextClass = "text-[14px]",
   editMessageId = null,
@@ -128,13 +132,15 @@ export function Composer({
 
   const activeAttachments = supportsImages ? attachments : [];
   const activeAttachError = supportsImages ? attachError : null;
+  const isInputBlocked = Boolean(disabled || busy);
+  const isControlsBlocked = Boolean(controlsDisabled);
 
   const canSend =
-    (value.trim().length > 0 || activeAttachments.length > 0) && !disabled;
+    (value.trim().length > 0 || activeAttachments.length > 0) && !isInputBlocked;
 
   const handleSend = () => {
     const text = value.trim();
-    if ((!text && activeAttachments.length === 0) || disabled) return;
+    if ((!text && activeAttachments.length === 0) || isInputBlocked) return;
     if (isEditMode && editMessageId && onEditSave) {
       onEditSave(editMessageId, text);
       setValue("");
@@ -230,7 +236,7 @@ export function Composer({
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={isEditMode ? "Edit your message…" : mode === "agents" ? "Describe a task for the agent…" : "Ask anything…"}
-          disabled={disabled}
+          disabled={isInputBlocked}
           className={`block w-full resize-none rounded-md bg-transparent px-2 py-1.5 font-medium leading-snug tracking-[-0.005em] text-white transition-[font-size] duration-200 ease-out placeholder:font-normal placeholder:tracking-normal placeholder:text-[var(--color-text-dim)]/70 focus:outline-none disabled:opacity-50 ${composerTextClass}`}
         />
         <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)]/50 pt-1.5">
@@ -248,7 +254,7 @@ export function Composer({
                       ? "Attach image (JPEG, PNG, WebP)"
                       : "Select a vision model to attach images"
                   }
-                  disabled={!supportsImages || disabled}
+                  disabled={!supportsImages || isInputBlocked}
                   onClick={() => fileInputRef.current?.click()}
                   className={
                     !supportsImages
@@ -272,12 +278,12 @@ export function Composer({
           <div className="flex shrink-0 items-center gap-1.5">
             {!isEditMode && (
               <>
-                <ModeSelector value={mode} onChange={onModeChange} />
-                <Toggle label="Memory" on={memory} onChange={onMemoryChange} />
+                <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
+                <Toggle label="Memory" on={memory} onChange={onMemoryChange} disabled={isControlsBlocked} />
                 <IconButton
                   aria-label="Extract memories now"
                   title="Extract memories now"
-                  disabled={disabled || !onTriggerMemoryExtraction}
+                  disabled={isInputBlocked || !onTriggerMemoryExtraction}
                   onClick={() => onTriggerMemoryExtraction?.()}
                 >
                   <Brain className="size-3.5" />
@@ -286,6 +292,7 @@ export function Composer({
                   label="Reasoning"
                   on={reasoningEnabled}
                   onChange={onReasoningEnabledChange}
+                  disabled={isControlsBlocked}
                 />
               </>
             )}
@@ -295,7 +302,7 @@ export function Composer({
               onClick={handleSend}
               className="group/send grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-accent)] text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_-2px_rgba(99,102,241,0.4)] transition-all hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_16px_-2px_rgba(99,102,241,0.5)] active:scale-95 disabled:opacity-40 disabled:hover:brightness-100 disabled:hover:shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_-2px_rgba(99,102,241,0.4)] disabled:active:scale-100"
             >
-              {disabled ? (
+              {busy ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : isEditMode ? (
                 <Check className="size-4" />

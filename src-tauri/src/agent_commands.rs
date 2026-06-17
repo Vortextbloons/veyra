@@ -6,7 +6,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
@@ -49,6 +49,7 @@ pub struct PiRunEvent {
     pub session_id: String,
     pub stream: String,
     pub line: String,
+    pub sequence: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -132,6 +133,7 @@ pub async fn run_pi_agent(
             &model,
             &prompt,
             route_to_lm_studio,
+            &input.mode,
         );
 
         let finished_event = match result {
@@ -259,12 +261,20 @@ fn run_pi_agent_blocking(
     model: &str,
     prompt: &str,
     route_to_lm_studio: bool,
+    mode: &str,
 ) -> Result<PiAgentOutput, String> {
     let mut args = vec![
         "--mode".to_string(),
         "rpc".to_string(),
         "--no-session".to_string(),
+        "--no-context-files".to_string(),
     ];
+
+    // Restrict tools based on mode
+    if mode == "plan" {
+        args.push("--tools".to_string());
+        args.push("read,grep,find,ls".to_string());
+    }
 
     if route_to_lm_studio {
         // Model string for Pi: lmstudio/<model>
@@ -318,20 +328,25 @@ fn run_pi_agent_blocking(
     // since Pi RPC never exits on its own (it waits for more commands).
     let ended_flag = Arc::new(AtomicBool::new(false));
 
+    let event_sequence = Arc::new(AtomicU64::new(0));
+
     // Spawn thread to stream stdout lines as events
     let stdout_handle = stdout.map(|stdout| {
         let app = app.clone();
         let session_id = session_id.to_string();
         let ended_flag = ended_flag.clone();
+        let event_sequence = event_sequence.clone();
         std::thread::spawn(move || {
             let mut lines = Vec::new();
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                let sequence = event_sequence.fetch_add(1, Ordering::Relaxed);
                 let _ = app.emit(
                     "agent://run-event",
                     PiRunEvent {
                         session_id: session_id.clone(),
                         stream: "stdout".to_string(),
                         line: line.clone(),
+                        sequence,
                     },
                 );
                 if line.contains("\"type\":\"agent_end\"") || line.contains("\"type\": \"agent_end\"") {
@@ -347,15 +362,18 @@ fn run_pi_agent_blocking(
     let stderr_handle = stderr.map(|stderr| {
         let app = app.clone();
         let session_id = session_id.to_string();
+        let event_sequence = event_sequence.clone();
         std::thread::spawn(move || {
             let mut lines = Vec::new();
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                let sequence = event_sequence.fetch_add(1, Ordering::Relaxed);
                 let _ = app.emit(
                     "agent://run-event",
                     PiRunEvent {
                         session_id: session_id.clone(),
                         stream: "stderr".to_string(),
                         line: line.clone(),
+                        sequence,
                     },
                 );
                 lines.push(line);
@@ -366,9 +384,15 @@ fn run_pi_agent_blocking(
 
     // Send the prompt command over stdin, then keep it alive so Pi doesn't exit
     if let Some(stdin) = stdin {
+        let system_instruction = match mode {
+            "plan" => "[MODE: PLAN] You are in read-only planning mode. Analyze the codebase, understand the request, and provide a clear plan or strategy. Do NOT write, edit, or modify any files. Do NOT run bash commands. Provide your analysis and plan as text only.\n\n",
+            "build" => "[MODE: BUILD] You are in build mode. Read, write, edit files and run commands to implement the requested changes. Follow best practices and verify your work.\n\n",
+            _ => "",
+        };
+        let full_prompt = format!("{}{}", system_instruction, prompt);
         let prompt_cmd = json!({
             "type": "prompt",
-            "message": prompt
+            "message": full_prompt
         });
         let line = format!("{}\n", prompt_cmd);
         let mut stdin_owned = stdin;
@@ -660,5 +684,4 @@ fn resolve_workspace_path(project_path: &str) -> Result<PathBuf, String> {
 // ---------------------------------------------------------------------------
 // Wait helpers
 // ---------------------------------------------------------------------------
-
 

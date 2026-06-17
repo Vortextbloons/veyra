@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useState } from "react";
 import {
   AlertTriangle,
   Bot,
@@ -6,8 +7,9 @@ import {
   Folder,
   FolderOpen,
   Hammer,
-  HelpCircle,
   ListTodo,
+  PanelLeftClose,
+  PanelLeftOpen,
   TerminalSquare,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -32,8 +34,7 @@ type AgentsPanelProps = {
 };
 
 export const AGENT_MODES: { id: AgentMode; label: string; detail: string; icon: ReactNode }[] = [
-  { id: "ask", label: "Ask", detail: "Read-only answers", icon: <HelpCircle className="size-3.5" /> },
-  { id: "plan", label: "Plan", detail: "Strategy & analysis", icon: <ListTodo className="size-3.5" /> },
+  { id: "plan", label: "Plan", detail: "Read-only analysis & strategy", icon: <ListTodo className="size-3.5" /> },
   { id: "build", label: "Build", detail: "Take action on your machine", icon: <Hammer className="size-3.5" /> },
 ];
 
@@ -53,6 +54,7 @@ export function AgentsPanel({
 }: AgentsPanelProps) {
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
   const runningSession = sessions.find((s) => s.status === "running") ?? null;
+  const [sessionsOpen, setSessionsOpen] = useState(true);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--color-bg)]">
@@ -64,17 +66,25 @@ export function AgentsPanel({
         runtimeAvailable={runtimeAvailable}
         running={Boolean(runningSession)}
         onCheckRuntime={onCheckRuntime}
+        sessionsOpen={sessionsOpen}
+        onToggleSessions={() => setSessionsOpen((o) => !o)}
       />
 
       <div className="flex min-h-0 flex-1">
-        <AgentSessionList
-          sessions={sessions}
-          activeSessionId={activeSession?.id ?? null}
-          onNew={onNewSession}
-          onSelect={onSelectSession}
-          onStop={onStopSession}
-          onDelete={onDeleteSession}
-        />
+        <div
+          className={`shrink-0 overflow-hidden transition-[width] duration-200 ease-out ${
+            sessionsOpen ? "w-72" : "w-0"
+          }`}
+        >
+          <AgentSessionList
+            sessions={sessions}
+            activeSessionId={activeSession?.id ?? null}
+            onNew={onNewSession}
+            onSelect={onSelectSession}
+            onStop={onStopSession}
+            onDelete={onDeleteSession}
+          />
+        </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
           {activeSession ? (
@@ -98,6 +108,8 @@ function AgentHeader({
   runtimeAvailable,
   running,
   onCheckRuntime,
+  sessionsOpen,
+  onToggleSessions,
 }: {
   mode: AgentMode;
   onModeChange: (m: AgentMode) => void;
@@ -106,6 +118,8 @@ function AgentHeader({
   runtimeAvailable: boolean | null;
   running: boolean;
   onCheckRuntime: () => void;
+  sessionsOpen: boolean;
+  onToggleSessions: () => void;
 }) {
   const handleBrowse = async () => {
     try {
@@ -122,6 +136,14 @@ function AgentHeader({
     <header className="flex shrink-0 flex-col gap-2.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onToggleSessions}
+            className="grid size-7 shrink-0 place-items-center rounded-lg text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.06] hover:text-white"
+            title={sessionsOpen ? "Collapse sessions" : "Expand sessions"}
+          >
+            {sessionsOpen ? <PanelLeftClose className="size-3.5" /> : <PanelLeftOpen className="size-3.5" />}
+          </button>
           <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/15 ring-1 ring-inset ring-indigo-400/15">
             <Bot className="size-3.5 text-indigo-300" />
           </div>

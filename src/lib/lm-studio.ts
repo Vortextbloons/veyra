@@ -86,9 +86,14 @@ function parseToolArguments(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function stableToolCallId(index: number): string {
+  return `tool-${index}`;
+}
+
 function extractToolCalls(output: V1OutputItem[] | undefined): ProviderToolCall[] {
   if (!output?.length) return [];
   const calls: ProviderToolCall[] = [];
+  let fallbackIndex = 0;
 
   const pushCall = (value: unknown) => {
     if (!value || typeof value !== "object") return;
@@ -103,10 +108,16 @@ function extractToolCalls(output: V1OutputItem[] | undefined): ProviderToolCall[
         : "";
     if (!name) return;
     calls.push({
-      id: typeof record.id === "string" ? record.id : typeof record.call_id === "string" ? record.call_id : crypto.randomUUID(),
+      id:
+        typeof record.id === "string"
+          ? record.id
+          : typeof record.call_id === "string"
+            ? record.call_id
+            : stableToolCallId(fallbackIndex),
       name,
       arguments: parseToolArguments(record.arguments ?? record.args ?? fn?.arguments),
     });
+    fallbackIndex += 1;
   };
 
   for (const item of output) {
@@ -384,8 +395,8 @@ function finalizeOpenAiToolCalls(state: OpenAiStreamState): ProviderToolCall[] {
   if (state.toolCallAccumulators.size === 0) return [];
   return [...state.toolCallAccumulators.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([, acc]) => ({
-      id: acc.id ?? crypto.randomUUID(),
+    .map(([index, acc]) => ({
+      id: acc.id ?? stableToolCallId(index),
       name: acc.name ?? "",
       arguments: parseToolArguments(acc.arguments),
     }))

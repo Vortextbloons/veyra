@@ -1,16 +1,14 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AgentEvent,
   AgentMode,
   AgentSession,
   AgentStatus,
-  PiSession,
   StartAgentSessionInput,
 } from "@/modules/agents/agent-types";
 import {
   checkPiAvailable,
-  deletePiSession,
-  listPiSessions,
   runPiAgent,
   stopPiAgent,
 } from "@/modules/agents/pi-runtime";
@@ -40,7 +38,6 @@ type AgentStore = {
   setActiveSessionId: (id: string | null) => void;
   checkRuntime: () => Promise<void>;
   loadProjectSessions: (projectPath: string) => Promise<void>;
-  loadPiSession: (sessionId: string) => Promise<void>;
   newSession: () => void;
   deleteSession: (sessionId: string) => Promise<void>;
   startSession: (input: StartAgentSessionInput) => Promise<string>;
@@ -53,13 +50,20 @@ function titleFromPrompt(prompt: string) {
   return trimmed.length > 64 ? `${trimmed.slice(0, 61)}...` : trimmed || "Agent task";
 }
 
-function event(type: AgentEvent["type"], title: string, detail?: string, toolCallId?: string): AgentEvent {
+function event(
+  type: AgentEvent["type"],
+  title: string,
+  detail?: string,
+  toolCallId?: string,
+  sequence?: number,
+): AgentEvent {
   return {
     id: crypto.randomUUID(),
     type,
     title,
     detail,
     at: Date.now(),
+    ...(sequence != null ? { sequence } : {}),
     ...(toolCallId ? { toolCallId } : {}),
   };
 }
@@ -91,22 +95,49 @@ function toolDetail(
         argParts.push(shortValue(value));
       }
     }
+    if (argParts.length === 0 && Object.keys(args).length > 0) {
+      argParts.push(shortValue(JSON.stringify(args)));
+    }
   }
   const resultParts: string[] = [];
   if (result) {
     const output = typeof result.output === "string" ? result.output : undefined;
-    if (output) resultParts.push(shortValue(output));
+    if (output) {
+      resultParts.push(shortValue(output));
+    } else if (Object.keys(result).length > 0) {
+      resultParts.push(shortValue(JSON.stringify(result)));
+    }
     if (isError) resultParts.push("error");
   }
   return [...argParts, ...resultParts].filter(Boolean).join(" · ") || undefined;
 }
 
-function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string }): AgentEvent | null {
+function parseToolCallId(record: Record<string, unknown>): string | undefined {
+  const candidates = [
+    record.toolCallId,
+    record.callId,
+    record.call_id,
+    record.tool_call_id,
+    record.tool_use_id,
+    record.toolUseId,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+  return undefined;
+}
+
+function isPlaceholderToolDetail(detail?: string): boolean {
+  const normalized = detail?.trim();
+  return !normalized || normalized === "Running tool";
+}
+
+function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string; sequence: number }): AgentEvent | null {
   const line = raw.line.trim();
   if (!line) return null;
 
   if (raw.stream === "stderr") {
-    return event("error", "Pi stderr", stripAnsi(line));
+    return event("error", "Pi stderr", stripAnsi(line), undefined, raw.sequence);
   }
 
   try {
@@ -127,7 +158,7 @@ function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string }): Agent
 
         if (eventType === "text_delta") {
           const delta = typeof assistantEvent.delta === "string" ? assistantEvent.delta : undefined;
-          return delta ? event("output", "Pi stream", delta) : null;
+          return delta ? event("output", "Pi stream", delta, undefined, raw.sequence) : null;
         }
 
         if (eventType === "text_end") {
@@ -136,7 +167,7 @@ function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string }): Agent
 
         if (eventType === "thinking_delta") {
           const delta = typeof assistantEvent.delta === "string" ? assistantEvent.delta : undefined;
-          return delta ? event("reasoning", "Reasoning", delta) : null;
+          return delta ? event("reasoning", "Reasoning", delta, undefined, raw.sequence) : null;
         }
 
         return null;
@@ -144,24 +175,24 @@ function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string }): Agent
 
       case "tool_execution_start": {
         const toolName = typeof parsed.toolName === "string" ? parsed.toolName : "tool";
-        const toolCallId = typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined;
+        const toolCallId = parseToolCallId(parsed);
         const args = asRecord(parsed.args);
-        return event("tool", toolName, toolDetail(args, null, false), toolCallId);
+        return event("tool", toolName, toolDetail(args, null, false), toolCallId, raw.sequence);
       }
 
       case "tool_execution_update": {
         const toolName = typeof parsed.toolName === "string" ? parsed.toolName : "tool";
-        const toolCallId = typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined;
+        const toolCallId = parseToolCallId(parsed);
         const partial = asRecord(parsed.partialResult);
-        return event("tool", toolName, toolDetail(null, partial, false), toolCallId);
+        return event("tool", toolName, toolDetail(null, partial, false), toolCallId, raw.sequence);
       }
 
       case "tool_execution_end": {
         const toolName = typeof parsed.toolName === "string" ? parsed.toolName : "tool";
-        const toolCallId = typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined;
+        const toolCallId = parseToolCallId(parsed);
         const result = asRecord(parsed.result);
         const isError = parsed.isError === true;
-        return event("tool", toolName, toolDetail(null, result, isError), toolCallId);
+        return event("tool", toolName, toolDetail(null, result, isError), toolCallId, raw.sequence);
       }
 
       case "turn_end":
@@ -172,20 +203,20 @@ function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string }): Agent
         if (msg && typeof msg.role === "string" && msg.role === "assistant") {
           const usage = asRecord(msg.usage);
           if (usage && typeof usage.input === "number") {
-            return event("token_update", "Token update", String(usage.input));
+            return event("token_update", "Token update", String(usage.input), undefined, raw.sequence);
           }
         }
         return null;
       }
 
       case "agent_end":
-        return event("result", "Completed");
+        return event("result", "Completed", undefined, undefined, raw.sequence);
 
       default:
         return null;
     }
   } catch {
-    return event("status", "Pi event", line.startsWith("{") ? undefined : stripAnsi(line));
+    return event("status", "Pi event", line.startsWith("{") ? undefined : stripAnsi(line), undefined, raw.sequence);
   }
 }
 
@@ -211,187 +242,191 @@ function patchSession(
 }
 
 function appendLiveOutput(events: AgentEvent[], nextEvent: AgentEvent): AgentEvent[] {
-  if (!nextEvent.detail) {
-    return [...events, nextEvent];
-  }
+  const baseEvents = events;
 
-  // Merge consecutive reasoning events
+  // Merge only back-to-back reasoning deltas so tool/output blocks stay in order.
   if (nextEvent.type === "reasoning" && nextEvent.title === "Reasoning") {
-    const lastReasoningIndex = events.findLastIndex(
-      (item) => item.type === "reasoning" && item.title === "Reasoning",
-    );
-    if (lastReasoningIndex !== -1) {
-      const current = events[lastReasoningIndex];
-      const currentText = current.detail ?? "";
-      const nextText = nextEvent.detail;
+    const last = baseEvents.at(-1);
+    if (last?.type === "reasoning" && last.title === "Reasoning") {
+      const currentText = last.detail ?? "";
+      const nextText = nextEvent.detail ?? "";
       const detail = nextText.startsWith(currentText)
         ? nextText
         : [currentText, nextText].filter(Boolean).join("");
-      const updated = events.slice();
-      updated[lastReasoningIndex] = { ...current, detail, at: nextEvent.at };
+      const updated = baseEvents.slice();
+      updated[updated.length - 1] = { ...last, detail, at: nextEvent.at };
       return updated;
     }
-    return [...events, nextEvent];
+    return [...baseEvents, nextEvent];
   }
 
-  // Merge tool events by toolCallId — update existing start/update with later update/end
-  if (nextEvent.type === "tool" && nextEvent.toolCallId) {
-    const existingIndex = events.findLastIndex(
-      (item) => item.type === "tool" && item.toolCallId === nextEvent.toolCallId,
-    );
-    if (existingIndex !== -1) {
-      const updated = events.slice();
-      updated[existingIndex] = { ...nextEvent };
-      return updated;
+  // Merge tool events so each call stays in one slot.
+  if (nextEvent.type === "tool") {
+    if (nextEvent.toolCallId) {
+      const existingIndex = baseEvents.findLastIndex(
+        (item) => item.type === "tool" && item.toolCallId === nextEvent.toolCallId,
+      );
+      if (existingIndex !== -1) {
+        const current = baseEvents[existingIndex];
+        const updated = baseEvents.slice();
+        updated[existingIndex] = {
+          ...current,
+          ...nextEvent,
+          title: nextEvent.title || current.title,
+          detail: nextEvent.detail?.trim() ? nextEvent.detail : current.detail,
+          at: nextEvent.at,
+          toolCallId: current.toolCallId ?? nextEvent.toolCallId,
+        };
+        return updated.filter(
+          (item, index) =>
+            index === existingIndex ||
+            item.type !== "tool" ||
+            item.toolCallId !== nextEvent.toolCallId,
+        );
+      }
+    } else {
+      const last = baseEvents.at(-1);
+      if (
+        last?.type === "tool" &&
+        last.title === nextEvent.title &&
+        (isPlaceholderToolDetail(last.detail) ||
+          isPlaceholderToolDetail(nextEvent.detail) ||
+          (last.detail?.trim() ?? "") === (nextEvent.detail?.trim() ?? ""))
+      ) {
+        const updated = baseEvents.slice();
+        updated[updated.length - 1] = {
+          ...last,
+          ...nextEvent,
+          title: nextEvent.title || last.title,
+          detail: nextEvent.detail?.trim() ? nextEvent.detail : last.detail,
+          at: nextEvent.at,
+        };
+        return updated;
+      }
     }
-    return [...events, nextEvent];
+
+    return [...baseEvents, nextEvent];
+  }
+
+  if (!nextEvent.detail) {
+    return [...baseEvents, nextEvent];
   }
 
   if (nextEvent.type !== "output" || nextEvent.title !== "Pi stream") {
-    return [...events, nextEvent];
+    return [...baseEvents, nextEvent];
   }
 
-  const lastPromptIndex = events.findLastIndex(
-    (item) => item.type === "status" && item.title === "Prompt",
-  );
-  const lastOutputIndex = events.findLastIndex(
-    (item, index) =>
-      index > lastPromptIndex &&
-      item.type === "output" &&
-      item.title === "Pi stream",
-  );
-  if (lastOutputIndex === -1) return [...events, nextEvent];
+  const last = baseEvents.at(-1);
+  if (last?.type === "output" && last.title === "Pi stream") {
+    const currentText = last.detail ?? "";
+    const nextText = nextEvent.detail;
+    const detail = nextText.startsWith(currentText)
+      ? nextText
+      : [currentText, nextText].filter(Boolean).join("");
+    const updated = baseEvents.slice();
+    updated[updated.length - 1] = { ...last, detail, at: nextEvent.at };
+    return updated;
+  }
 
-  const current = events[lastOutputIndex];
-  const currentText = current.detail ?? "";
-  const nextText = nextEvent.detail;
-  const detail = nextText.startsWith(currentText)
-    ? nextText
-    : [currentText, nextText].filter(Boolean).join("");
-
-  const updated = events.slice();
-  updated[lastOutputIndex] = { ...current, detail, at: nextEvent.at };
-  return updated;
+  return [...baseEvents, nextEvent];
 }
 
-function placeholderFromPiSession(session: PiSession): AgentSession {
-  return {
-    id: session.id,
-    runtime: "pi",
-    mode: "ask",
-    status: "ready",
-    projectPath: session.directory ?? "",
-    prompt: "",
-    model: "",
-    piSessionId: session.id,
-    title: session.title || "Pi session",
-    startedAt: session.created || session.updated || Date.now(),
-    endedAt: session.updated,
-    events: [],
-  };
-}
-
-export const useAgentStore = create<AgentStore>((set, get) => ({
-  sessions: [],
-  activeSessionId: null,
-  runtimeAvailable: null,
-  runtimeStatus: "idle",
-  mode: "ask",
-  projectPath: "",
-  selectedModel: "",
-  setMode: (mode) => set({ mode }),
-  setProjectPath: (projectPath) => {
-    for (const session of get().sessions) {
-      if (session.status === "running") {
-        abortAgentSession(session.id);
-      }
-    }
-    set({ projectPath, activeSessionId: null, sessions: [] });
-  },
-  setSelectedModel: (selectedModel) => set({ selectedModel }),
-  setActiveSessionId: (activeSessionId) => {
-    const session = activeSessionId
-      ? get().sessions.find((item) => item.id === activeSessionId)
-      : null;
-    set({
-      activeSessionId,
-      ...(session
-        ? {
-            mode: session.mode,
-            projectPath: session.projectPath,
+export const useAgentStore = create<AgentStore>()(
+  persist(
+    (set, get) => ({
+      sessions: [],
+      activeSessionId: null,
+      runtimeAvailable: null,
+      runtimeStatus: "idle",
+      mode: "plan",
+      projectPath: "",
+      selectedModel: "",
+      setMode: (mode) => set((state) => {
+        const active = state.activeSessionId
+          ? state.sessions.find((s) => s.id === state.activeSessionId)
+          : null;
+        const currentProjectPath = state.projectPath.trim();
+        return {
+          mode,
+          ...(active && active.status !== "running" && active.projectPath.trim() === currentProjectPath
+            ? { sessions: patchSession(state.sessions, active.id, { mode }) }
+            : {}),
+        };
+      }),
+      setProjectPath: (projectPath) => {
+        for (const session of get().sessions) {
+          if (session.status === "running") {
+            abortAgentSession(session.id);
           }
-        : {}),
-    });
-  },
-  checkRuntime: async () => {
-    set({ runtimeStatus: "checking_runtime" });
-    const available = await checkPiAvailable();
-    set({ runtimeAvailable: available, runtimeStatus: available ? "idle" : "failed" });
-  },
-  loadProjectSessions: async (projectPath) => {
-    const sessions = await listPiSessions(projectPath).catch(() => []);
-    set((state) => {
-      const existing = new Map(state.sessions.map((session) => [session.piSessionId ?? session.id, session]));
-      const hydrated = sessions.map((item) => {
-        const current = existing.get(item.id);
-        if (current && (current.status === "running" || current.events.length > 0)) return current;
-        return placeholderFromPiSession(item);
-      });
-      const projectKey = projectPath.trim();
-      const localOnlyForProject = state.sessions.filter(
-        (session) =>
-          !session.piSessionId &&
-          session.projectPath.trim() === projectKey &&
-          session.status === "running",
-      );
-      const nextSessions = [...hydrated, ...localOnlyForProject];
-      const activeSessionId = nextSessions.some((session) => session.id === state.activeSessionId)
-        ? state.activeSessionId
-        : nextSessions[0]?.id ?? null;
-      const activeSession = activeSessionId
-        ? nextSessions.find((session) => session.id === activeSessionId)
-        : null;
-      return {
-        sessions: nextSessions,
-        activeSessionId,
-        ...(activeSession
-          ? { mode: activeSession.mode, projectPath: activeSession.projectPath }
-          : {}),
-      };
-    });
-  },
-  loadPiSession: async (sessionId) => {
-    const current = get().sessions.find((session) => session.id === sessionId);
-    if (!current?.piSessionId || current.events.length > 0) return;
-  },
-  newSession: () => set({ activeSessionId: null }),
-  deleteSession: async (sessionId) => {
-    const current = get().sessions.find((session) => session.id === sessionId);
-    if (!current) return;
-    if (current.status === "running") {
-      abortAgentSession(sessionId);
-    }
-    if (current.piSessionId) {
-      await deletePiSession(current.projectPath || get().projectPath);
-    }
-    set((state) => {
-      const sessions = state.sessions.filter((session) => session.id !== sessionId);
-      const activeSessionId = state.activeSessionId === sessionId
-        ? sessions[0]?.id ?? null
-        : state.activeSessionId;
-      const activeSession = activeSessionId
-        ? sessions.find((session) => session.id === activeSessionId)
-        : null;
-      return {
-        sessions,
-        activeSessionId,
-        ...(activeSession
-          ? { mode: activeSession.mode, projectPath: activeSession.projectPath }
-          : {}),
-      };
-    });
-  },
-  startSession: async (input) => {
+        }
+        set({ projectPath, activeSessionId: null });
+      },
+      setSelectedModel: (selectedModel) => set({ selectedModel }),
+      setActiveSessionId: (activeSessionId) => {
+        const session = activeSessionId
+          ? get().sessions.find((item) => item.id === activeSessionId)
+          : null;
+        set({
+          activeSessionId,
+          ...(session
+            ? {
+                mode: session.mode,
+                projectPath: session.projectPath,
+              }
+            : {}),
+        });
+      },
+      checkRuntime: async () => {
+        set({ runtimeStatus: "checking_runtime" });
+        const available = await checkPiAvailable();
+        set({ runtimeAvailable: available, runtimeStatus: available ? "idle" : "failed" });
+      },
+      loadProjectSessions: async (projectPath) => {
+        set((state) => {
+          const projectKey = projectPath.trim();
+          const visibleSessions = state.sessions.filter(
+            (session) =>
+              session.projectPath.trim() === projectKey,
+          );
+          const activeSessionId = visibleSessions.some((session) => session.id === state.activeSessionId)
+            ? state.activeSessionId
+            : visibleSessions[0]?.id ?? null;
+          const activeSession = activeSessionId
+            ? visibleSessions.find((session) => session.id === activeSessionId)
+            : null;
+          return {
+            projectPath,
+            activeSessionId,
+            ...(activeSession ? { mode: activeSession.mode } : {}),
+          };
+        });
+      },
+      newSession: () => set({ activeSessionId: null }),
+      deleteSession: async (sessionId) => {
+        const current = get().sessions.find((session) => session.id === sessionId);
+        if (!current) return;
+        if (current.status === "running") {
+          abortAgentSession(sessionId);
+        }
+        set((state) => {
+          const sessions = state.sessions.filter((session) => session.id !== sessionId);
+          const deletedProject = current.projectPath.trim();
+          const activeSessionId = state.activeSessionId === sessionId
+            ? sessions.find((session) => session.projectPath.trim() === deletedProject)?.id ?? null
+            : state.activeSessionId;
+          const activeSession = activeSessionId
+            ? sessions.find((session) => session.id === activeSessionId)
+            : null;
+          return {
+            sessions,
+            activeSessionId,
+            ...(activeSession
+              ? { mode: activeSession.mode, projectPath: activeSession.projectPath }
+              : {}),
+          };
+        });
+      },
+      startSession: async (input) => {
     const waitFor = startSessionChain;
     let unlock: () => void = () => {};
     startSessionChain = new Promise<void>((resolve) => {
@@ -400,23 +435,31 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     await waitFor;
 
     try {
-      if (get().sessions.some((session) => session.status === "running")) {
-        const running = get().sessions.find((session) => session.status === "running");
+      const requestedProjectPath = input.projectPath.trim();
+      if (
+        get().sessions.some(
+          (session) => session.status === "running" && session.projectPath.trim() === requestedProjectPath,
+        )
+      ) {
+        const running = get().sessions.find(
+          (session) => session.status === "running" && session.projectPath.trim() === requestedProjectPath,
+        );
         return running?.id ?? "";
       }
 
       const activeSession = get().activeSessionId
-        ? get().sessions.find((item) => item.id === get().activeSessionId)
+        ? get().sessions.find(
+            (item) => item.id === get().activeSessionId && item.projectPath.trim() === requestedProjectPath,
+          )
         : null;
-      const inputProjectPath = input.projectPath.trim();
       const activeProjectPath = activeSession?.projectPath.trim() ?? "";
-      const projectPath = activeSession && inputProjectPath === "" ? activeProjectPath : inputProjectPath;
+      const projectPath = activeSession && requestedProjectPath === "" ? activeProjectPath : requestedProjectPath;
       const mode = input.mode;
       const shouldContinue = Boolean(
         activeSession &&
           activeSession.status !== "running" &&
-          (activeSession.piSessionId || activeSession.mode === input.mode) &&
-          activeProjectPath === projectPath,
+          activeProjectPath === projectPath &&
+          activeSession.mode === mode,
       );
       const id = shouldContinue && activeSession ? activeSession.id : crypto.randomUUID();
       const now = Date.now();
@@ -568,27 +611,44 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     } finally {
       unlock();
     }
-  },
-  stopSession: (id) => {
-    abortAgentSession(id);
-    set((state) => {
-      const current = state.sessions.find((item) => item.id === id);
-      if (!current || current.status !== "running") return state;
-      return {
-        sessions: patchSession(state.sessions, id, {
-          status: "stopped",
-          endedAt: Date.now(),
-          events: [...current.events, event("status", "Session stopped")],
-        }),
-      };
-    });
-  },
-  clearSessions: () => {
-    for (const session of get().sessions) {
-      if (session.status === "running") {
-        abortAgentSession(session.id);
-      }
-    }
-    set({ sessions: [], activeSessionId: null });
-  },
-}));
+      },
+      stopSession: (id) => {
+        abortAgentSession(id);
+        set((state) => {
+          const current = state.sessions.find((item) => item.id === id);
+          if (!current || current.status !== "running") return state;
+          return {
+            sessions: patchSession(state.sessions, id, {
+              status: "stopped",
+              endedAt: Date.now(),
+              events: [...current.events, event("status", "Session stopped")],
+            }),
+          };
+        });
+      },
+      clearSessions: () => {
+        for (const session of get().sessions) {
+          if (session.status === "running") {
+            abortAgentSession(session.id);
+          }
+        }
+        set({ sessions: [], activeSessionId: null });
+      },
+    }),
+    {
+      name: "veyra-agent-store",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        sessions: state.sessions.filter((session) => session.status !== "running"),
+        activeSessionId: state.sessions.some(
+          (session) => session.id === state.activeSessionId && session.status !== "running",
+        )
+          ? state.activeSessionId
+          : null,
+        mode: state.mode,
+        projectPath: state.projectPath,
+        selectedModel: state.selectedModel,
+      }),
+    },
+  ),
+);

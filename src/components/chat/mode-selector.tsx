@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Bot, Check, ChevronDown, Drama, MessageSquare, Telescope } from "lucide-react";
 import type { ChatMode } from "@/lib/chat-types";
 import { useClickOutside } from "@/hooks/use-click-outside";
@@ -33,12 +33,17 @@ const MODES: { id: ChatMode; label: string; description: string; icon: ReactNode
 export type ModeSelectorProps = {
   value: ChatMode;
   onChange?: (mode: ChatMode) => void;
+  disabled?: boolean;
 };
 
-export function ModeSelector({ value, onChange }: ModeSelectorProps) {
+export function ModeSelector({ value, onChange, disabled = false }: ModeSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = MODES.find((m) => m.id === value) ?? MODES[0];
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   useClickOutside(ref, open, () => setOpen(false));
 
@@ -48,12 +53,13 @@ export function ModeSelector({ value, onChange }: ModeSelectorProps) {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={`flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11.5px] font-medium transition-colors ${
           open
             ? "border-[var(--color-border-strong)] bg-white/[0.04] text-white"
             : "border-[var(--color-border)] bg-[var(--color-bg)]/40 text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
-        }`}
+        } ${disabled ? "cursor-not-allowed opacity-50 hover:border-[var(--color-border)] hover:bg-[var(--color-bg)]/40 hover:text-[var(--color-text-dim)]" : ""}`}
       >
         {current.icon}
         <span>{current.label}</span>
@@ -62,7 +68,7 @@ export function ModeSelector({ value, onChange }: ModeSelectorProps) {
         />
       </button>
 
-      {open && (
+      {open && !disabled && (
         <div
           role="listbox"
           aria-label="Mode"

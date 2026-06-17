@@ -161,8 +161,7 @@ function App() {
   const defaultContextLength = useSettingsStore((state) => state.defaultContextLength);
   const defaultReservedOutputTokens = useSettingsStore((state) => state.defaultReservedOutputTokens);
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
-  const codeExecutionEnabled = useSettingsStore((state) => state.codeExecutionEnabled);
-  const setCodeExecutionEnabled = useSettingsStore((state) => state.setCodeExecutionEnabled);
+  const codeExecutionDefaultEnabled = useSettingsStore((state) => state.codeExecutionEnabled);
   const reasoningEnabled = useSettingsStore((state) => state.reasoningEnabled);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
   const workspaceChatMode = useSettingsStore((state) => state.workspaceChatMode);
@@ -172,6 +171,7 @@ function App() {
     (state) => state.defaultWebSearchEnabled,
   );
   const [webSearchEnabled, setWebSearchEnabled] = useState(defaultWebSearchEnabled);
+  const [codeExecutionActive, setCodeExecutionActive] = useState(codeExecutionDefaultEnabled);
   const effectiveConnectivity = useConnectivityStore((state) => state.effectiveConnectivity);
   const startProbeListener = useConnectivityStore((state) => state.startProbeListener);
   const webSearchAvailability = useIsFeatureAvailable("webSearch");
@@ -185,7 +185,7 @@ function App() {
       : codeExecutionAvailability.reason;
   const effectiveWebSearchEnabled =
     effectiveConnectivity === "online" && webSearchEnabled && !webSearchDisabled;
-  const effectiveCodeExecutionEnabled = codeExecutionEnabled && !codeExecutionPanelDisabled;
+  const effectiveCodeExecutionEnabled = codeExecutionActive && !codeExecutionPanelDisabled;
   const prevEffectiveConnectivityRef = useRef(effectiveConnectivity);
 
   const sidebarsCollapsed =
@@ -243,6 +243,7 @@ function App() {
     void (async () => {
       await ensureSettingsHydrated();
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
+      setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
       await useChatStore.getState().hydrateConversations();
       void useDocumentStore.getState().hydrateDocuments();
       void useProjectStore.getState().hydrateProjects();
@@ -271,6 +272,7 @@ function App() {
     prevEffectiveConnectivityRef.current = effectiveConnectivity;
     if (prev === "offline" && effectiveConnectivity === "online") {
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
+      setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
     }
   }, [effectiveConnectivity]);
 
@@ -404,6 +406,7 @@ function App() {
     setStreamingMessageId(null);
     clearStreamingBuffer();
     setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
+    setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
     setActiveNav("chat");
     createConversation(activeProjectId ?? undefined);
   }, [activeProjectId, clearStreamingBuffer, createConversation, setActiveNav]);
@@ -448,19 +451,24 @@ function App() {
   const setActiveAgentSessionId = useAgentStore((state) => state.setActiveSessionId);
   const checkAgentRuntime = useAgentStore((state) => state.checkRuntime);
   const loadAgentProjectSessions = useAgentStore((state) => state.loadProjectSessions);
-  const loadPiSession = useAgentStore((state) => state.loadPiSession);
   const newAgentSession = useAgentStore((state) => state.newSession);
   const startAgentSession = useAgentStore((state) => state.startSession);
   const stopAgentSession = useAgentStore((state) => state.stopSession);
   const deleteAgentSession = useAgentStore((state) => state.deleteSession);
   const clearAgentSessions = useAgentStore((state) => state.clearSessions);
 
+  const agentProjectKey = agentProjectPath.trim();
+  const visibleAgentSessions = useMemo(
+    () => agentSessions.filter((session) => session.projectPath.trim() === agentProjectKey),
+    [agentProjectKey, agentSessions],
+  );
+
   const activeAgentSession = useMemo(
     () =>
-      agentSessions.find((session) => session.id === activeAgentSessionId) ??
-      agentSessions[0] ??
+      visibleAgentSessions.find((session) => session.id === activeAgentSessionId) ??
+      visibleAgentSessions[0] ??
       null,
-    [activeAgentSessionId, agentSessions],
+    [activeAgentSessionId, visibleAgentSessions],
   );
 
   const agentContextStats: ContextStats | undefined = useMemo(() => {
@@ -482,22 +490,16 @@ function App() {
   }, [agentRuntimeAvailable, workspaceChatMode, checkAgentRuntime]);
 
   useEffect(() => {
-    if (workspaceChatMode !== "agents" || agentRuntimeAvailable === false) return;
+    if (workspaceChatMode !== "agents") return;
     void loadAgentProjectSessions(agentProjectPath);
-  }, [agentProjectPath, agentRuntimeAvailable, workspaceChatMode, loadAgentProjectSessions]);
+  }, [agentProjectPath, workspaceChatMode, loadAgentProjectSessions]);
 
   const handleAgentSessionSelect = useCallback(
     (id: string) => {
       setActiveAgentSessionId(id);
-      void loadPiSession(id);
     },
-    [loadPiSession, setActiveAgentSessionId],
+    [setActiveAgentSessionId],
   );
-
-  useEffect(() => {
-    if (workspaceChatMode !== "agents" || !activeAgentSessionId) return;
-    void loadPiSession(activeAgentSessionId);
-  }, [activeAgentSessionId, workspaceChatMode, loadPiSession]);
 
   const handleSend = useCallback(
     (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
@@ -510,6 +512,11 @@ function App() {
 
       if (workspaceChatMode === "agents") {
         if (!trimmed) return;
+        if (agentRuntimeAvailable !== true) return;
+        const runningAgentSession = useAgentStore.getState().sessions.some(
+          (session) => session.status === "running" && session.projectPath.trim() === agentProjectKey,
+        );
+        if (runningAgentSession) return;
         aiScheduler.abortActiveBackgroundJob();
         aiScheduler.enqueueAiJob({
           type: "agent_pi",
@@ -676,6 +683,7 @@ function App() {
       activeProjectId,
       addMessagePair,
       agentMode,
+      agentRuntimeAvailable,
       agentProjectPath,
       appendStreamingContent,
       appendStreamingReasoning,
@@ -1148,8 +1156,8 @@ function App() {
             modelLoadProgress={modelLoadProgress}
             mode={workspaceChatMode}
             onModeChange={handleModeChange}
-            agentSessions={agentSessions}
-            activeAgentSessionId={activeAgentSessionId}
+            agentSessions={visibleAgentSessions}
+            activeAgentSessionId={activeAgentSession?.id ?? null}
             agentRuntimeAvailable={agentRuntimeAvailable}
             agentMode={agentMode}
             agentProjectPath={agentProjectPath}
@@ -1187,13 +1195,13 @@ function App() {
           onWebSearchChange={setWebSearchEnabled}
           webSearchDisabled={webSearchDisabled}
           webSearchDisabledReason={webSearchAvailability.reason}
-          codeExecutionEnabled={codeExecutionEnabled}
-          onCodeExecutionChange={setCodeExecutionEnabled}
+          codeExecutionEnabled={codeExecutionActive}
+          onCodeExecutionChange={setCodeExecutionActive}
           codeExecutionDisabled={codeExecutionPanelDisabled}
           codeExecutionDisabledReason={codeExecutionPanelDisabledReason}
           isAgentsMode={workspaceChatMode === "agents"}
-          agentSessionCount={agentSessions.length}
-          agentActiveCount={agentSessions.filter((s) => s.status === "running").length}
+          agentSessionCount={visibleAgentSessions.length}
+          agentActiveCount={visibleAgentSessions.filter((s) => s.status === "running").length}
           onAgentClearSessions={clearAgentSessions}
         />
       </div>

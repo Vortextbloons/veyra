@@ -23,6 +23,7 @@ type PiRunEvent = {
   sessionId: string;
   stream: "stdout" | "stderr";
   line: string;
+  sequence: number;
 };
 
 export type RunPiAgentOptions = {

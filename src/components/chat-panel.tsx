@@ -91,6 +91,11 @@ export function ChatPanel({
   const setReasoningEnabled = useSettingsStore((s) => s.setReasoningEnabled);
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
   const mode = controlledMode ?? internalMode;
+  const agentSessionRunning = mode === "agents" && agentSessions.some((session) => session.status === "running");
+  const agentComposerInputDisabled =
+    mode === "agents" &&
+    (agentRuntimeAvailable !== true || agentSessionRunning);
+  const agentComposerControlsDisabled = isStreaming || agentSessionRunning;
 
   const currentProvider = providers.find((p) => p.id === selectedProvider);
   const providerLabel = currentProvider?.name ?? "LM Studio";
@@ -345,7 +350,9 @@ export function ChatPanel({
           mode={mode}
           onModeChange={handleModeChange}
           onSend={onSend}
-          disabled={isStreaming}
+          disabled={isStreaming || agentComposerInputDisabled}
+          controlsDisabled={agentComposerControlsDisabled}
+          busy={isStreaming}
           supportsImages={supportsImages}
           composerTextClass={layout.composerText}
           editMessageId={editingMessageId}

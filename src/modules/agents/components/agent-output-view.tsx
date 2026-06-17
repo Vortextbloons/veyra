@@ -20,7 +20,7 @@ export function AgentOutputView({
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [session.events.length]);
+  }, [session.events]);
 
   const turns = buildAgentChatTurns(session.events, session.model);
   const hasAssistantAfterLastPrompt = turns.at(-1)?.role === "assistant";
@@ -125,7 +125,7 @@ export function AgentEmptyState() {
           Agents can research, write, code, manage files, and run commands on your machine.
           Choose a mode above, then send a task from the composer below.
         </p>
-        <div className="mt-5 grid grid-cols-3 gap-2">
+        <div className="mt-5 grid grid-cols-2 gap-2">
           {AGENT_MODES.map((m) => (
             <div
               key={m.id}

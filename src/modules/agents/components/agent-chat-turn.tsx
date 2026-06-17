@@ -31,10 +31,15 @@ export function buildAgentChatTurns(
   model?: string,
 ): AgentChatTurnModel[] {
   const turns: AgentChatTurnModel[] = [];
+  const toolTurnIndexByCallId = new Map<string, number>();
+  let previousEventType: AgentEvent["type"] | null = null;
 
   for (const evt of events) {
     if (evt.type === "status" && evt.title === "Prompt" && evt.detail?.trim()) {
+      toolTurnIndexByCallId.clear();
+      previousEventType = null;
       turns.push({ id: evt.id, role: "user", content: evt.detail.trim() });
+      previousEventType = evt.type;
       continue;
     }
 
@@ -42,7 +47,7 @@ export function buildAgentChatTurns(
       const content = evt.detail?.trim();
       if (!content) continue;
       const last = turns.at(-1);
-      if (last?.role === "assistant" && !last.kind) {
+      if (last?.role === "assistant" && !last.kind && previousEventType === "output") {
         last.content = [last.content, content].filter(Boolean).join("\n\n");
         last.animate = last.animate || shouldAnimateAgentText(evt);
       } else {
@@ -54,6 +59,7 @@ export function buildAgentChatTurns(
           model,
         });
       }
+      previousEventType = evt.type;
       continue;
     }
 
@@ -64,12 +70,13 @@ export function buildAgentChatTurns(
         title: evt.title,
         content: evt.detail?.trim() || "Pi failed.",
       });
+      previousEventType = evt.type;
       continue;
     }
 
     if (evt.type === "reasoning") {
       const last = turns.at(-1);
-      if (last?.kind === "reasoning") {
+      if (last?.kind === "reasoning" && previousEventType === "reasoning") {
         const content = evt.detail?.trim() || "";
         if (content) {
           last.content = [last.content, content].filter(Boolean).join("\n\n");
@@ -83,17 +90,33 @@ export function buildAgentChatTurns(
           content: evt.detail?.trim() || "Thinking",
         });
       }
+      previousEventType = evt.type;
       continue;
     }
 
     if (evt.type === "tool") {
-      turns.push({
-        id: evt.id,
-        role: "assistant",
-        kind: "tool",
-        title: evt.title,
-        content: evt.detail?.trim() || "Running tool",
-      });
+      const content = evt.detail?.trim() || "";
+      const existingIndex = evt.toolCallId ? toolTurnIndexByCallId.get(evt.toolCallId) : undefined;
+      if (existingIndex != null) {
+        const current = turns[existingIndex];
+        turns[existingIndex] = {
+          ...current,
+          title: evt.title || current.title,
+          content: content || current.content || "Running tool",
+        };
+      } else {
+        turns.push({
+          id: evt.toolCallId ?? evt.id,
+          role: "assistant",
+          kind: "tool",
+          title: evt.title,
+          content: content || "Running tool",
+        });
+        if (evt.toolCallId) {
+          toolTurnIndexByCallId.set(evt.toolCallId, turns.length - 1);
+        }
+      }
+      previousEventType = evt.type;
       continue;
     }
 
@@ -110,6 +133,7 @@ export function buildAgentChatTurns(
         title: evt.title,
         content: evt.detail?.trim() || "",
       });
+      previousEventType = evt.type;
     }
   }
 

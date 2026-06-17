@@ -98,6 +98,7 @@ Veyra stores runtime data on your machine only:
 
 - `%APPDATA%\com.veyra.app\` — conversations, SQLite memory DB, keys
 - Browser `localStorage` — settings and caches (`veyra.*` keys)
+- Browser `localStorage` — agent sessions, selected model, and workspace path
 
 Do not commit these paths or files to git.
 
@@ -114,10 +115,4 @@ Do not put production passwords or API keys in the repository.
 
 Logo files under `public/logos/` and root `*.jpg` brand images are for UI display. Ensure you have rights to redistribute them before publishing forks.
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-[MIT](LICENSE)
+#

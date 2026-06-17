@@ -247,7 +247,7 @@ const DEFAULT_STATE: SettingsStoreState = {
   memoryExtractionEnabled: true,
   memoryExtractionModel: "",
   defaultWebSearchEnabled: false,
-  codeExecutionEnabled: false,
+  codeExecutionEnabled: true,
   customPythonPath: "",
   codeExecutionTimeoutSecs: 30,
   webSearchSearxngUrl: "",

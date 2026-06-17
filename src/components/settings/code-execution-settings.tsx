@@ -104,17 +104,17 @@ export function CodeExecutionSettings() {
       <CollapsibleSettingsSection
         subsectionKey="codeExecution:execution"
         title="Execution"
-        description="Enable code execution and point Veyra at a Python interpreter."
+        description="Set the default code execution state and point Veyra at a Python interpreter."
         keywords={["python", "enable", "path", "detect", "browse"]}
         defaultExpanded
       >
         <Toggle
-          label="Enable code execution"
+          label="Enabled by default"
           on={codeExecutionEnabled}
           onChange={setCodeExecutionEnabled}
         />
         <p className="text-[11px] text-[var(--color-text-dim)]">
-          The tool is available only in chat and character conversations.
+          Controls the default state. You can also toggle it per session from the right panel.
         </p>
 
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">

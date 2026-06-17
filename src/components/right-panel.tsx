@@ -114,7 +114,7 @@ export function RightPanel({
             </div>
           )}
 
-          {!showProjectPanel && (
+          {!showProjectPanel && !isAgentsMode && (
             <div className="flex flex-col items-center gap-1.5">
               <CompactToolToggle
                 icon={<Globe className="size-3.5" />}
