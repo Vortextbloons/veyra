@@ -72,5 +72,5 @@ export function prepareReportSection(
 ): string {
   const sanitized = sanitizeReportSection(raw);
   if (!sanitized) return "";
-  return clampReportCitations(sanitized, maxCitation);
+  return clampReportCitations(sanitized, maxCitation).trim();
 }
