@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Conversation } from "@/lib/chat-types";
 import DecryptWorker from "@/workers/conversation-decrypt.worker?worker";
+import EncryptWorker from "@/workers/conversation-encrypt.worker?worker";
 
 const STORAGE_KEY = "veyra.conversations";
 const ENCRYPTION_VERSION = 1;
@@ -10,6 +11,7 @@ const KEY_BYTES = 32;
 
 let encryptionKeyPromise: Promise<CryptoKey> | null = null;
 let decryptWorker: Worker | null = null;
+let encryptWorker: Worker | null = null;
 let saveQueue: Promise<void> = Promise.resolve();
 let pendingSnapshot: Conversation[] | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -96,9 +98,19 @@ function getDecryptWorker(): Worker {
   return decryptWorker;
 }
 
+function getEncryptWorker(): Worker {
+  encryptWorker ??= new EncryptWorker();
+  return encryptWorker;
+}
+
 export function terminateDecryptWorker(): void {
   decryptWorker?.terminate();
   decryptWorker = null;
+}
+
+export function terminateEncryptWorker(): void {
+  encryptWorker?.terminate();
+  encryptWorker = null;
 }
 
 async function decryptSnapshot(raw: string): Promise<Conversation[]> {
@@ -155,6 +167,28 @@ async function decryptSnapshotOnMainThread(raw: string): Promise<Conversation[]>
 }
 
 async function encryptSnapshot(conversations: Conversation[]): Promise<string> {
+  try {
+    const keyBytes = await getKeyBytesForWorker();
+    const worker = getEncryptWorker();
+    return await new Promise<string>((resolve, reject) => {
+      const handler = (event: MessageEvent<{ ok: boolean; snapshot?: string; error?: string }>) => {
+        worker.removeEventListener("message", handler);
+        if (event.data.ok && event.data.snapshot) {
+          resolve(event.data.snapshot);
+          return;
+        }
+        reject(new Error(event.data.error ?? "encrypt failed"));
+      };
+      worker.addEventListener("message", handler);
+      worker.postMessage({ conversations, keyBytes }, [keyBytes]);
+    });
+  } catch {
+    // Fallback to main-thread encryption if worker fails
+    return encryptSnapshotOnMainThread(conversations);
+  }
+}
+
+async function encryptSnapshotOnMainThread(conversations: Conversation[]): Promise<string> {
   const encoder = new TextEncoder();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(

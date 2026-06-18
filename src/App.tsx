@@ -118,6 +118,8 @@ function App() {
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const activeChatJobIdRef = useRef<string | null>(null);
+  const isStreaming = requestStatus === "streaming";
+  const lastBreakdownRef = useRef<{ result: ReturnType<typeof getContextBreakdown>; convId: string | null; model: string } | undefined>(undefined);
 
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
@@ -362,6 +364,19 @@ function App() {
 
   const chatContextBreakdown = useMemo(() => {
     if (!activeConversation) return undefined;
+
+    // During streaming, skip expensive recomputation — return the last
+    // non-streaming result unless the conversation or model changed.
+    const cached = lastBreakdownRef.current;
+    if (
+      isStreaming &&
+      cached !== undefined &&
+      cached.convId === activeConversation.id &&
+      cached.model === selectedModel
+    ) {
+      return cached.result;
+    }
+
     const breakdownOptions = buildContextPanelOptions({
       conversation: activeConversation,
       modelId: selectedModel,
@@ -369,11 +384,15 @@ function App() {
       providerName: selectedProviderInfo?.name,
       reservedOutputTokens: resolvedReservedOutputTokens,
     });
-    return getContextBreakdown(
+    const result = getContextBreakdown(
       activeConversation.messages,
       breakdownOptions,
       resolvedContextLength,
     );
+    if (!isStreaming) {
+      lastBreakdownRef.current = { result, convId: activeConversation.id, model: selectedModel };
+    }
+    return result;
   }, [
     activeConversation,
     resolvedContextLength,
@@ -381,6 +400,7 @@ function App() {
     selectedModel,
     selectedModelInfo?.name,
     selectedProviderInfo?.name,
+    isStreaming,
   ]);
 
   const chatContextStats: ContextStats | undefined = useMemo(
@@ -1135,7 +1155,7 @@ function App() {
             title={activeConversation?.title}
             messages={visibleMessages}
             onSend={handleSend}
-            isStreaming={requestStatus === "streaming"}
+            isStreaming={isStreaming}
             streamingMessageId={streamingMessageId}
             providers={providers}
             selectedProvider={selectedProvider}

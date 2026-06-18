@@ -1,4 +1,5 @@
 use parking_lot::Mutex;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -493,8 +494,8 @@ pub async fn search_arxiv(query: String, limit: usize) -> Result<ArxivSearchResp
         .await
         .map_err(|e| format!("ArXiv API body read failed: {e}"))?;
 
-    // Parse entries from the Atom feed
-    let mut results: Vec<ArxivResult> = Vec::new();
+    // Parse entries from the Atom feed — collect slices then parse in parallel.
+    let mut entry_slices: Vec<String> = Vec::new();
     let mut remaining = xml_body.as_str();
 
     while let Some(entry_start) = remaining.find("<entry>") {
@@ -502,15 +503,17 @@ pub async fn search_arxiv(query: String, limit: usize) -> Result<ArxivSearchResp
             .find("</entry>")
             .map(|e| entry_start + e + 8);
         if let Some(end) = entry_end {
-            let entry_xml = &remaining[entry_start..end];
-            if let Some(result) = parse_arxiv_xml_entry(entry_xml) {
-                results.push(result);
-            }
+            entry_slices.push(remaining[entry_start..end].to_string());
             remaining = &remaining[end..];
         } else {
             break;
         }
     }
+
+    let results: Vec<ArxivResult> = entry_slices
+        .par_iter()
+        .filter_map(|entry| parse_arxiv_xml_entry(entry))
+        .collect();
 
     let result_count = results.len();
     let payload = ArxivSearchResponse {

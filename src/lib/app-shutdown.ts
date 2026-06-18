@@ -1,12 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { aiScheduler } from "@/lib/ai-scheduler";
-import { flushConversationSave, saveConversationSnapshot } from "@/lib/conversation-storage";
+import { flushConversationSave, saveConversationSnapshot, terminateDecryptWorker, terminateEncryptWorker } from "@/lib/conversation-storage";
 import { unloadAllProviderModels } from "@/lib/providers";
 import { useProviderStore } from "@/stores/provider-store";
-// Imported lazily so post-chat-jobs stays out of the main chunk.
-// The static import in chat-actions.ts is dynamic; this was the only eager site.
-import { terminateDecryptWorker } from "@/lib/conversation-storage";
 import { invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
 import { useChatStore } from "@/stores/chat-store";
 import { useResearchStore } from "@/modules/research/research-store";
@@ -158,6 +155,7 @@ export async function runAppShutdown(): Promise<void> {
   const { clearAllDelayedMemoryTimers } = await import("@/lib/post-chat-jobs");
   clearAllDelayedMemoryTimers();
   terminateDecryptWorker();
+  terminateEncryptWorker();
 
   setShutdownStep("saving");
   await withTimeout(persistConversations(), "Save conversations");

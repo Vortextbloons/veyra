@@ -180,7 +180,7 @@ export function ChatPanel({
   }, [messages]);
 
   const shouldVirtualizeMessages =
-    mode !== "agents" && !isStreaming && messages.length > VIRTUALIZE_AFTER_MESSAGES;
+    mode !== "agents" && messages.length > VIRTUALIZE_AFTER_MESSAGES;
   const visibleMessageWindow = useMemo(() => {
     if (!shouldVirtualizeMessages) {
       return { items: messages, before: 0, after: 0 };

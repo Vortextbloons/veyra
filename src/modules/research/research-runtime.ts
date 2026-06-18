@@ -822,7 +822,6 @@ async function callResearchAi(
   await prepareProviderModel(selectedProvider, selectedModel, {
     signal,
     contextLength: modelSettings.contextLength || undefined,
-    forceReload: true,
   });
   if (signal.aborted) {
     throw new DOMException("Research aborted", "AbortError");

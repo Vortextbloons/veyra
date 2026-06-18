@@ -1397,24 +1397,51 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
         );
     }
 
+    // Offload CPU-heavy DOM parsing (readability + scraper) to a blocking thread.
     let body = String::from_utf8_lossy(&body_bytes).to_string();
-
-    let (primary_content, primary_title) = match extract_text_from_html_body(&body, &parsed) {
-        Ok((content, title)) => (content, title),
-        Err(_) => {
-            // HTML extraction failed — try Wayback fallback before giving up
-            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
-                return recovered;
-            }
-            return make_error_page(
-                &url,
-                max_chars,
-                "extraction",
-                "Extraction returned too little content (likely a JS-only site)",
-                &req.cache_dir,
-            );
+    let extraction_result = run_blocking_extraction(&url, {
+        let url = url.clone();
+        let body = body.clone();
+        let parsed_url = parsed.clone();
+        move || match extract_text_from_html_body(&body, &parsed_url) {
+            Ok((content, title)) => FetchedPage {
+                url,
+                status: "ok".into(),
+                title,
+                content: Some(content),
+                error_reason: None,
+                source_type: Some("webpage".into()),
+                extraction_method: Some("readability".into()),
+                via_wayback: None,
+                char_count: None,
+            },
+            Err(reason) => FetchedPage {
+                url,
+                status: "extraction".into(),
+                title: None,
+                content: None,
+                error_reason: Some(reason.to_string()),
+                source_type: None,
+                extraction_method: None,
+                via_wayback: None,
+                char_count: None,
+            },
         }
-    };
+    })
+    .await;
+
+    if extraction_result.status != "ok" {
+        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+            return recovered;
+        }
+        let reason = extraction_result
+            .error_reason
+            .unwrap_or_else(|| "HTML extraction failed".into());
+        return make_error_page(&url, max_chars, "extraction", &reason, &req.cache_dir);
+    }
+
+    let primary_content = extraction_result.content.unwrap_or_default();
+    let primary_title = extraction_result.title;
 
     let content_trimmed = primary_content.trim();
     if is_low_quality_extracted_text(content_trimmed) {
