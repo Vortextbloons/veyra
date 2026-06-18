@@ -15,7 +15,7 @@ export async function getProject(id: string): Promise<ProjectRecord> {
 }
 
 export async function createProject(
-  input: Omit<CreateProjectInput, "id"> & { id?: string },
+  input: Omit<CreateProjectInput, "id" | "createdAt" | "updatedAt"> & { id?: string },
 ): Promise<ProjectRecord> {
   const now = nowIso();
   const id = input.id && input.id.length > 0 ? input.id : newId("proj");

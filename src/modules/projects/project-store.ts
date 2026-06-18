@@ -89,8 +89,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       icon: options?.icon,
       systemPrompt: options?.systemPrompt,
       settings: options?.settings,
-      createdAt: "",
-      updatedAt: "",
     });
     set((state) => ({
       projects: [project, ...state.projects],

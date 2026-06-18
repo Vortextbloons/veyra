@@ -11,14 +11,6 @@ import { useCharacterGroupStore } from "./character-group-store";
 import type { CharacterGroupRecord } from "./character-group-types";
 import type { CharacterRecord } from "./character-types";
 
-interface GroupConversationSnapshot {
-  id: string;
-  name: string;
-  memberIds: string[];
-  speakerMode: "manual" | "auto";
-  activeSpeakerId?: string;
-}
-
 export interface StartGroupChatOptions {
   speakerId?: string;
 }
@@ -46,21 +38,7 @@ export function startGroupChat(
 
   const now = Date.now();
   const conversationId = newId("conv");
-  const userMessageId = newId("msg");
   const assistantMessageId = newId("msg");
-
-  // We stash the group's identity inside the existing `characterSnapshot`
-  // field so the chat header can still render a friendly title even though
-  // no single character is bound.
-  void userMessageId;
-  const snapshot: GroupConversationSnapshot = {
-    id: group.id,
-    name: group.name,
-    memberIds: group.memberIds,
-    speakerMode: group.speakerMode,
-    activeSpeakerId: speaker.id,
-  };
-  void snapshot;
 
   const conversation = {
     id: conversationId,
@@ -93,7 +71,6 @@ export function startGroupChat(
     conversations: [conversation, ...state.conversations],
     activeConversationId: conversationId,
   }));
-  void userMessageId;
 
   // Best-effort persist — chat-store has its own save path.
   void import("@/lib/conversation-storage").then(({ saveConversationSnapshot }) => {
