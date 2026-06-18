@@ -1,4 +1,4 @@
-import type { ChatMessage, Conversation, CharacterConversationSnapshot } from "@/lib/chat-types";
+import type { ChatMessage, Conversation, CharacterConversationSnapshot } from "@/modules/chat/chat-types";
 import type { CharacterRecord } from "./character-types";
 import { useChatStore } from "@/stores/chat-store";
 import { useCharacterStore } from "./character-store";

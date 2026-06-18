@@ -4,8 +4,8 @@ import {
   executeChatSend,
   ensureProviderReady,
   triggerMemoryExtractionNow,
-} from "@/lib/chat-actions";
-import type { ChatMessage, RequestStatus } from "@/lib/chat-types";
+} from "@/modules/chat/chat-actions";
+import type { ChatMessage, RequestStatus } from "@/modules/chat/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";

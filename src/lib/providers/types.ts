@@ -1,6 +1,6 @@
-import type { ChatMessage, ModelInfo } from "@/lib/chat-types";
+import type { ChatMessage, ModelInfo } from "@/modules/chat/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
-import type { MemoryPack } from "@/lib/memory-types";
+import type { MemoryPack } from "@/modules/memory/memory-types";
 
 export type ProviderToolCall = {
   id: string;

@@ -7,7 +7,7 @@ import {
   ChevronDown,
   UserCheck,
 } from "lucide-react";
-import { ChatPanel } from "@/components/chat-panel";
+import { ChatPanel } from "@/app/components/chat-panel";
 import { useCharacterStore } from "../character-store";
 import { useCharacterGroupStore } from "../character-group-store";
 import { useCharacterChatPipeline } from "@/lib/use-character-chat-pipeline";

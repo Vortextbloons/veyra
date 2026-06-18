@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/lib/chat-types";
+import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { BuildChatContextOptions } from "@/lib/context";
 import {
   buildContextAnchoringBlock,

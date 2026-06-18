@@ -1,4 +1,4 @@
-import type { ChatMessage, ContextBlock, ContextBreakdown, ContextStats } from "@/lib/chat-types";
+import type { ChatMessage, ContextBlock, ContextBreakdown, ContextStats } from "@/modules/chat/chat-types";
 import { estimateTokens, buildChatContext, type BuildChatContextOptions } from "@/lib/context";
 import {
   VEYRA_CORE_SYSTEM,

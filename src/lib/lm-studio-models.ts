@@ -1,4 +1,4 @@
-import type { ModelInfo } from "@/lib/chat-types";
+import type { ModelInfo } from "@/modules/chat/chat-types";
 import type { LmStudioModelEntry, LoadedLmStudioModelInstance } from "@/lib/lm-studio-types";
 import { inferSupportsImages } from "@/lib/message-attachments";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";

@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/lib/chat-types";
+import type { ChatMessage } from "@/modules/chat/chat-types";
 
 export function formatTranscript(messages: ChatMessage[]): string {
   return messages

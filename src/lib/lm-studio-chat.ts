@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/lib/chat-types";
+import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { ProviderToolCall, ProviderToolDefinition } from "@/lib/providers/types";
 import type { LmChatCompleteResult, StreamState } from "@/lib/lm-studio-types";
 import { runLmStudioExclusive } from "@/lib/lm-studio-session";

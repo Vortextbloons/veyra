@@ -13,7 +13,7 @@ import {
 } from "@/modules/research/research-config";
 import { ResearchProfileKnobsEditor } from "@/modules/research/components/ResearchProfileKnobsEditor";
 import type { ResearchDepth } from "@/modules/research/research-types";
-import type { ModelInfo } from "@/lib/chat-types";
+import type { ModelInfo } from "@/modules/chat/chat-types";
 
 const DEPTH_ORDER: ResearchDepth[] = ["lightning", "quick", "standard", "deep", "exhaustive"];
 

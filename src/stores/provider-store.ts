@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { ModelInfo, ProviderInfo } from "@/lib/chat-types";
+import type { ModelInfo, ProviderInfo } from "@/modules/chat/chat-types";
 import { isProviderAllowedForConnectivity } from "@/lib/connectivity/provider-connectivity";
 import { getInitialProviders, getProviderAdapter } from "@/lib/providers";
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Bookmark, Trash2, X, Edit2, Check, Globe } from "lucide-react";
 import { useDocumentStore } from "../document-store";
-import { useMemoryStore } from "@/stores/memory-store";
+import { useMemoryStore } from "@/modules/memory/memory-store";
 import { DocumentExportMenu } from "./document-export-menu";
 import { formatDocumentStatus } from "../document-export";
 

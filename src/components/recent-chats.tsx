@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MessageSquare, PanelLeftClose, PanelLeftOpen, Search, Trash2 } from "lucide-react";
-import type { RecentChatsProps } from "@/lib/chat-types";
+import type { RecentChatsProps } from "@/modules/chat/chat-types";
 
 export function RecentChats({
   chats = [],

@@ -1,4 +1,4 @@
-import type { MessagePerformance } from "@/lib/chat-types";
+import type { MessagePerformance } from "@/modules/chat/chat-types";
 import { estimateTokens } from "@/lib/context";
 
 /** LM Studio `/api/v1/chat` stats object */

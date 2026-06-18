@@ -1,5 +1,5 @@
 import { ArrowLeft, Drama, RefreshCw, Trash2 } from "lucide-react";
-import { ChatPanel } from "@/components/chat-panel";
+import { ChatPanel } from "@/app/components/chat-panel";
 import { useCharacterStore } from "../character-store";
 import { useCharacterChatPipeline } from "@/lib/use-character-chat-pipeline";
 import { regenerateCharacterGreeting } from "../character-chat";

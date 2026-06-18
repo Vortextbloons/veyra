@@ -25,7 +25,7 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     warmup: {
-      clientFiles: ["./src/main.tsx", "./src/App.tsx"],
+      clientFiles: ["./src/app/main.tsx", "./src/app/App.tsx"],
     },
   },
   envPrefix: ["VITE_"],

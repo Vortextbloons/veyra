@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ConnectivityPreference } from "@/lib/connectivity/connectivity-types";
-import type { MemoryMode } from "@/lib/memory-types";
-import type { WorkspaceChatMode } from "@/lib/chat-types";
+import type { MemoryMode } from "@/modules/memory/memory-types";
+import type { WorkspaceChatMode } from "@/modules/chat/chat-types";
 import {
   DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
   mergeVisibleToolSettingsSections,

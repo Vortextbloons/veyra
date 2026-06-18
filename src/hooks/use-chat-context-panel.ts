@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { ContextStats } from "@/lib/chat-types";
+import type { ContextStats } from "@/modules/chat/chat-types";
 import { getContextBreakdown, getContextStatsFromBreakdown } from "@/lib/context-breakdown";
 import { buildContextPanelOptions } from "@/lib/context-panel-options";
 import { useChatStore } from "@/stores/chat-store";

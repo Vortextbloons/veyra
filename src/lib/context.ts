@@ -1,5 +1,5 @@
-import type { ChatMessage, ContextStats } from "@/lib/chat-types";
-import type { MemoryPack } from "@/lib/memory-types";
+import type { ChatMessage, ContextStats } from "@/modules/chat/chat-types";
+import type { MemoryPack } from "@/modules/memory/memory-types";
 import {
   buildMemoryContextBlock,
   buildSummaryContextBlock,

@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import type { ModelLoadProgress } from "@/lib/chat-types";
+import type { ModelLoadProgress } from "@/modules/chat/chat-types";
 
 const PHASE_LABEL: Record<string, string> = {
   unloading: "Unloading previous model",

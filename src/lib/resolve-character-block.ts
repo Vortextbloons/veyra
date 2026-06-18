@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/lib/chat-types";
+import type { ChatMessage } from "@/modules/chat/chat-types";
 import { useCharacterStore } from "@/modules/characters/character-store";
 import { evaluateLorebook } from "@/modules/characters/lorebook";
 import { buildCharacterContextBlock } from "@/modules/characters/character-context";

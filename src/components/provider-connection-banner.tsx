@@ -1,5 +1,5 @@
 import { Loader2, PlugZap, RefreshCw, Play } from "lucide-react";
-import type { ProviderInfo } from "@/lib/chat-types";
+import type { ProviderInfo } from "@/modules/chat/chat-types";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
 import { ProviderIcon } from "@/components/provider-icon";

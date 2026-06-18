@@ -7,7 +7,7 @@ import { MARKDOWN_COMPONENTS } from "@/components/markdown-components";
 import type { Components } from "react-markdown";
 import type { ResearchReport, ResearchSource, ResearchEvidence } from "../research-types";
 import { useDocumentStore } from "@/modules/documents/document-store";
-import { useMemoryStore } from "@/stores/memory-store";
+import { useMemoryStore } from "@/modules/memory/memory-store";
 import { useResearchStore } from "../research-store";
 import { CitationInspector } from "./CitationInspector";
 import { sanitizeReportSection, stripCitationAuditSection } from "../report-sanitize";

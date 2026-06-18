@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/lib/chat-types";
+import type { ChatMessage } from "@/modules/chat/chat-types";
 import { getProviderAdapter, prepareProviderModel } from "@/lib/providers";
 import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";

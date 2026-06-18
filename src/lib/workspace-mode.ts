@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { ChatMode } from "@/lib/chat-types";
+import type { ChatMode } from "@/modules/chat/chat-types";
 import { useSettingsStore } from "@/stores/settings-store";
 
 /** Maps mode-selector choices to primary nav + in-chat workspace mode. */

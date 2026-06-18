@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/lib/chat-types";
+import type { ChatMessage } from "@/modules/chat/chat-types";
 
 /** Text usable for titles/summaries — reasoning models often put the reply in `reasoning`. */
 export function getAssistantVisibleText(message: ChatMessage | undefined): string {

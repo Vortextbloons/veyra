@@ -1,4 +1,4 @@
-import type { WebSearchRound, WebSearchState } from "@/lib/chat-types";
+import type { WebSearchRound, WebSearchState } from "@/modules/chat/chat-types";
 
 /** Pre-rounds persisted message shape. */
 type LegacyWebSearchState = {

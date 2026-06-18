@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { FileText, Search, TerminalSquare, Wrench } from "lucide-react";
-import type { ToolCallPhase } from "@/lib/chat-types";
+import type { ToolCallPhase } from "@/modules/chat/chat-types";
 import {
   CODE_EXEC_TOOL_NAME,
   DOC_CREATE_TOOL_NAME,

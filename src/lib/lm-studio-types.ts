@@ -1,4 +1,4 @@
-import type { MessagePerformance } from "@/lib/chat-types";
+import type { MessagePerformance } from "@/modules/chat/chat-types";
 import type { ProviderToolCall } from "@/lib/providers/types";
 import type { LmChatStats } from "@/lib/performance";
 

@@ -1,7 +1,7 @@
 import { runAutoNameForConversation, resolveAutoNameModel } from "@/lib/auto-name";
-import { shouldSummarizeConversation, runSummarizeForConversation } from "@/lib/chat-summarize";
-import { shouldExtractMemoryBatch, runMemoryExtractionBatch } from "@/lib/memory-extraction";
-import { runMemoryRetentionCleanup } from "@/lib/memory-retention";
+import { shouldSummarizeConversation, runSummarizeForConversation } from "@/modules/chat/chat-summarize";
+import { shouldExtractMemoryBatch, runMemoryExtractionBatch } from "@/modules/memory/memory-extraction";
+import { runMemoryRetentionCleanup } from "@/modules/memory/memory-retention";
 import { runPostChatModelPipeline } from "@/lib/lm-model-session";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { useChatStore } from "@/stores/chat-store";

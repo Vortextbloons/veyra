@@ -3,7 +3,7 @@ import { Save } from "lucide-react";
 import type { ProjectRecord, ProjectSettings } from "@/modules/projects/project-types";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import type { MemoryMode } from "@/lib/memory-types";
+import type { MemoryMode } from "@/modules/memory/memory-types";
 import { Toggle } from "@/components/toggle";
 
 export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {

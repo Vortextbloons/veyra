@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Conversation } from "@/lib/chat-types";
+import type { Conversation } from "@/modules/chat/chat-types";
 import DecryptWorker from "@/workers/conversation-decrypt.worker?worker";
 import EncryptWorker from "@/workers/conversation-encrypt.worker?worker";
 

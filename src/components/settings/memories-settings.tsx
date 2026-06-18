@@ -1,6 +1,6 @@
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
-import type { MemoryMode } from "@/lib/memory-types";
+import type { MemoryMode } from "@/modules/memory/memory-types";
 import { Toggle } from "@/components/toggle";
 import { ModelDropdown } from "@/components/settings/model-dropdown";
 import { SliderControl } from "@/components/ui/slider-control";

@@ -1,7 +1,7 @@
 // Immediate save when the user explicitly asks to remember something.
 
-import { createMemoryNode } from "@/lib/memory-storage";
-import { useMemoryStore } from "@/stores/memory-store";
+import { createMemoryNode } from "@/modules/memory/memory-storage";
+import { useMemoryStore } from "@/modules/memory/memory-store";
 
 const REMEMBER_PATTERNS: { pattern: RegExp; strip: RegExp }[] = [
   {

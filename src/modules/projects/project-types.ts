@@ -2,7 +2,7 @@
 // A Project is a persistent local container that scopes chats, documents,
 // memories, tools, and settings around a goal or workstream.
 
-import type { MemoryMode } from "@/lib/memory-types";
+import type { MemoryMode } from "@/modules/memory/memory-types";
 
 export type ProjectKind =
   | "app"

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchRound, WebSearchState } from "@/lib/chat-types";
+import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchRound, WebSearchState } from "@/modules/chat/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 
 type ConversationHydrationState = "loading" | "ready";

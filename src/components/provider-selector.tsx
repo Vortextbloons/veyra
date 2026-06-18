@@ -6,7 +6,7 @@ import {
   Play,
   Loader2,
 } from "lucide-react";
-import type { ProviderInfo } from "@/lib/chat-types";
+import type { ProviderInfo } from "@/modules/chat/chat-types";
 import { ProviderIcon } from "@/components/provider-icon";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
