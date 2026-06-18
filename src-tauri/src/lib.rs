@@ -29,40 +29,17 @@ fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
     }
 }
 
-mod agent_commands;
-mod character_commands;
-mod character_db;
-mod character_group_commands;
-mod character_group_db;
-mod character_io_commands;
-mod code_execution_commands;
-mod connectivity_commands;
-mod constants;
-mod db_utils;
-mod document_commands;
-mod document_db;
-mod email_commands;
-mod email_db;
-mod lm_studio_setup;
-mod memory_commands;
-mod memory_db;
-mod path_utils;
-mod project_commands;
-mod project_db;
-mod research_commands;
-mod research_db;
-mod searxng_setup;
-mod web_fetch_cache;
-mod web_fetch_commands;
-mod web_fetch_documents;
-mod web_fetch_html;
-mod web_fetch_qwen;
-mod web_fetch_security;
-mod web_fetch_types;
-mod web_fetch_utils;
-mod web_fetch_wayback;
-mod web_fetch_youtube;
-mod web_search_commands;
+mod agents;
+mod characters;
+mod code_execution;
+mod connectivity;
+mod documents;
+mod email;
+mod memory;
+mod projects;
+mod research;
+mod shared;
+mod web_search;
 
 const CONVERSATIONS_FILE: &str = "conversations.json";
 const CONVERSATION_KEY_FILE: &str = "conversation.key";
@@ -153,135 +130,135 @@ pub fn run() {
             save_conversation_key,
             app_ready,
             exit_app,
-            agent_commands::check_pi_available,
-            agent_commands::run_pi_agent,
-            agent_commands::stop_pi_agent,
-            agent_commands::list_pi_sessions,
-            agent_commands::switch_pi_session,
-            agent_commands::delete_pi_session,
-            code_execution_commands::check_python_available,
-            code_execution_commands::execute_python_code,
-            memory_commands::list_memory_folders,
-            memory_commands::list_memory_files,
-            memory_commands::list_memory_nodes,
-            memory_commands::create_memory_node,
-            memory_commands::update_memory_node,
-            memory_commands::delete_memory_node,
-            memory_commands::archive_memory_node,
-            memory_commands::pin_memory_node,
-            memory_commands::search_memory,
-            connectivity_commands::probe_internet_connectivity,
-            web_search_commands::web_search_searxng,
-            web_search_commands::test_searxng_connection,
-            web_search_commands::search_arxiv,
-            web_search_commands::search_wikipedia,
-            web_fetch_commands::fetch_and_extract_pages,
-            web_fetch_commands::clear_web_fetch_cache,
-            web_fetch_commands::get_web_fetch_cache_stats,
-            searxng_setup::check_searxng_setup,
-            searxng_setup::start_searxng_container,
-            searxng_setup::stop_searxng_container,
-            lm_studio_setup::start_lm_studio_server,
-            document_commands::create_document,
-            document_commands::get_document,
-            document_commands::update_document,
-            document_commands::list_documents,
-            document_commands::delete_document,
-            document_commands::create_document_version,
-            document_commands::list_document_versions,
-            document_commands::get_document_version,
-            document_commands::restore_document_version,
-            document_commands::export_document_markdown,
-            document_commands::export_document_txt,
-            email_commands::email_list_accounts,
-            email_commands::email_add_account,
-            email_commands::email_configure_gmail_oauth,
-            email_commands::email_connect_gmail,
-            email_commands::email_connect_gmail_with_config,
-            email_commands::email_has_gmail_oauth_config,
-            email_commands::email_sync_account,
-            email_commands::email_remove_account,
-            email_commands::email_list_threads,
-            email_commands::email_get_thread,
-            email_commands::email_send_message,
-            email_commands::email_save_draft,
-            email_commands::email_archive_thread,
-            email_commands::email_mark_read,
-            email_commands::email_mark_unread,
-            project_commands::create_project,
-            project_commands::get_project,
-            project_commands::update_project,
-            project_commands::list_projects,
-            project_commands::delete_project,
-            project_commands::export_project_manifest,
-            research_commands::create_research_run,
-            research_commands::get_research_run,
-            research_commands::update_research_run,
-            research_commands::list_research_runs,
-            research_commands::delete_research_run,
-            research_commands::create_research_step,
-            research_commands::update_research_step,
-            research_commands::create_research_source,
-            research_commands::update_research_source,
-            research_commands::create_research_evidence,
-            research_commands::create_research_claim,
-            research_commands::update_research_claim,
-            research_commands::create_research_contradiction,
-            research_commands::create_research_report,
-            research_commands::update_research_report,
-            research_commands::update_research_source_after_fetch,
-            character_commands::create_character,
-            character_commands::get_character,
-            character_commands::update_character,
-            character_commands::list_characters,
-            character_commands::delete_character,
-            character_group_commands::create_character_group,
-            character_group_commands::get_character_group,
-            character_group_commands::update_character_group,
-            character_group_commands::list_character_groups,
-            character_group_commands::delete_character_group,
-            character_io_commands::read_text_file,
-            character_io_commands::read_binary_file,
-            character_io_commands::write_text_file,
-            character_io_commands::write_binary_file,
-            character_io_commands::export_character_card,
-            character_io_commands::save_character_avatar,
-            character_io_commands::delete_character_avatar,
-            character_io_commands::read_character_avatar,
+            agents::commands::check_pi_available,
+            agents::commands::run_pi_agent,
+            agents::commands::stop_pi_agent,
+            agents::commands::list_pi_sessions,
+            agents::commands::switch_pi_session,
+            agents::commands::delete_pi_session,
+            code_execution::commands::check_python_available,
+            code_execution::commands::execute_python_code,
+            memory::commands::list_memory_folders,
+            memory::commands::list_memory_files,
+            memory::commands::list_memory_nodes,
+            memory::commands::create_memory_node,
+            memory::commands::update_memory_node,
+            memory::commands::delete_memory_node,
+            memory::commands::archive_memory_node,
+            memory::commands::pin_memory_node,
+            memory::commands::search_memory,
+            connectivity::commands::probe_internet_connectivity,
+            web_search::commands::web_search_searxng,
+            web_search::commands::test_searxng_connection,
+            web_search::commands::search_arxiv,
+            web_search::commands::search_wikipedia,
+            web_search::fetch_commands::fetch_and_extract_pages,
+            web_search::fetch_commands::clear_web_fetch_cache,
+            web_search::fetch_commands::get_web_fetch_cache_stats,
+            web_search::searxng_setup::check_searxng_setup,
+            web_search::searxng_setup::start_searxng_container,
+            web_search::searxng_setup::stop_searxng_container,
+            shared::lm_studio_setup::start_lm_studio_server,
+            documents::commands::create_document,
+            documents::commands::get_document,
+            documents::commands::update_document,
+            documents::commands::list_documents,
+            documents::commands::delete_document,
+            documents::commands::create_document_version,
+            documents::commands::list_document_versions,
+            documents::commands::get_document_version,
+            documents::commands::restore_document_version,
+            documents::commands::export_document_markdown,
+            documents::commands::export_document_txt,
+            email::commands::email_list_accounts,
+            email::commands::email_add_account,
+            email::commands::email_configure_gmail_oauth,
+            email::commands::email_connect_gmail,
+            email::commands::email_connect_gmail_with_config,
+            email::commands::email_has_gmail_oauth_config,
+            email::commands::email_sync_account,
+            email::commands::email_remove_account,
+            email::commands::email_list_threads,
+            email::commands::email_get_thread,
+            email::commands::email_send_message,
+            email::commands::email_save_draft,
+            email::commands::email_archive_thread,
+            email::commands::email_mark_read,
+            email::commands::email_mark_unread,
+            projects::commands::create_project,
+            projects::commands::get_project,
+            projects::commands::update_project,
+            projects::commands::list_projects,
+            projects::commands::delete_project,
+            projects::commands::export_project_manifest,
+            research::commands::create_research_run,
+            research::commands::get_research_run,
+            research::commands::update_research_run,
+            research::commands::list_research_runs,
+            research::commands::delete_research_run,
+            research::commands::create_research_step,
+            research::commands::update_research_step,
+            research::commands::create_research_source,
+            research::commands::update_research_source,
+            research::commands::create_research_evidence,
+            research::commands::create_research_claim,
+            research::commands::update_research_claim,
+            research::commands::create_research_contradiction,
+            research::commands::create_research_report,
+            research::commands::update_research_report,
+            research::commands::update_research_source_after_fetch,
+            characters::commands::create_character,
+            characters::commands::get_character,
+            characters::commands::update_character,
+            characters::commands::list_characters,
+            characters::commands::delete_character,
+            characters::group_commands::create_character_group,
+            characters::group_commands::get_character_group,
+            characters::group_commands::update_character_group,
+            characters::group_commands::list_character_groups,
+            characters::group_commands::delete_character_group,
+            characters::io_commands::read_text_file,
+            characters::io_commands::read_binary_file,
+            characters::io_commands::write_text_file,
+            characters::io_commands::write_binary_file,
+            characters::io_commands::export_character_card,
+            characters::io_commands::save_character_avatar,
+            characters::io_commands::delete_character_avatar,
+            characters::io_commands::read_character_avatar,
         ])
         .setup(|app| {
-            code_execution_commands::cleanup_stale_temp_files();
+            code_execution::commands::cleanup_stale_temp_files();
 
-            let db_state = memory_db::MemoryDbState::new(app.handle().clone());
+            let db_state = memory::db::MemoryDbState::new(app.handle().clone());
             db_state.spawn_background_init();
             app.manage(db_state);
 
-            let doc_db_state = document_db::DocumentDbState::new(app.handle().clone());
+            let doc_db_state = documents::db::DocumentDbState::new(app.handle().clone());
             doc_db_state.spawn_background_init();
             app.manage(doc_db_state);
 
-            let email_db_state = email_db::EmailDbState::new(app.handle().clone());
+            let email_db_state = email::db::EmailDbState::new(app.handle().clone());
             email_db_state.spawn_background_init();
             app.manage(email_db_state);
 
-            let project_db_state = project_db::ProjectDbState::new(app.handle().clone());
+            let project_db_state = projects::db::ProjectDbState::new(app.handle().clone());
             project_db_state.spawn_background_init();
             app.manage(project_db_state);
 
-            let research_db_state = research_db::ResearchDbState::new(app.handle().clone());
+            let research_db_state = research::db::ResearchDbState::new(app.handle().clone());
             research_db_state.spawn_background_init();
             app.manage(research_db_state);
 
-            let character_db_state = character_db::CharacterDbState::new(app.handle().clone());
+            let character_db_state = characters::db::CharacterDbState::new(app.handle().clone());
             character_db_state.spawn_background_init();
             app.manage(character_db_state);
 
             let character_group_db_state =
-                character_group_db::CharacterGroupDbState::new(app.handle().clone());
+                characters::group_db::CharacterGroupDbState::new(app.handle().clone());
             character_group_db_state.spawn_background_init();
             app.manage(character_group_db_state);
 
-            let searxng_state = searxng_setup::SearxngState::new();
+            let searxng_state = web_search::searxng_setup::SearxngState::new();
             app.manage(searxng_state);
 
             if cfg!(debug_assertions) {
@@ -295,9 +272,9 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
-                let state = window.state::<searxng_setup::SearxngState>();
+                let state = window.state::<web_search::searxng_setup::SearxngState>();
                 if state.was_started_by_us() {
-                    searxng_setup::stop_container();
+                    web_search::searxng_setup::stop_container();
                     state.clear_started();
                 }
             }
@@ -312,10 +289,10 @@ pub fn run() {
                     reveal_main_window(app_handle, false);
                 }
                 RunEvent::ExitRequested { .. } => {
-                    agent_commands::stop_all_pi_agents();
-                    if let Some(state) = app_handle.try_state::<searxng_setup::SearxngState>() {
+                    agents::commands::stop_all_pi_agents();
+                    if let Some(state) = app_handle.try_state::<web_search::searxng_setup::SearxngState>() {
                         if state.was_started_by_us() {
-                            searxng_setup::stop_container();
+                            web_search::searxng_setup::stop_container();
                             state.clear_started();
                         }
                     }
