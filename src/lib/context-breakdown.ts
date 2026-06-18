@@ -99,12 +99,22 @@ function buildSystemBlocks(options: BuildChatContextOptions): {
     });
   }
 
-  const toolsBlockText = options.webSearchContextBlock?.trim() || options.toolsBlock?.trim();
-  if (toolsBlockText) {
+  const webSearchContextBlock = options.webSearchContextBlock?.trim();
+  if (webSearchContextBlock) {
+    blocks.push({
+      category: "web_search_results",
+      label: "Web Search Results",
+      tokenCount: estimateTokens(webSearchContextBlock),
+      dropped: false,
+    });
+  }
+
+  const toolsBlock = options.toolsBlock?.trim();
+  if (!webSearchContextBlock && toolsBlock) {
     blocks.push({
       category: "tool_definitions",
-      label: "Web Search Results",
-      tokenCount: estimateTokens(toolsBlockText),
+      label: "Tool Definitions",
+      tokenCount: estimateTokens(toolsBlock),
       dropped: false,
     });
   }

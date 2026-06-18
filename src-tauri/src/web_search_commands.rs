@@ -129,36 +129,36 @@ async fn get_with_retry(
     }
 }
 
-static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+static HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .user_agent(VEYRA_USER_AGENT)
         .build()
-        .expect("failed to build shared HTTP client")
+        .map_err(|e| format!("Failed to build shared HTTP client: {e}"))
 });
 
-static HTTP_CLIENT_SHORT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+static HTTP_CLIENT_SHORT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .user_agent(VEYRA_USER_AGENT)
         .build()
-        .expect("failed to build shared HTTP client")
+        .map_err(|e| format!("Failed to build short HTTP client: {e}"))
 });
 
-static ARXIV_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+static ARXIV_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
         .user_agent(VEYRA_USER_AGENT)
         .build()
-        .expect("failed to build arxiv HTTP client")
+        .map_err(|e| format!("Failed to build arxiv HTTP client: {e}"))
 });
 
-static WIKIPEDIA_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+static WIKIPEDIA_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .user_agent(VEYRA_USER_AGENT)
         .build()
-        .expect("failed to build wikipedia HTTP client")
+        .map_err(|e| format!("Failed to build wikipedia HTTP client: {e}"))
 });
 
 #[derive(Serialize, Deserialize)]
@@ -258,7 +258,8 @@ pub async fn web_search_searxng(
         }
     }
 
-    let response = HTTP_CLIENT
+    let client = HTTP_CLIENT.as_ref().map_err(Clone::clone)?;
+    let response = client
         .get(&url)
         .send()
         .await
@@ -334,7 +335,8 @@ pub async fn test_searxng_connection(base_url: String) -> Result<bool, String> {
         base_url.trim_end_matches('/')
     );
 
-    let response = HTTP_CLIENT_SHORT
+    let client = HTTP_CLIENT_SHORT.as_ref().map_err(Clone::clone)?;
+    let response = client
         .get(&url)
         .send()
         .await
@@ -487,7 +489,8 @@ pub async fn search_arxiv(query: String, limit: usize) -> Result<ArxivSearchResp
         effective_limit
     );
 
-    let response = get_with_retry(&ARXIV_CLIENT, &api_url, "ArXiv API").await?;
+    let client = ARXIV_CLIENT.as_ref().map_err(Clone::clone)?;
+    let response = get_with_retry(client, &api_url, "ArXiv API").await?;
 
     let xml_body = response
         .text()
@@ -565,8 +568,8 @@ pub async fn search_wikipedia(
         effective_limit
     );
 
-    let search_response =
-        get_with_retry(&WIKIPEDIA_CLIENT, &search_url, "Wikipedia search API").await?;
+    let client = WIKIPEDIA_CLIENT.as_ref().map_err(Clone::clone)?;
+    let search_response = get_with_retry(client, &search_url, "Wikipedia search API").await?;
 
     let search_body: serde_json::Value = search_response
         .json()
@@ -625,7 +628,7 @@ pub async fn search_wikipedia(
     );
 
     let extract_body: serde_json::Value =
-        match get_with_retry(&WIKIPEDIA_CLIENT, &extract_url, "Wikipedia extract API").await {
+        match get_with_retry(client, &extract_url, "Wikipedia extract API").await {
             Ok(extract_response) => extract_response
                 .json()
                 .await

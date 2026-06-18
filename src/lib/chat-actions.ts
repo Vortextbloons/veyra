@@ -98,8 +98,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     onModelLoadProgress,
   });
 
-  const chatModel = useProviderStore.getState().selectedModel.trim();
-  const liveProvider = useProviderStore.getState().selectedProvider;
+  const chatModel = selectedModel.trim();
   const conv = useChatStore.getState().conversations.find((c) => c.id === conversationId);
   const assistantMsg = conv?.messages.find((m) => m.id === assistantMessage.id);
   const assistantText = getAssistantVisibleText(assistantMsg);
@@ -117,7 +116,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     queuePostChatJobs({
       conversationId,
       chatModel,
-      providerId: liveProvider,
+      providerId: selectedProvider,
       userMessage: trimmed,
       assistantMessage: assistantText,
       assistantMessageId: assistantMessage.id,
