@@ -365,18 +365,6 @@ function App() {
   const chatContextBreakdown = useMemo(() => {
     if (!activeConversation) return undefined;
 
-    // During streaming, skip expensive recomputation — return the last
-    // non-streaming result unless the conversation or model changed.
-    const cached = lastBreakdownRef.current;
-    if (
-      isStreaming &&
-      cached !== undefined &&
-      cached.convId === activeConversation.id &&
-      cached.model === selectedModel
-    ) {
-      return cached.result;
-    }
-
     const breakdownOptions = buildContextPanelOptions({
       conversation: activeConversation,
       modelId: selectedModel,
@@ -384,15 +372,11 @@ function App() {
       providerName: selectedProviderInfo?.name,
       reservedOutputTokens: resolvedReservedOutputTokens,
     });
-    const result = getContextBreakdown(
+    return getContextBreakdown(
       activeConversation.messages,
       breakdownOptions,
       resolvedContextLength,
     );
-    if (!isStreaming) {
-      lastBreakdownRef.current = { result, convId: activeConversation.id, model: selectedModel };
-    }
-    return result;
   }, [
     activeConversation,
     resolvedContextLength,
@@ -400,8 +384,17 @@ function App() {
     selectedModel,
     selectedModelInfo?.name,
     selectedProviderInfo?.name,
-    isStreaming,
   ]);
+
+  useEffect(() => {
+    if (!isStreaming && chatContextBreakdown && activeConversation) {
+      lastBreakdownRef.current = {
+        result: chatContextBreakdown,
+        convId: activeConversation.id,
+        model: selectedModel,
+      };
+    }
+  }, [isStreaming, chatContextBreakdown, activeConversation, selectedModel]);
 
   const chatContextStats: ContextStats | undefined = useMemo(
     () => (chatContextBreakdown ? getContextStatsFromBreakdown(chatContextBreakdown) : undefined),
@@ -429,7 +422,14 @@ function App() {
     setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
     setActiveNav("chat");
     createConversation(activeProjectId ?? undefined);
-  }, [activeProjectId, clearStreamingBuffer, createConversation, setActiveNav]);
+  }, [
+    activeProjectId,
+    clearStreamingBuffer,
+    createConversation,
+    setActiveNav,
+    setWebSearchEnabled,
+    setCodeExecutionActive,
+  ]);
 
   const handleDeleteChat = useCallback(
     (id: string) => {

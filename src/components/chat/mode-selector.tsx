@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Bot, Check, ChevronDown, Drama, MessageSquare, Telescope } from "lucide-react";
 import type { ChatMode } from "@/lib/chat-types";
 import { useClickOutside } from "@/hooks/use-click-outside";
@@ -41,11 +41,7 @@ export function ModeSelector({ value, onChange, disabled = false }: ModeSelector
   const ref = useRef<HTMLDivElement>(null);
   const current = MODES.find((m) => m.id === value) ?? MODES[0];
 
-  useEffect(() => {
-    if (disabled) setOpen(false);
-  }, [disabled]);
-
-  useClickOutside(ref, open, () => setOpen(false));
+  useClickOutside(ref, open, () => { if (!disabled) setOpen(false); });
 
   return (
     <div ref={ref} className="relative">

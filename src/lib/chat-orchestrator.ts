@@ -2,46 +2,23 @@ import type { ChatMessage, WebSearchSource } from "@/lib/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
 import { buildChatContext } from "@/lib/context";
 import { getProviderAdapter } from "@/lib/providers";
-import type { ProviderChatOptions } from "@/lib/providers/types";
+import type { ProviderChatOptions, ProviderToolCall } from "@/lib/providers/types";
 import type { MemoryPack } from "@/lib/memory-types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { buildMemoryPackWithInfo } from "@/lib/memory-retrieval";
 import type { MemoryRetrievalInfo } from "@/lib/memory-types";
 import { resolveCharacterBlock } from "@/lib/resolve-character-block";
-import { runSearch, buildSearchContextBlock } from "@/modules/web-search/orchestrator/SearchOrchestrator";
-import {
-  CODE_EXEC_TOOL_NAME,
-  DOC_CREATE_TOOL_NAME,
-  DOC_READ_TOOL_NAME,
-  DOC_UPDATE_TOOL_NAME,
-  WEB_SEARCH_TOOL_NAME,
-  buildProviderTools,
-} from "@/lib/tool-registry";
+import { buildProviderTools } from "@/lib/tool-registry";
 import { buildContextAnchoringBlock, buildDocumentInstructionsBlock, buildProjectContextBlock } from "@/lib/prompts";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import { useProjectStore } from "@/modules/projects/project-store";
-import { executeDocCreation, executeDocRead, executeDocUpdate } from "@/modules/documents/document-runtime";
-import type { ProviderToolCall } from "@/lib/providers/types";
 import { buildMessagePerformance } from "@/lib/performance";
-import type { WebSearchRound } from "@/lib/chat-types";
-import { invokeExecutePythonCode } from "@/lib/code-execution";
-import { getToolCallUi } from "@/lib/tool-call-ui";
-import {
-  docCreateIntentFromToolCall,
-  docReadIntentFromToolCall,
-  docUpdateIntentFromToolCall,
-  formatPythonExecutionSection,
-  registerStreamingToolCall,
-  registerStreamingToolCalls,
-  stringArg,
-  stripPythonCodeFence,
-  summarizeCodeSnippet,
-  summarizePythonExecutionResult,
-} from "@/lib/chat-tool-utils";
+import { registerStreamingToolCall } from "@/lib/chat-tool-utils";
+import { executeToolRound } from "@/lib/chat-tool-rounds";
 
 /**
  * Optional context threaded through to the chat consumer's onComplete
@@ -79,15 +56,7 @@ function latestUserMessageText(messages: ChatMessage[]): string {
   return "";
 }
 
-const TOOL_RETRY_LIMIT = 2;
 const MAX_TOOL_ROUNDS = 6;
-
-type ToolRoundResult = {
-  toolResultSections: string[];
-  webSearchSources: WebSearchSource[];
-  webSearchContextBlocks: string[];
-  streamedChunks: string[];
-};
 
 /**
  * Resolves the character context block for a conversation, if any.
@@ -214,10 +183,6 @@ export async function sendChatRequest({
 
   let toolCompletion: Promise<void> = Promise.resolve();
 
-  const patchWebSearchRound = (round: WebSearchRound) => {
-    useChatStore.getState().upsertStreamingWebSearchRound(round);
-  };
-
   const handleToolCallDetected = (call: Pick<ProviderToolCall, "id" | "name">) => {
     registerStreamingToolCall(call, "pending");
   };
@@ -286,466 +251,54 @@ export async function sendChatRequest({
     return `${sections.join("\n\n")}\n\nUse the tool results above. You may call more tools if needed before answering. For web search, sources are displayed separately — do not list or cite URLs in prose.`;
   };
 
-  const executeWebSearchCall = async (
-    call: ProviderToolCall,
-    attempt: number,
-  ): Promise<{
-    section: string;
-    sources: WebSearchSource[];
-    contextBlock: string;
-    query: string;
-  }> => {
-    const chatStore = useChatStore.getState();
-    const query = stringArg(call.arguments, "query");
-    if (!query) {
-      throw new Error("Web search failed: invalid tool arguments.");
-    }
-    if (!effectiveWebSearchEnabled) {
-      throw new Error(
-        webSearchAvailability.reason ?? "Web search is unavailable in Offline mode.",
-      );
-    }
-
-    patchWebSearchRound({
-      id: call.id,
-      query,
-      phase: "searching",
-      sources: [],
-    });
-    chatStore.setStreamingToolState({
-      id: call.id,
-      name: WEB_SEARCH_TOOL_NAME,
-      label: "Web Search",
-      phase: attempt > 0 ? "retrying" : "running",
-      input: query,
-      attempts: attempt > 0 ? attempt : undefined,
-    });
-
-    let searchBundle: Awaited<ReturnType<typeof runSearch>> | null = null;
-    let lastSearchError: unknown = null;
-    for (let retry = 0; retry <= TOOL_RETRY_LIMIT; retry += 1) {
-      try {
-        if (retry > 0) {
-          chatStore.setStreamingToolState({
-            id: call.id,
-            name: WEB_SEARCH_TOOL_NAME,
-            label: "Web Search",
-            phase: "retrying",
-            input: query,
-            attempts: retry,
-          });
-        }
-        patchWebSearchRound({
-          id: call.id,
-          query,
-          phase: "searching",
-          sources: [],
-        });
-        searchBundle = await runSearch(query, {
-          signal: options.signal,
-          projectId,
-          onFetchProgress: (completed, total) => {
-            patchWebSearchRound({
-              id: call.id,
-              query,
-              phase: "fetching",
-              sources: [],
-              fetch_progress: { completed, total },
-            });
+  const retryDocMutationWithLLM = async (
+    assistantContent: string,
+    errorMessage: string,
+  ): Promise<ProviderToolCall[]> => {
+    let retryToolCalls: ProviderToolCall[] = [];
+    await provider.sendChat({
+      ...providerChatBase(),
+      onChunk: () => {},
+      onReasoningChunk: () => {},
+      onComplete: (nextResult) => {
+        retryToolCalls = nextResult.toolCalls ?? [];
+      },
+      messages: buildRoundMessages(
+        [
+          ...messages,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: assistantContent || accumulatedContent,
+            timestamp: Date.now(),
+            modelId: options.model,
           },
-        });
-        lastSearchError = null;
-        break;
-      } catch (error) {
-        lastSearchError = error;
-        if (retry >= TOOL_RETRY_LIMIT) throw error;
-      }
-    }
-    if (!searchBundle) throw lastSearchError ?? new Error("Search failed");
-
-    const contextBlock = buildSearchContextBlock(searchBundle);
-    const sources: WebSearchSource[] = searchBundle.sources.map((s) => ({
-      id: s.id,
-      title: s.title,
-      url: s.url,
-      snippet: s.snippet ?? "",
-      ...(s.fetch ? { fetch: s.fetch } : {}),
-    }));
-
-    patchWebSearchRound({
-      id: call.id,
-      query,
-      phase: "reading",
-      sources,
+          {
+            id: crypto.randomUUID(),
+            role: "user",
+            content: `Your previous document tool call failed. Failure reason: ${errorMessage}. Retry by calling exactly one corrected document tool. Do not answer in prose.`,
+            timestamp: Date.now(),
+          },
+        ],
+        [],
+      ),
     });
-    const fetchedCount = searchBundle.fetchedPages?.length ?? 0;
-    const detail =
-      fetchedCount > 0
-        ? `${sources.length} source${sources.length !== 1 ? "s" : ""} · ${fetchedCount} page${fetchedCount !== 1 ? "s" : ""} read`
-        : `${sources.length} source${sources.length !== 1 ? "s" : ""} found`;
-    chatStore.setStreamingToolState({
-      id: call.id,
-      name: WEB_SEARCH_TOOL_NAME,
-      label: "Web Search",
-      phase: "done",
-      input: query,
-      detail,
-    });
-
-    return {
-      section: `Tool result for ${WEB_SEARCH_TOOL_NAME}(${JSON.stringify({ query })}):\n\n${contextBlock}`,
-      sources,
-      contextBlock,
-      query,
-    };
+    return retryToolCalls;
   };
 
-  const executeDocReadCall = async (call: ProviderToolCall): Promise<string> => {
-    const chatStore = useChatStore.getState();
-    const label = "Read Document";
-    const documentId = stringArg(call.arguments, "documentId");
-    registerStreamingToolCall(call, "running", documentId);
-
-    const intent = docReadIntentFromToolCall(call);
-    if (!intent) {
-      const error = "Invalid doc_read tool arguments.";
-      chatStore.setStreamingToolState({
-        id: call.id,
-        name: call.name,
-        label,
-        phase: "error",
-        error,
-      });
-      return `Tool result for ${DOC_READ_TOOL_NAME}: ${error}`;
-    }
-
-    const docResult = await executeDocRead(intent);
-    if (!docResult.applied || !docResult.documentContent) {
-      const error = docResult.error ?? docResult.sanitizedText;
-      chatStore.setStreamingToolState({
-        id: call.id,
-        name: call.name,
-        label,
-        phase: "error",
-        input: documentId,
-        error,
-      });
-      return `Tool result for ${DOC_READ_TOOL_NAME}(${JSON.stringify({ documentId: intent.documentId })}): ${error}`;
-    }
-
-    chatStore.setStreamingToolState({
-      id: call.id,
-      name: call.name,
-      label,
-      phase: "done",
-      input: intent.documentId,
-      detail: docResult.sanitizedText,
-    });
-    return `Tool result for ${DOC_READ_TOOL_NAME}(${JSON.stringify({ documentId: intent.documentId })}):\n\n${docResult.documentContent}`;
-  };
-
-  const executeCodeExecutionCall = async (call: ProviderToolCall): Promise<string> => {
-    const chatStore = useChatStore.getState();
-    const label = getToolCallUi(CODE_EXEC_TOOL_NAME).label;
-    const rawCode = stringArg(call.arguments, "code");
-    const code = stripPythonCodeFence(rawCode);
-    const inputPreview = summarizeCodeSnippet(code);
-
-    chatStore.setStreamingToolState({
-      id: call.id,
-      name: call.name,
-      label,
-      phase: "running",
-      input: inputPreview,
-    });
-
-    if (!code) {
-      const error = "Invalid code_execution tool arguments.";
-      chatStore.setStreamingToolState({
-        id: call.id,
-        name: call.name,
-        label,
-        phase: "error",
-        input: inputPreview,
-        error,
-      });
-      return `Tool result for ${CODE_EXEC_TOOL_NAME}: ${error}`;
-    }
-
-    try {
-      const result = await invokeExecutePythonCode({
-        code,
+  const executeToolRoundLocal = async (toolCalls: ProviderToolCall[]) => {
+    return executeToolRound(toolCalls, {
+      signal: options.signal,
+      projectId,
+      webSearchEnabled: effectiveWebSearchEnabled,
+      webSearchAvailability,
+      retryDocMutationWithLLM,
+      docMutationConversationId: conversationId,
+      codeExecution: {
         timeoutSecs: settings.codeExecutionTimeoutSecs,
         pythonPath: settings.customPythonPath.trim() || null,
-      });
-      const summary = summarizePythonExecutionResult(result);
-      const detail = [`Code:\n${code}`, formatPythonExecutionSection(result)].join("\n\n");
-      const phase = result.exitCode === 0 && !result.timedOut ? "done" : "error";
-
-      chatStore.setStreamingToolState({
-        id: call.id,
-        name: call.name,
-        label,
-        phase,
-        input: inputPreview,
-        detail,
-        result: { code, ...result },
-        ...(phase === "error" ? { error: summary } : {}),
-      });
-
-      return `Tool result for ${CODE_EXEC_TOOL_NAME}(python code):\n\n${formatPythonExecutionSection(result)}`;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      chatStore.setStreamingToolState({
-        id: call.id,
-        name: call.name,
-        label,
-        phase: "error",
-        input: inputPreview,
-        error: message,
-      });
-      return `Tool result for ${CODE_EXEC_TOOL_NAME}: ${message}`;
-    }
-  };
-
-  const executeDocMutationCalls = async (
-    mutationCalls: ProviderToolCall[],
-  ): Promise<{ sections: string[]; streamedChunks: string[] }> => {
-    const chatStore = useChatStore.getState();
-    const sections: string[] = [];
-    const streamedChunks: string[] = [];
-    let callsToProcess = mutationCalls.filter(
-      (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
-    );
-
-    registerStreamingToolCalls(callsToProcess, "running", (call) =>
-      stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId"),
-    );
-
-    for (let attempt = 0; attempt <= TOOL_RETRY_LIMIT; attempt += 1) {
-      const failed: string[] = [];
-      sections.length = 0;
-      streamedChunks.length = 0;
-
-      for (const call of callsToProcess) {
-        const label =
-          call.name === DOC_CREATE_TOOL_NAME ? "Create Document" : "Update Document";
-        chatStore.setStreamingToolState({
-          id: call.id,
-          name: call.name,
-          label,
-          phase: attempt > 0 ? "retrying" : "running",
-          attempts: attempt > 0 ? attempt : undefined,
-          input: stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId"),
-        });
-
-        if (call.name === DOC_CREATE_TOOL_NAME) {
-          const intent = docCreateIntentFromToolCall(call);
-          if (!intent) {
-            const error = "Invalid doc_create tool arguments.";
-            failed.push(error);
-            chatStore.setStreamingToolState({
-              id: call.id,
-              name: call.name,
-              label,
-              phase: "error",
-              error,
-            });
-            sections.push(`Tool result for ${DOC_CREATE_TOOL_NAME}: ${error}`);
-            continue;
-          }
-          const docResult = await executeDocCreation(intent, conversationId);
-          if (!docResult.applied) {
-            const error = docResult.error ?? docResult.sanitizedText;
-            failed.push(error);
-            chatStore.setStreamingToolState({
-              id: call.id,
-              name: call.name,
-              label,
-              phase: "error",
-              error,
-            });
-            sections.push(`Tool result for ${DOC_CREATE_TOOL_NAME}: ${error}`);
-            continue;
-          }
-          chatStore.setStreamingToolState({
-            id: call.id,
-            name: call.name,
-            label,
-            phase: "done",
-            detail: docResult.sanitizedText,
-            input: intent.title,
-          });
-          sections.push(
-            `Tool result for ${DOC_CREATE_TOOL_NAME}(${JSON.stringify({ title: intent.title })}):\n\n${docResult.sanitizedText}`,
-          );
-          streamedChunks.push(docResult.sanitizedText);
-        } else {
-          const intent = docUpdateIntentFromToolCall(call);
-          if (!intent) {
-            const error = "Invalid doc_update tool arguments.";
-            failed.push(error);
-            chatStore.setStreamingToolState({
-              id: call.id,
-              name: call.name,
-              label,
-              phase: "error",
-              error,
-            });
-            sections.push(`Tool result for ${DOC_UPDATE_TOOL_NAME}: ${error}`);
-            continue;
-          }
-          const docResult = await executeDocUpdate(intent, conversationId);
-          if (!docResult.applied) {
-            const error = docResult.error ?? docResult.sanitizedText;
-            failed.push(error);
-            chatStore.setStreamingToolState({
-              id: call.id,
-              name: call.name,
-              label,
-              phase: "error",
-              error,
-            });
-            sections.push(`Tool result for ${DOC_UPDATE_TOOL_NAME}: ${error}`);
-            continue;
-          }
-          chatStore.setStreamingToolState({
-            id: call.id,
-            name: call.name,
-            label,
-            phase: "done",
-            detail: docResult.sanitizedText,
-            input: intent.documentId,
-          });
-          sections.push(
-            `Tool result for ${DOC_UPDATE_TOOL_NAME}(${JSON.stringify({ documentId: intent.documentId })}):\n\n${docResult.sanitizedText}`,
-          );
-          streamedChunks.push(docResult.sanitizedText);
-        }
-      }
-
-      if (failed.length === 0 || attempt >= TOOL_RETRY_LIMIT) break;
-
-      let retryToolCalls: ProviderToolCall[] = [];
-      await provider.sendChat({
-        ...providerChatBase(),
-        onChunk: () => {},
-        onReasoningChunk: () => {},
-        onComplete: (nextResult) => {
-          retryToolCalls = nextResult.toolCalls ?? [];
-        },
-        messages: buildRoundMessages(
-          [
-            ...messages,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: accumulatedContent,
-              timestamp: Date.now(),
-              modelId: options.model,
-            },
-            {
-              id: crypto.randomUUID(),
-              role: "user",
-              content: `Your previous document tool call failed. Failure reason: ${failed.join("; ")}. Retry by calling exactly one corrected document tool. Do not answer in prose.`,
-              timestamp: Date.now(),
-            },
-          ],
-          [],
-        ),
-      });
-      const nextCalls = retryToolCalls.filter(
-        (call) =>
-          call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
-      );
-      if (nextCalls.length === 0) break;
-      callsToProcess = nextCalls;
-    }
-
-    return { sections, streamedChunks };
-  };
-
-  const executeToolRound = async (toolCalls: ProviderToolCall[]): Promise<ToolRoundResult> => {
-    const webSearchCalls = toolCalls.filter((call) => call.name === WEB_SEARCH_TOOL_NAME);
-    const docReadCalls = toolCalls.filter((call) => call.name === DOC_READ_TOOL_NAME);
-    const codeExecutionCalls = toolCalls.filter((call) => call.name === CODE_EXEC_TOOL_NAME);
-    const docMutationCalls = toolCalls.filter(
-      (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
-    );
-
-    registerStreamingToolCalls(toolCalls, "running", (call) => {
-      if (call.name === WEB_SEARCH_TOOL_NAME) return stringArg(call.arguments, "query");
-      if (call.name === CODE_EXEC_TOOL_NAME) {
-        return summarizeCodeSnippet(stripPythonCodeFence(stringArg(call.arguments, "code")));
-      }
-      return stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId");
+      },
     });
-
-    const toolResultSections: string[] = [];
-    const webSearchSources: WebSearchSource[] = [];
-    const webSearchContextBlocks: string[] = [];
-    const streamedChunks: string[] = [];
-
-    const webResults = await Promise.all(
-      webSearchCalls.map(async (call) => {
-        try {
-          return await executeWebSearchCall(call, 0);
-        } catch (error) {
-          const chatStore = useChatStore.getState();
-          const query = stringArg(call.arguments, "query");
-          const message = error instanceof Error ? error.message : String(error);
-          patchWebSearchRound({
-            id: call.id,
-            query: query || "Web search",
-            phase: "error",
-            sources: [],
-            error: message,
-          });
-          chatStore.setStreamingToolState({
-            id: call.id,
-            name: WEB_SEARCH_TOOL_NAME,
-            label: "Web Search",
-            phase: "error",
-            input: query,
-            error: message,
-          });
-          return {
-            section: `Tool result for ${WEB_SEARCH_TOOL_NAME}: ${message}`,
-            sources: [] as WebSearchSource[],
-            contextBlock: "",
-            query: query || "Web search",
-          };
-        }
-      }),
-    );
-
-    for (const result of webResults) {
-      toolResultSections.push(result.section);
-      webSearchSources.push(...result.sources);
-      if (result.contextBlock) webSearchContextBlocks.push(result.contextBlock);
-    }
-
-    const docReadSections = await Promise.all(
-      docReadCalls.map((call) => executeDocReadCall(call)),
-    );
-    toolResultSections.push(...docReadSections);
-
-    for (const call of codeExecutionCalls) {
-      toolResultSections.push(await executeCodeExecutionCall(call));
-    }
-
-    if (docMutationCalls.length > 0) {
-      const mutationResult = await executeDocMutationCalls(docMutationCalls);
-      toolResultSections.push(...mutationResult.sections);
-      streamedChunks.push(...mutationResult.streamedChunks);
-    }
-
-    return {
-      toolResultSections,
-      webSearchSources,
-      webSearchContextBlocks,
-      streamedChunks,
-    };
   };
 
   const rePromptWithTools = async (
@@ -794,7 +347,7 @@ export async function sendChatRequest({
                 return;
               }
 
-              const exec = await executeToolRound(toolCalls);
+              const exec = await executeToolRoundLocal(toolCalls);
               for (const chunk of exec.streamedChunks) {
                 accumulatedContent = accumulatedContent
                   ? `${accumulatedContent}\n\n${chunk}`
@@ -847,7 +400,7 @@ export async function sendChatRequest({
       try {
         if (options.signal?.aborted) return;
 
-        const exec = await executeToolRound(toolCalls);
+        const exec = await executeToolRoundLocal(toolCalls);
         for (const chunk of exec.streamedChunks) {
           accumulatedContent = accumulatedContent
             ? `${accumulatedContent}\n\n${chunk}`

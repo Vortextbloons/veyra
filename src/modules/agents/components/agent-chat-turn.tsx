@@ -37,7 +37,6 @@ export function buildAgentChatTurns(
   for (const evt of events) {
     if (evt.type === "status" && evt.title === "Prompt" && evt.detail?.trim()) {
       toolTurnIndexByCallId.clear();
-      previousEventType = null;
       turns.push({ id: evt.id, role: "user", content: evt.detail.trim() });
       previousEventType = evt.type;
       continue;
