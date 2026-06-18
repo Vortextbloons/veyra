@@ -54,7 +54,14 @@ mod research_db;
 mod searxng_setup;
 mod web_fetch_cache;
 mod web_fetch_commands;
+mod web_fetch_documents;
+mod web_fetch_html;
+mod web_fetch_qwen;
 mod web_fetch_security;
+mod web_fetch_types;
+mod web_fetch_utils;
+mod web_fetch_wayback;
+mod web_fetch_youtube;
 mod web_search_commands;
 
 const CONVERSATIONS_FILE: &str = "conversations.json";
