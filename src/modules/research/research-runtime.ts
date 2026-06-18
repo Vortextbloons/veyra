@@ -42,119 +42,21 @@ export type { ResearchRuntimeEvent };
 
 // ── Depth configuration ────────────────────────────────────────────────────
 
-import {
-  resolveResearchProfileForRun,
-  type ResearchProfileOverride,
-} from "./research-config";
+import { buildDepthConfig, type ResearchProfileOverride } from "./research-depth-config";
 import { getCredibilityScore } from "./source-credibility";
 import {
   maxEvidenceItemsPerSource,
   parseResearchEvidenceArray,
 } from "./extraction-json";
 
-type DepthConfig = {
-  maxSearchRounds: number;
-  maxSources: number;
-  maxSourcesPerRound: number;
-  adaptiveDeepening: boolean;
-  minSourceQuality: number; // 1-5
-  perSourceRead: boolean;
-  crossSourceVerify: boolean;
-  gapAnalysis: boolean;
-  // New knobs that the runtime reads.
-  validateConcurrency: number;
-  validateReasoning: boolean;
-  validateBatchSize: number;
-  verifyBatchSize: number;
-  verifyReasoning: boolean;
-  extractBatchSize: number;
-  contradictionDetect: boolean;
-  contradictionMaxPairs: number;
-  contradictionMinClaims: number;
-  contradictionStrategy: "all_pairs" | "top_k";
-  contradictionTopK: number;
-  contradictionConcurrency: number;
-  synthesisReasoning: boolean;
-  selfCritiquePass: boolean;
-  auditReasoning: boolean;
-  auditMaxCitations: number;
-  auditConcurrency: number;
-  // Report composition
-  sectionMaxWords: number;
-  maxSections: number;
-  directArxivSearch: boolean;
-  directWikipediaSearch: boolean;
-  // Lite-model routing (optional override of (modelId, providerId) for repetitive calls).
-  liteModelId: string;
-  liteModelProviderId: string;
-};
+/** Per-run overrides keyed by run id — survives pause/resume within a session. */
+const perRunOverrideByRunId = new Map<string, ResearchProfileOverride>();
 
-function profileToDepthConfig(p: ResearchProfileOverride): DepthConfig {
-  const liteModelId = p.liteModelId ?? "";
-  const liteModelProviderId = p.liteModelProviderId ?? "";
-  return {
-    maxSearchRounds: p.maxSearchRounds ?? 5,
-    maxSources: p.maxSources ?? 75,
-    maxSourcesPerRound: p.maxSourcesPerRound ?? 15,
-    adaptiveDeepening: p.adaptiveDeepening ?? false,
-    minSourceQuality: p.minSourceQuality ?? 3,
-    perSourceRead: p.perSourceRead ?? true,
-    directArxivSearch: p.directArxivSearch ?? true,
-    directWikipediaSearch: p.directWikipediaSearch ?? true,
-    crossSourceVerify: p.crossSourceVerify ?? true,
-    gapAnalysis: p.gapAnalysis ?? false,
-    validateConcurrency: clamp(p.validateConcurrency ?? 3, 1, 8),
-    validateReasoning: p.validateReasoning ?? false,
-    validateBatchSize: clamp(p.validateBatchSize ?? 1, 1, 5),
-    verifyBatchSize: clamp(p.verifyBatchSize ?? 1, 1, 20),
-    verifyReasoning: p.verifyReasoning ?? false,
-    extractBatchSize: clamp(p.extractBatchSize ?? 1, 1, 10),
-    contradictionDetect: p.contradictionDetect ?? false,
-    contradictionMaxPairs: Math.max(0, p.contradictionMaxPairs ?? 0),
-    contradictionMinClaims: Math.max(0, p.contradictionMinClaims ?? 5),
-    contradictionStrategy: p.contradictionStrategy ?? "top_k",
-    contradictionTopK: clamp(p.contradictionTopK ?? 50, 5, 500),
-    contradictionConcurrency: clamp(p.contradictionConcurrency ?? 2, 1, 8),
-    synthesisReasoning: p.synthesisReasoning ?? false,
-    selfCritiquePass: p.selfCritiquePass ?? false,
-    auditReasoning: p.auditReasoning ?? false,
-    auditMaxCitations: Math.max(0, p.auditMaxCitations ?? 30),
-    auditConcurrency: clamp(p.auditConcurrency ?? 3, 1, 8),
-    sectionMaxWords: clamp(p.sectionMaxWords ?? 700, 150, 3000),
-    maxSections: clamp(p.maxSections ?? 8, 1, 20),
-    liteModelId,
-    liteModelProviderId,
-  };
-}
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
-
-/**
- * Build the effective DepthConfig for a run, layering:
- *   1. The built-in preset for the run's `depth`.
- *   2. The user's per-depth overrides (settings-store).
- *   3. The user's global override.
- *   4. Any per-run override passed in.
- */
-/** Per-run overrides keyed by run id — survives pause/resume within a session. */
-const perRunOverrideByRunId = new Map<string, ResearchProfileOverride>();
-
-function buildDepthConfig(
-  depth: ResearchDepth,
-  perRunOverride?: ResearchProfileOverride,
-): DepthConfig {
-  const settings = useSettingsStore.getState();
-  const merged = resolveResearchProfileForRun(
-    settings.research,
-    depth,
-    perRunOverride,
-  );
-  return profileToDepthConfig(merged);
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 
 function makeChatMessage(role: "system" | "user", content: string): ChatMessage {
   return {

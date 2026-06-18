@@ -18,7 +18,6 @@ import {
   WEB_SEARCH_TOOL_NAME,
   buildProviderTools,
 } from "@/lib/tool-registry";
-import { getToolCallUi } from "@/lib/tool-call-ui";
 import { buildContextAnchoringBlock, buildDocumentInstructionsBlock, buildProjectContextBlock } from "@/lib/prompts";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 import { useConnectivityStore } from "@/stores/connectivity-store";
@@ -26,11 +25,23 @@ import { useProviderStore } from "@/stores/provider-store";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { executeDocCreation, executeDocRead, executeDocUpdate } from "@/modules/documents/document-runtime";
-import type { DocCreateIntent, DocReadIntent, DocUpdateIntent, DocumentType } from "@/modules/documents/document-types";
 import type { ProviderToolCall } from "@/lib/providers/types";
 import { buildMessagePerformance } from "@/lib/performance";
 import type { WebSearchRound } from "@/lib/chat-types";
 import { invokeExecutePythonCode } from "@/lib/code-execution";
+import { getToolCallUi } from "@/lib/tool-call-ui";
+import {
+  docCreateIntentFromToolCall,
+  docReadIntentFromToolCall,
+  docUpdateIntentFromToolCall,
+  formatPythonExecutionSection,
+  registerStreamingToolCall,
+  registerStreamingToolCalls,
+  stringArg,
+  stripPythonCodeFence,
+  summarizeCodeSnippet,
+  summarizePythonExecutionResult,
+} from "@/lib/chat-tool-utils";
 
 /**
  * Optional context threaded through to the chat consumer's onComplete
@@ -68,95 +79,6 @@ function latestUserMessageText(messages: ChatMessage[]): string {
   return "";
 }
 
-function stringArg(args: Record<string, unknown>, key: string): string {
-  const value = args[key];
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function docCreateIntentFromToolCall(call: ProviderToolCall): DocCreateIntent | null {
-  const title = stringArg(call.arguments, "title");
-  const documentType = stringArg(call.arguments, "documentType") as DocumentType;
-  const contentMarkdown = stringArg(call.arguments, "contentMarkdown");
-  if (!title || !documentType || !contentMarkdown) return null;
-  return { type: "doc.create", title, documentType, contentMarkdown };
-}
-
-function docUpdateIntentFromToolCall(call: ProviderToolCall): DocUpdateIntent | null {
-  const documentId = stringArg(call.arguments, "documentId");
-  const mode = stringArg(call.arguments, "mode") as DocUpdateIntent["mode"];
-  const contentMarkdown = stringArg(call.arguments, "contentMarkdown");
-  const target = stringArg(call.arguments, "target");
-  if (!documentId || !mode || !contentMarkdown) return null;
-  return { type: "doc.update", documentId, mode, contentMarkdown, target: target || undefined };
-}
-
-function docReadIntentFromToolCall(call: ProviderToolCall): DocReadIntent | null {
-  const documentId = stringArg(call.arguments, "documentId");
-  if (!documentId) return null;
-  return { type: "doc.read", documentId };
-}
-
-function stripPythonCodeFence(code: string): string {
-  const trimmed = code.trim();
-  const fenced = trimmed.match(/^```(?:python3?|py)?\s*\r?\n([\s\S]*?)\r?\n```$/i);
-  if (fenced) return fenced[1].trim();
-
-  const inlineFenced = trimmed.match(/^```(?:python3?|py)?\s*([\s\S]*?)```$/i);
-  if (inlineFenced) return inlineFenced[1].trim();
-
-  return trimmed;
-}
-
-function summarizeCodeSnippet(code: string, maxLength = 120): string {
-  const oneLine = code.replace(/\s+/g, " ").trim();
-  if (oneLine.length <= maxLength) return oneLine;
-  return `${oneLine.slice(0, maxLength - 1)}…`;
-}
-
-function summarizePythonExecutionResult(result: {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  durationMs: number;
-}): string {
-  if (result.timedOut) {
-    return `Timed out after ${Math.round(result.durationMs / 1000)}s`;
-  }
-  if (result.exitCode !== 0) {
-    return `Exited with code ${result.exitCode ?? "unknown"}`;
-  }
-
-  const stdout = result.stdout.trim();
-  const stderr = result.stderr.trim();
-  if (stdout && stderr) return "Exited 0 · stdout and stderr captured";
-  if (stderr) return "Exited 0 · stderr captured";
-  if (stdout) return stdout.length > 120 ? "Exited 0 · output captured" : `Exited 0 · ${stdout}`;
-  return "Exited 0 · no output";
-}
-
-function formatPythonExecutionSection(result: {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  pythonPath: string;
-  durationMs: number;
-  workingDirectory: string;
-}): string {
-  const stdout = result.stdout.trim();
-  const stderr = result.stderr.trim();
-
-  return [
-    `Python: ${result.pythonPath}`,
-    `Working directory: ${result.workingDirectory}`,
-    `Duration: ${result.durationMs} ms`,
-    `Exit code: ${result.exitCode ?? "unknown"}${result.timedOut ? " (timed out)" : ""}`,
-    stdout ? `Stdout:\n${stdout}` : "Stdout: (empty)",
-    stderr ? `Stderr:\n${stderr}` : "Stderr: (empty)",
-  ].join("\n\n");
-}
-
 const TOOL_RETRY_LIMIT = 2;
 const MAX_TOOL_ROUNDS = 6;
 
@@ -166,31 +88,6 @@ type ToolRoundResult = {
   webSearchContextBlocks: string[];
   streamedChunks: string[];
 };
-
-function registerStreamingToolCall(
-  call: Pick<ProviderToolCall, "id" | "name">,
-  phase: "pending" | "running",
-  input?: string,
-) {
-  const meta = getToolCallUi(call.name);
-  useChatStore.getState().setStreamingToolState({
-    id: call.id,
-    name: call.name,
-    label: meta.label,
-    phase,
-    input,
-  });
-}
-
-function registerStreamingToolCalls(
-  calls: ProviderToolCall[],
-  phase: "pending" | "running",
-  inputForCall?: (call: ProviderToolCall) => string | undefined,
-) {
-  for (const call of calls) {
-    registerStreamingToolCall(call, phase, inputForCall?.(call));
-  }
-}
 
 /**
  * Resolves the character context block for a conversation, if any.
