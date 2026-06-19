@@ -1,9 +1,11 @@
 use parking_lot::Mutex;
-use rusqlite::{params_from_iter, types::Value, Connection};
+use rusqlite::{params, params_from_iter, types::Value, Connection};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::shared::db_utils::parse_json_array;
+use super::embedding;
+use super::vector;
 
 pub struct MemoryDb(pub Mutex<Connection>);
 
@@ -75,6 +77,14 @@ pub struct MemoryNodeRow {
     pub updated_at: String,
     pub last_used_at: Option<String>,
     pub use_count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relevance_score: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vector_score: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bm25_score: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_dim: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -289,7 +299,7 @@ END;
 -- );
 "#;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 impl MemoryDb {
     pub fn init(app: &tauri::AppHandle) -> Result<Self, String> {
@@ -403,6 +413,8 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         add_column_if_missing(conn, "memory_nodes", "extraction_batch_id", "TEXT")?;
         add_column_if_missing(conn, "memory_nodes", "duplicate_of", "TEXT")?;
         add_column_if_missing(conn, "memory_nodes", "contradiction_of", "TEXT")?;
+        add_column_if_missing(conn, "memory_nodes", "embedding", "BLOB")?;
+        add_column_if_missing(conn, "memory_nodes", "embedding_dim", "INTEGER")?;
 
         if schema_version < 1 {
             conn.execute_batch("INSERT INTO memory_nodes_fts(memory_nodes_fts) VALUES('rebuild');")
@@ -523,6 +535,7 @@ fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<MemoryNodeRow> {
     let source_message_ids_str: String = row.get("source_message_ids")?;
     let is_pinned: i64 = row.get("is_pinned")?;
     let user_editable: i64 = row.get("user_editable")?;
+    let embedding_dim: Option<i64> = row.get("embedding_dim").ok();
     Ok(MemoryNodeRow {
         id: row.get("id")?,
         folder_id: row.get("folder_id")?,
@@ -551,6 +564,10 @@ fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<MemoryNodeRow> {
         updated_at: row.get("updated_at")?,
         last_used_at: row.get("last_used_at")?,
         use_count: row.get("use_count")?,
+        relevance_score: None,
+        vector_score: None,
+        bm25_score: None,
+        embedding_dim,
     })
 }
 
@@ -746,7 +763,8 @@ pub fn list_nodes(conn: &Connection, filter_json: String) -> Result<Vec<MemoryNo
                 node_type, scope, tags, importance, confidence, priority, expires_at,
                 source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
                 origin, status,
-                is_pinned, user_editable, created_at, updated_at, last_used_at, use_count
+                is_pinned, user_editable, created_at, updated_at, last_used_at, use_count,
+                embedding_dim
          FROM memory_nodes{}
          ORDER BY is_pinned DESC, importance DESC, created_at DESC
          LIMIT ?{}",
@@ -855,7 +873,8 @@ pub fn create_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
                     node_type, scope, tags, importance, confidence, priority, expires_at,
                     source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
                     origin, status,
-                    is_pinned, user_editable, created_at, updated_at, last_used_at, use_count
+                    is_pinned, user_editable, created_at, updated_at, last_used_at, use_count,
+                    embedding_dim
              FROM memory_nodes WHERE id = ?1",
             [&input.id],
             row_to_node,
@@ -897,14 +916,21 @@ pub fn update_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
     if let Some(v) = input.title {
         sets.push(format!("title = ?{}", params.len() + 1));
         params.push(Value::Text(v));
+        sets.push("embedding = NULL".to_string());
+        sets.push("embedding_dim = NULL".to_string());
     }
     if let Some(v) = input.content {
         sets.push(format!("content = ?{}", params.len() + 1));
         params.push(Value::Text(v));
+        // Content changed — clear stale embedding
+        sets.push("embedding = NULL".to_string());
+        sets.push("embedding_dim = NULL".to_string());
     }
     if let Some(v) = input.summary {
         sets.push(format!("summary = ?{}", params.len() + 1));
         params.push(Value::Text(v));
+        sets.push("embedding = NULL".to_string());
+        sets.push("embedding_dim = NULL".to_string());
     }
     if let Some(v) = input.node_type {
         sets.push(format!("node_type = ?{}", params.len() + 1));
@@ -919,6 +945,8 @@ pub fn update_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
             serde_json::to_string(&v).map_err(|e| format!("failed to serialize tags: {}", e))?;
         sets.push(format!("tags = ?{}", params.len() + 1));
         params.push(Value::Text(json));
+        sets.push("embedding = NULL".to_string());
+        sets.push("embedding_dim = NULL".to_string());
     }
     if let Some(v) = input.importance {
         sets.push(format!("importance = ?{}", params.len() + 1));
@@ -1008,7 +1036,8 @@ pub fn update_node(conn: &Connection, input_json: String) -> Result<MemoryNodeRo
                     node_type, scope, tags, importance, confidence, priority, expires_at,
                     source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
                     origin, status,
-                    is_pinned, user_editable, created_at, updated_at, last_used_at, use_count
+                    is_pinned, user_editable, created_at, updated_at, last_used_at, use_count,
+                    embedding_dim
              FROM memory_nodes WHERE id = ?1",
             [&input.id],
             row_to_node,
@@ -1082,6 +1111,7 @@ pub fn search_nodes(
                 source_message_ids, extraction_batch_id, duplicate_of, contradiction_of,
                 origin, status,
                 is_pinned, user_editable, created_at, updated_at, last_used_at, use_count,
+                embedding_dim,
                 (CASE WHEN LOWER(title) LIKE ?1 THEN 3.0 ELSE 0 END) +
                 (CASE WHEN LOWER(tags) LIKE ?2 THEN 2.0 ELSE 0 END) +
                 (CASE WHEN LOWER(summary) LIKE ?3 THEN 1.5 ELSE 0 END) +
@@ -1098,7 +1128,16 @@ pub fn search_nodes(
         .prepare(&sql)
         .map_err(|e| format!("prepare search_nodes failed: {}", e))?;
     let rows = stmt
-        .query_map(params_from_iter(params), row_to_node)
+        .query_map(params_from_iter(params), |row| {
+            let base = row_to_node(row)?;
+            let raw_score: f64 = row.get("score")?;
+            // Normalize LIKE score: max raw score is 7.5 (3+2+1.5+1), map to 0-1
+            let normalized = (raw_score / 7.5).min(1.0);
+            Ok(MemoryNodeRow {
+                relevance_score: Some(normalized),
+                ..base
+            })
+        })
         .map_err(|e| format!("query search_nodes failed: {}", e))?;
     let mut out = Vec::new();
     for r in rows {
@@ -1134,7 +1173,9 @@ fn search_nodes_fts(
                 n.node_type, n.scope, n.tags, n.importance, n.confidence, n.priority, n.expires_at,
                 n.source_message_ids, n.extraction_batch_id, n.duplicate_of, n.contradiction_of,
                 n.origin, n.status,
-                n.is_pinned, n.user_editable, n.created_at, n.updated_at, n.last_used_at, n.use_count
+                n.is_pinned, n.user_editable, n.created_at, n.updated_at, n.last_used_at, n.use_count,
+                n.embedding_dim,
+                bm25(memory_nodes_fts) AS bm25_score
          FROM memory_nodes_fts f
          JOIN memory_nodes n ON n.rowid = f.rowid
          WHERE memory_nodes_fts MATCH ?1
@@ -1148,11 +1189,247 @@ fn search_nodes_fts(
         .prepare(&sql)
         .map_err(|e| format!("prepare search_nodes_fts failed: {}", e))?;
     let rows = stmt
-        .query_map(params_from_iter(params), row_to_node)
+        .query_map(params_from_iter(params), |row| {
+            let base = row_to_node(row)?;
+            let bm25_raw: f64 = row.get("bm25_score")?;
+            Ok(MemoryNodeRow {
+                relevance_score: Some(vector::normalize_bm25(bm25_raw)),
+                ..base
+            })
+        })
         .map_err(|e| format!("query search_nodes_fts failed: {}", e))?;
     let mut out = Vec::new();
     for r in rows {
         out.push(r.map_err(|e| format!("row error in search_nodes_fts: {}", e))?);
     }
     Ok(out)
+}
+
+// ---------------------------------------------------------------------------
+// Embedding & vector search helpers
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingStatus {
+    pub total_nodes: i64,
+    pub embedded_count: i64,
+    pub missing_ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicatePair {
+    pub node_a_id: String,
+    pub node_b_id: String,
+    pub similarity: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VectorSearchResult {
+    pub nodes: Vec<MemoryNodeRow>,
+    pub query_vector_available: bool,
+}
+
+/// Store an embedding vector for a node.
+pub fn store_embedding(conn: &Connection, node_id: &str, embedding: &[f32]) -> Result<(), String> {
+    let bytes = embedding::vec_to_bytes(embedding);
+    let dim = embedding.len() as i64;
+    conn.execute(
+        "UPDATE memory_nodes SET embedding = ?1, embedding_dim = ?2, updated_at = datetime('now') WHERE id = ?3",
+        params![bytes, dim, node_id],
+    )
+    .map_err(|e| format!("store_embedding failed: {}", e))?;
+    Ok(())
+}
+
+/// Batch store embeddings for multiple nodes. Each entry is (node_id, embedding).
+pub fn store_embeddings_batch(
+    conn: &Connection,
+    embeddings: &[(String, Vec<f32>)],
+) -> Result<i64, String> {
+    let mut updated = 0i64;
+    for (node_id, emb) in embeddings {
+        let bytes = embedding::vec_to_bytes(emb);
+        let dim = emb.len() as i64;
+        conn.execute(
+            "UPDATE memory_nodes SET embedding = ?1, embedding_dim = ?2, updated_at = datetime('now') WHERE id = ?3",
+            params![bytes, dim, node_id],
+        )
+        .map_err(|e| format!("store_embeddings_batch failed for {}: {}", node_id, e))?;
+        updated += 1;
+    }
+    Ok(updated)
+}
+
+/// Get embedding status: total nodes, embedded count, missing IDs.
+pub fn get_embedding_status(
+    conn: &Connection,
+    project_id: Option<String>,
+) -> Result<EmbeddingStatus, String> {
+    let total;
+    let embedded;
+    let missing_ids;
+
+    if let Some(pid) = project_id {
+        total = conn
+            .query_row(
+                "SELECT COUNT(*) FROM memory_nodes WHERE status != 'archived' AND (project_id IS NULL OR project_id = ?1)",
+                params![pid],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("get_embedding_status count failed: {}", e))?;
+
+        embedded = conn
+            .query_row(
+                "SELECT COUNT(*) FROM memory_nodes WHERE status != 'archived' AND embedding IS NOT NULL AND (project_id IS NULL OR project_id = ?1)",
+                params![pid],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("get_embedding_status embedded count failed: {}", e))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT id FROM memory_nodes WHERE status != 'archived' AND embedding IS NULL AND (project_id IS NULL OR project_id = ?1)",
+            )
+            .map_err(|e| format!("get_embedding_status prepare failed: {}", e))?;
+        missing_ids = stmt
+            .query_map(params![pid], |row| row.get(0))
+            .map_err(|e| format!("get_embedding_status query failed: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+    } else {
+        total = conn
+            .query_row(
+                "SELECT COUNT(*) FROM memory_nodes WHERE status != 'archived'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("get_embedding_status count failed: {}", e))?;
+
+        embedded = conn
+            .query_row(
+                "SELECT COUNT(*) FROM memory_nodes WHERE status != 'archived' AND embedding IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("get_embedding_status embedded count failed: {}", e))?;
+
+        let mut stmt = conn
+            .prepare("SELECT id FROM memory_nodes WHERE status != 'archived' AND embedding IS NULL")
+            .map_err(|e| format!("get_embedding_status prepare failed: {}", e))?;
+        missing_ids = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|e| format!("get_embedding_status query failed: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+    }
+
+    Ok(EmbeddingStatus {
+        total_nodes: total,
+        embedded_count: embedded,
+        missing_ids,
+    })
+}
+
+/// Load all node IDs, embeddings, and projects for in-memory vector search.
+pub fn load_all_embeddings(
+    conn: &Connection,
+    project_id: Option<String>,
+) -> Result<Vec<(String, Vec<f32>, Option<String>)>, String> {
+    let mut result = Vec::new();
+
+    if let Some(pid) = project_id {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, embedding, embedding_dim, project_id FROM memory_nodes
+                 WHERE status != 'archived' AND embedding IS NOT NULL AND (project_id IS NULL OR project_id = ?1)",
+            )
+            .map_err(|e| format!("load_all_embeddings prepare failed: {}", e))?;
+        let rows = stmt
+            .query_map(params![pid], |row| {
+                let id: String = row.get("id")?;
+                let embedding_blob: Vec<u8> = row.get("embedding")?;
+                let dim: i64 = row.get("embedding_dim")?;
+                let project_id: Option<String> = row.get("project_id")?;
+                Ok((id, embedding_blob, dim as usize, project_id))
+            })
+            .map_err(|e| format!("load_all_embeddings query failed: {}", e))?;
+
+        for row in rows {
+            let (id, blob, dim, proj) =
+                row.map_err(|e| format!("load_all_embeddings row error: {}", e))?;
+            if let Some(vec) = embedding::bytes_to_vec(&blob, dim) {
+                result.push((id, vec, proj));
+            }
+        }
+    } else {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, embedding, embedding_dim, project_id FROM memory_nodes
+                 WHERE status != 'archived' AND embedding IS NOT NULL",
+            )
+            .map_err(|e| format!("load_all_embeddings prepare failed: {}", e))?;
+        let rows = stmt
+            .query_map([], |row| {
+                let id: String = row.get("id")?;
+                let embedding_blob: Vec<u8> = row.get("embedding")?;
+                let dim: i64 = row.get("embedding_dim")?;
+                let project_id: Option<String> = row.get("project_id")?;
+                Ok((id, embedding_blob, dim as usize, project_id))
+            })
+            .map_err(|e| format!("load_all_embeddings query failed: {}", e))?;
+
+        for row in rows {
+            let (id, blob, dim, proj) =
+                row.map_err(|e| format!("load_all_embeddings row error: {}", e))?;
+            if let Some(vec) = embedding::bytes_to_vec(&blob, dim) {
+                result.push((id, vec, proj));
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Find nodes with duplicate embeddings (cosine similarity > threshold).
+pub fn find_duplicate_embeddings(
+    conn: &Connection,
+    threshold: f32,
+) -> Result<Vec<DuplicatePair>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, embedding, embedding_dim FROM memory_nodes
+             WHERE status != 'archived' AND embedding IS NOT NULL
+             ORDER BY id",
+        )
+        .map_err(|e| format!("find_duplicate_embeddings prepare failed: {}", e))?;
+
+    let rows: Vec<(String, Vec<f32>)> = stmt
+        .query_map([], |row| {
+            let id: String = row.get("id")?;
+            let blob: Vec<u8> = row.get("embedding")?;
+            let dim: i64 = row.get("embedding_dim")?;
+            Ok((id, blob, dim as usize))
+        })
+        .map_err(|e| format!("find_duplicate_embeddings query failed: {}", e))?
+        .filter_map(|r| r.ok())
+        .filter_map(|(id, blob, dim)| embedding::bytes_to_vec(&blob, dim).map(|v| (id, v)))
+        .collect();
+
+    let mut duplicates = Vec::new();
+    for i in 0..rows.len() {
+        for j in (i + 1)..rows.len() {
+            let sim = vector::cosine_similarity(&rows[i].1, &rows[j].1);
+            if sim >= threshold {
+                duplicates.push(DuplicatePair {
+                    node_a_id: rows[i].0.clone(),
+                    node_b_id: rows[j].0.clone(),
+                    similarity: sim,
+                });
+            }
+        }
+    }
+    Ok(duplicates)
 }

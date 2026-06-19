@@ -9,6 +9,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { newId, nowIso } from "@/lib/id";
+import { useSettingsStore } from "@/stores/settings-store";
 import type {
   CreateMemoryNode,
   MemoryFile,
@@ -18,6 +19,23 @@ import type {
   MemorySearchOptions,
   UpdateMemoryNode,
 } from "@/modules/memory/memory-types";
+
+export type EmbeddingStatus = {
+  totalNodes: number;
+  embeddedCount: number;
+  missingIds: string[];
+};
+
+export type DuplicatePair = {
+  nodeAId: string;
+  nodeBId: string;
+  similarity: number;
+};
+
+export type VectorSearchResult = {
+  nodes: MemoryNode[];
+  queryVectorAvailable: boolean;
+};
 
 export async function listMemoryFolders(): Promise<MemoryFolder[]> {
   return invoke<MemoryFolder[]>("list_memory_folders");
@@ -42,6 +60,7 @@ export async function createMemoryNode(
 ): Promise<MemoryNode> {
   const now = nowIso();
   const id = input.id ?? newId("mem");
+  const { vectorSearchEnabled, vectorSearchEndpointUrl, vectorSearchModel } = useSettingsStore.getState();
   const payload = {
     id,
     folderId: input.folderId,
@@ -71,6 +90,9 @@ export async function createMemoryNode(
   };
   return invoke<MemoryNode>("create_memory_node", {
     input: JSON.stringify(payload),
+    vectorSearchEnabled,
+    endpointUrl: vectorSearchEndpointUrl || null,
+    model: vectorSearchModel || null,
   });
 }
 
@@ -78,8 +100,12 @@ export async function updateMemoryNode(
   input: UpdateMemoryNode,
 ): Promise<MemoryNode> {
   const payload = { ...input, updatedAt: nowIso() };
+  const { vectorSearchEnabled, vectorSearchEndpointUrl, vectorSearchModel } = useSettingsStore.getState();
   return invoke<MemoryNode>("update_memory_node", {
     input: JSON.stringify(payload),
+    vectorSearchEnabled,
+    endpointUrl: vectorSearchEndpointUrl || null,
+    model: vectorSearchModel || null,
   });
 }
 
@@ -104,5 +130,59 @@ export async function searchMemory(
     query,
     limit,
     projectId: options.projectId ?? null,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Vector search & embedding IPC
+// ---------------------------------------------------------------------------
+
+export async function vectorSearchMemory(
+  query: string,
+  options: {
+    limit?: number;
+    projectId?: string;
+    endpointUrl?: string;
+    model?: string;
+    vectorWeight?: number;
+    bm25Weight?: number;
+  } = {},
+): Promise<VectorSearchResult> {
+  return invoke<VectorSearchResult>("vector_search_memory", {
+    query,
+    limit: options.limit ?? 20,
+    projectId: options.projectId ?? null,
+    endpointUrl: options.endpointUrl ?? null,
+    model: options.model ?? null,
+    vectorWeight: options.vectorWeight ?? 0.5,
+    bm25Weight: options.bm25Weight ?? 0.4,
+  });
+}
+
+export async function computeAllEmbeddings(options: {
+  endpointUrl?: string;
+  model?: string;
+  projectId?: string;
+}): Promise<number> {
+  return invoke<number>("compute_all_embeddings", {
+    endpointUrl: options.endpointUrl ?? null,
+    model: options.model ?? null,
+    projectId: options.projectId ?? null,
+  });
+}
+
+export async function getEmbeddingStatus(
+  projectId?: string,
+): Promise<EmbeddingStatus> {
+  return invoke<EmbeddingStatus>("get_embedding_memory_status", {
+    projectId: projectId ?? null,
+  });
+}
+
+export async function findDuplicateNodes(
+  threshold: number = 0.92,
+): Promise<DuplicatePair[]> {
+  return invoke<DuplicatePair[]>("find_duplicate_memory_nodes", {
+    threshold,
   });
 }

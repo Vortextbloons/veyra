@@ -1,6 +1,6 @@
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import { getProviderAdapter } from "@/lib/providers";
-import { createMemoryNode, searchMemory } from "@/modules/memory/memory-storage";
+import { createMemoryNode, searchMemory, vectorSearchMemory } from "@/modules/memory/memory-storage";
 import type { CreateMemoryNode, MemoryNode, MemoryPriority } from "@/modules/memory/memory-types";
 import {
   buildMemoryExtractionUserMessage,
@@ -8,6 +8,7 @@ import {
 } from "@/lib/prompts";
 import { useChatStore } from "@/stores/chat-store";
 import { useMemoryStore } from "@/modules/memory/memory-store";
+import { useSettingsStore } from "@/stores/settings-store";
 
 const MIN_NEW_MESSAGES = 4;
 const MIN_NEW_EXCHANGES = 2;
@@ -129,12 +130,44 @@ export function shouldExtractMemoryBatch(conversationId: string, now = Date.now(
 async function isLikelyDuplicate(candidate: ExtractedCandidate): Promise<boolean> {
   const query = `${candidate.title ?? ""} ${candidate.summary ?? ""} ${candidate.content ?? ""}`.trim();
   if (query.length < 12) return false;
+
+  // 1. Text-based duplicate check (always runs)
   const matches = await searchMemory(query, { limit: 5 });
   const normalized = (candidate.content ?? candidate.summary ?? "").toLowerCase().replace(/\s+/g, " ").trim();
-  return matches.some((node) => {
+  const textDuplicate = matches.some((node) => {
     const existing = `${node.title} ${node.summary} ${node.content}`.toLowerCase().replace(/\s+/g, " ");
     return normalized.length > 20 && existing.includes(normalized.slice(0, 80));
   });
+  if (textDuplicate) return true;
+
+  // 2. Vector similarity duplicate check (when enabled)
+  const {
+    vectorSearchEnabled,
+    vectorSearchEndpointUrl,
+    vectorSearchModel,
+    vectorDuplicateThreshold,
+  } = useSettingsStore.getState();
+
+  if (vectorSearchEnabled) {
+    try {
+      const vectorResult = await vectorSearchMemory(query, {
+        limit: 5,
+        endpointUrl: vectorSearchEndpointUrl,
+        model: vectorSearchModel,
+      });
+      if (vectorResult.queryVectorAvailable) {
+        const vectorDuplicate = vectorResult.nodes.some((node) => {
+          const sim = node.vectorScore ?? 0;
+          return sim >= vectorDuplicateThreshold;
+        });
+        if (vectorDuplicate) return true;
+      }
+    } catch {
+      // Vector search failed — fall through to text-only result
+    }
+  }
+
+  return false;
 }
 
 function toCreateNode(

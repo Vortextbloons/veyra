@@ -96,6 +96,10 @@ export interface MemoryNode {
   updatedAt: string;
   lastUsedAt?: string;
   useCount: number;
+  relevanceScore?: number;
+  vectorScore?: number;
+  bm25Score?: number;
+  embeddingDim?: number;
 }
 
 export interface MemoryPack {

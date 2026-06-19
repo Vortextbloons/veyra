@@ -6,7 +6,7 @@
 
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import { estimateTokens } from "@/lib/context";
-import { listMemoryNodes, searchMemory, updateMemoryNode } from "@/modules/memory/memory-storage";
+import { listMemoryNodes, searchMemory, updateMemoryNode, vectorSearchMemory } from "@/modules/memory/memory-storage";
 import {
   isProtectedMemory,
   type MemoryMode,
@@ -22,6 +22,7 @@ import {
 } from "@/modules/memory/memory-router";
 import { buildMemoryContextBlock } from "@/lib/prompts";
 import { isProfileNode } from "@/modules/memory/profile-helpers";
+import { useSettingsStore } from "@/stores/settings-store";
 
 const STOPWORDS = new Set([
   "the","a","an","is","are","was","were","be","been","being","have","has","had",
@@ -104,6 +105,39 @@ function useCountBoost(node: MemoryNode): number {
 function projectBoost(node: MemoryNode, projectId?: string): number {
   if (!projectId) return 0;
   if (node.scope === "project" && node.projectId === projectId) return 0.15;
+  return 0;
+}
+
+// Category-aware query intent detection and boosting
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  identity: ["name", "who", "me", "about", "user", "person"],
+  communication: ["prefer", "style", "format", "response", "communicate", "tone"],
+  expertise: ["skill", "know", "learn", "domain", "expert", "proficiency"],
+  interests: ["interest", "hobby", "like", "enjoy", "favorite", "topic"],
+  work: ["work", "job", "role", "responsibility", "task", "project"],
+  learning: ["learn", "study", "course", "education", "book", "tutorial"],
+  preferences: ["prefer", "like", "dislike", "style", "setup", "config"],
+};
+
+function detectQueryIntent(query: string): string | null {
+  const lower = query.toLowerCase();
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some((kw) => lower.includes(kw))) {
+      return category;
+    }
+  }
+  return null;
+}
+
+function categoryBoost(node: MemoryNode, intentCategory: string | null): number {
+  if (!intentCategory) return 0;
+  // Boost profile nodes when the query matches their category
+  if (node.origin === "profile_setup" || node.tags.some((t) => t.startsWith("profile:"))) {
+    const nodeCategory = node.tags
+      .find((t) => t.startsWith("profile:"))
+      ?.split(":")[1];
+    if (nodeCategory === intentCategory) return 0.15;
+  }
   return 0;
 }
 
@@ -199,6 +233,17 @@ export async function buildMemoryPackWithInfo(
   try {
     const queryTokens = unique(tokenize(searchQuery));
     const alwaysSeedDurable = router.retrieve || isDurableSeedQuery(args.query);
+    const intentCategory = detectQueryIntent(args.query);
+
+    // Read vector search settings from store
+    const {
+      vectorSearchEnabled,
+      vectorSearchEndpointUrl,
+      vectorSearchModel,
+      vectorWeight,
+      bm25Weight,
+      metaWeight,
+    } = useSettingsStore.getState();
 
     let durable: MemoryNode[] = [];
     if (alwaysSeedDurable) {
@@ -210,14 +255,37 @@ export async function buildMemoryPackWithInfo(
     }
 
     let searched: MemoryNode[] = [];
+    let vectorSearched: MemoryNode[] = [];
+
     if (router.retrieve && searchQuery.trim().length > 0) {
-      searched = await searchMemory(searchQuery, {
-        limit: SEARCH_LIMIT,
-        projectId: args.projectId,
-      });
+      if (vectorSearchEnabled) {
+        try {
+          const vectorResult = await vectorSearchMemory(searchQuery, {
+            limit: SEARCH_LIMIT,
+            projectId: args.projectId,
+            endpointUrl: vectorSearchEndpointUrl,
+            model: vectorSearchModel,
+            vectorWeight,
+            bm25Weight,
+          });
+          vectorSearched = vectorResult.nodes;
+        } catch {
+          // Vector search failed, fall back to keyword search
+          searched = await searchMemory(searchQuery, {
+            limit: SEARCH_LIMIT,
+            projectId: args.projectId,
+          });
+        }
+      } else {
+        searched = await searchMemory(searchQuery, {
+          limit: SEARCH_LIMIT,
+          projectId: args.projectId,
+        });
+      }
     }
 
-    const candidates = uniqueById([...durable, ...searched]);
+    // Merge vector and keyword results, dedup by ID
+    const candidates = uniqueById([...durable, ...vectorSearched, ...searched]);
     const allowed = candidates.filter((n) => allowNode(n, args.mode, args.projectId));
 
     if (!router.retrieve && allowed.length === 0) {
@@ -261,17 +329,18 @@ export async function buildMemoryPackWithInfo(
       const pinnedBoost = node.isPinned ? 1 : 0;
       const durableBase = isDurableSeed(node, args.mode) ? 0.2 : 0;
 
-      const score =
+      const retrievalBase = node.relevanceScore ?? (keywordMatch * 0.3 + titleMatch * 0.14 + tagMatch * 0.12);
+      const metaScore =
         durableBase +
-        keywordMatch * 0.3 +
-        titleMatch * 0.14 +
-        tagMatch * 0.12 +
-        importance * 0.12 +
-        confidence * 0.1 +
-        pinnedBoost * 0.05 +
+        importance * 0.3 +
+        confidence * 0.2 +
+        pinnedBoost * 0.1 +
         recencyBoost(node) +
         useCountBoost(node) +
-        projectBoost(node, args.projectId);
+        projectBoost(node, args.projectId) +
+        categoryBoost(node, intentCategory);
+
+      const score = retrievalBase + metaWeight * metaScore;
 
       return { node, score, matchedTokens: matched };
     });
