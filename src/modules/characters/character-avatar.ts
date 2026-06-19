@@ -58,21 +58,6 @@ export async function deleteCharacterAvatar(relativePath: string): Promise<void>
 }
 
 /**
- * Convert a stored relative path (e.g. "character-avatars/char_x.png") into a
- * URL the renderer can use in <img src={...}>. Returns undefined when the
- * path is empty. The URL is cached.
- */
-export function getCharacterAvatarUrl(relativePath: string | undefined | null): string | undefined {
-  if (!relativePath) return undefined;
-  const cached = avatarCache.get(relativePath);
-  if (cached) return cached;
-  // The stored path is relative to the app data dir. `convertFileSrc` requires
-  // an absolute path; we use a small custom bridge: read bytes and create a
-  // blob URL. That keeps the avatar path opaque and lets us revoke later.
-  return undefined; // populated asynchronously via ensureCharacterAvatarUrl
-}
-
-/**
  * Asynchronously load the avatar bytes and convert to a blob URL. Use this in
  * a useEffect and call setState with the returned URL.
  */

@@ -58,12 +58,6 @@ function latestUserMessageText(messages: ChatMessage[]): string {
 
 const MAX_TOOL_ROUNDS = 6;
 
-/**
- * Resolves the character context block for a conversation, if any.
- * @see resolveCharacterBlock in resolve-character-block.ts
- */
-export { resolveCharacterBlock } from "@/lib/resolve-character-block";
-
 export async function sendChatRequest({
   providerId,
   messages,
