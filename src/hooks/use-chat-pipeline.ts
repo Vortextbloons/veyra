@@ -163,9 +163,24 @@ export function useChatPipeline({
       const memoryEnabled = options?.memoryEnabled ?? defaultMemoryEnabled;
       const trimmed = text.trim();
       const imageAttachments =
-        attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
-      if (!trimmed && imageAttachments.length === 0) return;
-      if (imageAttachments.length > 0 && !supportsImages) return;
+        attachments?.filter((a) => a.fileType === "image") ?? [];
+      const fileAttachments =
+        attachments?.filter((a) => a.fileType !== "image") ?? [];
+      const allAttachments = attachments ?? [];
+      if (!trimmed && allAttachments.length === 0) return;
+
+      // Strip images on non-vision models; continue with text + file attachments
+      const effectiveAttachments =
+        imageAttachments.length > 0 && !supportsImages
+          ? fileAttachments.length > 0 || trimmed
+            ? fileAttachments
+            : []
+          : allAttachments;
+
+      // If user sent only images on a non-vision model, bail with no-op
+      if (imageAttachments.length > 0 && !supportsImages && !trimmed && fileAttachments.length === 0) {
+        return;
+      }
 
       // Agent mode dispatch
       if (agentModeEnabled) {
@@ -233,7 +248,7 @@ export function useChatPipeline({
         id: crypto.randomUUID(),
         role: "user",
         content: trimmed,
-        attachments: imageAttachments.length > 0 ? imageAttachments : undefined,
+        attachments: effectiveAttachments.length > 0 ? effectiveAttachments : undefined,
         timestamp: Date.now(),
       };
       const assistantMessage: ChatMessage = {

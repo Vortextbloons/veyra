@@ -15,17 +15,36 @@ const DEFAULT_TEMPERATURE = 0.7;
 export const OPENAI_CHAT_PATH = "/v1/chat/completions";
 
 function buildOpenAiMessage(message: ChatMessage): Record<string, unknown> {
-  const imageAttachments = message.attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
-  if (imageAttachments.length > 0) {
+  const imageAttachments = message.attachments?.filter((a) => a.fileType === "image") ?? [];
+  const fileAttachments = message.attachments?.filter((a) => a.fileType !== "image" && a.textContent) ?? [];
+  const hasImages = imageAttachments.length > 0;
+  const hasFiles = fileAttachments.length > 0;
+
+  if (hasImages || hasFiles) {
+    const contentParts: Array<Record<string, unknown>> = [];
+
+    const text = message.content.trim();
+    if (text) {
+      contentParts.push({ type: "text", text });
+    }
+
+    for (const att of fileAttachments) {
+      contentParts.push({
+        type: "text",
+        text: `\n\n--- File: ${att.name} (${att.mimeType}) ---\n${att.textContent}\n--- End: ${att.name} ---`,
+      });
+    }
+
+    for (const att of imageAttachments) {
+      contentParts.push({
+        type: "image_url",
+        image_url: { url: att.dataUrl },
+      });
+    }
+
     return {
       role: message.role,
-      content: [
-        ...(message.content.trim() ? [{ type: "text", text: message.content }] : []),
-        ...imageAttachments.map((attachment) => ({
-          type: "image_url",
-          image_url: { url: attachment.dataUrl },
-        })),
-      ],
+      content: contentParts.length > 0 ? contentParts : message.content,
     };
   }
 

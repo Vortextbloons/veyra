@@ -14,6 +14,8 @@ import { ToolCallList } from "@/modules/chat/components/tool-call-list";
 import { ModelIcon } from "@/components/model-icon";
 import { useProviderStore } from "@/stores/provider-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
+import { type MessageAttachment } from "@/lib/message-attachments";
+import { FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
 
 const MarkdownRenderer = lazy(() =>
   import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
@@ -58,40 +60,53 @@ export const MessageBubble = memo(function MessageBubble({
     : "Assistant";
 
   const isUser = message.role === "user";
+  const [previewAttachment, setPreviewAttachment] = useState<MessageAttachment | null>(null);
+
   if (isUser) {
     return (
-      <div className="group/message flex flex-row-reverse gap-3">
-        <div className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-500 to-rose-500 text-[11px] font-semibold text-white shadow-[0_0_0_2px_var(--color-bg)]">
-          U
-        </div>
-        <div
-          className={`flex min-w-0 flex-col items-end transition-[max-width] duration-200 ease-out ${layout.userMaxW}`}
-        >
-          <MessageToolbar
-            isUser
-            isStreaming={isStreaming}
-            isLastAssistant={isLastAssistant}
-            onEdit={() => onEdit?.(message.id)}
-            onCopy={() => onCopy?.(message.id)}
-            onFork={() => onFork?.(message.id)}
-            onDelete={() => onDelete?.(message.id)}
+      <>
+        {previewAttachment && (
+          <FilePreviewModal
+            attachment={previewAttachment}
+            onClose={() => setPreviewAttachment(null)}
           />
+        )}
+        <div className="group/message flex flex-row-reverse gap-3">
+          <div className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-500 to-rose-500 text-[11px] font-semibold text-white shadow-[0_0_0_2px_var(--color-bg)]">
+            U
+          </div>
           <div
-            className={`rounded-2xl rounded-tr-md border border-indigo-400/15 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] transition-[font-size] duration-200 ease-out ${layout.messageText}`}
+            className={`flex min-w-0 flex-col items-end transition-[max-width] duration-200 ease-out ${layout.userMaxW}`}
           >
-            {message.attachments && message.attachments.length > 0 && (
-              <MessageAttachmentsPreview attachments={message.attachments} />
-            )}
-            {message.content.trim() && (
-              <Suspense>
-                <MarkdownRenderer className="leading-snug">
-                  {message.content.trim()}
-                </MarkdownRenderer>
-              </Suspense>
-            )}
+            <MessageToolbar
+              isUser
+              isStreaming={isStreaming}
+              isLastAssistant={isLastAssistant}
+              onEdit={() => onEdit?.(message.id)}
+              onCopy={() => onCopy?.(message.id)}
+              onFork={() => onFork?.(message.id)}
+              onDelete={() => onDelete?.(message.id)}
+            />
+            <div
+              className={`rounded-2xl rounded-tr-md border border-indigo-400/15 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] transition-[font-size] duration-200 ease-out ${layout.messageText}`}
+            >
+              {message.attachments && message.attachments.length > 0 && (
+                <MessageAttachmentsPreview
+                  attachments={message.attachments}
+                  onPreview={(att) => setPreviewAttachment(att)}
+                />
+              )}
+              {message.content.trim() && (
+                <Suspense>
+                  <MarkdownRenderer className="leading-snug">
+                    {message.content.trim()}
+                  </MarkdownRenderer>
+                </Suspense>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
   const rawBody = message.content.trim();

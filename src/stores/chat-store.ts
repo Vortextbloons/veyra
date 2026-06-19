@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchRound, WebSearchState } from "@/modules/chat/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
+import { normalizeAttachment } from "@/lib/message-attachments";
 
 type ConversationHydrationState = "loading" | "ready";
 
@@ -160,9 +161,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (get().hydrationState === "ready") return;
     hydratePromise ??= (async () => {
       const conversations = await loadConversationSnapshot();
+      // Normalize old attachments that may lack fileType/size
+      const normalized = conversations.map((conv) => ({
+        ...conv,
+        messages: conv.messages.map((msg) => ({
+          ...msg,
+          attachments: msg.attachments?.map(normalizeAttachment),
+        })),
+      }));
       set({
-        conversations,
-        activeConversationId: conversations[0]?.id ?? null,
+        conversations: normalized,
+        activeConversationId: normalized[0]?.id ?? null,
         hydrationState: "ready",
       });
     })().finally(() => {

@@ -59,8 +59,12 @@ export function estimateTokens(text: string): number {
 function estimateMessageTokens(message: ChatMessage): number {
   const textTokens = estimateTokens(message.content);
   const imageCount =
-    message.attachments?.filter((a) => a.mimeType.startsWith("image/")).length ?? 0;
-  return textTokens + imageCount * TOKENS_PER_IMAGE;
+    message.attachments?.filter((a) => a.fileType === "image").length ?? 0;
+  const fileTextTokens =
+    message.attachments
+      ?.filter((a) => a.fileType !== "image" && a.textContent)
+      .reduce((sum, a) => sum + estimateTokens(a.textContent!), 0) ?? 0;
+  return textTokens + imageCount * TOKENS_PER_IMAGE + fileTextTokens;
 }
 
 function buildSystemContent(options: BuildChatContextOptions): string {

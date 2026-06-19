@@ -35,6 +35,7 @@ mod code_execution;
 mod connectivity;
 mod documents;
 mod email;
+mod file_extraction;
 mod memory;
 mod projects;
 mod research;
@@ -225,6 +226,7 @@ pub fn run() {
             characters::io_commands::save_character_avatar,
             characters::io_commands::delete_character_avatar,
             characters::io_commands::read_character_avatar,
+            file_extraction::commands::extract_file_text,
         ])
         .setup(|app| {
             code_execution::commands::cleanup_stale_temp_files();
