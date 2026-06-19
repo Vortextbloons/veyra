@@ -35,3 +35,4 @@ Desktop.ini
 *.exe
 !src-tauri/icons/**
 AGENTS.md
+plans/

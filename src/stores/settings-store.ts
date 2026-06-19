@@ -1,319 +1,88 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { ConnectivityPreference } from "@/lib/connectivity/connectivity-types";
-import type { MemoryMode } from "@/modules/memory/memory-types";
-import type { WorkspaceChatMode } from "@/modules/chat/chat-types";
-import {
-  DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
-  mergeVisibleToolSettingsSections,
-  type ToolSettingsSectionId,
-} from "@/components/settings/tools-settings-registry";
-import {
-  DEFAULT_RESEARCH_CONFIG,
-  applyResearchConfig,
-  type ResearchConfigSetter,
-  type ResearchConfigState,
-  type ResearchDepthProfileId,
-  type ResearchProfileOverride,
-  type ResearchDepthProfile,
-} from "@/modules/research/research-config";
-import type { ResearchDepth } from "@/modules/research/research-types";
+import { mergeVisibleToolSettingsSections } from "@/components/settings/tools-settings-registry";
+import { DEFAULT_RESEARCH_CONFIG } from "@/modules/research/research-config";
+
+import { createUiLayoutSlice, DEFAULT_UI_LAYOUT_STATE } from "./slices/ui-layout-slice";
+import { createModelSlice, DEFAULT_MODEL_STATE } from "./slices/model-slice";
+import { createMemorySlice, DEFAULT_MEMORY_STATE } from "./slices/memory-slice";
+import { createWebSearchSlice, DEFAULT_WEB_SEARCH_STATE } from "./slices/web-search-slice";
+import { createDocumentSlice, DEFAULT_DOCUMENT_STATE } from "./slices/document-slice";
+import { createCharacterSlice, DEFAULT_CHARACTER_STATE } from "./slices/character-slice";
+import { createResearchSlice, DEFAULT_RESEARCH_SLICE_STATE } from "./slices/research-slice";
+import { createCodeExecutionSlice, DEFAULT_CODE_EXECUTION_STATE } from "./slices/code-execution-slice";
+import { createConnectivitySlice, DEFAULT_CONNECTIVITY_STATE } from "./slices/connectivity-slice";
+import { createChatSlice, DEFAULT_CHAT_STATE } from "./slices/chat-slice";
+
+export type { ModelSettings, ResolvedModelSettings } from "./slices/model-slice";
+
 const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 
-export interface ModelSettings {
-  temperature?: number;
-  contextLength?: number;
-  maxTokens?: number;
-  topP?: number;
-  repetitionPenalty?: number;
-  stopSequences?: string[];
-  reservedOutputTokens?: number;
-  systemPrompt?: string;
-}
+// ── Combined types ──────────────────────────────────────────────────────────
+// These mirror the old flat types so existing consumers don't need to change.
 
-type SettingsStoreState = {
-  activeNav: string;
-  recentChatsCollapsed: boolean;
-  rightPanelCollapsed: boolean;
-  memoryMode: MemoryMode;
-  maxMemoryTokens: number;
-  maxMemoryNodes: number;
-  maxMemoryFiles: number;
-  maxGraphDepth: number;
-  favoriteModels: string[];
-  autoNameEnabled: boolean;
-  autoNameModel: string;
-  defaultMemoryEnabled: boolean;
-  defaultTemperature: number;
-  defaultContextLength: number;
-  defaultMaxTokens: number;
-  defaultTopP: number;
-  defaultRepetitionPenalty: number;
-  defaultStopSequences: string[];
-  defaultReservedOutputTokens: number;
-  defaultSystemPrompt: string;
-  modelOverrides: Record<string, ModelSettings>;
-  backgroundJobsEnabled: boolean;
-  autoSummarizeChats: boolean;
-  summaryModel: string;
-  memoryExtractionEnabled: boolean;
-  memoryExtractionModel: string;
-  defaultWebSearchEnabled: boolean;
-  codeExecutionEnabled: boolean;
-  customPythonPath: string;
-  codeExecutionTimeoutSecs: number;
-  webSearchSearxngUrl: string;
-  webSearchDefaultMode: "auto" | "always" | "off";
-  webSearchMaxResults: number;
-  webSearchTimeRange: "" | "day" | "week" | "month" | "year";
-  webSearchCategories: string;
-  webSearchSafeSearch: 0 | 1 | 2;
-  webSearchContextTokenLimit: number;
-  webSearchFetchEnabled: boolean;
-  webSearchFetchCount: number;
-  webSearchPerPageTimeoutSecs: number;
-  webSearchFetchMaxCharsPerSource: number;
-  advancedSearchBundleEnabled: boolean;
-  advancedSearchMultiQueryEnabled: boolean;
-  advancedSearchFusionEnabled: boolean;
-  advancedSearchAdaptiveFallbackEnabled: boolean;
-  advancedSearchFreshnessBoostEnabled: boolean;
-  advancedSearchQualityFilterEnabled: boolean;
-  bundleExtractDocx: boolean;
-  bundleExtractPptx: boolean;
-  bundleExtractXlsx: boolean;
-  bundleExtractEpub: boolean;
-  bundleWaybackFallback: boolean;
-  bundleArxivSearch: boolean;
-  bundleWikipediaSearch: boolean;
-  searxngSetupError: string;
-  contextAnchoringEnabled: boolean;
-  documentPanelEnabled: boolean;
-  documentAutoSaveEnabled: boolean;
-  documentAutoSaveDelay: number;
-  documentDefaultType: string;
-  documentWordWrap: boolean;
-  documentFontSize: number;
-  documentTabSize: number;
-  documentSpellCheck: boolean;
-  documentAutoOpenOnCreate: boolean;
-  connectivityPreference: ConnectivityPreference;
-  // ── Character AI assist ──────────────────────────────────────────────────
-  characterAssistModel: string;
-  characterAssistMaxTokens: number;
-  characterAssistSendContext: boolean;
-  characterAssistTelemetry: boolean;
-  characterAssistTone: string;
-  workspaceChatMode: WorkspaceChatMode;
-  reasoningEnabled: boolean;
-  visibleToolSettingsSections: Record<ToolSettingsSectionId, boolean>;
-  toolSettingsSubsectionsExpanded: Record<string, boolean>;
-  research: ResearchConfigState;
-  researchAdvancedOpen: boolean;
-  researchFirstRunNoticeDismissed: boolean;
-};
+export type SettingsStoreState = UiLayoutSliceState
+  & ModelSliceState
+  & MemorySliceState
+  & WebSearchSliceState
+  & DocumentSliceState
+  & CharacterSliceState
+  & ResearchSliceState
+  & CodeExecutionSliceState
+  & ConnectivitySliceState
+  & ChatSliceState;
 
-type ResolvedModelSettings = {
-  temperature: number;
-  contextLength: number;
-  maxTokens: number;
-  topP: number;
-  repetitionPenalty: number;
-  stopSequences: string[];
-  reservedOutputTokens: number;
-  systemPrompt: string;
-};
+export type SettingsStore = SettingsStoreState
+  & UiLayoutSliceActions
+  & ModelSliceActions
+  & MemorySliceActions
+  & WebSearchSliceActions
+  & DocumentSliceActions
+  & CharacterSliceActions
+  & ResearchSliceActions
+  & CodeExecutionSliceActions
+  & ConnectivitySliceActions
+  & ChatSliceActions;
 
-type SettingsStore = SettingsStoreState & {
-  setActiveNav: (id: string) => void;
-  setRecentChatsCollapsed: (collapsed: boolean) => void;
-  setRightPanelCollapsed: (collapsed: boolean) => void;
-  setMemoryMode: (mode: MemoryMode) => void;
-  setMaxMemoryTokens: (n: number) => void;
-  setMaxMemoryNodes: (n: number) => void;
-  setMaxMemoryFiles: (n: number) => void;
-  setMaxGraphDepth: (n: number) => void;
-  toggleFavoriteModel: (modelId: string) => void;
-  setAutoNameEnabled: (enabled: boolean) => void;
-  setAutoNameModel: (modelId: string) => void;
-  setDefaultMemoryEnabled: (enabled: boolean) => void;
-  setDefaultTemperature: (n: number) => void;
-  setDefaultContextLength: (n: number) => void;
-  setDefaultMaxTokens: (n: number) => void;
-  setDefaultTopP: (n: number) => void;
-  setDefaultRepetitionPenalty: (n: number) => void;
-  setDefaultStopSequences: (s: string[]) => void;
-  setDefaultReservedOutputTokens: (n: number) => void;
-  setDefaultSystemPrompt: (s: string) => void;
-  setModelOverride: (modelId: string, settings: ModelSettings) => void;
-  clearModelOverride: (modelId: string) => void;
-  getModelSettings: (modelId: string) => ResolvedModelSettings;
-  setBackgroundJobsEnabled: (enabled: boolean) => void;
-  setAutoSummarizeChats: (enabled: boolean) => void;
-  setSummaryModel: (modelId: string) => void;
-  setMemoryExtractionEnabled: (enabled: boolean) => void;
-  setMemoryExtractionModel: (modelId: string) => void;
-  setDefaultWebSearchEnabled: (enabled: boolean) => void;
-  setCodeExecutionEnabled: (enabled: boolean) => void;
-  setCustomPythonPath: (path: string) => void;
-  setCodeExecutionTimeoutSecs: (secs: number) => void;
-  setWebSearchSearxngUrl: (url: string) => void;
-  setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
-  setWebSearchMaxResults: (n: number) => void;
-  setWebSearchTimeRange: (range: "" | "day" | "week" | "month" | "year") => void;
-  setWebSearchCategories: (categories: string) => void;
-  setWebSearchSafeSearch: (level: 0 | 1 | 2) => void;
-  setWebSearchContextTokenLimit: (n: number) => void;
-  setWebSearchFetchEnabled: (enabled: boolean) => void;
-  setWebSearchFetchCount: (n: number) => void;
-  setWebSearchPerPageTimeoutSecs: (n: number) => void;
-  setWebSearchFetchMaxCharsPerSource: (n: number) => void;
-  setAdvancedSearchBundleEnabled: (enabled: boolean) => void;
-  setAdvancedSearchMultiQueryEnabled: (enabled: boolean) => void;
-  setAdvancedSearchFusionEnabled: (enabled: boolean) => void;
-  setAdvancedSearchAdaptiveFallbackEnabled: (enabled: boolean) => void;
-  setAdvancedSearchFreshnessBoostEnabled: (enabled: boolean) => void;
-  setAdvancedSearchQualityFilterEnabled: (enabled: boolean) => void;
-  setBundleExtractDocx: (enabled: boolean) => void;
-  setBundleExtractPptx: (enabled: boolean) => void;
-  setBundleExtractXlsx: (enabled: boolean) => void;
-  setBundleExtractEpub: (enabled: boolean) => void;
-  setBundleWaybackFallback: (enabled: boolean) => void;
-  setBundleArxivSearch: (enabled: boolean) => void;
-  setBundleWikipediaSearch: (enabled: boolean) => void;
-  setSearxngSetupError: (message: string) => void;
-  setContextAnchoringEnabled: (enabled: boolean) => void;
-  setDocumentPanelEnabled: (enabled: boolean) => void;
-  setDocumentAutoSaveEnabled: (enabled: boolean) => void;
-  setDocumentAutoSaveDelay: (ms: number) => void;
-  setDocumentDefaultType: (type: string) => void;
-  setDocumentWordWrap: (enabled: boolean) => void;
-  setDocumentFontSize: (size: number) => void;
-  setDocumentTabSize: (size: number) => void;
-  setDocumentSpellCheck: (enabled: boolean) => void;
-  setDocumentAutoOpenOnCreate: (enabled: boolean) => void;
-  setConnectivityPreference: (preference: ConnectivityPreference) => void;
-  setCharacterAssistModel: (model: string) => void;
-  setCharacterAssistMaxTokens: (n: number) => void;
-  setCharacterAssistSendContext: (enabled: boolean) => void;
-  setCharacterAssistTelemetry: (enabled: boolean) => void;
-  setCharacterAssistTone: (tone: string) => void;
-  setWorkspaceChatMode: (mode: WorkspaceChatMode) => void;
-  setReasoningEnabled: (enabled: boolean) => void;
-  setToolSettingsSectionVisible: (id: ToolSettingsSectionId, visible: boolean) => void;
-  setAllToolSettingsSectionsVisible: (visible: boolean) => void;
-  setToolSettingsSubsectionExpanded: (key: string, expanded: boolean) => void;
-  applyResearch: (action: ResearchConfigSetter) => void;
-  setResearchAdvancedOpen: (open: boolean) => void;
-  setResearchFirstRunNoticeDismissed: (dismissed: boolean) => void;
-  // Convenience helpers built on top of applyResearch.
-  setResearchActiveProfile: (id: ResearchDepthProfileId) => void;
-  setResearchOverride: (override: ResearchProfileOverride) => void;
-  setResearchDepthOverride: (depth: ResearchDepth, override: ResearchProfileOverride) => void;
-  addResearchCustomProfile: (profile: ResearchDepthProfile) => void;
-  updateResearchCustomProfile: (id: string, profile: Partial<ResearchDepthProfile>) => void;
-  deleteResearchCustomProfile: (id: string) => void;
-  setResearchDefaultDepth: (depth: ResearchDepth) => void;
-  setResearchDefaultModelId: (modelId: string | null) => void;
-  setResearchLiteModel: (modelId: string, providerId: string) => void;
-  resetResearch: () => void;
-};
+// Re-import state types for the combined type above.
+import type { UiLayoutSliceState, UiLayoutSliceActions } from "./slices/ui-layout-slice";
+import type { ModelSliceState, ModelSliceActions } from "./slices/model-slice";
+import type { MemorySliceState, MemorySliceActions } from "./slices/memory-slice";
+import type { WebSearchSliceState, WebSearchSliceActions } from "./slices/web-search-slice";
+import type { DocumentSliceState, DocumentSliceActions } from "./slices/document-slice";
+import type { CharacterSliceState, CharacterSliceActions } from "./slices/character-slice";
+import type { ResearchSliceState, ResearchSliceActions } from "./slices/research-slice";
+import type { CodeExecutionSliceState, CodeExecutionSliceActions } from "./slices/code-execution-slice";
+import type { ConnectivitySliceState, ConnectivitySliceActions } from "./slices/connectivity-slice";
+import type { ChatSliceState, ChatSliceActions } from "./slices/chat-slice";
+
+// ── Defaults (for merge) ────────────────────────────────────────────────────
 
 const DEFAULT_STATE: SettingsStoreState = {
-  activeNav: "chat",
-  recentChatsCollapsed: false,
-  rightPanelCollapsed: false,
-  memoryMode: "safe_auto_save",
-  maxMemoryTokens: 700,
-  maxMemoryNodes: 10,
-  maxMemoryFiles: 4,
-  maxGraphDepth: 1,
-  favoriteModels: [],
-  autoNameEnabled: true,
-  autoNameModel: "",
-  defaultMemoryEnabled: true,
-  defaultTemperature: 0.7,
-  defaultContextLength: 8192,
-  defaultMaxTokens: 0,
-  defaultTopP: 1.0,
-  defaultRepetitionPenalty: 1.0,
-  defaultStopSequences: [],
-  defaultReservedOutputTokens: 1024,
-  defaultSystemPrompt: "",
-  modelOverrides: {},
-  backgroundJobsEnabled: true,
-  autoSummarizeChats: false,
-  summaryModel: "",
-  memoryExtractionEnabled: true,
-  memoryExtractionModel: "",
-  defaultWebSearchEnabled: false,
-  codeExecutionEnabled: true,
-  customPythonPath: "",
-  codeExecutionTimeoutSecs: 30,
-  webSearchSearxngUrl: "",
-  webSearchDefaultMode: "auto",
-  webSearchMaxResults: 8,
-  webSearchTimeRange: "",
-  webSearchCategories: "",
-  webSearchSafeSearch: 0,
-  webSearchContextTokenLimit: 4000,
-  webSearchFetchEnabled: true,
-  webSearchFetchCount: 5,
-  webSearchPerPageTimeoutSecs: 8,
-  webSearchFetchMaxCharsPerSource: 8000,
-  advancedSearchBundleEnabled: true,
-  advancedSearchMultiQueryEnabled: true,
-  advancedSearchFusionEnabled: true,
-  advancedSearchAdaptiveFallbackEnabled: true,
-  advancedSearchFreshnessBoostEnabled: true,
-  advancedSearchQualityFilterEnabled: true,
-  bundleExtractDocx: true,
-  bundleExtractPptx: true,
-  bundleExtractXlsx: true,
-  bundleExtractEpub: true,
-  bundleWaybackFallback: true,
-  bundleArxivSearch: true,
-  bundleWikipediaSearch: true,
-  searxngSetupError: "",
-  contextAnchoringEnabled: true,
-  documentPanelEnabled: true,
-  documentAutoSaveEnabled: true,
-  documentAutoSaveDelay: 800,
-  documentDefaultType: "document",
-  documentWordWrap: true,
-  documentFontSize: 14,
-  documentTabSize: 2,
-  documentSpellCheck: true,
-  documentAutoOpenOnCreate: true,
-  connectivityPreference: "auto",
-  characterAssistModel: "",
-  characterAssistMaxTokens: 1500,
-  characterAssistSendContext: false,
-  characterAssistTelemetry: true,
-  characterAssistTone: "neutral",
-  workspaceChatMode: "chat",
-  reasoningEnabled: true,
-  visibleToolSettingsSections: DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
-  toolSettingsSubsectionsExpanded: {},
-  research: DEFAULT_RESEARCH_CONFIG,
-  researchAdvancedOpen: false,
-  researchFirstRunNoticeDismissed: false,
+  ...DEFAULT_UI_LAYOUT_STATE,
+  ...DEFAULT_MODEL_STATE,
+  ...DEFAULT_MEMORY_STATE,
+  ...DEFAULT_WEB_SEARCH_STATE,
+  ...DEFAULT_DOCUMENT_STATE,
+  ...DEFAULT_CHARACTER_STATE,
+  ...DEFAULT_RESEARCH_SLICE_STATE,
+  ...DEFAULT_CODE_EXECUTION_STATE,
+  ...DEFAULT_CONNECTIVITY_STATE,
+  ...DEFAULT_CHAT_STATE,
 };
+
+// ── Partialize ──────────────────────────────────────────────────────────────
 
 function partializeSettings(state: SettingsStore): SettingsStoreState {
   return {
     activeNav: state.activeNav,
     recentChatsCollapsed: state.recentChatsCollapsed,
     rightPanelCollapsed: state.rightPanelCollapsed,
-    memoryMode: state.memoryMode,
-    maxMemoryTokens: state.maxMemoryTokens,
-    maxMemoryNodes: state.maxMemoryNodes,
-    maxMemoryFiles: state.maxMemoryFiles,
-    maxGraphDepth: state.maxGraphDepth,
+    visibleToolSettingsSections: state.visibleToolSettingsSections,
+    toolSettingsSubsectionsExpanded: state.toolSettingsSubsectionsExpanded,
     favoriteModels: state.favoriteModels,
     autoNameEnabled: state.autoNameEnabled,
     autoNameModel: state.autoNameModel,
-    defaultMemoryEnabled: state.defaultMemoryEnabled,
     defaultTemperature: state.defaultTemperature,
     defaultContextLength: state.defaultContextLength,
     defaultMaxTokens: state.defaultMaxTokens,
@@ -323,15 +92,19 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     defaultReservedOutputTokens: state.defaultReservedOutputTokens,
     defaultSystemPrompt: state.defaultSystemPrompt,
     modelOverrides: state.modelOverrides,
+    reasoningEnabled: state.reasoningEnabled,
     backgroundJobsEnabled: state.backgroundJobsEnabled,
     autoSummarizeChats: state.autoSummarizeChats,
     summaryModel: state.summaryModel,
+    memoryMode: state.memoryMode,
+    maxMemoryTokens: state.maxMemoryTokens,
+    maxMemoryNodes: state.maxMemoryNodes,
+    maxMemoryFiles: state.maxMemoryFiles,
+    maxGraphDepth: state.maxGraphDepth,
+    defaultMemoryEnabled: state.defaultMemoryEnabled,
     memoryExtractionEnabled: state.memoryExtractionEnabled,
     memoryExtractionModel: state.memoryExtractionModel,
     defaultWebSearchEnabled: state.defaultWebSearchEnabled,
-    codeExecutionEnabled: state.codeExecutionEnabled,
-    customPythonPath: state.customPythonPath,
-    codeExecutionTimeoutSecs: state.codeExecutionTimeoutSecs,
     webSearchSearxngUrl: state.webSearchSearxngUrl,
     webSearchDefaultMode: state.webSearchDefaultMode,
     webSearchMaxResults: state.webSearchMaxResults,
@@ -357,7 +130,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     bundleArxivSearch: state.bundleArxivSearch,
     bundleWikipediaSearch: state.bundleWikipediaSearch,
     searxngSetupError: state.searxngSetupError,
-    contextAnchoringEnabled: state.contextAnchoringEnabled,
     documentPanelEnabled: state.documentPanelEnabled,
     documentAutoSaveEnabled: state.documentAutoSaveEnabled,
     documentAutoSaveDelay: state.documentAutoSaveDelay,
@@ -367,21 +139,24 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     documentTabSize: state.documentTabSize,
     documentSpellCheck: state.documentSpellCheck,
     documentAutoOpenOnCreate: state.documentAutoOpenOnCreate,
-    connectivityPreference: state.connectivityPreference,
     characterAssistModel: state.characterAssistModel,
     characterAssistMaxTokens: state.characterAssistMaxTokens,
     characterAssistSendContext: state.characterAssistSendContext,
     characterAssistTelemetry: state.characterAssistTelemetry,
     characterAssistTone: state.characterAssistTone,
     workspaceChatMode: state.workspaceChatMode,
-    reasoningEnabled: state.reasoningEnabled,
-    visibleToolSettingsSections: state.visibleToolSettingsSections,
-    toolSettingsSubsectionsExpanded: state.toolSettingsSubsectionsExpanded,
+    contextAnchoringEnabled: state.contextAnchoringEnabled,
     research: state.research,
     researchAdvancedOpen: state.researchAdvancedOpen,
     researchFirstRunNoticeDismissed: state.researchFirstRunNoticeDismissed,
+    codeExecutionEnabled: state.codeExecutionEnabled,
+    customPythonPath: state.customPythonPath,
+    codeExecutionTimeoutSecs: state.codeExecutionTimeoutSecs,
+    connectivityPreference: state.connectivityPreference,
   };
 }
+
+// ── Hydration ───────────────────────────────────────────────────────────────
 
 let settingsHydrated = false;
 
@@ -391,168 +166,21 @@ export async function ensureSettingsHydrated(): Promise<void> {
   settingsHydrated = true;
 }
 
+// ── Store ───────────────────────────────────────────────────────────────────
+
 export const useSettingsStore = create<SettingsStore>()(
   persist(
-    (set, get) => ({
-      ...DEFAULT_STATE,
-      setActiveNav: (activeNav) => set({ activeNav }),
-      setRecentChatsCollapsed: (recentChatsCollapsed) => set({ recentChatsCollapsed }),
-      setRightPanelCollapsed: (rightPanelCollapsed) => set({ rightPanelCollapsed }),
-      setMemoryMode: (memoryMode) => set({ memoryMode }),
-      setMaxMemoryTokens: (maxMemoryTokens) => set({ maxMemoryTokens }),
-      setMaxMemoryNodes: (maxMemoryNodes) => set({ maxMemoryNodes }),
-      setMaxMemoryFiles: (maxMemoryFiles) => set({ maxMemoryFiles }),
-      setMaxGraphDepth: (maxGraphDepth) => set({ maxGraphDepth }),
-      toggleFavoriteModel: (modelId: string) => {
-        const current = get().favoriteModels;
-        const next = current.includes(modelId)
-          ? current.filter((id) => id !== modelId)
-          : [...current, modelId];
-        set({ favoriteModels: next });
-      },
-      setAutoNameEnabled: (autoNameEnabled) => set({ autoNameEnabled }),
-      setAutoNameModel: (autoNameModel) => set({ autoNameModel }),
-      setDefaultMemoryEnabled: (defaultMemoryEnabled) => set({ defaultMemoryEnabled }),
-      setDefaultTemperature: (defaultTemperature) => set({ defaultTemperature }),
-      setDefaultContextLength: (defaultContextLength) => set({ defaultContextLength }),
-      setDefaultMaxTokens: (defaultMaxTokens) => set({ defaultMaxTokens }),
-      setDefaultTopP: (defaultTopP) => set({ defaultTopP }),
-      setDefaultRepetitionPenalty: (defaultRepetitionPenalty) => set({ defaultRepetitionPenalty }),
-      setDefaultStopSequences: (defaultStopSequences) => set({ defaultStopSequences }),
-      setDefaultReservedOutputTokens: (defaultReservedOutputTokens) =>
-        set({ defaultReservedOutputTokens }),
-      setDefaultSystemPrompt: (defaultSystemPrompt) => set({ defaultSystemPrompt }),
-      setModelOverride: (modelId: string, settings: ModelSettings) => {
-        const current = get().modelOverrides;
-        set({ modelOverrides: { ...current, [modelId]: settings } });
-      },
-      clearModelOverride: (modelId: string) => {
-        const current = get().modelOverrides;
-        const next = { ...current };
-        delete next[modelId];
-        set({ modelOverrides: next });
-      },
-      getModelSettings: (modelId: string): ResolvedModelSettings => {
-        const state = get();
-        const override = state.modelOverrides[modelId];
-        return {
-          temperature: override?.temperature ?? state.defaultTemperature,
-          contextLength: override?.contextLength ?? state.defaultContextLength,
-          maxTokens: override?.maxTokens ?? state.defaultMaxTokens,
-          topP: override?.topP ?? state.defaultTopP,
-          repetitionPenalty: override?.repetitionPenalty ?? state.defaultRepetitionPenalty,
-          stopSequences: override?.stopSequences ?? state.defaultStopSequences,
-          reservedOutputTokens:
-            override?.reservedOutputTokens ?? state.defaultReservedOutputTokens,
-          systemPrompt: override?.systemPrompt ?? state.defaultSystemPrompt,
-        };
-      },
-      setBackgroundJobsEnabled: (backgroundJobsEnabled) => set({ backgroundJobsEnabled }),
-      setAutoSummarizeChats: (autoSummarizeChats) => set({ autoSummarizeChats }),
-      setSummaryModel: (summaryModel) => set({ summaryModel }),
-      setMemoryExtractionEnabled: (memoryExtractionEnabled) => set({ memoryExtractionEnabled }),
-      setMemoryExtractionModel: (memoryExtractionModel) => set({ memoryExtractionModel }),
-      setDefaultWebSearchEnabled: (defaultWebSearchEnabled) => set({ defaultWebSearchEnabled }),
-      setCodeExecutionEnabled: (codeExecutionEnabled) => set({ codeExecutionEnabled }),
-      setCustomPythonPath: (customPythonPath) => set({ customPythonPath }),
-      setCodeExecutionTimeoutSecs: (codeExecutionTimeoutSecs) =>
-        set({ codeExecutionTimeoutSecs }),
-      setWebSearchSearxngUrl: (webSearchSearxngUrl) => set({ webSearchSearxngUrl }),
-      setWebSearchDefaultMode: (webSearchDefaultMode) => set({ webSearchDefaultMode }),
-      setWebSearchMaxResults: (webSearchMaxResults) => set({ webSearchMaxResults }),
-      setWebSearchTimeRange: (webSearchTimeRange) => set({ webSearchTimeRange }),
-      setWebSearchCategories: (webSearchCategories) => set({ webSearchCategories }),
-      setWebSearchSafeSearch: (webSearchSafeSearch) => set({ webSearchSafeSearch }),
-      setWebSearchContextTokenLimit: (webSearchContextTokenLimit) => set({ webSearchContextTokenLimit }),
-      setWebSearchFetchEnabled: (webSearchFetchEnabled) => set({ webSearchFetchEnabled }),
-      setWebSearchFetchCount: (webSearchFetchCount) => set({ webSearchFetchCount }),
-      setWebSearchPerPageTimeoutSecs: (webSearchPerPageTimeoutSecs) =>
-        set({ webSearchPerPageTimeoutSecs }),
-      setWebSearchFetchMaxCharsPerSource: (webSearchFetchMaxCharsPerSource) =>
-        set({ webSearchFetchMaxCharsPerSource }),
-      setAdvancedSearchBundleEnabled: (advancedSearchBundleEnabled) =>
-        set({ advancedSearchBundleEnabled }),
-      setAdvancedSearchMultiQueryEnabled: (advancedSearchMultiQueryEnabled) =>
-        set({ advancedSearchMultiQueryEnabled }),
-      setAdvancedSearchFusionEnabled: (advancedSearchFusionEnabled) =>
-        set({ advancedSearchFusionEnabled }),
-      setAdvancedSearchAdaptiveFallbackEnabled: (advancedSearchAdaptiveFallbackEnabled) =>
-        set({ advancedSearchAdaptiveFallbackEnabled }),
-      setAdvancedSearchFreshnessBoostEnabled: (advancedSearchFreshnessBoostEnabled) =>
-        set({ advancedSearchFreshnessBoostEnabled }),
-      setAdvancedSearchQualityFilterEnabled: (advancedSearchQualityFilterEnabled) =>
-        set({ advancedSearchQualityFilterEnabled }),
-      setBundleExtractDocx: (bundleExtractDocx) => set({ bundleExtractDocx }),
-      setBundleExtractPptx: (bundleExtractPptx) => set({ bundleExtractPptx }),
-      setBundleExtractXlsx: (bundleExtractXlsx) => set({ bundleExtractXlsx }),
-      setBundleExtractEpub: (bundleExtractEpub) => set({ bundleExtractEpub }),
-      setBundleWaybackFallback: (bundleWaybackFallback) => set({ bundleWaybackFallback }),
-      setBundleArxivSearch: (bundleArxivSearch) => set({ bundleArxivSearch }),
-      setBundleWikipediaSearch: (bundleWikipediaSearch) => set({ bundleWikipediaSearch }),
-      setSearxngSetupError: (searxngSetupError) => set({ searxngSetupError }),
-      setContextAnchoringEnabled: (contextAnchoringEnabled) => set({ contextAnchoringEnabled }),
-      setDocumentPanelEnabled: (documentPanelEnabled) => set({ documentPanelEnabled }),
-      setDocumentAutoSaveEnabled: (documentAutoSaveEnabled) => set({ documentAutoSaveEnabled }),
-      setDocumentAutoSaveDelay: (documentAutoSaveDelay) => set({ documentAutoSaveDelay }),
-      setDocumentDefaultType: (documentDefaultType) => set({ documentDefaultType }),
-      setDocumentWordWrap: (documentWordWrap) => set({ documentWordWrap }),
-      setDocumentFontSize: (documentFontSize) => set({ documentFontSize }),
-      setDocumentTabSize: (documentTabSize) => set({ documentTabSize }),
-      setDocumentSpellCheck: (documentSpellCheck) => set({ documentSpellCheck }),
-      setDocumentAutoOpenOnCreate: (documentAutoOpenOnCreate) => set({ documentAutoOpenOnCreate }),
-      setConnectivityPreference: (connectivityPreference) => set({ connectivityPreference }),
-      setCharacterAssistModel: (characterAssistModel) => set({ characterAssistModel }),
-      setCharacterAssistMaxTokens: (characterAssistMaxTokens) => set({ characterAssistMaxTokens }),
-      setCharacterAssistSendContext: (characterAssistSendContext) => set({ characterAssistSendContext }),
-      setCharacterAssistTelemetry: (characterAssistTelemetry) => set({ characterAssistTelemetry }),
-      setCharacterAssistTone: (characterAssistTone) => set({ characterAssistTone }),
-      setWorkspaceChatMode: (workspaceChatMode) => set({ workspaceChatMode }),
-      setReasoningEnabled: (reasoningEnabled) => set({ reasoningEnabled }),
-      setToolSettingsSectionVisible: (id, visible) =>
-        set((state) => ({
-          visibleToolSettingsSections: {
-            ...state.visibleToolSettingsSections,
-            [id]: visible,
-          },
-        })),
-      setAllToolSettingsSectionsVisible: (visible) =>
-        set((state) => ({
-          visibleToolSettingsSections: Object.fromEntries(
-            Object.keys(state.visibleToolSettingsSections).map((id) => [id, visible]),
-          ) as Record<ToolSettingsSectionId, boolean>,
-        })),
-      setToolSettingsSubsectionExpanded: (key, expanded) =>
-        set((state) => ({
-          toolSettingsSubsectionsExpanded: {
-            ...state.toolSettingsSubsectionsExpanded,
-            [key]: expanded,
-          },
-        })),
-      applyResearch: (action) =>
-        set((state) => ({ research: applyResearchConfig(state.research, action) })),
-      setResearchAdvancedOpen: (researchAdvancedOpen) => set({ researchAdvancedOpen }),
-      setResearchFirstRunNoticeDismissed: (researchFirstRunNoticeDismissed) =>
-        set({ researchFirstRunNoticeDismissed }),
-      setResearchActiveProfile: (id) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setActiveProfile", id }) })),
-      setResearchOverride: (override) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setOverride", override }) })),
-      setResearchDepthOverride: (depth, override) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setDepthOverride", depth, override }) })),
-      addResearchCustomProfile: (profile) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "addCustomProfile", profile }) })),
-      updateResearchCustomProfile: (id, profile) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "updateCustomProfile", id, profile }) })),
-      deleteResearchCustomProfile: (id) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "deleteCustomProfile", id }) })),
-      setResearchDefaultDepth: (defaultDepth) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setDefaultDepth", depth: defaultDepth }) })),
-      setResearchDefaultModelId: (defaultModelId) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setDefaultModelId", modelId: defaultModelId }) })),
-      setResearchLiteModel: (modelId, providerId) =>
-        set((state) => ({ research: applyResearchConfig(state.research, { kind: "setLiteModel", modelId, providerId }) })),
-      resetResearch: () =>
-        set({ research: { ...DEFAULT_RESEARCH_CONFIG } }),
+    (...a) => ({
+      ...createUiLayoutSlice(...a),
+      ...createModelSlice(...a),
+      ...createMemorySlice(...a),
+      ...createWebSearchSlice(...a),
+      ...createDocumentSlice(...a),
+      ...createCharacterSlice(...a),
+      ...createResearchSlice(...a),
+      ...createCodeExecutionSlice(...a),
+      ...createConnectivitySlice(...a),
+      ...createChatSlice(...a),
     }),
     {
       name: SETTINGS_STORAGE_KEY,
@@ -577,7 +205,6 @@ export const useSettingsStore = create<SettingsStore>()(
         migrated.research = {
           ...DEFAULT_RESEARCH_CONFIG,
           ...(parsed.research ?? {}),
-          // Always restore baseline of built-in depthOverrides; do not trust user overrides silently.
           depthOverrides: parsed.research?.depthOverrides ?? {},
           customProfiles: parsed.research?.customProfiles ?? [],
         };
