@@ -20,10 +20,6 @@ export type EditorFormat = "markdown";
 
 export type ChangeSource = "user" | "assistant" | "system";
 
-export type SuggestionStatus = "pending" | "accepted" | "rejected" | "modified";
-
-export type SuggestionTargetType = "range" | "section" | "whole_document" | "cursor";
-
 export interface DocumentRecord {
   id: string;
   projectId?: string;
@@ -50,22 +46,6 @@ export interface DocumentVersion {
   sourceConversationId?: string;
   sourceMessageId?: string;
   createdAt: string;
-}
-
-// Deferred for suggestions milestone
-export interface DocumentEditSuggestion {
-  id: string;
-  documentId: string;
-  status: SuggestionStatus;
-  targetType: SuggestionTargetType;
-  targetRange?: { from: number; to: number };
-  sectionTitle?: string;
-  originalText: string;
-  suggestedText: string;
-  instruction: string;
-  createdByMessageId?: string;
-  createdAt: string;
-  resolvedAt?: string;
 }
 
 // Helper types for document operations
@@ -119,5 +99,3 @@ export interface DocReadIntent {
   type: "doc.read";
   documentId: string;
 }
-
-export type DocOperationIntent = DocCreateIntent | DocUpdateIntent | DocReadIntent;

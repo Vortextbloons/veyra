@@ -1,9 +1,8 @@
 import type { ModelInfo } from "@/modules/chat/chat-types";
 import type { LmStudioModelEntry, LoadedLmStudioModelInstance } from "@/lib/lm-studio-types";
+import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
 import { inferSupportsImages } from "@/lib/message-attachments";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-
-const DEFAULT_BASE_URL = "http://localhost:1234";
 
 function modelIdFromEntry(entry: LmStudioModelEntry): string {
   const record = entry as Record<string, unknown>;
@@ -56,7 +55,7 @@ async function fetchModelEntries(url: string): Promise<LmStudioModelEntry[]> {
 
 export async function fetchModels(baseUrl?: string): Promise<ModelInfo[]> {
   try {
-    const url = `${baseUrl || DEFAULT_BASE_URL}/v1/models`;
+    const url = `${baseUrl || DEFAULT_LM_STUDIO_BASE_URL}/v1/models`;
     const res = await tauriFetch(url);
     if (!res.ok) return [];
     const json = await res.json();
@@ -73,7 +72,7 @@ export async function fetchModels(baseUrl?: string): Promise<ModelInfo[]> {
 export async function fetchLoadedLmStudioModelInstancesDirect(
   baseUrl?: string,
 ): Promise<LoadedLmStudioModelInstance[]> {
-  const root = baseUrl || DEFAULT_BASE_URL;
+  const root = baseUrl || DEFAULT_LM_STUDIO_BASE_URL;
   const nativeEntries = await fetchModelEntries(`${root}/api/v1/models`);
   return nativeEntries.flatMap((entry) => {
     const instances = loadedInstancesFromEntry(entry);
@@ -105,7 +104,7 @@ async function loadModelImpl(
   },
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const url = `${options?.baseUrl || DEFAULT_BASE_URL}/api/v1/models/load`;
+    const url = `${options?.baseUrl || DEFAULT_LM_STUDIO_BASE_URL}/api/v1/models/load`;
     const res = await tauriFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -146,7 +145,7 @@ async function unloadModelImpl(
   baseUrl?: string,
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const url = `${baseUrl || DEFAULT_BASE_URL}/api/v1/models/unload`;
+    const url = `${baseUrl || DEFAULT_LM_STUDIO_BASE_URL}/api/v1/models/unload`;
     const res = await tauriFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

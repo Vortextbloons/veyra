@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -46,6 +47,32 @@ const CONVERSATIONS_FILE: &str = "conversations.json";
 const CONVERSATION_KEY_FILE: &str = "conversation.key";
 const MAX_CONVERSATIONS_JSON_BYTES: usize = 50 * 1024 * 1024;
 
+fn app_data_file_path(app: &tauri::AppHandle, file_name: &str) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join(file_name))
+}
+
+fn read_app_data_file(app: &tauri::AppHandle, file_name: &str) -> Result<String, String> {
+    let path = app_data_file_path(app, file_name)?;
+    if !path.exists() {
+        return Ok(String::new());
+    }
+
+    fs::read_to_string(path).map_err(|error| error.to_string())
+}
+
+fn write_app_data_file(app: &tauri::AppHandle, file_name: &str, contents: String) -> Result<(), String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    fs::write(dir.join(file_name), contents).map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 fn save_conversations(app: tauri::AppHandle, conversations_json: String) -> Result<(), String> {
     if conversations_json.len() > MAX_CONVERSATIONS_JSON_BYTES {
@@ -56,27 +83,12 @@ fn save_conversations(app: tauri::AppHandle, conversations_json: String) -> Resu
     }
     serde_json::from_str::<serde_json::Value>(&conversations_json)
         .map_err(|error| error.to_string())?;
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
-    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    fs::write(dir.join(CONVERSATIONS_FILE), conversations_json).map_err(|error| error.to_string())
+    write_app_data_file(&app, CONVERSATIONS_FILE, conversations_json)
 }
 
 #[tauri::command]
 fn load_or_create_conversation_key(app: tauri::AppHandle) -> Result<String, String> {
-    let path = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?
-        .join(CONVERSATION_KEY_FILE);
-
-    if !path.exists() {
-        return Ok(String::new());
-    }
-
-    fs::read_to_string(path).map_err(|error| error.to_string())
+    read_app_data_file(&app, CONVERSATION_KEY_FILE)
 }
 
 #[tauri::command]
@@ -85,27 +97,12 @@ fn save_conversation_key(app: tauri::AppHandle, key: String) -> Result<(), Strin
         return Err("conversation key is invalid".into());
     }
 
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
-    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    fs::write(dir.join(CONVERSATION_KEY_FILE), key).map_err(|error| error.to_string())
+    write_app_data_file(&app, CONVERSATION_KEY_FILE, key)
 }
 
 #[tauri::command]
 fn load_conversations(app: tauri::AppHandle) -> Result<String, String> {
-    let path = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?
-        .join(CONVERSATIONS_FILE);
-
-    if !path.exists() {
-        return Ok(String::new());
-    }
-
-    fs::read_to_string(path).map_err(|error| error.to_string())
+    read_app_data_file(&app, CONVERSATIONS_FILE)
 }
 
 #[tauri::command]

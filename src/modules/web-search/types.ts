@@ -1,3 +1,5 @@
+import type { FetchStatus } from "@/lib/fetch-status";
+
 export interface SearchProvider {
   id: string;
   name: string;
@@ -43,7 +45,7 @@ export type SearchResult = {
 
 export type FetchedPageSummary = {
   url: string;
-  status: string;
+  status: FetchStatus | string;
   title: string | null;
   content: string | null;
   error_reason: string | null;
@@ -68,7 +70,7 @@ export type SearchSource = {
   rankReason?: string;
   queryLane?: string;
   fetch?: {
-    status: string;
+    status: FetchStatus | string;
     error_reason?: string;
     extraction_method?: string;
     via_wayback?: boolean;

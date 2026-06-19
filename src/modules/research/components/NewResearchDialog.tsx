@@ -21,6 +21,7 @@ import { invokeTestSearxngConnection } from "@/modules/web-search/tauri-commands
 import { resolveResearchProfileForRun } from "../research-config";
 import { ResearchProfileKnobsEditor } from "./ResearchProfileKnobsEditor";
 import type { ResearchDepth } from "../research-types";
+import { DialogSurface } from "@/components/dialog-surface";
 
 const DEPTH_OPTIONS: {
   value: ResearchDepth;
@@ -189,14 +190,12 @@ export function NewResearchDialog({ onClose }: Props) {
   const liteActive = !!researchConfig.liteModelId;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <DialogSurface
+      onClose={onClose}
+      overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      panelClassName="relative flex max-h-[min(92vh,900px)] w-full max-w-3xl flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl"
     >
-      <div className="relative flex max-h-[min(92vh,900px)] w-full max-w-3xl flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
           <div className="flex items-center gap-2">
             <div className="grid size-7 place-items-center rounded-lg bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
               <FlaskConical className="size-4" />
@@ -212,9 +211,9 @@ export function NewResearchDialog({ onClose }: Props) {
           >
             <X className="size-4" />
           </button>
-        </div>
+      </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-text)]">
               Research question
@@ -359,19 +358,19 @@ export function NewResearchDialog({ onClose }: Props) {
               </div>
             )}
           </div>
-        </div>
+      </div>
 
-        {preflightError && (
-          <div className="mx-6 mb-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/[0.08] px-3 py-2 text-[12px] text-red-200">
+      {preflightError && (
+        <div className="mx-6 mb-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/[0.08] px-3 py-2 text-[12px] text-red-200">
             <AlertCircle className="mt-0.5 size-4 shrink-0" />
             <div className="flex-1">
               <div className="font-medium">Cannot start research</div>
               <div className="mt-0.5 text-[11.5px] text-red-200/85">{preflightError}</div>
             </div>
           </div>
-        )}
+      )}
 
-        <div className="flex items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
+      <div className="flex items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -397,8 +396,7 @@ export function NewResearchDialog({ onClose }: Props) {
               </>
             )}
           </button>
-        </div>
       </div>
-    </div>
+    </DialogSurface>
   );
 }

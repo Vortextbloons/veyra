@@ -18,6 +18,8 @@ import type { CharacterGroupRecord, CharacterGroupSpeakerMode } from "../charact
 import type { CharacterRecord } from "../character-types";
 import { GroupChatView } from "./GroupChatView";
 import { startGroupChat } from "../group-chat";
+import { ConfirmDangerModal } from "@/components/confirm-danger-modal";
+import { EmptyState } from "@/components/empty-state";
 
 export function GroupPage() {
   const hydrateGroups = useCharacterGroupStore((s) => s.hydrateGroups);
@@ -48,59 +50,18 @@ export function GroupPage() {
         onCreate={handleCreate}
         onDeleteGroup={(id) => setConfirmDeleteId(id)}
       />
-      {confirmDeleteId && (
-        <DeleteGroupModal
-          onCancel={() => setConfirmDeleteId(null)}
-          onConfirm={async () => {
-            const id = confirmDeleteId;
-            setConfirmDeleteId(null);
-            if (id) await useCharacterGroupStore.getState().deleteGroup(id);
-          }}
-        />
-      )}
+      <ConfirmDangerModal
+        open={confirmDeleteId != null}
+        title="Delete group?"
+        description="This will permanently remove the group. Any conversations bound to it will keep their chat history but lose the persona/lorebook injection."
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={async () => {
+          const id = confirmDeleteId;
+          setConfirmDeleteId(null);
+          if (id) await useCharacterGroupStore.getState().deleteGroup(id);
+        }}
+      />
     </>
-  );
-}
-
-function DeleteGroupModal({
-  onCancel,
-  onConfirm,
-}: {
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="flex w-[360px] max-w-[90vw] flex-col gap-3 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-panel)] p-4 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-[13px] font-semibold text-white">Delete group?</h3>
-        <p className="text-[12px] text-[var(--color-text-dim)]">
-          This will permanently remove the group. Any conversations bound to it
-          will keep their chat history but lose the persona/lorebook injection.
-        </p>
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md px-3 py-1.5 text-[12.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-md bg-red-500/80 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-red-500"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -249,11 +210,11 @@ function GroupListPanel({
       </div>
       <div className="flex-1 overflow-y-auto p-2">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-6 text-center text-[12px] text-[var(--color-text-dim)]">
-            {groups.length === 0 ? (
-              <>
-                <Users className="size-7 text-[var(--color-text-dim)]/40" />
-                <p>No groups yet.</p>
+          groups.length === 0 ? (
+            <EmptyState
+              icon={<Users className="size-7 text-[var(--color-text-dim)]/40" />}
+              title="No groups yet."
+              action={
                 <button
                   type="button"
                   onClick={onCreate}
@@ -261,11 +222,11 @@ function GroupListPanel({
                 >
                   Create your first
                 </button>
-              </>
-            ) : (
-              <p>No matches.</p>
-            )}
-          </div>
+              }
+            />
+          ) : (
+            <EmptyState icon={<Users className="size-6 text-[var(--color-text-dim)]/40" />} title="No matches." />
+          )
         ) : (
           <div className="flex flex-col gap-0.5">
             {filtered.map((g) => {

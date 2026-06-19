@@ -13,6 +13,7 @@ import {
 } from "../ai-assist/WandButton";
 import { CHARACTER_TONE_PRESETS } from "../ai-assist/tones";
 import { useSettingsStore } from "@/stores/settings-store";
+import { DialogSurface } from "@/components/dialog-surface";
 
 interface NewCharacterDialogProps {
   open: boolean;
@@ -209,15 +210,12 @@ function DialogBody({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+    <DialogSurface
+      onClose={onClose}
+      overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      panelClassName="flex w-[640px] max-w-[95vw] flex-col gap-4 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-panel)] p-5 shadow-2xl"
     >
-      <div
-        className="flex w-[640px] max-w-[95vw] flex-col gap-4 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-panel)] p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div
               className={`grid size-7 place-items-center rounded-lg ${AVATAR_GRADIENTS[color]}`}
@@ -267,11 +265,11 @@ function DialogBody({ onClose }: { onClose: () => void }) {
           >
             <X className="size-3.5" />
           </button>
-        </header>
+      </header>
 
-        {mode === "manual" ? (
-          <>
-            <div className="flex flex-col gap-3">
+      {mode === "manual" ? (
+        <>
+          <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1.5">
                 <span className="text-[11.5px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
                   Name
@@ -350,7 +348,7 @@ function DialogBody({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
-            <footer className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] pt-3">
+          <footer className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] pt-3">
               <button
                 type="button"
                 onClick={onClose}
@@ -367,43 +365,42 @@ function DialogBody({ onClose }: { onClose: () => void }) {
               >
                 {busy ? "Creating…" : "Create Character"}
               </button>
-            </footer>
-          </>
-        ) : (
-          <ConceptMode
-            concept={concept}
-            setConcept={setConcept}
-            tone={tone}
-            setTone={setTone}
-            color={color}
-            setColor={setColor}
-            isGlobal={isGlobal}
-            setIsGlobal={setIsGlobal}
-            draft={draft}
-            setDraft={setDraft}
-            jobBuffer={job.buffer}
-            jobBusy={job.running}
-            jobError={job.error}
-            onGenerate={generate}
-            onCancel={runner.cancel}
-            onReset={() => {
-              runner.reset();
-              setDraft(null);
-            }}
-            onSave={handleSaveDraft}
-            onSaveManual={() => {
-              setMode("manual");
-              if (draft?.name) setName(draft.name);
-              if (draft?.title) setTitle(draft.title);
-              if (draft?.tagline) setTagline(draft.tagline);
-            }}
-            error={error}
-            setError={setError}
-            busy={busy}
-          />
-        )}
-      </div>
-    </div>
+          </footer>
+        </>
+      ) : (
+        <ConceptMode
+          concept={concept}
+          setConcept={setConcept}
+          tone={tone}
+          setTone={setTone}
+          color={color}
+          setColor={setColor}
+          isGlobal={isGlobal}
+          setIsGlobal={setIsGlobal}
+          draft={draft}
+          setDraft={setDraft}
+          jobBuffer={job.buffer}
+          jobBusy={job.running}
+          jobError={job.error}
+          onGenerate={generate}
+          onCancel={runner.cancel}
+          onReset={() => {
+            runner.reset();
+            setDraft(null);
+          }}
+          onSave={handleSaveDraft}
+          onSaveManual={() => {
+            setMode("manual");
+            if (draft?.name) setName(draft.name);
+            if (draft?.title) setTitle(draft.title);
+            if (draft?.tagline) setTagline(draft.tagline);
+          }}
+          error={error}
+          setError={setError}
+          busy={busy}
+        />
+      )}
+    </DialogSurface>
   );
 }
 

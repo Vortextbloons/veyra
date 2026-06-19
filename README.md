@@ -42,7 +42,7 @@ For quicker Rust restarts, run Vite and Tauri in two terminals:
 
 ```powershell
 # Terminal 1
-npm run dev:ui
+npm run dev
 
 # Terminal 2
 npm run dev:app
@@ -50,7 +50,7 @@ npm run dev:app
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev:ui` | Vite only (http://localhost:1420) |
+| `npm run dev` | Vite only (http://localhost:1420) |
 | `npm run dev:app` | Tauri dev using `tauri.dev.conf.json` |
 | `npm run dev:full` | `tauri dev` (starts Vite via `beforeDevCommand`) |
 | `npm run build:app` | Production installer/binary |

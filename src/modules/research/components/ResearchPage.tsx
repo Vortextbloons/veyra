@@ -35,6 +35,8 @@ import {
   summarizeResearchExtractions,
 } from "@/lib/source-extraction-ui";
 import { isPdfUrl, isYouTubeUrl, isDocxUrl, isPptxUrl, isXlsxUrl, isEpubUrl } from "@/lib/url-classifiers";
+import { ConfirmDangerModal } from "@/components/confirm-danger-modal";
+import { EmptyState } from "@/components/empty-state";
 
 const TAB_ITEMS = [
   { id: "plan", label: "Plan", icon: <LayoutList className="size-3.5" /> },
@@ -219,17 +221,19 @@ export function ResearchPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-3">
             {runs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-[12.5px] text-[var(--color-text-dim)]">
-                <FlaskConical className="size-8 text-[var(--color-text-dim)]/40" />
-                <p>No research runs yet.</p>
-                <button
-                  type="button"
-                  onClick={() => setShowNewDialog(true)}
-                  className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
-                >
-                  Start your first research
-                </button>
-              </div>
+              <EmptyState
+                icon={<FlaskConical className="size-8 text-[var(--color-text-dim)]/40" />}
+                title="No research runs yet."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setShowNewDialog(true)}
+                    className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
+                  >
+                    Start your first research
+                  </button>
+                }
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {runs.map((r) => (
@@ -430,48 +434,26 @@ export function ResearchPage() {
         <NewResearchDialog onClose={() => setShowNewDialog(false)} />
       )}
 
-      {confirmDeleteRunId && (
-        <DeleteResearchRunConfirm
-          onCancel={() => setConfirmDeleteRunId(null)}
-          onConfirm={() => void handleDeleteRun(confirmDeleteRunId)}
-        />
-      )}
+      <ConfirmDangerModal
+        open={confirmDeleteRunId != null}
+        closeOnBackdrop={false}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        panelClassName="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
+        titleClassName="text-[14px] font-semibold text-white"
+        descriptionClassName="mt-2 text-[12.5px] leading-relaxed text-[var(--color-text-dim)]"
+        actionsClassName="mt-5 flex justify-end gap-2"
+        cancelButtonClassName="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-white"
+        confirmButtonClassName="rounded-lg bg-red-500/15 px-3 py-1.5 text-[12px] font-medium text-red-300 hover:bg-red-500/25"
+        title="Delete research run?"
+        description="This will permanently delete the run, sources, evidence, claims, and report. This cannot be undone."
+        onCancel={() => setConfirmDeleteRunId(null)}
+        onConfirm={async () => {
+          const id = confirmDeleteRunId;
+          if (!id) return;
+          await handleDeleteRun(id);
+        }}
+      />
     </main>
-  );
-}
-
-function DeleteResearchRunConfirm({
-  onCancel,
-  onConfirm,
-}: {
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl">
-        <h3 className="text-[14px] font-semibold text-white">Delete research run?</h3>
-        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-text-dim)]">
-          This will permanently delete the run, sources, evidence, claims, and report. This cannot be undone.
-        </p>
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-white"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-lg bg-red-500/15 px-3 py-1.5 text-[12px] font-medium text-red-300 hover:bg-red-500/25"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 

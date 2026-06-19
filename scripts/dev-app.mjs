@@ -19,7 +19,7 @@ function isPortOpen(port) {
 const viteRunning = await isPortOpen(1420);
 if (!viteRunning) {
   console.warn(
-    "[veyra] Vite is not running on :1420. Start `npm run dev:ui` in another terminal for faster restarts.",
+    "[veyra] Vite is not running on :1420. Start `npm run dev` in another terminal for faster restarts.",
   );
 }
 

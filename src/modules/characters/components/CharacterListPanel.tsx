@@ -3,6 +3,8 @@ import { Drama, Plus, Search, Users, Copy, Download } from "lucide-react";
 import { useCharacterStore } from "../character-store";
 import type { CharacterRecord } from "../character-types";
 import { CharacterAvatar } from "../CharacterAvatar";
+import { ConfirmDangerModal } from "@/components/confirm-danger-modal";
+import { EmptyState } from "@/components/empty-state";
 
 interface CharacterListPanelProps {
   onCreate: () => void;
@@ -177,11 +179,11 @@ export function CharacterListPanel({ onCreate, onDuplicate, onExport }: Characte
 
       <div className="flex-1 overflow-y-auto p-2">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-6 text-center text-[12px] text-[var(--color-text-dim)]">
-            {characters.length === 0 ? (
-              <>
-                <Users className="size-7 text-[var(--color-text-dim)]/40" />
-                <p className="px-1">No characters yet.</p>
+          characters.length === 0 ? (
+            <EmptyState
+              icon={<Users className="size-7 text-[var(--color-text-dim)]/40" />}
+              title="No characters yet."
+              action={
                 <button
                   type="button"
                   onClick={onCreate}
@@ -189,14 +191,11 @@ export function CharacterListPanel({ onCreate, onDuplicate, onExport }: Characte
                 >
                   Create your first
                 </button>
-              </>
-            ) : (
-              <>
-                <Search className="size-6 text-[var(--color-text-dim)]/40" />
-                <p>No matches.</p>
-              </>
-            )}
-          </div>
+              }
+            />
+          ) : (
+            <EmptyState icon={<Search className="size-6 text-[var(--color-text-dim)]/40" />} title="No matches." />
+          )
         ) : (
           <div className="flex flex-col gap-0.5">
             {filtered.map((c) => (
@@ -214,43 +213,17 @@ export function CharacterListPanel({ onCreate, onDuplicate, onExport }: Characte
         )}
       </div>
 
-      {confirmDeleteId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setConfirmDeleteId(null)}
-        >
-          <div
-            className="flex w-[360px] max-w-[90vw] flex-col gap-3 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-panel)] p-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-[13px] font-semibold text-white">Delete character?</h3>
-            <p className="text-[12px] text-[var(--color-text-dim)]">
-              This will permanently remove the character and its lorebook. Any conversations
-              using it will lose their character binding but the chat history is kept.
-            </p>
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteId(null)}
-                className="rounded-md px-3 py-1.5 text-[12.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const id = confirmDeleteId;
-                  setConfirmDeleteId(null);
-                  if (id) await deleteCharacter(id);
-                }}
-                className="rounded-md bg-red-500/80 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-red-500"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDangerModal
+        open={confirmDeleteId != null}
+        title="Delete character?"
+        description="This will permanently remove the character and its lorebook. Any conversations using it will lose their character binding but the chat history is kept."
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={async () => {
+          const id = confirmDeleteId;
+          setConfirmDeleteId(null);
+          if (id) await deleteCharacter(id);
+        }}
+      />
     </aside>
   );
 }

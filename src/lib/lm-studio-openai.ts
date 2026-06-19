@@ -8,9 +8,9 @@ import { buildMessagePerformance } from "@/lib/performance";
 import { readV1SseStream } from "@/lib/lm-studio-sse";
 import { withFetchTimeout } from "@/lib/abort-utils";
 import { parseToolArguments, stableToolCallId, extractToolCalls } from "@/lib/lm-studio-v1";
+import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
+import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-
-const DEFAULT_BASE_URL = "http://localhost:1234";
 const DEFAULT_TEMPERATURE = 0.7;
 export const OPENAI_CHAT_PATH = "/v1/chat/completions";
 
@@ -232,7 +232,7 @@ export async function sendOpenAiCompatibleChat(
   try {
     const { signal: fetchSignal, cleanup: cleanupFetchTimeout } = withFetchTimeout(options.signal);
     try {
-      const res = await tauriFetch(`${options.baseUrl || DEFAULT_BASE_URL}${OPENAI_CHAT_PATH}`, {
+      const res = await tauriFetch(`${options.baseUrl || DEFAULT_LM_STUDIO_BASE_URL}${OPENAI_CHAT_PATH}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildOpenAiChatBody({ ...options, stream: true })),
@@ -240,12 +240,7 @@ export async function sendOpenAiCompatibleChat(
       });
 
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        options.onError(
-          text
-            ? `Request failed (${res.status}): ${text.slice(0, 200)}`
-            : `Request failed with status ${res.status}`,
-        );
+        options.onError(await formatLmStudioRequestError(res));
         return;
       }
 
@@ -318,12 +313,6 @@ export async function sendOpenAiCompatibleChat(
       cleanupFetchTimeout();
     }
   } catch (err: unknown) {
-    if (options.signal?.aborted) {
-      options.onError("Request aborted");
-    } else {
-      options.onError(err instanceof Error ? err.message : "Unknown error");
-    }
+    options.onError(formatLmStudioCaughtError(err, options.signal));
   }
 }
-
-

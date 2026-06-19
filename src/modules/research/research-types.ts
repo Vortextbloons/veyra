@@ -1,3 +1,5 @@
+import type { FetchStatus } from "@/lib/fetch-status";
+
 export type ResearchDepth = "lightning" | "quick" | "standard" | "deep" | "exhaustive";
 
 export type ResearchRunStatus =
@@ -166,7 +168,7 @@ export interface ResearchSource {
    * "network" | "ssrf_blocked" | "too_large" | "unsupported" | "invalid_url".
    * Not the same as `status` (which is the research pipeline state).
    */
-  fetchStatus?: string;
+  fetchStatus?: FetchStatus | string;
   sourceQuality?: {
     relevant: boolean;
     quality: number;
@@ -288,7 +290,7 @@ export interface CreateResearchSourceInput {
   engine?: string;
   score?: number;
   rank?: number;
-  fetchStatus?: string;
+  fetchStatus?: FetchStatus | string;
 }
 
 export interface UpdateResearchSourceInput {

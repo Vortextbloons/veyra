@@ -1,11 +1,10 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { invoke } from "@tauri-apps/api/core";
-
-const DEFAULT_BASE_URL = "http://localhost:1234";
+import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
 
 export async function isServerRunning(baseUrl?: string): Promise<boolean> {
   try {
-    const url = `${baseUrl || DEFAULT_BASE_URL}/v1/models`;
+    const url = `${baseUrl || DEFAULT_LM_STUDIO_BASE_URL}/v1/models`;
     const res = await tauriFetch(url);
     return res.ok;
   } catch {
@@ -28,7 +27,7 @@ export async function startServer(baseUrl?: string): Promise<{ success: boolean;
 }
 
 export async function ensureServerRunning(baseUrl?: string): Promise<boolean> {
-  const url = baseUrl?.trim() || DEFAULT_BASE_URL;
+  const url = baseUrl?.trim() || DEFAULT_LM_STUDIO_BASE_URL;
   if (await isServerRunning(url)) return true;
 
   const result = await startServer(url);

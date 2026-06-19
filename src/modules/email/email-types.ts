@@ -48,5 +48,3 @@ export type EmailDraft = {
   createdAt: number;
   updatedAt: number;
 };
-
-export type EmailFolder = "inbox" | "sent" | "drafts" | "archive" | "starred";

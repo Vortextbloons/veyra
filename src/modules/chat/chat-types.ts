@@ -5,6 +5,7 @@ import type { MessageAttachment } from "@/lib/message-attachments";
 import type { MemoryPack, MemoryRetrievalInfo } from "@/modules/memory/memory-types";
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult } from "@/modules/web-search/types";
+import type { FetchStatus } from "@/lib/fetch-status";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -18,15 +19,7 @@ export type WebSearchSource = Pick<SearchResult, "id" | "title" | "url"> & {
 };
 
 export type SourceFetchStatus =
-  | "ok"
-  | "timeout"
-  | "http"
-  | "extraction"
-  | "network"
-  | "ssrf_blocked"
-  | "too_large"
-  | "unsupported"
-  | "invalid_url";
+  FetchStatus;
 
 export type SourceFetch = {
   status: SourceFetchStatus | string;

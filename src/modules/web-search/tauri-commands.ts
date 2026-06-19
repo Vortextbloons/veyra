@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
+import type { FetchStatus as BaseFetchStatus } from "@/lib/fetch-status";
 
 const inflightDirectSearches = new Map<string, Promise<unknown>>();
 
@@ -59,16 +60,7 @@ export async function invokeTestSearxngConnection(
   return invoke<boolean>("test_searxng_connection", { baseUrl });
 }
 
-export type FetchStatus =
-  | "ok"
-  | "timeout"
-  | "http"
-  | "extraction"
-  | "network"
-  | "ssrf_blocked"
-  | "too_large"
-  | "unsupported"
-  | "invalid_url";
+export type FetchStatus = BaseFetchStatus;
 
 export type FetchedPage = {
   url: string;

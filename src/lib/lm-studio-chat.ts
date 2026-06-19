@@ -14,9 +14,9 @@ import {
   extractReasoningText,
 } from "@/lib/lm-studio-v1";
 import { sendOpenAiCompatibleChat } from "@/lib/lm-studio-openai";
+import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
+import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-
-const DEFAULT_BASE_URL = "http://localhost:1234";
 
 export type LmStudioChatOptions = {
   messages: ChatMessage[];
@@ -106,7 +106,7 @@ async function sendLmStudioChatImpl(options: LmStudioChatOptions): Promise<void>
   try {
     const { signal: fetchSignal, cleanup: cleanupFetchTimeout } = withFetchTimeout(signal);
     try {
-      const res = await tauriFetch(`${baseUrl || DEFAULT_BASE_URL}${CHAT_PATH}`, {
+      const res = await tauriFetch(`${baseUrl || DEFAULT_LM_STUDIO_BASE_URL}${CHAT_PATH}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
@@ -131,12 +131,7 @@ async function sendLmStudioChatImpl(options: LmStudioChatOptions): Promise<void>
       });
 
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      onError(
-        text
-          ? `Request failed (${res.status}): ${text.slice(0, 200)}`
-          : `Request failed with status ${res.status}`,
-      );
+      onError(await formatLmStudioRequestError(res));
       return;
     }
 
@@ -185,10 +180,6 @@ async function sendLmStudioChatImpl(options: LmStudioChatOptions): Promise<void>
       cleanupFetchTimeout();
     }
   } catch (err: unknown) {
-    if (signal?.aborted) {
-      onError("Request aborted");
-    } else {
-      onError(err instanceof Error ? err.message : "Unknown error");
-    }
+    onError(formatLmStudioCaughtError(err, signal));
   }
 }

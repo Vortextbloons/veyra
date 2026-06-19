@@ -3,6 +3,7 @@ import { X, Folder, LayoutGrid, GraduationCap, Briefcase, Code2, Palette, FlaskC
 import { useProjectStore } from "@/modules/projects/project-store";
 import type { ProjectKind } from "@/modules/projects/project-types";
 import { PROJECT_KIND_LABELS, PROJECT_COLORS } from "@/modules/projects/project-types";
+import { DialogSurface } from "@/components/dialog-surface";
 
 const KIND_OPTIONS: { kind: ProjectKind; icon: React.ReactNode; desc: string }[] = [
   { kind: "app", icon: <LayoutGrid className="size-4" />, desc: "A software application or product" },
@@ -57,10 +58,14 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
+    <DialogSurface
+      onClose={onClose}
+      closeOnBackdrop={false}
+      overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      panelClassName="relative w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
           <h2 className="text-[15px] font-semibold text-[var(--color-text)]">Create new project</h2>
           <button
             type="button"
@@ -69,10 +74,10 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
           >
             <X className="size-4" />
           </button>
-        </div>
+      </div>
 
-        {/* Body */}
-        <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-5">
+      {/* Body */}
+      <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-5">
           {/* Name */}
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-text)]">
@@ -170,10 +175,10 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
               className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3.5 py-2.5 text-[12px] leading-relaxed text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-accent)] focus:outline-none"
             />
           </div>
-        </div>
+      </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
+      {/* Footer */}
+      <div className="flex items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -189,8 +194,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
           >
             {creating ? "Creating..." : "Create Project"}
           </button>
-        </div>
       </div>
-    </div>
+    </DialogSurface>
   );
 }
