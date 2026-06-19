@@ -21,6 +21,7 @@ import {
   shouldRetrieveMemory,
 } from "@/modules/memory/memory-router";
 import { buildMemoryContextBlock } from "@/lib/prompts";
+import { isProfileNode } from "@/modules/memory/profile-helpers";
 
 const STOPWORDS = new Set([
   "the","a","an","is","are","was","were","be","been","being","have","has","had",
@@ -289,17 +290,19 @@ export async function buildMemoryPackWithInfo(
     }
 
     const lines: string[] = [];
+    const profile = kept.filter((s) => isProfileNode(s.node));
     const permanent = kept.filter(
       (s) =>
-        s.node.isPinned ||
+        !isProfileNode(s.node) &&
+        (s.node.isPinned ||
         s.node.priority === "permanent" ||
         s.node.importance >= 5 ||
-        s.node.origin === "explicit_user_save",
+        s.node.origin === "explicit_user_save"),
     );
     const project = kept.filter(
-      (s) => s.node.scope === "project" && !permanent.includes(s),
+      (s) => s.node.scope === "project" && !permanent.includes(s) && !profile.includes(s),
     );
-    const other = kept.filter((s) => !permanent.includes(s) && !project.includes(s));
+    const other = kept.filter((s) => !permanent.includes(s) && !project.includes(s) && !profile.includes(s));
 
     const addGroup = (label: string, group: ScoredNode[]) => {
       if (group.length === 0) return;
@@ -313,6 +316,7 @@ export async function buildMemoryPackWithInfo(
       }
     };
 
+    addGroup("User profile", profile);
     addGroup("Permanent/user memory", permanent);
     addGroup("Project memory", project);
     addGroup("Related memory", other);

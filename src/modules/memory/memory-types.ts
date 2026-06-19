@@ -87,7 +87,8 @@ export interface MemoryNode {
     | "explicit_user_save"
     | "auto_extracted"
     | "manual_user_edit"
-    | "imported";
+    | "imported"
+    | "profile_setup";
   status: MemoryStatus;
   isPinned: boolean;
   userEditable: boolean;
@@ -196,6 +197,7 @@ export function isProtectedMemory(
     node.priority === "permanent" ||
     node.importance >= 5 ||
     node.origin === "explicit_user_save" ||
-    node.origin === "manual_user_edit"
+    node.origin === "manual_user_edit" ||
+    node.origin === "profile_setup"
   );
 }

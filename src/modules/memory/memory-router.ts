@@ -101,6 +101,7 @@ export function isManualOnlyOrigin(node: {
     node.isPinned ||
     node.priority === "permanent" ||
     node.origin === "explicit_user_save" ||
-    node.origin === "manual_user_edit"
+    node.origin === "manual_user_edit" ||
+    node.origin === "profile_setup"
   );
 }

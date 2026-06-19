@@ -7,7 +7,8 @@ export type MemoryView =
   | "permanent"
   | "low_priority"
   | "recent"
-  | "archived";
+  | "archived"
+  | "profile";
 
 type MemoryUiContextValue = {
   selectedNodeId: string | null;
