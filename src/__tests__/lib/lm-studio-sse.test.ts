@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readV1SseStream } from "./lm-studio-sse";
+import { readV1SseStream } from "../../lib/lm-studio-sse";
 
 function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();

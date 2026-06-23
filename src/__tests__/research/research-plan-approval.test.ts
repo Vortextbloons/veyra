@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import type { ResearchPlan } from "./research-types";
+import type { ResearchPlan } from "../../modules/research/research-types";
 
 const mocks = vi.hoisted(() => ({
   listen: vi.fn(),
@@ -10,13 +10,13 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: mocks.listen,
 }));
 
-vi.mock("./research-store", () => ({
+vi.mock("../../modules/research/research-store", () => ({
   useResearchStore: {
     getState: mocks.getState,
   },
 }));
 
-import { waitForPlanApproval } from "./research-plan-approval";
+import { waitForPlanApproval } from "../../modules/research/research-plan-approval";
 
 describe("waitForPlanApproval", () => {
   beforeEach(() => {

@@ -5,7 +5,7 @@ import {
   salvageEvidenceObjects,
   stripMarkdownJsonFence,
   stripThinkingBlocks,
-} from "./extraction-json";
+} from "../../modules/research/extraction-json";
 
 describe("parseResearchEvidenceArray", () => {
   it("parses valid evidence wrapper JSON", () => {

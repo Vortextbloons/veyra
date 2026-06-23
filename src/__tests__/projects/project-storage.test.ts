@@ -15,7 +15,7 @@ vi.mock("@/lib/id", () => ({
   nowIso: mocks.nowIso,
 }));
 
-import { createProject, deleteProject, updateProject } from "./project-storage";
+import { createProject, deleteProject, updateProject } from "../../modules/projects/project-storage";
 
 describe("project-storage", () => {
   beforeEach(() => {

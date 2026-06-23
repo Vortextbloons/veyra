@@ -5,7 +5,7 @@ import {
   sanitizeReportSection,
   stripCitationAuditSection,
   stripReportThinking,
-} from "./report-sanitize";
+} from "../../modules/research/report-sanitize";
 
 describe("report-sanitize", () => {
   it("removes thinking wrappers", () => {

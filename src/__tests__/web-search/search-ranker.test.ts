@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dedupeAndRankSearchResults } from "./search-ranker";
-import type { SearchResult } from "./types";
+import { dedupeAndRankSearchResults } from "../../modules/web-search/search-ranker";
+import type { SearchResult } from "../../modules/web-search/types";
 
 function makeResult(overrides: Partial<SearchResult> & Pick<SearchResult, "id" | "title" | "url" | "providerId">): SearchResult {
   return {

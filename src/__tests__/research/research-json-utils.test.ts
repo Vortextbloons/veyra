@@ -4,7 +4,7 @@ import {
   pickResearchAiOutputText,
   safeJsonParse,
   normalizeClaimStatus,
-} from "./research-json-utils";
+} from "../../modules/research/research-json-utils";
 
 describe("research-json-utils", () => {
   it("parses fenced JSON embedded in prose", () => {
