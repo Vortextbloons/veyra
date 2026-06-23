@@ -7,7 +7,9 @@ import {
   Loader2,
   Paperclip,
   Send,
+  Sparkles,
   X,
+  Zap,
 } from "lucide-react";
 import type { ChatMode } from "@/modules/chat/chat-types";
 import {
@@ -17,7 +19,6 @@ import {
   MAX_IMAGE_ATTACHMENTS,
   type MessageAttachment,
 } from "@/lib/message-attachments";
-import { Toggle } from "@/components/toggle";
 import { ModeSelector } from "@/modules/chat/components/mode-selector";
 import { FileTypeIcon, FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
 
@@ -135,6 +136,85 @@ export function IconButton({
       className={`grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white disabled:pointer-events-none ${className ?? ""}`}
     >
       {children}
+    </button>
+  );
+}
+
+function ToggleIconButton({
+  icon: Icon,
+  label,
+  active,
+  accent,
+  onChange,
+  onLongPress,
+  disabled,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active: boolean;
+  accent: "emerald" | "violet" | "amber";
+  onChange: (on: boolean) => void;
+  onLongPress?: () => void;
+  disabled?: boolean;
+}) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPressRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const handlePointerDown = () => {
+    if (disabled || !onLongPress) return;
+    didLongPressRef.current = false;
+    timerRef.current = setTimeout(() => {
+      didLongPressRef.current = true;
+      onLongPress();
+    }, 500);
+  };
+
+  const handlePointerUp = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const handleClick = () => {
+    if (didLongPressRef.current) {
+      didLongPressRef.current = false;
+      return;
+    }
+    if (!disabled) onChange(!active);
+  };
+
+  const activeStyles = {
+    emerald: "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/25",
+    violet: "bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/25",
+    amber: "bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/25",
+  }[accent];
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      aria-label={`${label}${onLongPress ? " (hold to extract)" : ""}`}
+      disabled={disabled}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+      onClick={handleClick}
+      title={`${label}${active ? " (on)" : " (off)"}${onLongPress ? " · hold to extract" : ""}`}
+      className={`grid size-7 place-items-center rounded-md transition-all ${
+        active
+          ? activeStyles
+          : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+      } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+    >
+      <Icon className="size-3.5" />
     </button>
   );
 }
@@ -382,24 +462,28 @@ export function Composer({
             {!isEditMode && (
               <>
                 <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
-                <Toggle label="Memory" on={memory} onChange={onMemoryChange} disabled={isControlsBlocked} />
-                <IconButton
-                  aria-label="Extract memories now"
-                  title="Extract memories now"
-                  disabled={isInputBlocked || !onTriggerMemoryExtraction}
-                  onClick={() => onTriggerMemoryExtraction?.()}
-                >
-                  <Brain className="size-3.5" />
-                </IconButton>
-                <Toggle
+                <ToggleIconButton
+                  icon={Brain}
+                  label="Memory"
+                  active={memory}
+                  accent="emerald"
+                  onChange={onMemoryChange}
+                  onLongPress={onTriggerMemoryExtraction}
+                  disabled={isControlsBlocked}
+                />
+                <ToggleIconButton
+                  icon={Sparkles}
                   label="Reasoning"
-                  on={reasoningEnabled}
+                  active={reasoningEnabled}
+                  accent="violet"
                   onChange={onReasoningEnabledChange}
                   disabled={isControlsBlocked}
                 />
-                <Toggle
+                <ToggleIconButton
+                  icon={Zap}
                   label="Enhanced"
-                  on={enhancedMode}
+                  active={enhancedMode}
+                  accent="amber"
                   onChange={onEnhancedModeChange}
                   disabled={isControlsBlocked}
                 />
