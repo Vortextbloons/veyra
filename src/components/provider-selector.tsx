@@ -80,7 +80,7 @@ export function ProviderSelector({
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/50"
+          className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-xl shadow-black/40"
         >
           <div className="px-2 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
             Provider

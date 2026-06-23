@@ -96,7 +96,7 @@ export function ModelSelector({
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 top-full z-50 mt-1.5 w-80 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/50"
+          className="absolute left-0 top-full z-50 mt-1.5 w-80 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-xl shadow-black/40"
         >
           <div className="border-b border-[var(--color-border)] p-2">
             <div className="flex items-center gap-2 rounded-md bg-[var(--color-bg)] px-2 py-1.5">

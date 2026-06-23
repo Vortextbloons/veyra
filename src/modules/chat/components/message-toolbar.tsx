@@ -63,7 +63,7 @@ export function MessageToolbar({
 
   return (
     <div
-      className={`flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-0.5 shadow-lg shadow-black/30 opacity-0 transition-opacity group-hover/message:opacity-100 ${
+      className={`flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 ${
         isUser ? "ml-auto" : ""
       }`}
     >

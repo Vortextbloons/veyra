@@ -68,7 +68,7 @@ export function ModeSelector({ value, onChange, disabled = false }: ModeSelector
         <div
           role="listbox"
           aria-label="Mode"
-          className="absolute bottom-full left-0 z-50 mb-1.5 w-60 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-1 shadow-2xl shadow-black/50"
+          className="absolute bottom-full left-0 z-50 mb-1.5 w-60 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-1 shadow-xl shadow-black/40"
         >
           {MODES.map((m) => {
             const active = m.id === value;

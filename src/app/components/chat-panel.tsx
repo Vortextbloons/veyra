@@ -40,7 +40,6 @@ function chatLayoutClasses(sidebarsCollapsed: number) {
 export function ChatPanel({
   title = "New conversation",
   titleAccessory,
-  headerActions,
   messages = [],
   onSend,
   supportsImages = false,
@@ -205,7 +204,7 @@ export function ChatPanel({
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
         <div className="flex min-w-0 items-center gap-2">
           <ProviderSelector
             value={selectedProvider}
@@ -224,8 +223,16 @@ export function ChatPanel({
           />
         </div>
 
+        <div className="mx-3 h-4 w-px bg-[var(--color-border)]" />
+
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[13px] font-medium tracking-tight">{title}</h1>
+        </div>
+
+        {titleAccessory}
+
         <div
-          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] ${
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${
             providerConnectionPhase === "connecting"
               ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
               : providerStatus === "connected"
@@ -249,7 +256,7 @@ export function ChatPanel({
               : "Disconnected"}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <button
             aria-label="Notifications"
             className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
@@ -270,26 +277,12 @@ export function ChatPanel({
         onStartServer={() => onProviderStartServer?.()}
       />
 
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <h1 className="truncate text-[14px] font-medium tracking-tight">{title}</h1>
-          {titleAccessory}
-        </div>
-        <div className="flex items-center gap-1">
-          {headerActions}
-        </div>
-      </div>
-
-      <div
-        ref={messagesScrollRef}
-        onScroll={handleMessagesScroll}
-        className="relative flex flex-1 flex-col overflow-y-auto"
-      >
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 z-0 h-32 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.08),transparent_70%)]"
-        />
-        {mode === "agents" ? (
+          ref={messagesScrollRef}
+          onScroll={handleMessagesScroll}
+          className="relative flex flex-1 flex-col overflow-y-auto"
+        >
+          {mode === "agents" ? (
           <AgentsPanel
             sessions={agentSessions}
             activeSessionId={activeAgentSessionId}

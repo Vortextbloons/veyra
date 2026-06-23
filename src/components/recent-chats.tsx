@@ -58,7 +58,7 @@ export function RecentChats({
                   className={`grid size-8 place-items-center rounded-md transition-colors ${
                     active
                       ? "bg-[var(--color-accent-soft)] text-white"
-                      : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
+                      : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
                   }`}
                 >
                   <MessageSquare className="size-3.5" />
@@ -105,7 +105,7 @@ export function RecentChats({
                     className={`flex w-full items-center gap-0.5 rounded-md transition-colors ${
                       active
                         ? "bg-[var(--color-accent-soft)]"
-                        : "hover:bg-white/[0.03]"
+                        : "hover:bg-white/5"
                     }`}
                   >
                     <button
@@ -217,7 +217,7 @@ function EmptyChats() {
   return (
     <div className="grid h-full place-items-center px-6 text-center">
       <div>
-        <div className="mx-auto mb-2 grid size-9 place-items-center rounded-lg border border-dashed border-[var(--color-border-strong)] text-[var(--color-text-dim)]">
+        <div className="mx-auto mb-2 grid size-9 place-items-center rounded-lg bg-[var(--color-panel)] text-[var(--color-text-dim)]">
           <Search className="size-4" />
         </div>
         <p className="text-[12px] text-[var(--color-text-dim)]">

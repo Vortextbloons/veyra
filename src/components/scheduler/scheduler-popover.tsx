@@ -84,7 +84,7 @@ export function SchedulerPopover() {
         <div
           role="dialog"
           aria-label="Scheduler panel"
-          className="absolute left-1/2 top-full z-50 mt-2 w-[320px] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/50"
+          className="absolute left-1/2 top-full z-50 mt-2 w-[320px] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] shadow-xl shadow-black/40"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">

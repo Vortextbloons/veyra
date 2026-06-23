@@ -26,9 +26,9 @@ export function ProviderConnectionBanner({
   const isLmStudio = provider.id === "lm-studio";
 
   return (
-    <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-      <div className="mx-auto flex max-w-2xl gap-3 rounded-xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.08] via-[var(--color-panel)] to-violet-500/[0.06] p-3.5 shadow-lg shadow-black/20">
-        <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-amber-500/15 text-amber-300 ring-1 ring-inset ring-amber-500/20">
+    <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+      <div className="mx-auto flex max-w-2xl gap-3 rounded-xl border-l-2 border-amber-500 bg-amber-500/10 p-3.5">
+        <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-amber-500/15 text-amber-300">
           {connecting ? (
             <Loader2 className="size-4 animate-spin" aria-hidden />
           ) : (

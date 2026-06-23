@@ -58,7 +58,7 @@ export function ModelDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl shadow-black/50">
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-xl shadow-black/40">
           {models.length > 4 && (
             <div className="border-b border-[var(--color-border)] p-2">
               <input

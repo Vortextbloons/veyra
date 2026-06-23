@@ -25,7 +25,7 @@ export function ShutdownOverlay() {
       aria-describedby="shutdown-description"
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-[var(--color-bg)]/85 backdrop-blur-md"
     >
-      <div className="mx-6 w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6 shadow-2xl shadow-black/50">
+      <div className="mx-6 w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6 shadow-xl shadow-black/40">
         <div className="mb-5 flex justify-center">
           <div className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500/25 to-violet-500/20 ring-1 ring-inset ring-indigo-400/20">
             <Loader2 className="size-6 animate-spin text-indigo-300" />

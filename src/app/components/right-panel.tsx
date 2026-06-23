@@ -31,7 +31,7 @@ export function PanelShell({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
+    <section className="rounded-xl bg-[var(--color-panel)] p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[15px] font-semibold text-[var(--color-text)]">
           {title}

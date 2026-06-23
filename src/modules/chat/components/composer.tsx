@@ -377,7 +377,7 @@ export function Composer({
   };
 
   return (
-    <div className={`group/composer relative rounded-2xl border bg-gradient-to-b from-[var(--color-panel)] to-[var(--color-bg)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_0_0_3px_rgba(99,102,241,0.08)] ${
+    <div className={`group/composer relative rounded-2xl border bg-[var(--color-panel)] p-2 transition-all focus-within:ring-1 focus-within:ring-[var(--color-accent)]/25 ${
       isEditMode
         ? "border-amber-400/40 focus-within:border-amber-400/60"
         : "border-[var(--color-border)] focus-within:border-[var(--color-accent)]/40"
@@ -493,7 +493,7 @@ export function Composer({
               aria-label={isEditMode ? "Save edit" : "Send"}
               disabled={!canSend}
               onClick={handleSend}
-              className="group/send grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-accent)] text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_-2px_rgba(99,102,241,0.4)] transition-all hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(99,102,241,0.5),0_6px_16px_-2px_rgba(99,102,241,0.5)] active:scale-95 disabled:opacity-40 disabled:hover:brightness-100 disabled:hover:shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_4px_12px_-2px_rgba(99,102,241,0.4)] disabled:active:scale-100"
+              className="group/send grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-accent)] text-white shadow-[0_0_0_1px_rgba(99,102,241,0.3)] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100 disabled:active:scale-100"
             >
               {busy ? (
                 <Loader2 className="size-4 animate-spin" />
