@@ -145,6 +145,8 @@ type ComposerProps = {
   onTriggerMemoryExtraction?: () => void;
   reasoningEnabled: boolean;
   onReasoningEnabledChange: (on: boolean) => void;
+  enhancedMode: boolean;
+  onEnhancedModeChange: (on: boolean) => void;
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
   onSend?: (
@@ -169,6 +171,8 @@ export function Composer({
   onTriggerMemoryExtraction,
   reasoningEnabled,
   onReasoningEnabledChange,
+  enhancedMode,
+  onEnhancedModeChange,
   mode,
   onModeChange,
   onSend,
@@ -391,6 +395,12 @@ export function Composer({
                   label="Reasoning"
                   on={reasoningEnabled}
                   onChange={onReasoningEnabledChange}
+                  disabled={isControlsBlocked}
+                />
+                <Toggle
+                  label="Enhanced"
+                  on={enhancedMode}
+                  onChange={onEnhancedModeChange}
                   disabled={isControlsBlocked}
                 />
               </>

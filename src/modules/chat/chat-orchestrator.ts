@@ -30,6 +30,7 @@ export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;
   memoryRetrieval: MemoryRetrievalInfo;
   webSearchSources?: WebSearchSource[];
+  scratchpadContent?: string;
 }
 
 type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
@@ -41,6 +42,8 @@ type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
   webSearchEnabled: boolean;
   /** When false, the Python execution tool is not offered. */
   codeExecutionEnabled: boolean;
+  /** When true, enhanced mode tools (scratchpad, ask_question) are available. */
+  enhancedMode: boolean;
   conversationId?: string;
   projectId?: string;
   onComplete?: (
@@ -57,6 +60,7 @@ function latestUserMessageText(messages: ChatMessage[]): string {
 }
 
 const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_ROUNDS_ENHANCED = 10;
 
 export async function sendChatRequest({
   providerId,
@@ -64,6 +68,7 @@ export async function sendChatRequest({
   memoryEnabled,
   webSearchEnabled,
   codeExecutionEnabled,
+  enhancedMode,
   conversationId,
   projectId,
   ...options
@@ -159,6 +164,7 @@ export async function sendChatRequest({
     documentToolsEnabled: settings.documentPanelEnabled,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
     activeDocumentId: activeDocument?.id,
+    enhancedMode,
   });
 
   let accumulatedContent = "";
@@ -186,6 +192,7 @@ export async function sendChatRequest({
     webSearchSources: WebSearchSource[],
   ) => {
     const chatStore = useChatStore.getState();
+    const bufferScratchpad = chatStore.streamingBuffer?.scratchpadContent;
     if (webSearchSources.length > 0) {
       chatStore.completeStreamingWebSearchRounds();
     }
@@ -194,6 +201,7 @@ export async function sendChatRequest({
       memoryPack,
       memoryRetrieval,
       webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
+      scratchpadContent: bufferScratchpad,
     });
     chatStore.resetAfterRePrompt();
   };
@@ -281,9 +289,12 @@ export async function sendChatRequest({
   };
 
   const executeToolRoundLocal = async (toolCalls: ProviderToolCall[]) => {
+    const buffer = useChatStore.getState().streamingBuffer;
     return executeToolRound(toolCalls, {
       signal: options.signal,
       projectId,
+      conversationId,
+      assistantMessageId: buffer?.messageId,
       webSearchEnabled: effectiveWebSearchEnabled,
       webSearchAvailability,
       retryDocMutationWithLLM,
@@ -302,8 +313,9 @@ export async function sendChatRequest({
     accumulatedContextBlocks: string[],
   ): Promise<void> => {
     if (options.signal?.aborted) return;
-    if (round >= MAX_TOOL_ROUNDS) {
-      options.onError(`Stopped after ${MAX_TOOL_ROUNDS} tool rounds.`);
+    const maxRounds = enhancedMode ? MAX_TOOL_ROUNDS_ENHANCED : MAX_TOOL_ROUNDS;
+    if (round >= maxRounds) {
+      options.onError(`Stopped after ${maxRounds} tool rounds.`);
       const now = Date.now();
       finalizeToUser(
         {

@@ -35,6 +35,12 @@ type MessageBubbleProps = {
   isStreaming: boolean;
   layout: ChatMessageLayout;
   isLastAssistant?: boolean;
+  pendingQuestion?: {
+    toolCallId: string;
+    questions: Array<{ text: string; options?: string[] }>;
+    answers: Record<number, string>;
+  };
+  onResolveQuestion?: (answers: Record<number, string>) => void;
   onEdit?: (messageId: string) => void;
   onRegenerate?: (messageId: string) => void;
   onRetry?: (messageId: string) => void;
@@ -48,6 +54,8 @@ export const MessageBubble = memo(function MessageBubble({
   isStreaming,
   layout,
   isLastAssistant = false,
+  pendingQuestion,
+  onResolveQuestion,
   onEdit,
   onRegenerate,
   onRetry,
@@ -159,7 +167,11 @@ export const MessageBubble = memo(function MessageBubble({
           />
         )}
         {(message.toolStates?.length || hasWebSearchActivity(message.webSearchState)) ? (
-          <ToolCallList message={message} />
+          <ToolCallList
+            message={message}
+            pendingQuestion={pendingQuestion}
+            onResolveQuestion={onResolveQuestion}
+          />
         ) : null}
         {showReplyBubble && (
         <div

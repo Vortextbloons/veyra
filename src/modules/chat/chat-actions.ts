@@ -16,6 +16,7 @@ type ChatSendParams = {
   memoryEnabled: boolean;
   webSearchEnabled: boolean;
   codeExecutionEnabled: boolean;
+  enhancedMode: boolean;
   projectId?: string;
   signal: AbortSignal;
   onChunk: (chunk: string) => void;
@@ -50,6 +51,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     memoryEnabled,
     webSearchEnabled,
     codeExecutionEnabled,
+    enhancedMode,
     projectId,
     signal,
     onChunk,
@@ -89,6 +91,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     memoryEnabled,
     webSearchEnabled,
     codeExecutionEnabled,
+    enhancedMode,
     conversationId,
     projectId: projectId ?? undefined,
     onChunk,

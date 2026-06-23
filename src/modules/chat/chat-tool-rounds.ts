@@ -6,6 +6,8 @@ import {
   CODE_EXEC_TOOL_NAME,
   DOC_CREATE_TOOL_NAME,
   DOC_UPDATE_TOOL_NAME,
+  SCRATCHPAD_TOOL_NAME,
+  ASK_QUESTION_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
@@ -20,6 +22,8 @@ import {
   executeCodeExecutionCall,
   type CodeExecutionSettings,
 } from "@/modules/chat/tools/code-execution-tool";
+import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
+import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
 
 export type ToolRoundResult = {
   toolResultSections: string[];
@@ -31,6 +35,8 @@ export type ToolRoundResult = {
 type ToolRoundContext = {
   signal?: AbortSignal;
   projectId?: string;
+  conversationId?: string;
+  assistantMessageId?: string;
   webSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
   retryDocMutationWithLLM: (
@@ -48,6 +54,8 @@ export async function executeToolRound(
   const webSearchCalls = toolCalls.filter((call) => call.name === WEB_SEARCH_TOOL_NAME);
   const docReadCalls = toolCalls.filter((call) => call.name === DOC_READ_TOOL_NAME);
   const codeExecutionCalls = toolCalls.filter((call) => call.name === CODE_EXEC_TOOL_NAME);
+  const scratchpadCalls = toolCalls.filter((call) => call.name === SCRATCHPAD_TOOL_NAME);
+  const askQuestionCalls = toolCalls.filter((call) => call.name === ASK_QUESTION_TOOL_NAME);
   const docMutationCalls = toolCalls.filter(
     (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
   );
@@ -116,6 +124,17 @@ export async function executeToolRound(
 
   for (const call of codeExecutionCalls) {
     toolResultSections.push(await executeCodeExecutionCall(call, ctx.codeExecution));
+  }
+
+  for (const call of scratchpadCalls) {
+    toolResultSections.push(
+      executeScratchpadCall(call, ctx.conversationId ?? "", ctx.assistantMessageId ?? ""),
+    );
+  }
+
+  for (const call of askQuestionCalls) {
+    const result = await executeAskQuestionCall(call);
+    toolResultSections.push(result);
   }
 
   if (docMutationCalls.length > 0) {

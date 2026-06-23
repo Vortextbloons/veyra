@@ -18,6 +18,8 @@ import { AgentsPanel } from "@/modules/agents/components/agents-panel";
 import { Composer } from "@/modules/chat/components/composer";
 import { MessageBubble } from "@/modules/chat/components/message-bubble";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useChatStore } from "@/stores/chat-store";
+import { resolvePendingQuestion } from "@/modules/chat/tools/ask-question-tool";
 
 const VIRTUALIZE_AFTER_MESSAGES = 80;
 const ESTIMATED_MESSAGE_HEIGHT = 180;
@@ -89,6 +91,9 @@ export function ChatPanel({
   const [memory, setMemory] = useState(defaultMemoryEnabled);
   const reasoningEnabled = useSettingsStore((s) => s.reasoningEnabled);
   const setReasoningEnabled = useSettingsStore((s) => s.setReasoningEnabled);
+  const enhancedModeEnabled = useSettingsStore((s) => s.enhancedModeEnabled);
+  const setEnhancedModeEnabled = useSettingsStore((s) => s.setEnhancedModeEnabled);
+  const streamingBuffer = useChatStore((s) => s.streamingBuffer);
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
   const mode = controlledMode ?? internalMode;
   const agentSessionRunning = mode === "agents" && agentSessions.some((session) => session.status === "running");
@@ -317,6 +322,8 @@ export function ChatPanel({
                   isStreaming={m.id === streamingMessageId}
                   layout={layout}
                   isLastAssistant={m.id === lastAssistantId}
+                  pendingQuestion={m.id === streamingMessageId ? streamingBuffer?.pendingQuestion : undefined}
+                  onResolveQuestion={m.id === streamingMessageId ? resolvePendingQuestion : undefined}
                   onEdit={onEditMessage}
                   onRegenerate={onRegenerate}
                   onRetry={onRetry}
@@ -347,6 +354,8 @@ export function ChatPanel({
           onTriggerMemoryExtraction={onTriggerMemoryExtraction}
           reasoningEnabled={reasoningEnabled}
           onReasoningEnabledChange={setReasoningEnabled}
+          enhancedMode={enhancedModeEnabled}
+          onEnhancedModeChange={setEnhancedModeEnabled}
           mode={mode}
           onModeChange={handleModeChange}
           onSend={onSend}

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchRound, WebSearchState } from "@/modules/chat/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { normalizeAttachment } from "@/lib/message-attachments";
+import { abortPendingQuestion } from "@/modules/chat/pending-question-registry";
 
 type ConversationHydrationState = "loading" | "ready";
 
@@ -12,6 +13,12 @@ type StreamingBuffer = {
   reasoning: string;
   webSearchState?: WebSearchState;
   toolStates?: ToolCallState[];
+  scratchpadContent?: string;
+  pendingQuestion?: {
+    toolCallId: string;
+    questions: Array<{ text: string; options?: string[] }>;
+    answers: Record<number, string>;
+  };
 } | null;
 
 type ChatStore = {
@@ -44,6 +51,8 @@ type ChatStore = {
   upsertStreamingWebSearchRound: (round: WebSearchRound) => void;
   completeStreamingWebSearchRounds: () => void;
   setStreamingToolState: (state: ToolCallState) => void;
+  appendToScratchpad: (conversationId: string, messageId: string, content: string) => void;
+  setPendingQuestion: (question: { toolCallId: string; questions: Array<{ text: string; options?: string[] }>; answers: Record<number, string> } | null) => void;
   commitAssistantMessage: (
     conversationId: string,
     messageId: string,
@@ -242,6 +251,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     queueStreamingChunk(set, conversationId, messageId, chunk, "reasoning");
   },
   clearStreamingBuffer: () => {
+    abortPendingQuestion();
     flushPendingStreaming(set);
     set({ streamingBuffer: null, _skipNextClear: false });
   },
@@ -250,12 +260,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       set({ _skipNextClear: false });
       return;
     }
+    abortPendingQuestion();
     flushPendingStreaming(set);
     set({ streamingBuffer: null });
   },
   isBufferClearSkipped: () => get()._skipNextClear,
   skipNextBufferClear: () => set({ _skipNextClear: true }),
   resetAfterRePrompt: () => {
+    abortPendingQuestion();
     flushPendingStreaming(set);
     set({ streamingBuffer: null, _skipNextClear: false });
   },
@@ -310,6 +322,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       return { streamingBuffer: { ...buffer, toolStates: next } };
     });
   },
+  appendToScratchpad: (conversationId, messageId, content) => {
+    set((state) => {
+      const buffer = state.streamingBuffer;
+      if (!buffer || buffer.conversationId !== conversationId || buffer.messageId !== messageId) return state;
+      const existing = buffer.scratchpadContent ?? "";
+      const separator = existing ? "\n\n" : "";
+      return { streamingBuffer: { ...buffer, scratchpadContent: existing + separator + content } };
+    });
+  },
+  setPendingQuestion: (question) => {
+    set((state) => {
+      const buffer = state.streamingBuffer;
+      if (!buffer) return state;
+      return { streamingBuffer: { ...buffer, pendingQuestion: question ?? undefined } };
+    });
+  },
   commitAssistantMessage: (conversationId, messageId, patch = {}) => {
     flushPendingStreaming(set);
     set((state) => {
@@ -332,6 +360,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                   reasoning: patch.reasoning ?? buffer?.reasoning ?? message.reasoning,
                   webSearchState: patch.webSearchState ?? buffer?.webSearchState ?? message.webSearchState,
                   toolStates: patch.toolStates ?? buffer?.toolStates ?? message.toolStates,
+                  scratchpadContent: patch.scratchpadContent ?? buffer?.scratchpadContent ?? message.scratchpadContent,
                 }
               : message,
           ),

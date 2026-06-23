@@ -71,6 +71,7 @@ export function useChatPipeline({
   const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
   const defaultCodeExecutionEnabled = useSettingsStore((s) => s.codeExecutionEnabled);
   const codeExecutionEnabled = controlledCodeExecutionEnabled ?? defaultCodeExecutionEnabled;
+  const enhancedModeEnabled = useSettingsStore((s) => s.enhancedModeEnabled);
 
   const effectiveConnectivity = useConnectivityStore((state) => state.effectiveConnectivity);
   const webSearchAvailability = useIsFeatureAvailable("webSearch");
@@ -293,6 +294,7 @@ export function useChatPipeline({
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
               codeExecutionEnabled: effectiveCodeExecutionEnabled,
+              enhancedMode: enhancedModeEnabled,
               projectId,
               signal,
               onChunk: (chunk) => {
@@ -321,12 +323,14 @@ export function useChatPipeline({
                 const memoryPack = context?.memoryPack ?? null;
                 const memoryRetrieval = context?.memoryRetrieval;
                 const webSearchSources = context?.webSearchSources;
+                const scratchpadContent = context?.scratchpadContent;
                 commitAssistantMessage(conversationId, assistantMessage.id, {
                   performance: result.performance,
                   lmResponseId: result.responseId,
                   ...(memoryPack ? { memoryPack } : {}),
                   ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
                   ...(webSearchSources ? { webSearchSources } : {}),
+                  ...(scratchpadContent ? { scratchpadContent } : {}),
                 });
               },
             });
@@ -362,6 +366,7 @@ export function useChatPipeline({
       defaultMemoryEnabled,
       effectiveWebSearchEnabled,
       effectiveCodeExecutionEnabled,
+      enhancedModeEnabled,
       selectedModel,
       selectedProvider,
       setModelLoadProgress,
@@ -457,6 +462,7 @@ export function useChatPipeline({
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
               codeExecutionEnabled: effectiveCodeExecutionEnabled,
+              enhancedMode: enhancedModeEnabled,
               projectId,
               signal,
               onChunk: (chunk) => {
@@ -485,12 +491,14 @@ export function useChatPipeline({
                 const memoryPack = context?.memoryPack ?? null;
                 const memoryRetrieval = context?.memoryRetrieval;
                 const webSearchSources = context?.webSearchSources;
+                const scratchpadContent = context?.scratchpadContent;
                 commitAssistantMessage(activeConversationId, assistantMessage.id, {
                   performance: result.performance,
                   lmResponseId: result.responseId,
                   ...(memoryPack ? { memoryPack } : {}),
                   ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
                   ...(webSearchSources ? { webSearchSources } : {}),
+                  ...(scratchpadContent ? { scratchpadContent } : {}),
                 });
               },
             });
@@ -524,6 +532,7 @@ export function useChatPipeline({
       defaultMemoryEnabled,
       effectiveWebSearchEnabled,
       effectiveCodeExecutionEnabled,
+      enhancedModeEnabled,
       selectedModel,
       selectedProvider,
       setModelLoadProgress,
@@ -602,6 +611,7 @@ export function useChatPipeline({
               memoryEnabled,
               webSearchEnabled: effectiveWebSearchEnabled,
               codeExecutionEnabled: effectiveCodeExecutionEnabled,
+              enhancedMode: enhancedModeEnabled,
               projectId,
               signal,
               onChunk: (chunk) => {
@@ -630,12 +640,14 @@ export function useChatPipeline({
                 const memoryPack = context?.memoryPack ?? null;
                 const memoryRetrieval = context?.memoryRetrieval;
                 const webSearchSources = context?.webSearchSources;
+                const scratchpadContent = context?.scratchpadContent;
                 commitAssistantMessage(activeConversationId, assistantMessage.id, {
                   performance: result.performance,
                   lmResponseId: result.responseId,
                   ...(memoryPack ? { memoryPack } : {}),
                   ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
                   ...(webSearchSources ? { webSearchSources } : {}),
+                  ...(scratchpadContent ? { scratchpadContent } : {}),
                 });
               },
             });
@@ -669,6 +681,7 @@ export function useChatPipeline({
       defaultMemoryEnabled,
       effectiveWebSearchEnabled,
       effectiveCodeExecutionEnabled,
+      enhancedModeEnabled,
       removeLastMessagePair,
       selectedModel,
       selectedProvider,
@@ -768,5 +781,6 @@ export function useChatPipeline({
     editInitialValue,
     handleNewChat,
     handleDeleteChat,
+    enhancedModeEnabled,
   };
 }

@@ -5,6 +5,8 @@ export const DOC_CREATE_TOOL_NAME = "doc_create";
 export const DOC_READ_TOOL_NAME = "doc_read";
 export const DOC_UPDATE_TOOL_NAME = "doc_update";
 export const CODE_EXEC_TOOL_NAME = "code_execution";
+export const SCRATCHPAD_TOOL_NAME = "scratchpad_write";
+export const ASK_QUESTION_TOOL_NAME = "ask_question";
 
 const DOCUMENT_TYPES = [
   "document",
@@ -26,6 +28,7 @@ export function buildProviderTools(options: {
   documentToolsEnabled: boolean;
   codeExecutionEnabled: boolean;
   activeDocumentId?: string;
+  enhancedMode?: boolean;
 }): ProviderToolDefinition[] {
   const tools: ProviderToolDefinition[] = [];
 
@@ -147,6 +150,65 @@ export function buildProviderTools(options: {
             },
           },
           required: ["documentId"],
+          additionalProperties: false,
+        },
+      },
+    });
+  }
+
+  if (options.enhancedMode) {
+    tools.push({
+      type: "function",
+      function: {
+        name: SCRATCHPAD_TOOL_NAME,
+        description:
+          "Write notes, findings, or intermediate results to a working scratchpad. Use this to keep track of information across multiple tool rounds. Notes are visible to you but hidden from the user unless expanded.",
+        parameters: {
+          type: "object",
+          properties: {
+            content: {
+              type: "string",
+              description: "Content to write to the scratchpad. Appends to existing notes.",
+            },
+          },
+          required: ["content"],
+          additionalProperties: false,
+        },
+      },
+    });
+
+    tools.push({
+      type: "function",
+      function: {
+        name: ASK_QUESTION_TOOL_NAME,
+        description:
+          "Pause and ask the user one or more questions for clarification before proceeding. Use when you are uncertain about intent, need to choose between approaches, or require missing information. You may ask multiple questions in a single call — the user answers all before you continue.",
+        parameters: {
+          type: "object",
+          properties: {
+            questions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  text: {
+                    type: "string",
+                    description: "The question to ask.",
+                  },
+                  options: {
+                    type: "array",
+                    items: { type: "string" },
+                    description:
+                      "Optional multiple-choice options. If provided, the user picks one. If omitted, the user types a free-text answer.",
+                  },
+                },
+                required: ["text"],
+              },
+              description:
+                "Array of questions to ask. Each can be multiple-choice (with options) or free-text (without options).",
+            },
+          },
+          required: ["questions"],
           additionalProperties: false,
         },
       },

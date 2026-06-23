@@ -2,13 +2,21 @@ import type { ChatMessage } from "@/modules/chat/chat-types";
 import { CodeExecutionBlock } from "@/modules/chat/components/code-execution-block";
 import { ToolCallIndicator } from "@/modules/chat/components/tool-call-indicator";
 import { WebSearchToolCallBlock } from "@/modules/chat/components/web-search-block";
+import { ScratchpadBlock } from "@/modules/chat/components/scratchpad-block";
+import { AskQuestionBlock } from "@/modules/chat/components/ask-question-block";
 import { webSearchRoundForToolCall } from "@/lib/web-search-state";
 
 type ToolCallListProps = {
   message: ChatMessage;
+  pendingQuestion?: {
+    toolCallId: string;
+    questions: Array<{ text: string; options?: string[] }>;
+    answers: Record<number, string>;
+  };
+  onResolveQuestion?: (answers: Record<number, string>) => void;
 };
 
-export function ToolCallList({ message }: ToolCallListProps) {
+export function ToolCallList({ message, pendingQuestion, onResolveQuestion }: ToolCallListProps) {
   if (!message.toolStates?.length) return null;
 
   const webSearchToolStates = message.toolStates.filter(
@@ -39,6 +47,29 @@ export function ToolCallList({ message }: ToolCallListProps) {
 
         if (toolState.name === "code_execution") {
           return <CodeExecutionBlock key={toolState.id} state={toolState} />;
+        }
+
+        if (toolState.name === "scratchpad_write") {
+          return (
+            <ScratchpadBlock
+              key={toolState.id}
+              state={toolState}
+              scratchpadContent={message.scratchpadContent}
+            />
+          );
+        }
+
+        if (toolState.name === "ask_question") {
+          const isPending = Boolean(pendingQuestion?.toolCallId === toolState.id && onResolveQuestion);
+          return (
+            <AskQuestionBlock
+              key={toolState.id}
+              state={toolState}
+              questions={isPending ? pendingQuestion?.questions : undefined}
+              isPending={isPending}
+              onAnswer={onResolveQuestion ?? (() => {})}
+            />
+          );
         }
 
         return <ToolCallIndicator key={toolState.id} state={toolState} />;
