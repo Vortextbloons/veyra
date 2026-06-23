@@ -13,6 +13,7 @@ export type WebSearchSliceState = {
   webSearchFetchCount: number;
   webSearchPerPageTimeoutSecs: number;
   webSearchFetchMaxCharsPerSource: number;
+  webSearchSpeedPreset: "normal" | "fast";
   advancedSearchBundleEnabled: boolean;
   advancedSearchMultiQueryEnabled: boolean;
   advancedSearchFusionEnabled: boolean;
@@ -42,6 +43,7 @@ export type WebSearchSliceActions = {
   setWebSearchFetchCount: (n: number) => void;
   setWebSearchPerPageTimeoutSecs: (secs: number) => void;
   setWebSearchFetchMaxCharsPerSource: (n: number) => void;
+  setWebSearchSpeedPreset: (preset: "normal" | "fast") => void;
   setAdvancedSearchBundleEnabled: (enabled: boolean) => void;
   setAdvancedSearchMultiQueryEnabled: (enabled: boolean) => void;
   setAdvancedSearchFusionEnabled: (enabled: boolean) => void;
@@ -71,6 +73,7 @@ export const DEFAULT_WEB_SEARCH_STATE: WebSearchSliceState = {
   webSearchFetchCount: 5,
   webSearchPerPageTimeoutSecs: 8,
   webSearchFetchMaxCharsPerSource: 8000,
+  webSearchSpeedPreset: "normal",
   advancedSearchBundleEnabled: true,
   advancedSearchMultiQueryEnabled: true,
   advancedSearchFusionEnabled: true,
@@ -105,6 +108,7 @@ export const createWebSearchSlice: StateCreator<WebSearchSlice, [], [], WebSearc
     set({ webSearchPerPageTimeoutSecs }),
   setWebSearchFetchMaxCharsPerSource: (webSearchFetchMaxCharsPerSource) =>
     set({ webSearchFetchMaxCharsPerSource }),
+  setWebSearchSpeedPreset: (webSearchSpeedPreset) => set({ webSearchSpeedPreset }),
   setAdvancedSearchBundleEnabled: (advancedSearchBundleEnabled) =>
     set({ advancedSearchBundleEnabled }),
   setAdvancedSearchMultiQueryEnabled: (advancedSearchMultiQueryEnabled) =>

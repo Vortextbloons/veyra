@@ -3,16 +3,23 @@ import { FileText, Globe, TerminalSquare } from "lucide-react";
 import { PanelShell } from "@/app/components/right-panel";
 import { useSettingsStore } from "@/stores/settings-store";
 
-type ToolAccent = "emerald" | "amber";
+type ToolAccent = "emerald" | "amber" | "cyan";
 
-const TOOL_ACCENT_STYLES: Record<ToolAccent, { on: string; icon: string }> = {
+const TOOL_ACCENT_STYLES: Record<ToolAccent, { on: string; icon: string; pill: string }> = {
   emerald: {
-    on: "bg-emerald-500/10 text-emerald-300 ring-1 ring-inset ring-emerald-500/20 hover:bg-emerald-500/15",
-    icon: "text-emerald-300",
+    on: "border-emerald-500/20 bg-emerald-500/5 text-emerald-300",
+    icon: "text-emerald-400",
+    pill: "bg-emerald-500/15 text-emerald-300",
   },
   amber: {
-    on: "bg-amber-500/10 text-amber-300 ring-1 ring-inset ring-amber-500/20 hover:bg-amber-500/15",
-    icon: "text-amber-300",
+    on: "border-amber-500/20 bg-amber-500/5 text-amber-300",
+    icon: "text-amber-400",
+    pill: "bg-amber-500/15 text-amber-300",
+  },
+  cyan: {
+    on: "border-cyan-500/20 bg-cyan-500/5 text-cyan-300",
+    icon: "text-cyan-400",
+    pill: "bg-cyan-500/15 text-cyan-300",
   },
 };
 
@@ -46,16 +53,18 @@ export function ToolRow({
       onClick={() => {
         if (!disabled) onChange(!on);
       }}
-      className={`flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[12px] transition-colors ${
+      className={`flex h-11 w-full items-center gap-2.5 rounded-xl border px-3 text-left text-[12.5px] transition-colors ${
         disabled
-          ? "cursor-not-allowed opacity-50"
+          ? "cursor-not-allowed opacity-50 border-[var(--color-border)]"
           : "cursor-pointer"
       } ${
-        on ? accentStyles.on : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
+        on
+          ? accentStyles.on
+          : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
       }`}
     >
       <span
-        className={`grid size-4 place-items-center transition-colors ${on ? accentStyles.icon : "text-[var(--color-text-dim)]"}`}
+        className={`grid size-5 place-items-center transition-colors ${on ? accentStyles.icon : "text-[var(--color-text-dim)]"}`}
       >
         {icon}
       </span>
@@ -127,6 +136,34 @@ export function CompactToolToggle({
   );
 }
 
+function WebSearchSpeedToggle() {
+  const preset = useSettingsStore((s) => s.webSearchSpeedPreset);
+  const setPreset = useSettingsStore((s) => s.setWebSearchSpeedPreset);
+  const accent = preset === "fast" ? "cyan" : "emerald";
+  const accentStyles = TOOL_ACCENT_STYLES[accent];
+
+  return (
+    <div role="radiogroup" aria-label="Search speed" className="flex rounded-xl border border-[var(--color-border)] p-0.5">
+      {(["normal", "fast"] as const).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          role="radio"
+          aria-checked={preset === mode}
+          onClick={() => setPreset(mode)}
+          className={`flex-1 rounded-lg py-1.5 text-[11.5px] font-medium transition-colors ${
+            preset === mode
+              ? accentStyles.pill
+              : "text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+          }`}
+        >
+          {mode === "normal" ? "Normal" : "Fast"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ToolsPanel({
   webSearch,
   onWebSearchChange,
@@ -148,18 +185,22 @@ export function ToolsPanel({
 }) {
   const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
   const setDocumentPanelEnabled = useSettingsStore((s) => s.setDocumentPanelEnabled);
+  const speedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
+  const webSearchOn = !webSearchDisabled && webSearch;
 
   return (
     <PanelShell title="Tools">
-      <div className="space-y-0.5">
+      <div className="space-y-2">
         <ToolRow
           icon={<Globe className="size-3.5" />}
           label="Web Search"
-          on={webSearchDisabled ? false : webSearch}
+          on={webSearchOn}
           onChange={onWebSearchChange}
           disabled={webSearchDisabled}
           disabledReason={webSearchDisabledReason}
+          accent={webSearchOn && speedPreset === "fast" ? "cyan" : "emerald"}
         />
+        {webSearchOn && <WebSearchSpeedToggle />}
         <ToolRow
           icon={<TerminalSquare className="size-3.5" />}
           label="Code Execution"

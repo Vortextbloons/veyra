@@ -123,6 +123,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     webSearchFetchCount: state.webSearchFetchCount,
     webSearchPerPageTimeoutSecs: state.webSearchPerPageTimeoutSecs,
     webSearchFetchMaxCharsPerSource: state.webSearchFetchMaxCharsPerSource,
+    webSearchSpeedPreset: state.webSearchSpeedPreset,
     advancedSearchBundleEnabled: state.advancedSearchBundleEnabled,
     advancedSearchMultiQueryEnabled: state.advancedSearchMultiQueryEnabled,
     advancedSearchFusionEnabled: state.advancedSearchFusionEnabled,

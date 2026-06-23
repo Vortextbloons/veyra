@@ -112,7 +112,7 @@ export function ContextBreakdownPanel({
   return (
     <div className="mt-3 space-y-3 border-t border-[var(--color-border)] pt-3">
       <div className="max-h-[320px] overflow-y-auto scrollbar-thin">
-        <ContextBlockSection label="System" count={systemBlocks.length} defaultOpen>
+        <ContextBlockSection label="System" count={systemBlocks.length}>
           {systemBlocks.map((block, i) => (
             <ContextBlockRow
               key={`sys-${i}`}
@@ -122,7 +122,7 @@ export function ContextBreakdownPanel({
           ))}
         </ContextBlockSection>
 
-        <ContextBlockSection label="Messages" count={includedBlocks.length} defaultOpen>
+        <ContextBlockSection label="Messages" count={includedBlocks.length}>
           {includedBlocks.map((block, i) => (
             <ContextBlockRow
               key={`msg-${i}`}

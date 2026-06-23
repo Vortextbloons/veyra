@@ -33,7 +33,7 @@ export function PanelShell({
   return (
     <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[12.5px] font-medium text-[var(--color-text)]">
+        <h3 className="text-[15px] font-semibold text-[var(--color-text)]">
           {title}
         </h3>
         {action}
@@ -70,6 +70,7 @@ export function RightPanel({
   };
   const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
   const setDocumentPanelEnabled = useSettingsStore((s) => s.setDocumentPanelEnabled);
+  const speedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
 
   const activeNav = useSettingsStore((s) => s.activeNav);
   const activeProject = useProjectStore((s) => s.activeProject());
@@ -123,6 +124,7 @@ export function RightPanel({
                 onChange={(on) => onWebSearchChange?.(on)}
                 disabled={webSearchDisabled}
                 disabledReason={webSearchDisabledReason}
+                accent={webSearchEnabled && speedPreset === "fast" ? "cyan" : "emerald"}
               />
               <CompactToolToggle
                 icon={<TerminalSquare className="size-3.5" />}

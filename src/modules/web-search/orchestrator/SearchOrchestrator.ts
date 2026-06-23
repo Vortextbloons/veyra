@@ -103,15 +103,20 @@ export async function runSearch(
     : undefined;
   const projectSettings = projectRecord?.settings;
 
-  const fetchEnabled =
-    projectSettings?.webSearchFetchEnabled ?? settings.webSearchFetchEnabled;
-  const fetchCount = Math.max(
-    1,
-    Math.min(
-      10,
-      projectSettings?.webSearchFetchCount ?? settings.webSearchFetchCount,
-    ),
-  );
+  const isFast = settings.webSearchSpeedPreset === "fast";
+
+  const fetchEnabled = isFast
+    ? false
+    : (projectSettings?.webSearchFetchEnabled ?? settings.webSearchFetchEnabled);
+  const fetchCount = isFast
+    ? 0
+    : Math.max(
+        1,
+        Math.min(
+          10,
+          projectSettings?.webSearchFetchCount ?? settings.webSearchFetchCount,
+        ),
+      );
   const perPageTimeoutSecs = Math.max(
     2,
     Math.min(
@@ -128,17 +133,19 @@ export async function runSearch(
         settings.webSearchFetchMaxCharsPerSource,
     ),
   );
-  const tokenLimit = Math.max(
-    500,
-    Math.min(
-      8000,
-      projectSettings?.webSearchContextTokenLimit ??
-        settings.webSearchContextTokenLimit,
-    ),
-  );
+  const tokenLimit = isFast
+    ? 1500
+    : Math.max(
+        500,
+        Math.min(
+          8000,
+          projectSettings?.webSearchContextTokenLimit ??
+            settings.webSearchContextTokenLimit,
+        ),
+      );
 
   const run = async (): Promise<SearchContextBundle> => {
-    const maxResults = settings.webSearchMaxResults ?? 8;
+    const maxResults = isFast ? 3 : (settings.webSearchMaxResults ?? 8);
     const config: SearXNGProviderConfig = {
       id: "searxng-default",
       name: "SearXNG",
@@ -151,9 +158,9 @@ export async function runSearch(
 
     const provider = new SearXNGProvider(config);
     const directLimit = Math.min(3, maxResults);
-    const fusedSearchEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchFusionEnabled !== false;
-    const multiQueryEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchMultiQueryEnabled !== false && multiQuery !== false;
-    const fallbackEnabled = settings.advancedSearchBundleEnabled && settings.advancedSearchAdaptiveFallbackEnabled !== false;
+    const fusedSearchEnabled = !isFast && settings.advancedSearchBundleEnabled && settings.advancedSearchFusionEnabled !== false;
+    const multiQueryEnabled = !isFast && settings.advancedSearchBundleEnabled && settings.advancedSearchMultiQueryEnabled !== false && multiQuery !== false;
+    const fallbackEnabled = !isFast && settings.advancedSearchBundleEnabled && settings.advancedSearchAdaptiveFallbackEnabled !== false;
     const rankingOptions = {
       freshnessBoost: fusedSearchEnabled && settings.advancedSearchFreshnessBoostEnabled !== false,
       qualityFilter: fusedSearchEnabled && settings.advancedSearchQualityFilterEnabled !== false,
@@ -161,7 +168,7 @@ export async function runSearch(
     const plannedQueries: PlannedSearchQuery[] = multiQueryEnabled
       ? planSearchQueries(query, Math.min(6, Math.max(2, Math.ceil(maxResults / 2))))
       : [{ query, lane: "general" }];
-    const direct = resolveDirectSearchProviders({
+    const direct = isFast ? { arxiv: false, wikipedia: false } : resolveDirectSearchProviders({
       advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
       bundleArxivSearch: settings.bundleArxivSearch,
       bundleWikipediaSearch: settings.bundleWikipediaSearch,
