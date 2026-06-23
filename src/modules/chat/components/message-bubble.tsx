@@ -11,6 +11,7 @@ import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
 import { MessageAttachmentsPreview } from "@/modules/chat/components/composer";
 import { MessageToolbar } from "@/modules/chat/components/message-toolbar";
 import { ToolCallList } from "@/modules/chat/components/tool-call-list";
+import { ThinkingIndicator } from "@/modules/chat/components/thinking-indicator";
 import { ModelIcon } from "@/components/model-icon";
 import { useProviderStore } from "@/stores/provider-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
@@ -118,6 +119,7 @@ export const MessageBubble = memo(function MessageBubble({
   const reasoningOnlyStreaming = isStreaming && hasReasoning && !body;
   const hasToolActivity = (message.toolStates?.length ?? 0) > 0 || hasWebSearchActivity(message.webSearchState);
   const showReplyBubble = Boolean(body) || (isStreaming && !reasoningOnlyStreaming && !hasToolActivity);
+  const showThinking = isStreaming && !body && !reasoningOnlyStreaming;
   const showPulseInReply = isStreaming && !reasoningOnlyStreaming && Boolean(body);
 
   return (
@@ -163,11 +165,15 @@ export const MessageBubble = memo(function MessageBubble({
         <div
           className={`rounded-2xl rounded-tl-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-2.5 text-[var(--color-text)] shadow-[0_1px_0_rgba(255,255,255,0.03)_inset transition-[font-size] duration-200 ease-out ${layout.messageText}`}
         >
-          <Suspense>
-            <MarkdownRenderer className="leading-snug">
-              {body}
-            </MarkdownRenderer>
-          </Suspense>
+          {showThinking && !body ? (
+            <ThinkingIndicator />
+          ) : (
+            <Suspense>
+              <MarkdownRenderer className="leading-snug">
+                {body}
+              </MarkdownRenderer>
+            </Suspense>
+          )}
           {showPulseInReply && (
             <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
           )}
