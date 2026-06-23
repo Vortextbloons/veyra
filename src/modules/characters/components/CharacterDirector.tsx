@@ -5,6 +5,7 @@
 // per character id (see ai-assist-store).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   X,
   Send,
@@ -38,9 +39,11 @@ export function CharacterDirector({ character, onClose, onApplied }: CharacterDi
   useCancelOnUnmount(runner.jobId);
 
   const updateCharacter = useCharacterStore((s) => s.updateCharacter);
-  const pendingChanges = useCharacterAssistStore((s) =>
-    Object.values(s.pendingChanges).filter(
-      (c) => c.characterId === character.id && c.status === "pending",
+  const pendingChanges = useCharacterAssistStore(
+    useShallow((s) =>
+      Object.values(s.pendingChanges).filter(
+        (c) => c.characterId === character.id && c.status === "pending",
+      ),
     ),
   );
   const markPendingChangeApplied = useCharacterAssistStore((s) => s.markPendingChangeApplied);

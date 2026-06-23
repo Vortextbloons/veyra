@@ -381,7 +381,7 @@ function App() {
           contextBreakdown={displayContextBreakdown}
           collapsed={rightPanelCollapsed}
           onCollapsedChange={setRightPanelCollapsed}
-          hidden={!isChatMode && workspaceChatMode !== "agents" && activeNav !== "projects"}
+          hidden={!isChatMode}
           webSearchEnabled={webSearchEnabled}
           onWebSearchChange={setWebSearchEnabled}
           webSearchDisabled={!webSearchAvailability.available}
