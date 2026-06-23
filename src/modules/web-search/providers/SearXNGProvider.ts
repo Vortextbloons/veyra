@@ -68,10 +68,17 @@ const SPAM_KEYWORDS = [
 const MIN_SCORE_THRESHOLD = 0.1;
 
 function isBlockedUrl(urlString: string): boolean {
-  const lower = urlString.toLowerCase();
-  for (const tld of SPAM_TLDS) {
-    if (lower.includes(tld)) return true;
+  let hostname: string;
+  try {
+    hostname = new URL(urlString).hostname.toLowerCase();
+  } catch {
+    return false;
   }
+  for (const tld of SPAM_TLDS) {
+    const suffix = tld.slice(1);
+    if (hostname === suffix || hostname.endsWith(`.${suffix}`)) return true;
+  }
+  const lower = urlString.toLowerCase();
   for (const keyword of SPAM_KEYWORDS) {
     if (lower.includes(keyword)) return true;
   }

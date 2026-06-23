@@ -42,7 +42,7 @@ export function planSearchQueries(query: string, maxQueries: number): PlannedSea
   addUnique(out, seen, `${core} overview analysis`, "general");
   if (maxQueries <= out.length) return out.slice(0, maxQueries);
 
-  addUnique(out, seen, `${core} latest 2026`, "recent");
+  addUnique(out, seen, `${core} latest ${new Date().getFullYear()}`, "recent");
   if (maxQueries <= out.length) return out.slice(0, maxQueries);
 
   addUnique(out, seen, `${core} research study evidence`, "academic");

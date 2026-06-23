@@ -47,9 +47,9 @@ function hostname(urlString: string): string {
 function tokenize(text: string): Set<string> {
   return new Set(
     text.toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, " ")
-      .split(/\s+/)
-      .filter((token) => token.length > 2),
+      .split(/[\s\-_]+/)
+      .map((t) => t.replace(/^\p{P}+|\p{P}+$/gu, ""))
+      .filter((token) => token.length > 1),
   );
 }
 

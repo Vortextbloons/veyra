@@ -1,4 +1,5 @@
 use crate::web_search::fetch_types::MIN_CONTENT_CHARS;
+use htmd::convert as htmd_convert;
 use readability::extractor::extract as readability_extract;
 use scraper::{Html, Selector};
 
@@ -67,7 +68,8 @@ pub(crate) fn extract_text_from_html_body(
     let body = html.to_string();
     match readability_extract(&mut body.as_bytes(), parsed) {
         Ok(p) if p.content.trim().len() >= MIN_CONTENT_CHARS => {
-            return Ok((p.content, Some(p.title)));
+            let content = htmd_convert(&p.content).unwrap_or(p.content);
+            return Ok((content, Some(p.title)));
         }
         Ok(_) | Err(_) => {}
     }
@@ -95,7 +97,7 @@ pub(crate) fn extract_text_from_html_body(
 /// headings, and blockquotes, joined with double newlines.
 fn extract_paragraphs_fallback(html: &str) -> String {
     let document = Html::parse_document(html);
-    let sel = Selector::parse("p, li, h1, h2, h3, h4, h5, h6, blockquote, pre")
+    let sel = Selector::parse("p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, article, section, td, dt, dd, figcaption")
         .expect("static selector must parse");
     let mut out = String::new();
     for element in document.select(&sel) {
@@ -116,36 +118,40 @@ fn extract_paragraphs_fallback(html: &str) -> String {
     out
 }
 
-/// Last-resort regex extraction of <p> blocks when scraper yields nothing.
+/// Last-resort regex extraction of <p> and other block elements when scraper yields nothing.
 fn extract_paragraphs_regex(html: &str) -> String {
     let mut out = String::new();
     let lower = html.to_lowercase();
+    let tags: &[&str] = &["<p", "<article", "<section", "<td", "<li", "<h1", "<h2", "<h3", "<h4", "<h5", "<h6"];
     let mut i = 0usize;
-    while i < lower.len() {
-        if let Some(pos) = find_subslice(lower.as_bytes()[i..].as_ref(), b"<p") {
-            let abs = i + pos;
-            if let Some(end_rel) = lower[abs..].find("</p>") {
-                let block = &html[abs..abs + end_rel];
-                let mut text = String::new();
-                for part in block
-                    .split('<')
-                    .skip(1)
-                    .filter_map(|s| s.split_once('>').map(|(_, after)| after))
-                {
-                    if !text.is_empty() {
-                        text.push(' ');
+    'outer: while i < lower.len() {
+        for tag in tags {
+            if let Some(pos) = find_subslice(lower.as_bytes()[i..].as_ref(), tag.as_bytes()) {
+                let abs = i + pos;
+                let close_tag = format!("</{}>", &tag[1..]);
+                if let Some(end_rel) = lower[abs..].find(&close_tag) {
+                    let block = &html[abs..abs + end_rel];
+                    let mut text = String::new();
+                    for part in block
+                        .split('<')
+                        .skip(1)
+                        .filter_map(|s| s.split_once('>').map(|(_, after)| after))
+                    {
+                        if !text.is_empty() {
+                            text.push(' ');
+                        }
+                        text.push_str(part);
                     }
-                    text.push_str(part);
-                }
-                let cleaned = compact_whitespace(&text);
-                if cleaned.len() >= 20 {
-                    if !out.is_empty() {
-                        out.push_str("\n\n");
+                    let cleaned = compact_whitespace(&text);
+                    if cleaned.len() >= 20 {
+                        if !out.is_empty() {
+                            out.push_str("\n\n");
+                        }
+                        out.push_str(&cleaned);
                     }
-                    out.push_str(&cleaned);
+                    i = abs + end_rel + close_tag.len();
+                    continue 'outer;
                 }
-                i = abs + end_rel + 4;
-                continue;
             }
         }
         break;

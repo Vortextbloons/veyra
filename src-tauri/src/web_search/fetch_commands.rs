@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::Semaphore;
+use tokio::time::sleep;
 
 use crate::web_search::fetch_cache;
 use crate::web_search::fetch_documents::{
@@ -19,6 +20,12 @@ use crate::web_search::fetch_utils::{
 };
 use crate::web_search::fetch_wayback::try_wayback_fallback;
 use crate::web_search::fetch_youtube::{handle_youtube, is_youtube_url};
+
+const FETCH_MAX_RETRIES: u32 = 2;
+
+fn fetch_retry_delay(attempt: u32, retry_after: Option<Duration>) -> Duration {
+    retry_after.unwrap_or_else(|| Duration::from_secs(2u64.pow(attempt.min(3))))
+}
 
 async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let url = req.url.clone();
@@ -94,55 +101,79 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     }
 
     let timeout = Duration::from_secs(req.timeout_secs.clamp(2, 30));
-    let response = match tokio::time::timeout(
-        timeout,
-        FETCH_CLIENT.get(parsed.clone()).timeout(timeout).send(),
-    )
-    .await
-    {
-        Ok(Ok(r)) => r,
-        Ok(Err(e)) => {
-            let reason = if e.is_timeout() {
-                "Request timed out".to_string()
-            } else {
-                format!("Network error: {e}")
-            };
-            let status = if e.is_timeout() { "timeout" } else { "network" };
-            // Network/timeout error — try Wayback fallback
-            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
-                return recovered;
+
+    enum FetchOutcome {
+        Ok(reqwest::Response),
+        Err(String, String),
+    }
+
+    let outcome = 'retry: {
+        for attempt in 0..=FETCH_MAX_RETRIES {
+            let result = tokio::time::timeout(
+                timeout,
+                FETCH_CLIENT.get(parsed.clone()).timeout(timeout).send(),
+            )
+            .await;
+            match result {
+                Ok(Ok(r)) => {
+                    let status = r.status();
+                    if status.is_success() {
+                        break 'retry FetchOutcome::Ok(r);
+                    }
+                    let retryable =
+                        status.as_u16() == 429 || status.as_u16() == 408 || status.is_server_error();
+                    if retryable && attempt < FETCH_MAX_RETRIES {
+                        let retry_after = r
+                            .headers()
+                            .get(reqwest::header::RETRY_AFTER)
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|s| s.parse::<u64>().ok())
+                            .map(Duration::from_secs);
+                        sleep(fetch_retry_delay(attempt, retry_after)).await;
+                        continue;
+                    }
+                    break 'retry FetchOutcome::Err(
+                        "http".to_string(),
+                        format!("HTTP {}", status.as_u16()),
+                    );
+                }
+                Ok(Err(e)) => {
+                    let reason = if e.is_timeout() {
+                        "Request timed out".to_string()
+                    } else {
+                        format!("Network error: {e}")
+                    };
+                    let status = if e.is_timeout() { "timeout" } else { "network" };
+                    if attempt < FETCH_MAX_RETRIES {
+                        sleep(fetch_retry_delay(attempt, None)).await;
+                        continue;
+                    }
+                    break 'retry FetchOutcome::Err(status.to_string(), reason);
+                }
+                Err(_) => {
+                    if attempt < FETCH_MAX_RETRIES {
+                        sleep(fetch_retry_delay(attempt, None)).await;
+                        continue;
+                    }
+                    break 'retry FetchOutcome::Err(
+                        "timeout".to_string(),
+                        format!("Request timed out after {}s", req.timeout_secs),
+                    );
+                }
             }
-            return make_error_page(&url, max_chars, status, &reason, &req.cache_dir);
         }
-        Err(_) => {
-            // Timeout — try Wayback fallback
-            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
-                return recovered;
-            }
-            return make_error_page(
-                &url,
-                max_chars,
-                "timeout",
-                &format!("Request timed out after {}s", req.timeout_secs),
-                &req.cache_dir,
-            );
-        }
+        FetchOutcome::Err("retry".to_string(), "all attempts failed".to_string())
     };
 
-    let http_status = response.status();
-    if !http_status.is_success() {
-        // HTTP error — try Wayback fallback
-        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
-            return recovered;
+    let response = match outcome {
+        FetchOutcome::Ok(r) => r,
+        FetchOutcome::Err(status, reason) => {
+            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+                return recovered;
+            }
+            return make_error_page(&url, max_chars, &status, &reason, &req.cache_dir);
         }
-        return make_error_page(
-            &url,
-            max_chars,
-            "http",
-            &format!("HTTP {}", http_status.as_u16()),
-            &req.cache_dir,
-        );
-    }
+    };
 
     let content_type = response
         .headers()
