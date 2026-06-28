@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Bot, User } from "lucide-react";
+import { Bot } from "lucide-react";
 import type { AiAssistMessage } from "../document-ai";
 import { cn } from "@/lib/utils";
 
@@ -37,11 +37,6 @@ export function AiMessageBubble({ message }: AiMessageBubbleProps) {
           </Suspense>
         )}
       </div>
-      {isUser && (
-        <div className="grid size-6 shrink-0 place-items-center rounded-full bg-white/10">
-          <User className="size-3.5 text-[var(--color-text-dim)]" />
-        </div>
-      )}
     </div>
   );
 }

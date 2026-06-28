@@ -81,9 +81,6 @@ export const MessageBubble = memo(function MessageBubble({
           />
         )}
         <div className="group/message flex flex-row-reverse gap-3">
-          <div className="grid size-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-500 to-rose-500 text-[11px] font-semibold text-white ring-2 ring-[var(--color-bg)]">
-            U
-          </div>
           <div
             className={`flex min-w-0 flex-col items-end transition-[max-width] duration-200 ease-out ${layout.userMaxW}`}
           >
