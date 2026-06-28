@@ -335,7 +335,8 @@ pub fn connect_gmail_with_config(
             || error.contains("insufficient authentication scopes")
             || error.contains("Insufficient Permission")
         {
-            return Ok(account);
+            let _ = remove_account(conn, account.id.clone());
+            return Err(gmail_scope_setup_error());
         }
         let _ = remove_account(conn, account.id.clone());
         return Err(error);
@@ -370,6 +371,17 @@ fn wait_for_oauth_code(listener: TcpListener) -> Result<String, String> {
     let first_line = request.lines().next().unwrap_or_default();
     let path = first_line.split_whitespace().nth(1).unwrap_or_default();
     let query = path.split_once('?').map(|(_, q)| q).unwrap_or_default();
+    if let Some(error) = query_param(query, "error") {
+        let description = query_param(query, "error_description")
+            .unwrap_or_else(|| "Google did not include more detail".to_string());
+        let response = format!(
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html\r\n\r\n<html><body><h1>Gmail connection failed</h1><p>{}: {}</p><p>You can return to Veyra.</p></body></html>",
+            html_escape(&error),
+            html_escape(&description)
+        );
+        let _ = stream.write_all(response.as_bytes());
+        return Err(format!("Gmail OAuth failed: {error}: {description}"));
+    }
     let code = query
         .split('&')
         .find_map(|part| {
@@ -384,11 +396,33 @@ fn wait_for_oauth_code(listener: TcpListener) -> Result<String, String> {
     Ok(code)
 }
 
+fn query_param(query: &str, name: &str) -> Option<String> {
+    query.split('&').find_map(|part| {
+        let (key, value) = part.split_once('=')?;
+        (key == name)
+            .then(|| urlencoding::decode(value).ok().map(|v| v.into_owned()))
+            .flatten()
+    })
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 #[derive(Debug, Clone)]
 struct GmailToken {
     access_token: String,
     refresh_token: String,
     expires_at: i64,
+}
+
+fn gmail_scope_setup_error() -> String {
+    "Google connected, but Gmail scopes were not granted. In Google Cloud project `gmal`, make sure the OAuth consent screen includes gmail.modify, gmail.send, and gmail.compose, add your Gmail address as a test user if the app is in Testing, revoke the old Veyra grant from your Google Account, then reconnect.".to_string()
 }
 
 fn gmail_oauth_config(conn: &Connection) -> Result<(String, String), String> {
@@ -413,11 +447,9 @@ fn exchange_gmail_code(
             ("redirect_uri", redirect_uri),
         ])
         .send()
-        .map_err(|e| e.to_string())?
-        .error_for_status()
-        .map_err(|e| e.to_string())?
-        .json()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+        .and_then(google_response_json)?;
+    validate_gmail_token_scope(&value)?;
     Ok(GmailToken {
         access_token: value
             .get("access_token")
@@ -441,6 +473,22 @@ fn exchange_gmail_code(
     })
 }
 
+fn validate_gmail_token_scope(value: &Value) -> Result<(), String> {
+    let Some(scope) = value.get("scope").and_then(Value::as_str) else {
+        return Ok(());
+    };
+    let scopes: std::collections::HashSet<&str> = scope.split_whitespace().collect();
+    let required = [
+        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/gmail.compose",
+        "https://www.googleapis.com/auth/gmail.send",
+    ];
+    if required.iter().all(|scope| scopes.contains(scope)) {
+        return Ok(());
+    }
+    Err(gmail_scope_setup_error())
+}
+
 fn refresh_gmail_token(conn: &Connection, account_id: &str) -> Result<String, String> {
     let existing = conn.query_row("SELECT access_token, refresh_token, expires_at FROM email_account_tokens WHERE account_id = ?1", params![account_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?))).map_err(|e| e.to_string())?;
     if existing.2 > now_ms() + 60_000 {
@@ -457,11 +505,8 @@ fn refresh_gmail_token(conn: &Connection, account_id: &str) -> Result<String, St
             ("grant_type", "refresh_token"),
         ])
         .send()
-        .map_err(|e| e.to_string())?
-        .error_for_status()
-        .map_err(|e| e.to_string())?
-        .json()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+        .and_then(google_response_json)?;
     let access_token = value
         .get("access_token")
         .and_then(Value::as_str)
@@ -496,6 +541,16 @@ fn google_api_request_json(
     }
     serde_json::from_str(&body)
         .map_err(|e| format!("failed to parse Google API response: {e}; body: {body}"))
+}
+
+fn google_response_json(response: reqwest::blocking::Response) -> Result<Value, String> {
+    let status = response.status();
+    let body = response.text().map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        return Err(format!("Google OAuth token request failed ({status}): {body}"));
+    }
+    serde_json::from_str(&body)
+        .map_err(|e| format!("failed to parse Google OAuth token response: {e}; body: {body}"))
 }
 
 fn upsert_gmail_account(
