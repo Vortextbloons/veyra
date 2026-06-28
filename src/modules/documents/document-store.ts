@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   DocumentRecord,
   DocumentVersion,
+  DocumentStatus,
   CreateDocumentInput,
   UpdateDocumentInput,
   CreateVersionInput,
@@ -22,6 +23,10 @@ import { useSettingsStore } from "@/stores/settings-store";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
+export type ViewMode = "source" | "split" | "preview";
+export type SortMode = "updatedAt" | "createdAt" | "title";
+export type StatusFilter = DocumentStatus | "all";
+
 type DocumentStore = {
   documents: DocumentRecord[];
   activeDocumentId: string | null;
@@ -36,9 +41,23 @@ type DocumentStore = {
   _debounceTimer: ReturnType<typeof setTimeout> | null;
   _lastSavedContent: string | null;
 
+  /** Documents tab standalone state */
+  viewMode: ViewMode;
+  searchQuery: string;
+  statusFilter: StatusFilter;
+  sortMode: SortMode;
+  documentsLoaded: boolean;
+  _documentsTabActive: boolean;
+
   hydrateDocuments: () => Promise<void>;
+  loadAllDocuments: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
   setActiveProjectId: (id: string | null) => void;
+  setViewMode: (mode: ViewMode) => void;
+  setSearchQuery: (query: string) => void;
+  setStatusFilter: (filter: StatusFilter) => void;
+  setSortMode: (mode: SortMode) => void;
+  setDocumentsTabActive: (active: boolean) => void;
 
   createDocument: (input: CreateDocumentInput) => Promise<DocumentRecord>;
   updateDocument: (input: UpdateDocumentInput) => Promise<void>;
@@ -80,6 +99,43 @@ export function selectActiveDocumentContent(state: DocumentStore): string {
   return activeDraftContent ?? doc.contentMarkdown;
 }
 
+/** Pure helper for filtering/sorting documents. Used by DocumentListPanel and tests. */
+export function filterDocuments(
+  documents: DocumentRecord[],
+  searchQuery: string,
+  statusFilter: StatusFilter,
+  sortMode: SortMode,
+): DocumentRecord[] {
+  let filtered = documents;
+
+  if (statusFilter !== "all") {
+    filtered = filtered.filter((d) => d.status === statusFilter);
+  }
+
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(
+      (d) =>
+        d.title.toLowerCase().includes(q) ||
+        d.contentMarkdown.toLowerCase().includes(q) ||
+        d.tags.some((t) => t.toLowerCase().includes(q)),
+    );
+  }
+
+  const sorted = [...filtered];
+  if (sortMode === "title") {
+    sorted.sort((a, b) => a.title.localeCompare(b.title));
+  } else {
+    sorted.sort((a, b) => {
+      const aVal = a[sortMode] ?? "";
+      const bVal = b[sortMode] ?? "";
+      return bVal.localeCompare(aVal);
+    });
+  }
+
+  return sorted;
+}
+
 let hydrationPromise: Promise<void> | null = null;
 
 export const useDocumentStore = create<DocumentStore>((set, get) => ({
@@ -95,15 +151,25 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   _debounceTimer: null,
   _lastSavedContent: null,
 
+  viewMode: "split",
+  searchQuery: "",
+  statusFilter: "all",
+  sortMode: "updatedAt",
+  documentsLoaded: false,
+  _documentsTabActive: false,
+
   hydrateDocuments: async () => {
     if (hydrationPromise) return hydrationPromise;
     hydrationPromise = (async () => {
-      set({ isLoading: true, error: null });
       try {
+        if (get()._documentsTabActive) {
+          return;
+        }
+        set({ isLoading: true, error: null });
         const conversationId = get().activeConversationId ?? undefined;
         const projectId = get().activeProjectId ?? undefined;
         const documents = await ipcListDocuments(projectId, conversationId);
-        set({ documents, isLoading: false });
+        set({ documents, isLoading: false, documentsLoaded: true });
       } catch (error) {
         set({ error: String(error), isLoading: false });
       } finally {
@@ -111,6 +177,16 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       }
     })();
     return hydrationPromise;
+  },
+
+  loadAllDocuments: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const documents = await ipcListDocuments(undefined, undefined);
+      set({ documents, isLoading: false, documentsLoaded: true });
+    } catch (error) {
+      set({ error: String(error), isLoading: false });
+    }
   },
 
   setActiveConversationId: (id) => {
@@ -124,6 +200,12 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     hydrationPromise = null;
     void get().hydrateDocuments();
   },
+
+  setViewMode: (viewMode) => set({ viewMode }),
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
+  setStatusFilter: (statusFilter) => set({ statusFilter }),
+  setSortMode: (sortMode) => set({ sortMode }),
+  setDocumentsTabActive: (_documentsTabActive) => set({ _documentsTabActive }),
 
   createDocument: async (input) => {
     try {
