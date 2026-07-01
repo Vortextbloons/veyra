@@ -46,6 +46,8 @@ mod web_search;
 const CONVERSATIONS_FILE: &str = "conversations.json";
 const CONVERSATION_KEY_FILE: &str = "conversation.key";
 const MAX_CONVERSATIONS_JSON_BYTES: usize = 50 * 1024 * 1024;
+const KEYRING_SERVICE: &str = "com.veyra.app";
+const KEYRING_USER: &str = "conversation-key";
 
 fn app_data_file_path(app: &tauri::AppHandle, file_name: &str) -> Result<PathBuf, String> {
     Ok(app
@@ -88,16 +90,59 @@ fn save_conversations(app: tauri::AppHandle, conversations_json: String) -> Resu
 
 #[tauri::command]
 fn load_or_create_conversation_key(app: tauri::AppHandle) -> Result<String, String> {
-    read_app_data_file(&app, CONVERSATION_KEY_FILE)
+    // File is the source of truth — always prefer it
+    let file_key = read_app_data_file(&app, CONVERSATION_KEY_FILE)?;
+    if !file_key.is_empty() {
+        let trimmed = file_key.trim().to_string();
+        if !trimmed.is_empty() {
+            // Best-effort: also write to keyring so future reads can use stronger storage
+            if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+                let _ = entry.set_password(&trimmed);
+            }
+            return Ok(trimmed);
+        }
+    }
+
+    // File missing — try keyring as fallback
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+        match entry.get_password() {
+            Ok(key) => {
+                let trimmed = key.trim().to_string();
+                if !trimmed.is_empty() {
+                    eprintln!("[veyra] conversation key recovered from keyring (file missing)");
+                    return Ok(trimmed);
+                }
+            }
+            Err(e) => {
+                eprintln!("[veyra] keyring read failed: {e}");
+            }
+        }
+    }
+
+    Ok(String::new())
 }
 
 #[tauri::command]
 fn save_conversation_key(app: tauri::AppHandle, key: String) -> Result<(), String> {
-    if key.trim().len() < 40 {
+    let trimmed = key.trim().to_string();
+    if trimmed.len() < 40 {
         return Err("conversation key is invalid".into());
     }
 
-    write_app_data_file(&app, CONVERSATION_KEY_FILE, key)
+    // Always persist to file as a reliable backup
+    write_app_data_file(&app, CONVERSATION_KEY_FILE, trimmed.clone())?;
+
+    // Best-effort: also write to keyring for stronger at-rest protection
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+        if entry.set_password(&trimmed).is_ok() {
+            return Ok(());
+        }
+        eprintln!("[veyra] keyring write failed; key saved to file only");
+    } else {
+        eprintln!("[veyra] keyring unavailable; key saved to file only");
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

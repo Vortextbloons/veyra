@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::time::Duration;
+use tauri::Manager;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
@@ -22,6 +23,24 @@ use crate::web_search::fetch_wayback::try_wayback_fallback;
 use crate::web_search::fetch_youtube::{handle_youtube, is_youtube_url};
 
 const FETCH_MAX_RETRIES: u32 = 2;
+
+fn validate_cache_dir(
+    cache_dir: &std::path::Path,
+    app: &tauri::AppHandle,
+) -> Result<(), String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+    let app_data_canonical = std::fs::canonicalize(&app_data)
+        .map_err(|e| format!("failed to canonicalize app data dir: {e}"))?;
+    let cache_canonical = std::fs::canonicalize(cache_dir)
+        .map_err(|e| format!("cache directory does not exist: {e}"))?;
+    if !cache_canonical.starts_with(&app_data_canonical) {
+        return Err("cache directory must be inside the app data directory".into());
+    }
+    Ok(())
+}
 
 fn fetch_retry_delay(attempt: u32, retry_after: Option<Duration>) -> Duration {
     retry_after.unwrap_or_else(|| Duration::from_secs(2u64.pow(attempt.min(3))))
@@ -450,6 +469,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
 
 #[tauri::command]
 pub async fn fetch_and_extract_pages(
+    app: tauri::AppHandle,
     urls: Vec<String>,
     concurrency: usize,
     timeout_secs: u64,
@@ -460,6 +480,7 @@ pub async fn fetch_and_extract_pages(
     if cache_dir.as_os_str().is_empty() {
         return Err("Cache directory is required".into());
     }
+    validate_cache_dir(&cache_dir, &app)?;
     let sem_concurrency = concurrency.clamp(1, 16);
     let semaphore = std::sync::Arc::new(Semaphore::new(sem_concurrency));
     let max_chars = max_chars_per_source.clamp(500, 50_000);
@@ -509,13 +530,19 @@ pub async fn fetch_and_extract_pages(
 }
 
 #[tauri::command]
-pub fn clear_web_fetch_cache(cache_dir: PathBuf) -> Result<(), String> {
+pub fn clear_web_fetch_cache(
+    app: tauri::AppHandle,
+    cache_dir: PathBuf,
+) -> Result<(), String> {
+    validate_cache_dir(&cache_dir, &app)?;
     fetch_cache::clear(&cache_dir)
 }
 
 #[tauri::command]
 pub fn get_web_fetch_cache_stats(
+    app: tauri::AppHandle,
     cache_dir: PathBuf,
 ) -> Result<fetch_cache::CacheStats, String> {
+    validate_cache_dir(&cache_dir, &app)?;
     Ok(fetch_cache::stats(&cache_dir))
 }

@@ -14,6 +14,7 @@ import { useChatStore } from "@/stores/chat-store";
 export type CodeExecutionSettings = {
   timeoutSecs: number;
   pythonPath: string | null;
+  workspaceRoot: string | null;
 };
 
 export async function executeCodeExecutionCall(
@@ -52,6 +53,7 @@ export async function executeCodeExecutionCall(
       code,
       timeoutSecs: settings.timeoutSecs,
       pythonPath: settings.pythonPath,
+      workspaceRoot: settings.workspaceRoot,
     });
     const summary = summarizePythonExecutionResult(result);
     const detail = [`Code:\n${code}`, formatPythonExecutionSection(result)].join("\n\n");

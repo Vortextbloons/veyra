@@ -84,9 +84,15 @@ pub fn write(
 
 pub fn clear(cache_dir: &Path) -> Result<(), String> {
     if cache_dir.exists() {
-        fs::remove_dir_all(cache_dir).map_err(|e| format!("Failed to clear cache: {e}"))?;
+        let entries = fs::read_dir(cache_dir).map_err(|e| format!("Failed to read cache dir: {e}"))?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                let _ = fs::remove_file(&path);
+            }
+        }
     }
-    ensure_dir(cache_dir)
+    Ok(())
 }
 
 pub fn stats(cache_dir: &Path) -> CacheStats {

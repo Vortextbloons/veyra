@@ -74,16 +74,14 @@ pub struct PiRunFinishedEvent {
 #[tauri::command]
 pub async fn check_pi_available() -> bool {
     tauri::async_runtime::spawn_blocking(|| {
-        pi_candidates()
-            .iter()
-            .any(|candidate| {
-                Command::new(candidate)
-                    .arg("--version")
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .output()
-                    .is_ok_and(|output| output.status.success())
-            })
+        pi_candidates().iter().any(|candidate| {
+            Command::new(candidate)
+                .arg("--version")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()
+                .is_ok_and(|output| output.status.success())
+        })
     })
     .await
     .unwrap_or(false)
@@ -205,16 +203,7 @@ pub async fn switch_pi_session(session_path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn delete_pi_session(session_path: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let path = PathBuf::from(session_path.trim());
-        if !path.exists() {
-            return Err("session file does not exist".into());
-        }
-        if !path
-            .extension()
-            .is_some_and(|ext| ext == "jsonl")
-        {
-            return Err("session file must be a .jsonl file".into());
-        }
+        let path = resolve_pi_session_file(&session_path)?;
         fs::remove_file(&path).map_err(|e| format!("failed to delete session: {e}"))
     })
     .await
@@ -349,7 +338,9 @@ fn run_pi_agent_blocking(
                         sequence,
                     },
                 );
-                if line.contains("\"type\":\"agent_end\"") || line.contains("\"type\": \"agent_end\"") {
+                if line.contains("\"type\":\"agent_end\"")
+                    || line.contains("\"type\": \"agent_end\"")
+                {
                     ended_flag.store(true, Ordering::Relaxed);
                 }
                 lines.push(line);
@@ -535,8 +526,7 @@ fn generate_pi_models_json(
     });
 
     let path = models_dir.join("models.json");
-    let content =
-        serde_json::to_string_pretty(&models_json).map_err(|e| e.to_string())?;
+    let content = serde_json::to_string_pretty(&models_json).map_err(|e| e.to_string())?;
     fs::write(&path, content).map_err(|e| format!("failed to write models.json: {e}"))?;
 
     Ok(())
@@ -548,6 +538,41 @@ fn pi_agent_dir() -> Result<PathBuf, String> {
         .or_else(|_| std::env::var("HOME"))
         .map_err(|_| "failed to resolve home directory".to_string())?;
     Ok(PathBuf::from(home).join(".pi").join("agent"))
+}
+
+fn resolve_pi_session_file(session_path: &str) -> Result<PathBuf, String> {
+    resolve_pi_session_file_in_dir(session_path, &pi_agent_dir()?.join("sessions"))
+}
+
+fn resolve_pi_session_file_in_dir(
+    session_path: &str,
+    sessions_dir: &Path,
+) -> Result<PathBuf, String> {
+    let trimmed = session_path.trim();
+    if trimmed.is_empty() || trimmed.contains('\0') {
+        return Err("session file path is invalid".into());
+    }
+
+    let sessions_dir = sessions_dir
+        .canonicalize()
+        .map_err(|_| "session directory does not exist".to_string())?;
+    let session_file = PathBuf::from(trimmed)
+        .canonicalize()
+        .map_err(|_| "session file does not exist".to_string())?;
+
+    if !session_file.starts_with(&sessions_dir) {
+        return Err("session file is outside the Pi sessions directory".into());
+    }
+
+    if !session_file.is_file() {
+        return Err("session file does not exist".into());
+    }
+
+    if !session_file.extension().is_some_and(|ext| ext == "jsonl") {
+        return Err("session file must be a .jsonl file".into());
+    }
+
+    Ok(session_file)
 }
 
 /// Scan `~/.pi/agent/sessions/` for `.jsonl` session files.
@@ -685,3 +710,76 @@ fn resolve_workspace_path(project_path: &str) -> Result<PathBuf, String> {
 // Wait helpers
 // ---------------------------------------------------------------------------
 
+#[cfg(test)]
+mod tests {
+    use super::resolve_pi_session_file_in_dir;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_dir(name: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before Unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("veyra-pi-session-{name}-{nanos}"))
+    }
+
+    #[test]
+    fn allows_session_file_inside_sessions_dir() {
+        let root = unique_test_dir("inside");
+        let sessions_dir = root.join("sessions");
+        fs::create_dir_all(&sessions_dir).expect("create sessions dir");
+        let session_file = sessions_dir.join("session.jsonl");
+        fs::write(&session_file, "{}\n").expect("write session file");
+
+        let resolved = resolve_pi_session_file_in_dir(
+            session_file.to_str().expect("session path utf-8"),
+            &sessions_dir,
+        )
+        .expect("session file should resolve");
+
+        assert_eq!(
+            resolved,
+            session_file.canonicalize().expect("canonical file")
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_session_file_outside_sessions_dir() {
+        let root = unique_test_dir("outside");
+        let sessions_dir = root.join("sessions");
+        let outside_dir = root.join("outside");
+        fs::create_dir_all(&sessions_dir).expect("create sessions dir");
+        fs::create_dir_all(&outside_dir).expect("create outside dir");
+        let session_file = outside_dir.join("session.jsonl");
+        fs::write(&session_file, "{}\n").expect("write outside session file");
+
+        let error = resolve_pi_session_file_in_dir(
+            session_file.to_str().expect("session path utf-8"),
+            &sessions_dir,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("outside"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_non_jsonl_session_file() {
+        let root = unique_test_dir("extension");
+        let sessions_dir = root.join("sessions");
+        fs::create_dir_all(&sessions_dir).expect("create sessions dir");
+        let session_file = sessions_dir.join("session.txt");
+        fs::write(&session_file, "{}\n").expect("write session file");
+
+        let error = resolve_pi_session_file_in_dir(
+            session_file.to_str().expect("session path utf-8"),
+            &sessions_dir,
+        )
+        .unwrap_err();
+
+        assert!(error.contains(".jsonl"));
+        let _ = fs::remove_dir_all(&root);
+    }
+}

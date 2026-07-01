@@ -30,10 +30,12 @@ export async function invokeExecutePythonCode(options: {
   code: string;
   timeoutSecs?: number;
   pythonPath?: string | null;
+  workspaceRoot?: string | null;
 }): Promise<PythonExecutionResult> {
   return invoke<PythonExecutionResult>("execute_python_code", {
     code: options.code,
     timeoutSecs: options.timeoutSecs ?? null,
     pythonPath: options.pythonPath?.trim() || null,
+    workspaceRoot: options.workspaceRoot?.trim() || null,
   });
 }

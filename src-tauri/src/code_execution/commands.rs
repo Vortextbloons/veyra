@@ -107,9 +107,10 @@ pub async fn execute_python_code(
     code: String,
     timeout_secs: Option<u64>,
     python_path: Option<String>,
+    workspace_root: Option<String>,
 ) -> Result<PythonExecutionResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        execute_python_code_sync(code, timeout_secs, python_path)
+        execute_python_code_sync(code, timeout_secs, python_path, workspace_root)
     })
     .await
     .map_err(|error| format!("python execution task failed: {error}"))?
@@ -157,13 +158,20 @@ fn execute_python_code_sync(
     code: String,
     timeout_secs: Option<u64>,
     python_path: Option<String>,
+    workspace_root: Option<String>,
 ) -> Result<PythonExecutionResult, String> {
     let code = code.trim();
     if code.is_empty() {
         return Err("Python code is required".into());
     }
 
-    scan_python_code(code)?;
+    let ws_root = workspace_root
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from);
+
+    scan_python_code(code, ws_root.as_deref())?;
 
     let timeout_secs = timeout_secs
         .unwrap_or(DEFAULT_TIMEOUT_SECS)
@@ -485,7 +493,7 @@ fn wait_with_timeout(
     }
 }
 
-fn scan_python_code(code: &str) -> Result<(), String> {
+fn scan_python_code(code: &str, workspace_root: Option<&std::path::Path>) -> Result<(), String> {
     let (no_comments, no_strings) = strip_comments_and_strings(code);
     let blocked_modules = [
         "os",
@@ -593,7 +601,7 @@ fn scan_python_code(code: &str) -> Result<(), String> {
                 return Err(format!("line {line_no}: {message}"));
             }
 
-            if let Some(message) = blocked_open_mode(raw_line) {
+            if let Some(message) = blocked_open_mode(raw_line, workspace_root) {
                 return Err(format!("line {line_no}: {message}"));
             }
         }
@@ -665,7 +673,7 @@ fn has_sys_attribute_assignment(line: &str) -> bool {
 }
 
 fn blocked_pathlib_usage(line: &str) -> Option<&'static str> {
-    let blocked_patterns = [
+    let blocked_write_patterns = [
         ".write_text(",
         ".write_bytes(",
         ".touch(",
@@ -680,16 +688,23 @@ fn blocked_pathlib_usage(line: &str) -> Option<&'static str> {
         ".lchmod(",
     ];
 
-    for pattern in blocked_patterns {
+    for pattern in blocked_write_patterns {
         if line.contains(pattern) {
             return Some("pathlib write helpers are blocked; read-only access only");
+        }
+    }
+
+    let blocked_read_patterns = [".read_text(", ".read_bytes(", ".readlink(", ".open("];
+    for pattern in blocked_read_patterns {
+        if line.contains(pattern) {
+            return Some("pathlib file access is blocked; use open() for workspace-confined reads");
         }
     }
 
     None
 }
 
-fn blocked_open_mode(line: &str) -> Option<&'static str> {
+fn blocked_open_mode(line: &str, workspace_root: Option<&std::path::Path>) -> Option<&'static str> {
     let mut search_start = 0;
     while let Some(index) = find_token(line, "open(", search_start) {
         let tail = &line[index + "open(".len()..];
@@ -700,6 +715,13 @@ fn blocked_open_mode(line: &str) -> Option<&'static str> {
         } else {
             return Some("open() with a non-literal mode is blocked for safety");
         }
+
+        if let Some(path_str) = parse_open_first_arg(tail) {
+            if let Some(reason) = blocked_open_path(&path_str, workspace_root) {
+                return Some(reason);
+            }
+        }
+
         search_start = index + "open(".len();
     }
 
@@ -811,6 +833,135 @@ fn extract_string_literal(value: &str) -> Option<String> {
     Some(trimmed[1..trimmed.len() - 1].to_string())
 }
 
+fn parse_open_first_arg(args: &str) -> Option<String> {
+    let mut current = String::new();
+    let mut depth = 0usize;
+    let mut string_quote: Option<char> = None;
+    let mut escaped = false;
+
+    for ch in args.chars() {
+        if let Some(quote) = string_quote {
+            current.push(ch);
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            match ch {
+                '\\' => escaped = true,
+                c if c == quote => string_quote = None,
+                _ => {}
+            }
+            continue;
+        }
+
+        match ch {
+            '(' | '[' | '{' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' if depth == 0 => {
+                if !current.trim().is_empty() {
+                    return extract_string_literal(&current);
+                }
+                break;
+            }
+            ')' => {
+                depth = depth.saturating_sub(1);
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                if !current.trim().is_empty() {
+                    return extract_string_literal(&current);
+                }
+                current.clear();
+            }
+            '"' | '\'' => {
+                string_quote = Some(ch);
+                current.push(ch);
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    None
+}
+
+fn blocked_open_path(
+    path_str: &str,
+    workspace_root: Option<&std::path::Path>,
+) -> Option<&'static str> {
+    let trimmed = path_str.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let lower = trimmed.replace('\\', "/").to_lowercase();
+
+    // Always block traversal attempts
+    if trimmed.contains("..") {
+        return Some("open() path contains traversal (..)");
+    }
+
+    // Always block network/UNC paths
+    if trimmed.starts_with("\\\\") || lower.starts_with("//") {
+        return Some("open() path targets a network location");
+    }
+
+    // Always block known system directories
+    let dangerous_dirs = [
+        "/etc", "/proc", "/sys", "/dev", "/root", "/boot", "/sbin", "/bin", "/lib", "/usr",
+    ];
+    for dir in &dangerous_dirs {
+        if lower.starts_with(dir) || lower.contains(&format!("{}/", dir)) {
+            return Some("open() path targets a restricted system directory");
+        }
+    }
+    let windows_blocked = [
+        "c:\\windows",
+        "c:\\program files",
+        "c:\\programdata",
+        "c:\\$windows",
+        "c:\\boot",
+        "c:\\recovery",
+        "d:\\windows",
+        "d:\\program files",
+        "e:\\windows",
+        "e:\\program files",
+    ];
+    for prefix in &windows_blocked {
+        if lower.starts_with(prefix) {
+            return Some("open() path targets a restricted system directory");
+        }
+    }
+
+    // When a workspace root is configured, enforce containment
+    if let Some(ws) = workspace_root {
+        let path = std::path::Path::new(trimmed);
+        let resolved = if path.is_absolute() {
+            match std::fs::canonicalize(path) {
+                Ok(p) => p,
+                Err(_) => return Some("open() path could not be resolved"),
+            }
+        } else {
+            let candidate = ws.join(trimmed);
+            match std::fs::canonicalize(&candidate) {
+                Ok(p) => p,
+                Err(_) => return Some("open() path could not be resolved"),
+            }
+        };
+
+        let ws_canonical = match std::fs::canonicalize(ws) {
+            Ok(p) => p,
+            Err(_) => return Some("open() workspace root could not be resolved"),
+        };
+        if !resolved.starts_with(&ws_canonical) {
+            return Some("open() path is outside the workspace root");
+        }
+    }
+
+    None
+}
+
 fn strip_comments_and_strings(code: &str) -> (String, String) {
     let mut no_comments = String::with_capacity(code.len());
     let mut no_strings = String::with_capacity(code.len());
@@ -897,6 +1048,16 @@ fn strip_comments_and_strings(code: &str) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::scan_python_code;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_dir(name: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before Unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("veyra-code-exec-{name}-{nanos}"))
+    }
 
     #[test]
     fn allows_safe_imports() {
@@ -905,35 +1066,76 @@ import json
 from math import sqrt
 value = sqrt(9)
 "#;
-        assert!(scan_python_code(code).is_ok());
+        assert!(scan_python_code(code, None).is_ok());
     }
 
     #[test]
     fn blocks_dangerous_imports() {
         let code = r#"import os
 "#;
-        let error = scan_python_code(code).unwrap_err();
+        let error = scan_python_code(code, None).unwrap_err();
         assert!(error.contains("os"));
     }
 
     #[test]
     fn blocks_exec_bypass() {
         let code = r#"exec("import os")"#;
-        let error = scan_python_code(code).unwrap_err();
+        let error = scan_python_code(code, None).unwrap_err();
         assert!(error.contains("exec"));
     }
 
     #[test]
     fn blocks_write_open_mode() {
         let code = "with open('x.txt', 'w') as f:\n    f.write('nope')";
-        let error = scan_python_code(code).unwrap_err();
+        let error = scan_python_code(code, None).unwrap_err();
         assert!(error.contains("write-capable"));
     }
 
     #[test]
     fn blocks_pathlib_writes() {
         let code = "from pathlib import Path\nPath('x.txt').write_text('hello')";
-        let error = scan_python_code(code).unwrap_err();
+        let error = scan_python_code(code, None).unwrap_err();
         assert!(error.contains("pathlib"));
+    }
+
+    #[test]
+    fn blocks_pathlib_reads() {
+        let code = "from pathlib import Path\nsecret = Path('x.txt').read_text()";
+        let error = scan_python_code(code, None).unwrap_err();
+        assert!(error.contains("pathlib"));
+    }
+
+    #[test]
+    fn allows_open_read_inside_workspace() {
+        let workspace = unique_test_dir("workspace-read");
+        fs::create_dir_all(&workspace).expect("create temp workspace");
+        fs::write(workspace.join("safe.txt"), "ok").expect("write temp file");
+
+        let code = "with open('safe.txt', 'r') as f:\n    data = f.read()";
+        let result = scan_python_code(code, Some(&workspace));
+
+        let _ = fs::remove_dir_all(&workspace);
+        assert!(result.is_ok(), "unexpected scanner error: {result:?}");
+    }
+
+    #[test]
+    fn blocks_open_read_outside_workspace() {
+        let workspace = unique_test_dir("workspace");
+        let outside = unique_test_dir("outside");
+        fs::create_dir_all(&workspace).expect("create temp workspace");
+        fs::create_dir_all(&outside).expect("create outside dir");
+        let outside_file = outside.join("secret.txt");
+        fs::write(&outside_file, "secret").expect("write outside file");
+        let outside_path = outside_file.to_string_lossy().replace('\\', "/");
+        let code = format!("with open('{outside_path}', 'r') as f:\n    data = f.read()");
+
+        let error = scan_python_code(&code, Some(&workspace)).unwrap_err();
+
+        let _ = fs::remove_dir_all(&workspace);
+        let _ = fs::remove_dir_all(&outside);
+        assert!(
+            error.contains("outside the workspace"),
+            "unexpected scanner error: {error}"
+        );
     }
 }

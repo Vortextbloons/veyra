@@ -81,10 +81,10 @@ export async function callResearchAi(
           .filter(({ m, i }) => m !== systemMsg && i !== lastUserIdx);
         const kept: typeof messages = [];
         let running = (systemMsg ? estimateTokens(systemMsg.content) : 0) + (lastUser ? estimateTokens(lastUser.content) : 0);
-        for (const { m } of flexMsgs) {
+        for (const { m } of flexMsgs.reverse()) {
           const t = estimateTokens(m.content);
           if (running + t > available) break;
-          kept.push(m);
+          kept.unshift(m);
           running += t;
         }
         const truncatedMessages: typeof messages = [

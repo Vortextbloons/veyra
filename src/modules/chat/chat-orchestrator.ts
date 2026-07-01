@@ -290,6 +290,8 @@ export async function sendChatRequest({
 
   const executeToolRoundLocal = async (toolCalls: ProviderToolCall[]) => {
     const buffer = useChatStore.getState().streamingBuffer;
+    const activeProject = useProjectStore.getState().activeProject();
+    const workspaceRoot = activeProject?.settings?.agentProjectPath?.trim() || null;
     return executeToolRound(toolCalls, {
       signal: options.signal,
       projectId,
@@ -302,6 +304,7 @@ export async function sendChatRequest({
       codeExecution: {
         timeoutSecs: settings.codeExecutionTimeoutSecs,
         pythonPath: settings.customPythonPath.trim() || null,
+        workspaceRoot,
       },
     });
   };

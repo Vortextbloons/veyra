@@ -67,8 +67,73 @@ fn map_io_error(error: std::io::Error) -> String {
     error.to_string()
 }
 
+fn validate_io_path(path: &str) -> Result<(), String> {
+    if path.is_empty() {
+        return Err("path is empty".into());
+    }
+
+    if path.contains('\0') {
+        return Err("path contains null byte".into());
+    }
+
+    if path.contains("..") {
+        return Err("path contains traversal (..)".into());
+    }
+
+    let lower = path.replace('\\', "/").to_lowercase();
+
+    // Block network/UNC paths
+    if path.starts_with("\\\\") || lower.starts_with("//") {
+        return Err("path targets a network location".into());
+    }
+
+    // Block known system directories (Linux/macOS)
+    let unix_blocked = [
+        "/etc/", "/proc/", "/sys/", "/dev/", "/root/", "/boot/",
+        "/sbin/", "/bin/", "/lib/", "/usr/", "/var/", "/tmp/",
+    ];
+    for prefix in &unix_blocked {
+        if lower.starts_with(prefix) {
+            return Err("path targets a restricted system directory".into());
+        }
+    }
+
+    // Block Windows system directories across ALL drive letters
+    for drive in 'a'..='z' {
+        let prefixes = [
+            format!("{drive}:/windows"),
+            format!("{drive}:/program files"),
+            format!("{drive}:/program files (x86)"),
+            format!("{drive}:/programdata"),
+            format!("{drive}:/$windows.~ws"),
+            format!("{drive}:/boot"),
+            format!("{drive}:/recovery"),
+            format!("{drive}:/perflogs"),
+        ];
+        for prefix in &prefixes {
+            if lower.starts_with(prefix) {
+                return Err("path targets a restricted system directory".into());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_read_path(path: &str) -> Result<(), String> {
+    validate_io_path(path)?;
+    // For reads, canonicalize to verify the path resolves to a real file
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| format!("path could not be resolved: {e}"))?;
+    if !canonical.is_file() {
+        return Err("path is not a regular file".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn read_text_file(path: String) -> Result<String, String> {
+    validate_read_path(&path)?;
     let metadata = fs::metadata(&path).map_err(map_io_error)?;
     if metadata.len() > MAX_TEXT_FILE_BYTES as u64 {
         return Err(format!(
@@ -81,6 +146,7 @@ pub fn read_text_file(path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn read_binary_file(path: String) -> Result<Vec<u8>, String> {
+    validate_read_path(&path)?;
     let metadata = fs::metadata(&path).map_err(map_io_error)?;
     if metadata.len() > MAX_BINARY_FILE_BYTES as u64 {
         return Err(format!(
@@ -93,6 +159,7 @@ pub fn read_binary_file(path: String) -> Result<Vec<u8>, String> {
 
 #[tauri::command]
 pub fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    validate_io_path(&path)?;
     if contents.len() > MAX_TEXT_FILE_BYTES {
         return Err(format!(
             "content is too large ({} MB) to write",
@@ -107,6 +174,7 @@ pub fn write_text_file(path: String, contents: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+    validate_io_path(&path)?;
     if contents.len() > MAX_BINARY_FILE_BYTES {
         return Err(format!(
             "content is too large ({} MB) to write",
