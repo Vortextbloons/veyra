@@ -2,21 +2,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { Toggle } from "@/components/toggle";
 import { SliderControl } from "@/components/ui/slider-control";
 import { CollapsibleSettingsSection } from "./collapsible-settings-section";
-
-const DOCUMENT_TYPES = [
-  { value: "document", label: "Document" },
-  { value: "technical_spec", label: "Technical Spec" },
-  { value: "essay", label: "Essay" },
-  { value: "report", label: "Report" },
-  { value: "proposal", label: "Proposal" },
-  { value: "readme", label: "README" },
-  { value: "notes", label: "Notes" },
-  { value: "prompt", label: "Prompt" },
-  { value: "project_plan", label: "Project Plan" },
-  { value: "meeting_notes", label: "Meeting Notes" },
-  { value: "research_brief", label: "Research Brief" },
-  { value: "agent_instruction", label: "Agent Instruction" },
-] as const;
+import { DOCUMENT_TYPE_OPTIONS } from "@/modules/documents/document-export";
 
 export function DocumentSettings() {
   const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
@@ -37,6 +23,12 @@ export function DocumentSettings() {
   const setDocumentSpellCheck = useSettingsStore((s) => s.setDocumentSpellCheck);
   const documentAutoOpenOnCreate = useSettingsStore((s) => s.documentAutoOpenOnCreate);
   const setDocumentAutoOpenOnCreate = useSettingsStore((s) => s.setDocumentAutoOpenOnCreate);
+  const documentDefaultViewMode = useSettingsStore((s) => s.documentDefaultViewMode);
+  const setDocumentDefaultViewMode = useSettingsStore((s) => s.setDocumentDefaultViewMode);
+  const documentAiPanelAutoShow = useSettingsStore((s) => s.documentAiPanelAutoShow);
+  const setDocumentAiPanelAutoShow = useSettingsStore((s) => s.setDocumentAiPanelAutoShow);
+  const documentListDensity = useSettingsStore((s) => s.documentListDensity);
+  const setDocumentListDensity = useSettingsStore((s) => s.setDocumentListDensity);
 
   return (
     <div className="space-y-8">
@@ -56,6 +48,31 @@ export function DocumentSettings() {
           The document panel lets you and the AI create, edit, and manage
           markdown documents in a side editor.
         </p>
+
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+          <div className="mb-2 text-[12.5px] font-medium text-white">
+            List density
+          </div>
+          <p className="mb-2 text-[11px] text-[var(--color-text-dim)]">
+            Spacing used in the document list sidebar.
+          </p>
+          <div className="flex gap-1">
+            {(["comfortable", "compact"] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDocumentListDensity(d)}
+                className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-medium capitalize transition-colors ${
+                  documentListDensity === d
+                    ? "bg-[var(--color-accent-soft)] text-white ring-1 ring-inset ring-[var(--color-accent)]/30"
+                    : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
       </CollapsibleSettingsSection>
 
       <CollapsibleSettingsSection
@@ -98,6 +115,15 @@ export function DocumentSettings() {
           Automatically open the editor panel when the AI creates a new
           document.
         </p>
+
+        <Toggle
+          label="Auto-open AI assist panel"
+          on={documentAiPanelAutoShow}
+          onChange={setDocumentAiPanelAutoShow}
+        />
+        <p className="text-[11px] text-[var(--color-text-dim)]">
+          Automatically open the AI assist panel when you open a document.
+        </p>
       </CollapsibleSettingsSection>
 
       <CollapsibleSettingsSection
@@ -118,12 +144,37 @@ export function DocumentSettings() {
             onChange={(e) => setDocumentDefaultType(e.target.value)}
             className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-[12px] text-white outline-none focus:border-[var(--color-accent)]"
           >
-            {DOCUMENT_TYPES.map((t) => (
+            {DOCUMENT_TYPE_OPTIONS.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+          <div className="mb-2 text-[12.5px] font-medium text-white">
+            Default view mode
+          </div>
+          <p className="mb-2 text-[11px] text-[var(--color-text-dim)]">
+            Reset the editor layout each time you open a document.
+          </p>
+          <div className="flex gap-1">
+            {(["source", "split", "preview"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setDocumentDefaultViewMode(mode)}
+                className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-medium capitalize transition-colors ${
+                  documentDefaultViewMode === mode
+                    ? "bg-[var(--color-accent-soft)] text-white ring-1 ring-inset ring-[var(--color-accent)]/30"
+                    : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
         </div>
       </CollapsibleSettingsSection>
 

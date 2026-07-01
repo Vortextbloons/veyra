@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Bold, Italic, Code, List, ListOrdered, Heading1, Heading2, Quote } from "lucide-react";
+import { Bold, Italic, Code, List, ListOrdered, Heading1, Heading2, Quote, Link, Minus } from "lucide-react";
 import { useDocumentStore } from "../document-store";
 
 type ToolbarButton = {
@@ -8,6 +8,8 @@ type ToolbarButton = {
   prefix: string;
   suffix?: string;
   block?: boolean;
+  link?: boolean;
+  hr?: boolean;
 };
 
 const TOOLBAR_BUTTONS: ToolbarButton[] = [
@@ -19,6 +21,8 @@ const TOOLBAR_BUTTONS: ToolbarButton[] = [
   { icon: <List className="size-4" />, label: "Bullet List", prefix: "- ", block: true },
   { icon: <ListOrdered className="size-4" />, label: "Numbered List", prefix: "1. ", block: true },
   { icon: <Quote className="size-4" />, label: "Quote", prefix: "> ", block: true },
+  { icon: <Link className="size-4" />, label: "Link", prefix: "[", suffix: "](url)", link: true },
+  { icon: <Minus className="size-4" />, label: "Horizontal Rule", prefix: "", suffix: "", hr: true },
 ];
 
 export function DocumentToolbar() {
@@ -44,8 +48,28 @@ export function DocumentToolbar() {
 
       let newValue: string;
       let newCursorPos: number;
+      let selectStart: number | null = null;
+      let selectEnd: number | null = null;
 
-      if (button.block) {
+      if (button.link) {
+        const before = value.substring(0, start);
+        const after = value.substring(end);
+        const displayText = selectedText || "link text";
+        newValue = before + "[" + displayText + "]()" + after;
+        const urlStart = start + 1 + displayText.length + 2;
+        selectStart = urlStart;
+        selectEnd = urlStart;
+        newCursorPos = urlStart;
+      } else if (button.hr) {
+        const before = value.substring(0, start);
+        const after = value.substring(end);
+        const needsPre = before.length > 0 && !before.endsWith("\n\n");
+        const needsPost = after.length > 0 && !after.startsWith("\n\n");
+        const pre = needsPre ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
+        const post = needsPost ? (after.startsWith("\n") ? "\n" : "\n\n") : "";
+        newValue = before + pre + "---" + post + after;
+        newCursorPos = start + pre.length + 3;
+      } else if (button.block) {
         const lineStart = value.lastIndexOf("\n", start - 1) + 1;
         const before = value.substring(0, lineStart);
         const after = value.substring(lineStart);
@@ -63,7 +87,12 @@ export function DocumentToolbar() {
 
       requestAnimationFrame(() => {
         textarea.focus();
-        textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+        if (selectStart !== null && selectEnd !== null) {
+          textarea.selectionStart = selectStart;
+          textarea.selectionEnd = selectEnd;
+        } else {
+          textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+        }
       });
     },
     [doc, setContent]

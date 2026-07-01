@@ -1,6 +1,28 @@
 // Document export utilities
 
-import type { DocumentRecord } from "./document-types";
+import type { DocumentRecord, DocumentType, DocumentStatus } from "./document-types";
+
+export const DOCUMENT_TYPE_OPTIONS: { value: DocumentType; label: string }[] = [
+  { value: "document", label: "Document" },
+  { value: "technical_spec", label: "Technical Spec" },
+  { value: "essay", label: "Essay" },
+  { value: "report", label: "Report" },
+  { value: "proposal", label: "Proposal" },
+  { value: "readme", label: "README" },
+  { value: "notes", label: "Notes" },
+  { value: "prompt", label: "Prompt" },
+  { value: "project_plan", label: "Project Plan" },
+  { value: "meeting_notes", label: "Meeting Notes" },
+  { value: "research_brief", label: "Research Brief" },
+  { value: "agent_instruction", label: "Agent Instruction" },
+];
+
+export const DOCUMENT_STATUS_OPTIONS: { value: DocumentStatus; label: string }[] = [
+  { value: "draft", label: "Draft" },
+  { value: "review", label: "In Review" },
+  { value: "final", label: "Final" },
+  { value: "archived", label: "Archived" },
+];
 
 /**
  * Format a document status for display.

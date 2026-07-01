@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, startTransition } from "react";
 import { FileText, Eye, Columns2, Code } from "lucide-react";
 import { useDocumentStore } from "../document-store";
 import type { ViewMode } from "../document-store";
@@ -23,19 +23,30 @@ export function DocumentsPage() {
   const setViewMode = useDocumentStore((s) => s.setViewMode);
   const loadAllDocuments = useDocumentStore((s) => s.loadAllDocuments);
   const setDocumentsTabActive = useDocumentStore((s) => s.setDocumentsTabActive);
-  const [aiPanelOpen, setAiPanelOpen] = useState(
-    () => useSettingsStore.getState().documentAiPanelAutoShow,
-  );
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const prevDocIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setDocumentsTabActive(true);
     void loadAllDocuments();
-    const settings = useSettingsStore.getState();
-    if (settings.documentDefaultViewMode !== viewMode) {
-      setViewMode(settings.documentDefaultViewMode);
-    }
     return () => setDocumentsTabActive(false);
-  }, [loadAllDocuments, setDocumentsTabActive]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadAllDocuments, setDocumentsTabActive]);
+
+  useEffect(() => {
+    if (!activeDocumentId) return;
+    const settings = useSettingsStore.getState();
+    if (activeDocumentId !== prevDocIdRef.current) {
+      prevDocIdRef.current = activeDocumentId;
+      startTransition(() => {
+        if (settings.documentDefaultViewMode !== viewMode) {
+          setViewMode(settings.documentDefaultViewMode);
+        }
+        if (settings.documentAiPanelAutoShow) {
+          setAiPanelOpen(true);
+        }
+      });
+    }
+  }, [activeDocumentId, viewMode, setViewMode]);
 
   return (
     <div className="flex min-w-0 flex-1 overflow-hidden">

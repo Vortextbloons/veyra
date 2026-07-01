@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useDocumentStore, filterDocuments } from "../document-store";
 import type { StatusFilter } from "../document-store";
 import { DocumentCard } from "./document-card";
+import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
 
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
@@ -25,6 +26,7 @@ export function DocumentListPanel() {
   const setStatusFilter = useDocumentStore((s) => s.setStatusFilter);
   const setSortMode = useDocumentStore((s) => s.setSortMode);
   const createDocument = useDocumentStore((s) => s.createDocument);
+  const documentListDensity = useSettingsStore((s) => s.documentListDensity);
   const [showSortMenu, setShowSortMenu] = useState(false);
 
   const documents = useMemo(
@@ -170,6 +172,7 @@ export function DocumentListPanel() {
                 key={doc.id}
                 document={doc}
                 isActive={doc.id === activeDocumentId}
+                compact={documentListDensity === "compact"}
               />
             ))}
           </div>
