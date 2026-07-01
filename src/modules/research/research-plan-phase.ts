@@ -3,8 +3,6 @@ import type { ResearchRuntimeContext } from "./research-runtime-context";
 import { callResearchAi, getTemporalContext } from "./research-ai";
 import { safeJsonParse } from "./research-json-utils";
 import { nowIso, fallbackSearchQueries, buildFallbackPlan } from "./research-source-utils";
-import { waitForPlanApproval } from "./research-plan-approval";
-import { useResearchStore } from "./research-store";
 
 export type PhaseResult = { continue: true } | { continue: false; reason: "paused" | "failed" | "completed" };
 
@@ -27,6 +25,10 @@ export async function planPhase(
     await ctx.completeStep(planStep, `Resumed with existing plan: ${planSteps.length} steps`);
     onEvent({ type: "phase_complete", phase: "plan", stepId: planStep.id });
   } else {
+
+  const backgroundSection = ctx.backgroundContext
+    ? `\n\nBackground context gathered from initial web searches:\n${ctx.backgroundContext}\n\nUse this context to create a more informed plan with better search queries.`
+    : "";
 
   const planPrompt = `You are an expert research strategist. Your task is to create a research plan for the following question. Create no more than ${config.maxSearchRounds} search steps.
 
@@ -54,7 +56,7 @@ Return ONLY a JSON object in this exact format:
   "successCriteria": ["what a good answer should cover"]
 }
 
-Question: ${run.question}`;
+Question: ${run.question}${backgroundSection}`;
 
   const planResult = await callResearchAi(
     [
@@ -104,7 +106,7 @@ Question: ${run.question}`;
     id: planId,
     runId: run.id,
     steps: newSteps,
-    userApproved: false,
+    userApproved: true,
     userEdited: false,
     createdAt: nowIso(),
   };
@@ -119,36 +121,6 @@ Question: ${run.question}`;
 
   await ctx.completeStep(planStep, `Plan: ${planSteps.length} steps, ${planJson.keyConcepts?.length || 0} key concepts`);
   onEvent({ type: "phase_complete", phase: "plan", stepId: planStep.id });
-
-  // ── Phase 1.5: Wait for Plan Approval ───────────────────────────────────
-  if (plan.userApproved === false) {
-    await ctx.updateRunStatus("planning", 8);
-    const waitStep = await ctx.createStep("plan", "Waiting for plan approval");
-    onEvent({ type: "phase_start", phase: "wait_approval", stepId: waitStep.id });
-
-    const approvedPlan = await waitForPlanApproval(run.id, signal);
-    ctx.checkAbort();
-
-    if (!approvedPlan) {
-      if (signal.aborted) {
-        await ctx.failStep(waitStep, "Paused while waiting for plan approval");
-        store.setActiveController(null);
-        useResearchStore.setState({ isPausing: false });
-        await ctx.updateRunStatus("paused", 8);
-        return { continue: false, reason: "paused", planSteps };
-      }
-      await ctx.failStep(waitStep, "Plan approval timed out after 30 minutes");
-      await ctx.updateRunStatus("failed", 8, { error: "Plan approval timed out" });
-      return { continue: false, reason: "failed", planSteps };
-    }
-
-    planSteps.length = 0;
-    planSteps.push(...approvedPlan.steps);
-    ctx.activeResearchPlan = approvedPlan;
-    ctx.clarifiedResearchQuestion = store.activeRunOrNull()?.run.clarifiedQuestion || ctx.clarifiedResearchQuestion;
-    await ctx.completeStep(waitStep, "Plan approved by user");
-    onEvent({ type: "phase_complete", phase: "wait_approval", stepId: waitStep.id });
-  }
   } // end plan else block
 
   // Build plan context for downstream phases (validation, extraction, synthesis).

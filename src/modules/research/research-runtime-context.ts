@@ -51,6 +51,7 @@ export interface ResearchRuntimeContext {
   contradictions: ResearchContradiction[];
   searchQueriesUsed: string[];
   tokenUsage: { input: number };
+  backgroundContext: string;
   planContextSummary: string;
   activeResearchPlan: ResearchPlan | null;
   clarifiedResearchQuestion: string;
@@ -144,6 +145,7 @@ export function createResearchRuntimeContext(
     contradictions,
     searchQueriesUsed: [],
     tokenUsage: { input: 0 },
+    backgroundContext: "",
     planContextSummary,
     activeResearchPlan,
     clarifiedResearchQuestion,

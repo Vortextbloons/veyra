@@ -91,17 +91,6 @@ export function ResearchPage() {
     }
   }, [activeRunId, loadRun]);
 
-  useEffect(() => {
-    if (
-      activeRun?.run.plan &&
-      !activeRun.run.plan.userApproved &&
-      activeRun.run.status === "planning"
-    ) {
-      const timer = window.setTimeout(() => setActiveTab("plan"), 0);
-      return () => window.clearTimeout(timer);
-    }
-  }, [activeRun?.run.plan, activeRun?.run.status]);
-
 
 
   const handleSelectRun = useCallback(

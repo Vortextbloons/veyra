@@ -2,6 +2,7 @@ import { useResearchStore } from "./research-store";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import type { ResearchRun, ResearchRuntimeEvent } from "./research-types";
 import { createResearchRuntimeContext, type ResearchRunOverride } from "./research-runtime-context";
+import { backgroundPhase } from "./research-background-phase";
 import { planPhase } from "./research-plan-phase";
 import { searchPhase } from "./research-search-phase";
 import { readPhase } from "./research-read-phase";
@@ -21,7 +22,7 @@ const perRunOverrideByRunId = new Map<string, ResearchRunOverride>();
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
-export type ResumePhase = "plan" | "search" | "read" | "validate" | "extract" | "verify" | "gap" | "synthesize";
+export type ResumePhase = "background" | "plan" | "search" | "read" | "validate" | "extract" | "verify" | "gap" | "synthesize";
 
 export function enqueueResearchRunJob(
   run: ResearchRun,
@@ -105,6 +106,10 @@ export async function executeResearchRun(
   }
 
   try {
+    // ── Phase 0: Background Research ──────────────────────────────────────
+    const bgResult = await backgroundPhase(ctx, resumeFromPhase);
+    if (!bgResult.continue) return;
+
     // ── Phase 1: Plan ──────────────────────────────────────────────────────
     const planResult = await planPhase(ctx, resumeFromPhase);
     if (!planResult.continue) return;
@@ -200,10 +205,14 @@ export function resumeResearchRun(
     resumePhase = "validate";
   } else if (hasCompleted("search")) {
     resumePhase = "read";
-  } else if (hasCompleted("plan")) {
+  } else if (run.plan) {
+    // Plan exists (auto-approved) — skip background, resume from search.
     resumePhase = "search";
-  } else {
+  } else if (hasCompleted("background")) {
+    // Background done but plan not yet saved — regenerate plan.
     resumePhase = "plan";
+  } else {
+    resumePhase = "background";
   }
 
   console.info(`[research-runtime] Resuming from phase: ${resumePhase}`);

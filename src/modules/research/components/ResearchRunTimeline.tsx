@@ -15,6 +15,7 @@ import type { ResearchStep, ResearchStepStatus, ResearchStepType } from "../rese
 const STEP_ICONS: Record<ResearchStepType, React.ReactNode> = {
   clarify: <Brain className="size-3.5" />,
   plan: <Brain className="size-3.5" />,
+  background: <Search className="size-3.5" />,
   search: <Search className="size-3.5" />,
   read: <BookOpen className="size-3.5" />,
   extract: <ScanLine className="size-3.5" />,

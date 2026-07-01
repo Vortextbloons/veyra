@@ -35,6 +35,7 @@ export type ResearchRuntimeEvent =
 export type ResearchStepType =
   | "clarify"
   | "plan"
+  | "background"
   | "search"
   | "read"
   | "extract"

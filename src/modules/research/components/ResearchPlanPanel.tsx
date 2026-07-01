@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Check, Pencil, X, Save, Loader2 } from "lucide-react";
+import { Pencil, X, Save } from "lucide-react";
 import type { ResearchPlan, ResearchPlanStep } from "../research-types";
 import { useResearchStore } from "../research-store";
-import { enqueueResearchResume } from "../research-runtime";
 
 type Props = {
   plan: ResearchPlan;
@@ -13,23 +12,7 @@ export function ResearchPlanPanel({ plan, runId }: Props) {
   const updateRun = useResearchStore((s) => s.updateRun);
   const [isEditing, setIsEditing] = useState(false);
   const [editJson, setEditJson] = useState("");
-  const [isApproving, setIsApproving] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
-
-  const handleApprove = async () => {
-    setIsApproving(true);
-    try {
-      const updated = await updateRun({
-        id: runId,
-        plan: { ...plan, userApproved: true },
-      });
-      if (updated.status === "paused" || updated.status === "failed") {
-        await enqueueResearchResume(runId);
-      }
-    } finally {
-      setIsApproving(false);
-    }
-  };
 
   const handleStartEdit = () => {
     setEditJson(JSON.stringify(plan, null, 2));
@@ -74,40 +57,12 @@ export function ResearchPlanPanel({ plan, runId }: Props) {
     <div className="flex flex-col gap-4 p-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-[14px] font-semibold text-[var(--color-text)]">
-            Research Plan
-          </h2>
-          {plan.userApproved && (
-            <span className="flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">
-              <Check className="size-3" />
-              Approved
-            </span>
-          )}
-          {plan.userEdited && (
-            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">
-              Edited
-            </span>
-          )}
-        </div>
+        <h2 className="text-[14px] font-semibold text-[var(--color-text)]">
+          Research Plan
+        </h2>
 
         {!isEditing && (
           <div className="flex items-center gap-1.5">
-            {!plan.userApproved && (
-              <button
-                type="button"
-                onClick={handleApprove}
-                disabled={isApproving}
-                className="flex items-center gap-1.5 rounded-md bg-emerald-500/15 px-3 py-1.5 text-[12px] font-medium text-emerald-300 transition-colors hover:bg-emerald-500/25 disabled:opacity-50"
-              >
-                {isApproving ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Check className="size-3.5" />
-                )}
-                Approve Plan
-              </button>
-            )}
             <button
               type="button"
               onClick={handleStartEdit}
