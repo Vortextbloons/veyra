@@ -7,7 +7,9 @@ import { ErrorBoundary } from "@/components/error-boundary";
 
 markStartup("veyra:main-start");
 
-const root = createRoot(document.getElementById("root")!);
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("Root element not found");
+const root = createRoot(rootEl);
 const app = (
   <ErrorBoundary>
     <App />

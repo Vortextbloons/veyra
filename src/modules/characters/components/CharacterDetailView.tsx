@@ -366,7 +366,7 @@ function CharacterHeader({
         <MetaRow label="Creator" value={character.creator} />
         <MetaRow label="Category" value={character.category} />
         {(character.stats?.totalChats ?? 0) > 0 && (
-          <MetaRow label="Chats" value={String(character.stats!.totalChats)} />
+          <MetaRow label="Chats" value={String(character.stats?.totalChats ?? 0)} />
         )}
         {character.stats?.lastUsedAt && (
           <MetaRow

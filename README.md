@@ -13,7 +13,7 @@ Install these before cloning:
 | Tool | Notes |
 |------|--------|
 | [Node.js](https://nodejs.org/) LTS | **20+** required (`package.json` `engines`) |
-| [Rust](https://www.rust-lang.org/tools/install) | **1.77.2+** (see `rust-toolchain.toml`) |
+| [Rust](https://www.rust-lang.org/tools/install) | **1.80.0+** (see `src-tauri/Cargo.toml`) |
 | [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) | Workload: **Desktop development with C++** |
 | [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) | Usually preinstalled on Windows 11 |
 
@@ -106,7 +106,7 @@ Do not commit these paths or files to git.
 
 Some values in source are **intentional local-dev defaults**, not credentials for cloud services:
 
-- SearXNG `secret_key` in `src-tauri/src/searxng_setup.rs` — local Docker instance only
+- SearXNG `secret_key` in `src-tauri/src/web_search/searxng_setup.rs` — local Docker instance only
 - Conversation encryption fallback material in `src/lib/conversation-storage.ts` — legacy local storage
 
 Do not put production passwords or API keys in the repository.

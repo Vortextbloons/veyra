@@ -484,7 +484,7 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
         state.activeRun && reconciledById.has(state.activeRun.run.id)
           ? {
               ...state.activeRun,
-              run: reconciledById.get(state.activeRun.run.id)!,
+              run: reconciledById.get(state.activeRun.run.id) ?? state.activeRun.run,
               steps: state.activeRun.steps.map((step) =>
                 step.status === "running"
                   ? {

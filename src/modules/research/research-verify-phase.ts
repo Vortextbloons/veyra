@@ -407,7 +407,8 @@ Confidence: ${evidence.confidence}`)
         bySource.set(claim.sourceId, []);
         order.push(claim.sourceId);
       }
-      bySource.get(claim.sourceId)!.push(claim);
+      const arr = bySource.get(claim.sourceId) ?? [];
+      arr.push(claim);
     }
 
     const batches: VerifyBatch[][] = [];
@@ -419,7 +420,7 @@ Confidence: ${evidence.confidence}`)
     };
 
     for (const sourceId of order) {
-      flush(bySource.get(sourceId)!);
+      flush(bySource.get(sourceId) ?? []);
     }
     return batches;
   };
@@ -428,7 +429,7 @@ Confidence: ${evidence.confidence}`)
 
   for (let batchIndex = 0; batchIndex < verifyBatches.length; batchIndex++) {
     ctx.checkAbort();
-    const batch = verifyBatches[batchIndex]!;
+    const batch = verifyBatches[batchIndex];
     if (batch.length === 0) continue;
 
     const claimBlocks = batch
@@ -457,7 +458,7 @@ Do NOT fabricate source names — only count sources that actually appear in the
 
     try {
       const batchLabel = batch.length === 1
-        ? `Verify claim: ${batch[0]!.claim.claim.length > 60 ? `${batch[0]!.claim.claim.slice(0, 57)}…` : batch[0]!.claim.claim}`
+        ? `Verify claim: ${(batch[0]?.claim.claim ?? "").length > 60 ? `${batch[0]?.claim.claim?.slice(0, 57) ?? ""}…` : batch[0]?.claim.claim ?? ""}`
         : `Verify ${batch.length} claims (batched)`;
       const { value: verifyResponse } = await ctx.runAiStep(
         "verify",
@@ -492,7 +493,7 @@ Do NOT fabricate source names — only count sources that actually appear in the
       }
 
       for (let i = 0; i < batch.length; i++) {
-        const entry = batch[i]!;
+        const entry = batch[i];
         const verifyJson = resultsByIndex.get(i) ?? {};
 
         let status = normalizeClaimStatus(verifyJson.status);

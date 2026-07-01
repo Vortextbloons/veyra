@@ -23,8 +23,8 @@ export function sameLmStudioModel(a: string, b: string): boolean {
   if (!left || !right) return false;
   if (left === right) return true;
 
-  const leftTail = left.includes("/") ? left.split("/").pop()! : left;
-  const rightTail = right.includes("/") ? right.split("/").pop()! : right;
+  const leftTail = left.includes("/") ? left.split("/").pop() ?? left : left;
+  const rightTail = right.includes("/") ? right.split("/").pop() ?? right : right;
   return leftTail.length > 0 && leftTail === rightTail;
 }
 

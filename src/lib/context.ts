@@ -63,7 +63,7 @@ function estimateMessageTokens(message: ChatMessage): number {
   const fileTextTokens =
     message.attachments
       ?.filter((a) => a.fileType !== "image" && a.textContent)
-      .reduce((sum, a) => sum + estimateTokens(a.textContent!), 0) ?? 0;
+      .reduce((sum, a) => sum + estimateTokens(a.textContent ?? ""), 0) ?? 0;
   return textTokens + imageCount * TOKENS_PER_IMAGE + fileTextTokens;
 }
 

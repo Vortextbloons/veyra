@@ -52,6 +52,7 @@ export async function listPiSessions(projectPath: string): Promise<PiSession[]> 
   }
 }
 
+/** Validates that the session file exists. Does not switch an active Pi process. */
 export async function switchPiSession(sessionPath: string): Promise<void> {
   await invoke<void>("switch_pi_session", { sessionPath });
 }
@@ -93,15 +94,14 @@ export async function runPiAgent(
     rejectResult(error);
   };
 
-  // eslint-disable-next-line prefer-const
-  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutTimer: { id: ReturnType<typeof setTimeout> | undefined } = { id: undefined };
   let unlisten: () => void = () => {};
   let unlistenEvent: () => void = () => {};
 
   const cleanup = () => {
     if (cleanedUp) return;
     cleanedUp = true;
-    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+    if (timeoutTimer.id !== undefined) clearTimeout(timeoutTimer.id);
     unlisten();
     unlistenEvent();
     signal?.removeEventListener("abort", onAbort);
@@ -129,7 +129,7 @@ export async function runPiAgent(
 
   signal?.addEventListener("abort", onAbort, { once: true });
 
-  timeoutTimer = setTimeout(() => {
+  timeoutTimer.id = setTimeout(() => {
     cleanup();
     void stopPiAgent(input.sessionId).catch(() => undefined);
     fail(new Error(`Agent run timed out after ${timeoutMs}ms`));

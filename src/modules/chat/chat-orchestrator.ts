@@ -1,31 +1,23 @@
 import type { ChatMessage, WebSearchSource } from "@/modules/chat/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
-import { buildChatContext } from "@/lib/context";
-import { getProviderAdapter } from "@/lib/providers";
 import type { ProviderChatOptions, ProviderToolCall } from "@/lib/providers/types";
 import type { MemoryPack } from "@/modules/memory/memory-types";
+import type { MemoryRetrievalInfo } from "@/modules/memory/memory-types";
+import { getProviderAdapter } from "@/lib/providers";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
-import { buildMemoryPackWithInfo } from "@/modules/memory/memory-retrieval";
-import type { MemoryRetrievalInfo } from "@/modules/memory/memory-types";
-import { resolveCharacterBlock } from "@/lib/resolve-character-block";
-import { buildProviderTools } from "@/lib/tool-registry";
-import { buildContextAnchoringBlock, buildDocumentInstructionsBlock, buildProjectContextBlock } from "@/lib/prompts";
-import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
-import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useProviderStore } from "@/stores/provider-store";
+import { buildChatContext } from "@/lib/context";
+import { resolveCharacterBlock } from "@/lib/resolve-character-block";
+import { buildMemoryPackWithInfo } from "@/modules/memory/memory-retrieval";
+import { buildContextAnchoringBlock, buildDocumentInstructionsBlock, buildProjectContextBlock } from "@/lib/prompts";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import { useProjectStore } from "@/modules/projects/project-store";
-import { buildMessagePerformance } from "@/lib/performance";
 import { registerStreamingToolCall } from "@/modules/chat/chat-tool-utils";
-import { executeToolRound } from "@/modules/chat/chat-tool-rounds";
+import { resolveModelSettings, resolveProviderTooling } from "@/modules/chat/chat-provider-options";
+import { buildRoundMessages, providerChatBase as buildProviderChatBase, formatToolResultsMessage } from "@/modules/chat/chat-context-builder";
+import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 
-/**
- * Optional context threaded through to the chat consumer's onComplete
- * by the orchestrator. The provider does NOT fill this — it is the
- * orchestrator's job to attach the memoryPack that was injected into
- * the request.
- */
 export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;
   memoryRetrieval: MemoryRetrievalInfo;
@@ -36,13 +28,9 @@ export interface SendChatCompleteContext {
 type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
   providerId: string;
   messages: ChatMessage[];
-  /** When false, no memory retrieval, no pack injection, no extraction. */
   memoryEnabled: boolean;
-  /** When false, web search tools are not offered and searches are not run. */
   webSearchEnabled: boolean;
-  /** When false, the Python execution tool is not offered. */
   codeExecutionEnabled: boolean;
-  /** When true, enhanced mode tools (scratchpad, ask_question) are available. */
   enhancedMode: boolean;
   conversationId?: string;
   projectId?: string;
@@ -58,9 +46,6 @@ function latestUserMessageText(messages: ChatMessage[]): string {
   }
   return "";
 }
-
-const MAX_TOOL_ROUNDS = 6;
-const MAX_TOOL_ROUNDS_ENHANCED = 10;
 
 export async function sendChatRequest({
   providerId,
@@ -81,12 +66,6 @@ export async function sendChatRequest({
 
   const settings = useSettingsStore.getState();
 
-  const providerStore = useProviderStore.getState();
-  const activeModelInfo = providerStore.models.find((m) => m.id === options.model);
-  const activeProviderInfo = providerStore.providers.find((p) => p.id === providerId);
-  const activeModelName = activeModelInfo?.name;
-  const activeProviderName = activeProviderInfo?.name;
-
   const { pack: memoryPack, info: memoryRetrieval } = await buildMemoryPackWithInfo({
     enabled: memoryEnabled,
     mode: settings.memoryMode,
@@ -99,15 +78,14 @@ export async function sendChatRequest({
 
   const userOnComplete = options.onComplete;
 
-  const resolvedContextLength = options.contextLength ?? settings.getModelSettings(options.model).contextLength;
-  const resolvedMaxTokens = options.maxTokens ?? settings.getModelSettings(options.model).maxTokens;
-  const resolvedTopP = options.topP ?? settings.getModelSettings(options.model).topP;
-  const resolvedRepetitionPenalty = options.repetitionPenalty ?? settings.getModelSettings(options.model).repetitionPenalty;
-  const resolvedStopSequences = options.stopSequences ?? settings.getModelSettings(options.model).stopSequences;
-  const resolvedReservedOutputTokens = settings.getModelSettings(options.model).reservedOutputTokens;
-  const resolvedUserPrompt = settings.getModelSettings(options.model).systemPrompt || undefined;
+  const resolved = resolveModelSettings(options.model, {
+    contextLength: options.contextLength,
+    maxTokens: options.maxTokens,
+    topP: options.topP,
+    repetitionPenalty: options.repetitionPenalty,
+    stopSequences: options.stopSequences,
+  });
 
-  // Build project prompt block when a project is active
   const projectRecord = projectId
     ? useProjectStore.getState().projects.find((p) => p.id === projectId)
     : undefined;
@@ -139,33 +117,29 @@ export async function sendChatRequest({
       )
     : undefined;
 
-  const effectiveConnectivity = useConnectivityStore.getState().effectiveConnectivity;
-  const localServiceReady = useProviderStore.getState().providers.some(
-    (provider) =>
-      provider.id === useProviderStore.getState().selectedProvider &&
-      provider.status === "connected",
-  );
-  const webSearchAvailability = isFeatureAvailable(
-    "webSearch",
-    effectiveConnectivity,
-    localServiceReady,
-  );
-  const effectiveWebSearchEnabled = webSearchEnabled && webSearchAvailability.available;
-  const codeExecutionAvailability = isFeatureAvailable(
-    "codeExecution",
-    effectiveConnectivity,
-    localServiceReady,
-  );
-  const effectiveCodeExecutionEnabled =
-    codeExecutionEnabled && codeExecutionAvailability.available;
-
-  const providerTools = buildProviderTools({
-    webSearchEnabled: effectiveWebSearchEnabled,
-    documentToolsEnabled: settings.documentPanelEnabled,
-    codeExecutionEnabled: effectiveCodeExecutionEnabled,
-    activeDocumentId: activeDocument?.id,
+  const { providerTools, webSearchEnabled: effectiveWebSearchEnabled } = resolveProviderTooling({
+    webSearchEnabled,
+    codeExecutionEnabled,
     enhancedMode,
   });
+
+  const providerStore = useProviderStore.getState();
+  const activeModelInfo = providerStore.models.find((m) => m.id === options.model);
+  const activeProviderInfo = providerStore.providers.find((p) => p.id === providerId);
+  const activeModelName = activeModelInfo?.name;
+  const activeProviderName = activeProviderInfo?.name;
+
+  const roundMessagesContext = {
+    memoryPack: memoryPack ?? null,
+    conversation,
+    resolvedUserPrompt: resolved.userPrompt,
+    resolvedReservedOutputTokens: resolved.reservedOutputTokens,
+    activeModelName,
+    activeProviderName,
+    documentInstructionsBlock,
+    projectPromptBlock,
+    resolvedContextLength: resolved.contextLength,
+  };
 
   let accumulatedContent = "";
   const wrappedOnChunk = (content: string, done: boolean) => {
@@ -173,10 +147,9 @@ export async function sendChatRequest({
     options.onChunk(content, done);
   };
 
-  const reasoningEnabled = settings.reasoningEnabled;
   const wrappedOnReasoningChunk = options.onReasoningChunk
     ? (content: string, done: boolean) => {
-        if (!reasoningEnabled) return;
+        if (!resolved.reasoningEnabled) return;
         options.onReasoningChunk?.(content, done);
       }
     : undefined;
@@ -206,52 +179,13 @@ export async function sendChatRequest({
     chatStore.resetAfterRePrompt();
   };
 
-  const buildRoundMessages = (
+  const buildRoundMessagesBound = (
     chainMessages: ChatMessage[],
     webSearchContextBlocks: string[],
-  ): ChatMessage[] =>
-    buildChatContext(
-      chainMessages,
-      {
-        memoryPack: memoryPack ?? null,
-        conversationSummary: conversation?.conversationSummary,
-        summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
-        webSearchContextBlock:
-          webSearchContextBlocks.length > 0
-            ? webSearchContextBlocks.join("\n\n")
-            : undefined,
-        documentInstructionsBlock,
-        projectPromptBlock,
-        userPrompt: resolvedUserPrompt,
-        reservedOutputTokens: resolvedReservedOutputTokens,
-        modelName: activeModelName,
-        providerName: activeProviderName,
-        characterBlock: resolveCharacterBlock(conversation, chainMessages),
-      },
-      resolvedContextLength,
-    );
+  ) => buildRoundMessages(chainMessages, webSearchContextBlocks, roundMessagesContext);
 
-  const providerChatBase = () => ({
-    ...options,
-    previousResponseId: undefined,
-    reasoningEnabled,
-    temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
-    contextLength: resolvedContextLength,
-    maxTokens: resolvedMaxTokens || undefined,
-    topP: resolvedTopP,
-    repetitionPenalty: resolvedRepetitionPenalty,
-    stopSequences: resolvedStopSequences,
-    tools: providerTools,
-    toolChoice: providerTools.length > 0 ? ("auto" as const) : ("none" as const),
-    onToolCallDetected: handleToolCallDetected,
-  });
-
-  const formatToolResultsMessage = (sections: string[]): string => {
-    if (sections.length === 0) {
-      return "Tool calls completed with no usable results. Continue or answer from context.";
-    }
-    return `${sections.join("\n\n")}\n\nUse the tool results above. You may call more tools if needed before answering. For web search, sources are displayed separately — do not list or cite URLs in prose.`;
-  };
+  const providerChatBaseBound = () =>
+    buildProviderChatBase(options, resolved, providerTools, handleToolCallDetected);
 
   const retryDocMutationWithLLM = async (
     assistantContent: string,
@@ -259,13 +193,13 @@ export async function sendChatRequest({
   ): Promise<ProviderToolCall[]> => {
     let retryToolCalls: ProviderToolCall[] = [];
     await provider.sendChat({
-      ...providerChatBase(),
+      ...providerChatBaseBound(),
       onChunk: () => {},
       onReasoningChunk: () => {},
       onComplete: (nextResult) => {
         retryToolCalls = nextResult.toolCalls ?? [];
       },
-      messages: buildRoundMessages(
+      messages: buildRoundMessagesBound(
         [
           ...messages,
           {
@@ -288,113 +222,40 @@ export async function sendChatRequest({
     return retryToolCalls;
   };
 
-  const executeToolRoundLocal = async (toolCalls: ProviderToolCall[]) => {
-    const buffer = useChatStore.getState().streamingBuffer;
-    const activeProject = useProjectStore.getState().activeProject();
-    const workspaceRoot = activeProject?.settings?.agentProjectPath?.trim() || null;
-    return executeToolRound(toolCalls, {
-      signal: options.signal,
-      projectId,
-      conversationId,
-      assistantMessageId: buffer?.messageId,
-      webSearchEnabled: effectiveWebSearchEnabled,
-      webSearchAvailability,
-      retryDocMutationWithLLM,
-      docMutationConversationId: conversationId,
-      codeExecution: {
-        timeoutSecs: settings.codeExecutionTimeoutSecs,
-        pythonPath: settings.customPythonPath.trim() || null,
-        workspaceRoot,
-      },
-    });
-  };
+  const executeToolRoundLocal = createExecuteToolRoundLocal({
+    signal: options.signal,
+    projectId,
+    conversationId,
+    effectiveWebSearchEnabled,
+    webSearchAvailability: { available: true },
+    retryDocMutationWithLLM,
+    conversationIdForDocMutation: conversationId,
+  });
 
-  const rePromptWithTools = async (
+  const rePromptWithToolsBound = (
     chainMessages: ChatMessage[],
     round: number,
     accumulatedSearchSources: WebSearchSource[],
     accumulatedContextBlocks: string[],
-  ): Promise<void> => {
-    if (options.signal?.aborted) return;
-    const maxRounds = enhancedMode ? MAX_TOOL_ROUNDS_ENHANCED : MAX_TOOL_ROUNDS;
-    if (round >= maxRounds) {
-      options.onError(`Stopped after ${maxRounds} tool rounds.`);
-      const now = Date.now();
-      finalizeToUser(
-        {
-          performance: buildMessagePerformance({
-            content: accumulatedContent,
-            startedAt: now,
-            completedAt: now,
-          }),
-          toolCalls: [],
-        },
-        accumulatedSearchSources,
-      );
-      return;
-    }
-
-    let roundContent = "";
-    const roundOnChunk = (content: string, done: boolean) => {
-      roundContent += content;
-      accumulatedContent += content;
-      options.onChunk(content, done);
-    };
-
-    await new Promise<void>((resolve, reject) => {
-      void provider.sendChat({
-        ...providerChatBase(),
-        onChunk: roundOnChunk,
-        onReasoningChunk: wrappedOnReasoningChunk,
-        onComplete: (result) => {
-          void (async () => {
-            try {
-              const toolCalls = result.toolCalls ?? [];
-              if (toolCalls.length === 0) {
-                finalizeToUser(result, accumulatedSearchSources);
-                resolve();
-                return;
-              }
-
-              const exec = await executeToolRoundLocal(toolCalls);
-              for (const chunk of exec.streamedChunks) {
-                accumulatedContent = accumulatedContent
-                  ? `${accumulatedContent}\n\n${chunk}`
-                  : chunk;
-                options.onChunk(chunk, false);
-              }
-
-              const assistantMsg: ChatMessage = {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                content: roundContent,
-                timestamp: Date.now(),
-                modelId: options.model,
-              };
-              const toolUserMsg: ChatMessage = {
-                id: crypto.randomUUID(),
-                role: "user",
-                content: formatToolResultsMessage(exec.toolResultSections),
-                timestamp: Date.now(),
-              };
-              const nextChain = [...chainMessages, assistantMsg, toolUserMsg];
-              const nextSources = [...accumulatedSearchSources, ...exec.webSearchSources];
-              const nextBlocks = [
-                ...accumulatedContextBlocks,
-                ...exec.webSearchContextBlocks,
-              ];
-
-              await rePromptWithTools(nextChain, round + 1, nextSources, nextBlocks);
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          })();
-        },
-        messages: buildRoundMessages(chainMessages, accumulatedContextBlocks),
-      }).catch(reject);
+  ) =>
+    rePromptWithTools({
+      provider,
+      providerChatBase: providerChatBaseBound,
+      chainMessages,
+      round,
+      accumulatedSearchSources,
+      accumulatedContextBlocks,
+      accumulatedContent,
+      enhancedMode,
+      signal: options.signal,
+      model: options.model,
+      onChunk: options.onChunk,
+      onReasoningChunk: wrappedOnReasoningChunk,
+      onError: options.onError,
+      finalizeToUser,
+      roundMessagesContext,
+      executeToolRoundLocal,
     });
-  };
 
   const wrappedOnComplete: ProviderChatOptions["onComplete"] = (result) => {
     const toolCalls = result.toolCalls ?? [];
@@ -432,7 +293,7 @@ export async function sendChatRequest({
         };
         const chain = [...messages, assistantMsg, toolUserMsg];
 
-        await rePromptWithTools(
+        await rePromptWithToolsBound(
           chain,
           1,
           exec.webSearchSources,
@@ -453,16 +314,16 @@ export async function sendChatRequest({
   await provider.sendChat({
     ...options,
     temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
-    contextLength: resolvedContextLength,
-    maxTokens: resolvedMaxTokens || undefined,
-    topP: resolvedTopP,
-    repetitionPenalty: resolvedRepetitionPenalty,
-    stopSequences: resolvedStopSequences,
+    contextLength: resolved.contextLength,
+    maxTokens: resolved.maxTokens || undefined,
+    topP: resolved.topP,
+    repetitionPenalty: resolved.repetitionPenalty,
+    stopSequences: resolved.stopSequences,
     tools: providerTools,
     toolChoice: providerTools.length > 0 ? "auto" : "none",
     onChunk: wrappedOnChunk,
     onReasoningChunk: wrappedOnReasoningChunk,
-    reasoningEnabled,
+    reasoningEnabled: resolved.reasoningEnabled,
     onToolCallDetected: handleToolCallDetected,
     onComplete: wrappedOnComplete,
     messages: buildChatContext(
@@ -474,15 +335,14 @@ export async function sendChatRequest({
         contextAnchoringBlock,
         documentInstructionsBlock,
         projectPromptBlock,
-        userPrompt: resolvedUserPrompt,
-        reservedOutputTokens: resolvedReservedOutputTokens,
+        userPrompt: resolved.userPrompt,
+        reservedOutputTokens: resolved.reservedOutputTokens,
         modelName: activeModelName,
         providerName: activeProviderName,
         characterBlock: resolveCharacterBlock(conversation, messages),
       },
-      resolvedContextLength,
+      resolved.contextLength,
     ),
   });
   await toolCompletion;
-
 }

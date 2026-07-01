@@ -172,7 +172,7 @@ interface ExampleType {
 
 ### 3. Add a Cross-Reference
 
-In `docs/00-overview.md`, add a row to the Feature Modules table:
+In `docs/overview/README.md`, add a row to the Feature Modules table:
 
 ```markdown
 | [<feature>](./<feature>/README.md) | Short description |

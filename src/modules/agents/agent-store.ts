@@ -561,7 +561,8 @@ export const useAgentStore = create<AgentStore>()(
 
         const failed = result.exitCode !== 0;
         const stderrText = stripAnsi(result.stderr);
-        const currentEvents = get().sessions.find((item) => item.id === id)!.events;
+        const currentSessionEvents = get().sessions.find((item) => item.id === id);
+        const currentEvents = currentSessionEvents?.events ?? [];
         const events = [
           ...currentEvents,
           ...(stderrText

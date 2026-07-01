@@ -131,7 +131,7 @@ export function AskQuestionBlock({
   const isDone = state.phase === "done";
   const count = questions?.length ?? 0;
   const isSingle = count === 1;
-  const allAnswered = count > 0 && questions!.every((_, i) => answers[i]);
+  const allAnswered = count > 0 && (questions ?? []).every((_, i) => answers[i]);
 
   const handleQuestionAnswer = (index: number, value: string) => {
     const next = { ...answers, [index]: value };

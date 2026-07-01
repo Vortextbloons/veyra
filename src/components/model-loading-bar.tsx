@@ -39,7 +39,7 @@ export function ModelLoadingBar({ progress }: { progress: ModelLoadProgress }) {
           <div
             className="h-full rounded-full bg-indigo-400 transition-all duration-300 ease-out"
             style={{
-              width: hasPercent ? `${Math.min(100, Math.max(0, progress.percent!))}%` : "100%",
+              width: hasPercent ? `${Math.min(100, Math.max(0, progress.percent ?? 0))}%` : "100%",
               animation: hasPercent ? undefined : "veyra-indeterminate 1.5s ease-in-out infinite",
             }}
           />

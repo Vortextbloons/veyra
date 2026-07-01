@@ -254,18 +254,18 @@ Return ONLY a JSON object:
 
     const sectionEvidence = (section.supportingEvidenceIds || [])
       .map((id) => evidenceList.find((e) => e.id === id))
-      .filter(Boolean)
+      .filter((e): e is NonNullable<typeof e> => Boolean(e))
       .map((e) => {
-        const source = sources.find((s) => s.id === e!.sourceId);
-        const sourceNumber = getSourceNumber(e!.sourceId, shownSources);
-        return `Evidence: ${e!.content} (Citation: ${sourceNumber ? `[${sourceNumber}]` : "uncited-source"}, Source: ${source?.title || "Unknown"}, Confidence: ${e!.confidence})`;
+        const source = sources.find((s) => s.id === e.sourceId);
+        const sourceNumber = getSourceNumber(e.sourceId, shownSources);
+        return `Evidence: ${e.content} (Citation: ${sourceNumber ? `[${sourceNumber}]` : "uncited-source"}, Source: ${source?.title || "Unknown"}, Confidence: ${e.confidence})`;
       })
       .join("\n");
 
     const sectionClaims = (section.supportingClaimIds || [])
       .map((id) => claims.find((c) => c.id === id))
-      .filter(Boolean)
-      .map((c) => `Claim: ${c!.claim} (Status: ${c!.status}, Confidence: ${c!.confidence})`)
+      .filter((c): c is NonNullable<typeof c> => Boolean(c))
+      .map((c) => `Claim: ${c.claim} (Status: ${c.status}, Confidence: ${c.confidence})`)
       .join("\n");
 
     const sectionPrompt = `Write section "${section.heading}" for a research report.

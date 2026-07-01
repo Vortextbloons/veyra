@@ -71,7 +71,8 @@ export async function callResearchAi(
         const systemMsg = messages.find((m) => m.role === "system");
         const lastUserIdx = (() => {
           for (let i = messages.length - 1; i >= 0; i--) {
-            if (messages[i]!.role === "user") return i;
+            const msg = messages[i];
+            if (msg?.role === "user") return i;
           }
           return -1;
         })();

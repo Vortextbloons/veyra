@@ -114,7 +114,10 @@ export function SchedulerPopover() {
                 {snapshot.activeJob ? (
                   <button
                     type="button"
-                    onClick={() => handleSelectJob(snapshot.activeJob!)}
+                    onClick={() => {
+                      const active = snapshot.activeJob;
+                      if (active) handleSelectJob(active);
+                    }}
                     className="w-full rounded-lg border border-indigo-500/20 bg-indigo-500/[0.06] p-2 text-left transition-colors hover:bg-indigo-500/[0.1]"
                   >
                     <div className="flex items-center gap-2">

@@ -75,7 +75,7 @@ export function roundRobinSampleBySourceScore<T extends { sourceId: string }>(
   while (out.length < maxItems) {
     let pushedThisRound = 0;
     for (const sid of sourceIds) {
-      const list = bySource.get(sid)!;
+      const list = bySource.get(sid) ?? [];
       if (idx < list.length) {
         out.push(list[idx]);
         pushedThisRound++;

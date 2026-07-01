@@ -45,7 +45,9 @@ export async function extractFromSourcesBatch(
       continue;
     }
     for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-      workItems.push({ source, chunkIndex, chunk: chunks[chunkIndex]! });
+      const chunk = chunks[chunkIndex];
+      if (chunk == null) continue;
+      workItems.push({ source, chunkIndex, chunk });
     }
   }
 
@@ -218,12 +220,12 @@ If no evidence is relevant, return {"evidence":[]}.`;
       let persisted = 0;
       for (const item of arr) {
         const idxRaw = item.sourceIndex;
-        let source = sourceBatch[0]!;
+        let source = sourceBatch[0] ?? sourceBatch[sourceBatch.length - 1];
         if (typeof idxRaw === "number" && idxRaw >= 1 && idxRaw <= sourceBatch.length) {
           const aliased = sourceBatch[idxRaw - 1];
           if (aliased) source = aliased;
         } else if (sourceBatch.length === 1) {
-          source = sourceBatch[0]!;
+          source = sourceBatch[0] ?? source;
         }
         if (await persistOne(item, source)) {
           persisted++;
@@ -307,7 +309,7 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
       const batchMaxTokens = maxOutputTokensForExtractBatch(batchSourceCount, followUp);
       const { value } = await ctx.runAiStep(
         "extract",
-        `Extract batch of ${batchSourceCount} source${batchSourceCount === 1 ? "" : "s"}: ${sourceBatch[0]!.title.length > 40 ? `${sourceBatch[0]!.title.slice(0, 37)}…` : sourceBatch[0]!.title}${batchSourceCount > 1 ? ` +${batchSourceCount - 1}` : ""}`,
+        `Extract batch of ${batchSourceCount} source${batchSourceCount === 1 ? "" : "s"}: ${(sourceBatch[0]?.title ?? "").length > 40 ? `${sourceBatch[0]?.title?.slice(0, 37) ?? ""}…` : sourceBatch[0]?.title ?? ""}${batchSourceCount > 1 ? ` +${batchSourceCount - 1}` : ""}`,
         followUp ? "Follow-up extraction" : "Initial extraction",
         () =>
           callResearchAi(

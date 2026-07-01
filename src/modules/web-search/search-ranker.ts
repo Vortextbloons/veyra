@@ -113,7 +113,7 @@ export function dedupeAndRankSearchResults(
 
   const domainCounts = new Map<string, number>();
   const ranked = [...byUrl.values()].map((group) => {
-    const best = group[0]!;
+    const best = group[0];
     const result = best.result;
     const host = hostname(result.url);
     const fetch = fetchedByUrl.get(result.url);

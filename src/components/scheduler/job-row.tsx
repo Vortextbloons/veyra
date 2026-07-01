@@ -116,7 +116,10 @@ export function JobRow({
 
   useEffect(() => {
     if (job.status !== "running" || !job.startedAt) return;
-    const update = () => setElapsed(formatElapsed(job.startedAt!));
+    const startedAt = job.startedAt;
+    const update = () => {
+      if (startedAt) setElapsed(formatElapsed(startedAt));
+    };
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);

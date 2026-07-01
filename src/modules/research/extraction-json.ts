@@ -114,7 +114,7 @@ function salvageTruncatedArrayObjects(text: string): Array<Record<string, unknow
   const objects: Array<Record<string, unknown>> = [];
   let i = 0;
   while (i < body.length) {
-    while (i < body.length && /[\s,]/.test(body[i]!)) i++;
+    while (i < body.length && /[\s,]/.test(body[i] ?? "")) i++;
     if (i >= body.length || body[i] !== "{") break;
     const objStr = extractBalancedJson(body.slice(i), "{", "}");
     if (!objStr) break;
