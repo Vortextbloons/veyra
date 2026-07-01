@@ -117,7 +117,7 @@ export async function sendChatRequest({
       )
     : undefined;
 
-  const { providerTools, webSearchEnabled: effectiveWebSearchEnabled } = resolveProviderTooling({
+  const { providerTools, webSearchEnabled: effectiveWebSearchEnabled, webSearchAvailability } = resolveProviderTooling({
     webSearchEnabled,
     codeExecutionEnabled,
     enhancedMode,
@@ -227,7 +227,7 @@ export async function sendChatRequest({
     projectId,
     conversationId,
     effectiveWebSearchEnabled,
-    webSearchAvailability: { available: true },
+    webSearchAvailability,
     retryDocMutationWithLLM,
     conversationIdForDocMutation: conversationId,
   });

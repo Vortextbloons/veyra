@@ -220,7 +220,7 @@ If no evidence is relevant, return {"evidence":[]}.`;
       let persisted = 0;
       for (const item of arr) {
         const idxRaw = item.sourceIndex;
-        let source = sourceBatch[0] ?? sourceBatch[sourceBatch.length - 1];
+        let source = sourceBatch[0];
         if (typeof idxRaw === "number" && idxRaw >= 1 && idxRaw <= sourceBatch.length) {
           const aliased = sourceBatch[idxRaw - 1];
           if (aliased) source = aliased;

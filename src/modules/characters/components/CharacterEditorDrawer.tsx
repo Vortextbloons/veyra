@@ -68,8 +68,10 @@ function DrawerBody({ character, onClose }: { character: CharacterRecord; onClos
 
   const [draft, setDraft] = useState<CharacterRecord>(liveCharacter);
   const [lastSyncedId, setLastSyncedId] = useState(liveCharacter.id);
-  if (lastSyncedId !== liveCharacter.id) {
+  const [lastSyncedUpdatedAt, setLastSyncedUpdatedAt] = useState(liveCharacter.updatedAt);
+  if (lastSyncedId !== liveCharacter.id || lastSyncedUpdatedAt !== liveCharacter.updatedAt) {
     setLastSyncedId(liveCharacter.id);
+    setLastSyncedUpdatedAt(liveCharacter.updatedAt);
     setDraft(liveCharacter);
   }
 

@@ -21,6 +21,7 @@ export type ResolvedModelSettings = {
 export type ProviderTooling = {
   providerTools: ProviderToolDefinition[];
   webSearchEnabled: boolean;
+  webSearchAvailability: { available: boolean; reason?: string };
   codeExecutionEnabled: boolean;
 };
 
@@ -96,6 +97,7 @@ export function resolveProviderTooling({
   return {
     providerTools,
     webSearchEnabled: effectiveWebSearchEnabled,
+    webSearchAvailability,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
   };
 }

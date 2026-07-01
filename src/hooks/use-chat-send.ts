@@ -1,12 +1,12 @@
 import { useCallback } from "react";
 import { aiScheduler } from "@/lib/ai-scheduler";
-import { executeChatSend, ensureProviderReady } from "@/modules/chat/chat-actions";
 import type { ChatMessage, RequestStatus } from "@/modules/chat/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { useChatStore } from "@/stores/chat-store";
 import { useAgentStore } from "@/modules/agents/agent-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { filterAttachments } from "@/hooks/use-chat-attachments";
+import { runChatJob } from "@/hooks/run-chat-job";
 
 interface UseChatSendOptions {
   activeConversationId: string | null;
@@ -43,13 +43,6 @@ export function useChatSend({
 }: UseChatSendOptions) {
   const createConversation = useChatStore((state) => state.createConversation);
   const addMessagePair = useChatStore((state) => state.addMessagePair);
-  const appendStreamingContent = useChatStore((state) => state.appendStreamingContent);
-  const appendStreamingReasoning = useChatStore((state) => state.appendStreamingReasoning);
-  const clearStreamingBuffer = useChatStore((state) => state.clearStreamingBuffer);
-  const clearStreamingBufferUnlessSkipped = useChatStore(
-    (state) => state.clearStreamingBufferUnlessSkipped,
-  );
-  const commitAssistantMessage = useChatStore((state) => state.commitAssistantMessage);
   const setModelLoadProgress = useChatStore((state) => state.setModelLoadProgress);
 
   const handleSend = useCallback(
@@ -144,102 +137,29 @@ export function useChatSend({
       addMessagePair(conversationId, userMessage, assistantMessage, {
         deferTitle: useSettingsStore.getState().autoNameEnabled,
       });
-      setStreamingMessageId(assistantMessage.id);
-      setRequestStatus("streaming");
 
-      aiScheduler.abortActiveBackgroundJob();
-
-      const jobId = aiScheduler.enqueueAiJob({
-        type: "user_chat",
-        priority: 0,
-        title: "Sending message",
-        description: trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed,
-        prompt: trimmed,
+      runChatJob({
         conversationId,
-        model: selectedModel,
-        run: async (signal) => {
-          try {
-            await ensureProviderReady();
-            return await executeChatSend({
-              conversationId,
-              userMessage,
-              assistantMessage,
-              trimmed,
-              previousResponseId,
-              selectedProvider,
-              selectedModel,
-              memoryEnabled,
-              webSearchEnabled: effectiveWebSearchEnabled,
-              codeExecutionEnabled: effectiveCodeExecutionEnabled,
-              enhancedMode: enhancedModeEnabled,
-              projectId,
-              signal,
-              onChunk: (chunk) => {
-                if (chunk) appendStreamingContent(conversationId, assistantMessage.id, chunk);
-              },
-              onReasoningChunk: (chunk) => {
-                if (chunk) appendStreamingReasoning(conversationId, assistantMessage.id, chunk);
-              },
-              onModelLoadProgress: (phase: string, percent?: number) => {
-                setModelLoadProgress(
-                  phase === "ready" ? null : { phase: phase as "unloading" | "loading", percent },
-                );
-              },
-              onError: (error) => {
-                commitAssistantMessage(conversationId, assistantMessage.id, {
-                  content: `Error: ${error}`,
-                });
-                clearStreamingBuffer();
-                setModelLoadProgress(null);
-                setRequestStatus("error");
-                setStreamingMessageId(null);
-              },
-              onComplete: (result, context) => {
-                if (useChatStore.getState().isBufferClearSkipped()) return;
-                setModelLoadProgress(null);
-                const memoryPack = context?.memoryPack ?? null;
-                const memoryRetrieval = context?.memoryRetrieval;
-                const webSearchSources = context?.webSearchSources;
-                const scratchpadContent = context?.scratchpadContent;
-                commitAssistantMessage(conversationId, assistantMessage.id, {
-                  performance: result.performance,
-                  lmResponseId: result.responseId,
-                  ...(memoryPack ? { memoryPack } : {}),
-                  ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
-                  ...(webSearchSources ? { webSearchSources } : {}),
-                  ...(scratchpadContent ? { scratchpadContent } : {}),
-                });
-              },
-            });
-          } catch (error) {
-            if (!signal.aborted) {
-              commitAssistantMessage(conversationId, assistantMessage.id, {
-                content: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
-              });
-              setRequestStatus("error");
-            }
-          } finally {
-            clearStreamingBufferUnlessSkipped();
-            if (!useChatStore.getState().isBufferClearSkipped()) {
-              setStreamingMessageId(null);
-              setRequestStatus((status) => (status === "error" ? "error" : "idle"));
-            }
-            setModelLoadProgress(null);
-            if (activeChatJobIdRef.current === jobId) activeChatJobIdRef.current = null;
-          }
-        },
+        userMessage,
+        assistantMessage,
+        trimmed,
+        previousResponseId,
+        selectedProvider,
+        selectedModel,
+        memoryEnabled,
+        effectiveWebSearchEnabled,
+        effectiveCodeExecutionEnabled,
+        enhancedModeEnabled,
+        projectId,
+        setRequestStatus,
+        setStreamingMessageId,
+        activeChatJobIdRef,
       });
-      activeChatJobIdRef.current = jobId;
     },
     [
       activeConversationId,
       activeChatJobIdRef,
       addMessagePair,
-      appendStreamingContent,
-      appendStreamingReasoning,
-      clearStreamingBuffer,
-      clearStreamingBufferUnlessSkipped,
-      commitAssistantMessage,
       createConversation,
       defaultMemoryEnabled,
       effectiveWebSearchEnabled,
