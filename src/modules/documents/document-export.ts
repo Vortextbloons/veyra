@@ -28,34 +28,14 @@ export const DOCUMENT_STATUS_OPTIONS: { value: DocumentStatus; label: string }[]
  * Format a document status for display.
  */
 export function formatDocumentStatus(status: DocumentRecord["status"]): string {
-  const statusLabels: Record<DocumentRecord["status"], string> = {
-    draft: "Draft",
-    review: "In Review",
-    final: "Final",
-    archived: "Archived",
-  };
-  return statusLabels[status] || status;
+  return DOCUMENT_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
 }
 
 /**
  * Format a document type for display.
  */
 export function formatDocumentType(type: DocumentRecord["type"]): string {
-  const typeLabels: Record<DocumentRecord["type"], string> = {
-    document: "Document",
-    technical_spec: "Technical Spec",
-    essay: "Essay",
-    report: "Report",
-    proposal: "Proposal",
-    readme: "README",
-    notes: "Notes",
-    prompt: "Prompt",
-    project_plan: "Project Plan",
-    meeting_notes: "Meeting Notes",
-    research_brief: "Research Brief",
-    agent_instruction: "Agent Instruction",
-  };
-  return typeLabels[type] || type;
+  return DOCUMENT_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
 }
 
 /**

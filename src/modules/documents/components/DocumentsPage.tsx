@@ -33,7 +33,10 @@ export function DocumentsPage() {
   }, [loadAllDocuments, setDocumentsTabActive]);
 
   useEffect(() => {
-    if (!activeDocumentId) return;
+    if (!activeDocumentId) {
+      prevDocIdRef.current = null;
+      return;
+    }
     const settings = useSettingsStore.getState();
     if (activeDocumentId !== prevDocIdRef.current) {
       prevDocIdRef.current = activeDocumentId;

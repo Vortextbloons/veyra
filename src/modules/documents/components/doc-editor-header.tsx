@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, startTransition } from "react";
 import { Bookmark, Trash2, X, Edit2, Check, Globe, ChevronDown, ChevronRight } from "lucide-react";
 import { useDocumentStore } from "../document-store";
 import { useMemoryStore } from "@/modules/memory/memory-store";
@@ -23,6 +23,10 @@ export function DocEditorHeader() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    startTransition(() => setTagInput(""));
+  }, [activeDocumentId]);
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -255,7 +259,6 @@ export function DocEditorHeader() {
                 </span>
               ))}
               <input
-                key={activeDocumentId}
                 type="text"
                 value={tagInput}
                 onChange={(e) => {
