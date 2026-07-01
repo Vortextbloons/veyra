@@ -9,10 +9,14 @@ import {
   X,
   Loader2,
   Sparkles,
+  Languages,
+  CaseSensitive,
+  ListTree,
+  Search,
 } from "lucide-react";
 import { useDocumentStore, selectActiveDocumentContent } from "../document-store";
-import { buildAiMessages, streamAiAssist } from "../document-ai";
-import type { AiAssistAction, AiAssistMessage } from "../document-ai";
+import { buildAiMessages, streamAiAssist, streamResearchDraft } from "../document-ai";
+import type { AiAssistAction, AiAssistMessage, AiAssistParams } from "../document-ai";
 import { AiMessageBubble } from "./ai-message-bubble";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +33,10 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: "shorten", label: "Shorten", icon: <Scissors className="size-3.5" />, color: "text-amber-400" },
   { id: "rewrite", label: "Rewrite", icon: <MessageSquareQuote className="size-3.5" />, color: "text-purple-400" },
   { id: "summarize", label: "Summarize", icon: <Sparkles className="size-3.5" />, color: "text-pink-400" },
+  { id: "translate", label: "Translate", icon: <Languages className="size-3.5" />, color: "text-cyan-400" },
+  { id: "tone", label: "Tone", icon: <CaseSensitive className="size-3.5" />, color: "text-orange-400" },
+  { id: "outline", label: "Outline", icon: <ListTree className="size-3.5" />, color: "text-indigo-400" },
+  { id: "research_draft", label: "Research", icon: <Search className="size-3.5" />, color: "text-teal-400" },
 ];
 
 interface AiAssistPanelProps {
@@ -48,6 +56,8 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
   const [pendingSuggestion, setPendingSuggestion] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<AiAssistAction | null>(null);
   const [streamingContent, setStreamingContent] = useState("");
+  const [activeParams, setActiveParams] = useState<AiAssistParams>({});
+  const [showParamForm, setShowParamForm] = useState<AiAssistAction | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -61,7 +71,7 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
   }, [isStreaming]);
 
   const runAction = useCallback(
-    async (action: AiAssistAction, customPrompt?: string) => {
+    async (action: AiAssistAction, customPrompt?: string, params?: AiAssistParams) => {
       if (!doc || isStreaming) return;
 
       const promptText = action === "custom"
@@ -79,15 +89,7 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
       setIsStreaming(true);
       setStreamingContent("");
       setLastAction(action);
-
-      const aiMessages = buildAiMessages(
-        activeContent,
-        doc.title,
-        action,
-        action === "custom" ? promptText : "",
-        undefined,
-        messages,
-      );
+      setShowParamForm(null);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -95,39 +97,97 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
       let accumulated = "";
 
       try {
-        await streamAiAssist({
-          messages: aiMessages,
-          signal: controller.signal,
-          onChunk: (chunk, done) => {
-            if (done) {
-              setPendingSuggestion(accumulated);
-              setIsStreaming(false);
+        if (action === "research_draft") {
+          const query = params?.researchQuery ?? activeParams.researchQuery ?? promptText;
+          await streamResearchDraft({
+            documentContent: activeContent,
+            query,
+            signal: controller.signal,
+            onChunk: (chunk, done) => {
+              if (done) {
+                setPendingSuggestion(accumulated);
+                setIsStreaming(false);
+                setMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: accumulated, action },
+                ]);
+                setStreamingContent("");
+              } else {
+                accumulated += chunk;
+                setStreamingContent(accumulated);
+              }
+            },
+            onError: (error) => {
               setMessages((prev) => [
                 ...prev,
-                { role: "assistant", content: accumulated, action },
+                { role: "assistant", content: `Error: ${error}` },
               ]);
+              setIsStreaming(false);
               setStreamingContent("");
-            } else {
-              accumulated += chunk;
-              setStreamingContent(accumulated);
-            }
-          },
-          onError: (error) => {
-            setMessages((prev) => [
-              ...prev,
-              { role: "assistant", content: `Error: ${error}` },
-            ]);
-            setIsStreaming(false);
-            setStreamingContent("");
-          },
-        });
+            },
+          });
+        } else {
+          const aiMessages = buildAiMessages(
+            activeContent,
+            doc.title,
+            action,
+            action === "custom" ? promptText : "",
+            undefined,
+            messages,
+            params ?? activeParams,
+          );
+
+          await streamAiAssist({
+            messages: aiMessages,
+            signal: controller.signal,
+            onChunk: (chunk, done) => {
+              if (done) {
+                setPendingSuggestion(accumulated);
+                setIsStreaming(false);
+                setMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: accumulated, action },
+                ]);
+                setStreamingContent("");
+              } else {
+                accumulated += chunk;
+                setStreamingContent(accumulated);
+              }
+            },
+            onError: (error) => {
+              setMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: `Error: ${error}` },
+              ]);
+              setIsStreaming(false);
+              setStreamingContent("");
+            },
+          });
+        }
       } catch {
         setIsStreaming(false);
         setStreamingContent("");
       }
     },
-    [doc, activeContent, input, messages, isStreaming],
+    [doc, activeContent, input, messages, isStreaming, activeParams],
   );
+
+  const handleActionClick = useCallback(
+    (action: AiAssistAction) => {
+      const parameterizedActions: AiAssistAction[] = ["translate", "tone", "outline", "research_draft"];
+      if (parameterizedActions.includes(action)) {
+        setShowParamForm(action);
+      } else {
+        void runAction(action);
+      }
+    },
+    [runAction],
+  );
+
+  const handleParamSubmit = useCallback(() => {
+    if (!showParamForm) return;
+    void runAction(showParamForm, undefined, activeParams);
+  }, [showParamForm, activeParams, runAction]);
 
   const handleAccept = useCallback(() => {
     if (pendingSuggestion) {
@@ -144,12 +204,17 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (showParamForm && e.key === "Escape") {
+        setShowParamForm(null);
+        setActiveParams({});
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         void runAction("custom");
       }
     },
-    [runAction],
+    [runAction, showParamForm],
   );
 
   const handleStop = useCallback(() => {
@@ -184,12 +249,12 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
         </div>
       )}
 
-      <div className="flex gap-1 border-b border-[var(--color-border)] px-3 py-2">
+      <div className="flex flex-wrap gap-1 border-b border-[var(--color-border)] px-3 py-2">
         {QUICK_ACTIONS.map((action) => (
           <button
             key={action.id}
             type="button"
-            onClick={() => void runAction(action.id)}
+            onClick={() => handleActionClick(action.id)}
             disabled={isStreaming || !doc}
             className={cn(
               "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
@@ -203,7 +268,105 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      {/* Parameter form for parameterized actions */}
+      {showParamForm && (
+        <div className="border-b border-[var(--color-border)] px-3 py-2">
+          {showParamForm === "translate" && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] text-[var(--color-text-dim)]">Target Language</label>
+              <select
+                value={activeParams.targetLanguage ?? "English"}
+                onChange={(e) => setActiveParams({ ...activeParams, targetLanguage: e.target.value })}
+                className="rounded-md border border-[var(--color-border)] bg-white/[0.03] px-2 py-1 text-[12px] text-[var(--color-text)] focus:border-[var(--color-accent)]/50 focus:outline-none"
+              >
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Chinese">Chinese</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Korean">Korean</option>
+                <option value="Portuguese">Portuguese</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Russian">Russian</option>
+              </select>
+            </div>
+          )}
+          {showParamForm === "tone" && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] text-[var(--color-text-dim)]">Tone</label>
+              <select
+                value={activeParams.tone ?? "formal"}
+                onChange={(e) => setActiveParams({ ...activeParams, tone: e.target.value })}
+                className="rounded-md border border-[var(--color-border)] bg-white/[0.03] px-2 py-1 text-[12px] text-[var(--color-text)] focus:border-[var(--color-accent)]/50 focus:outline-none"
+              >
+                <option value="formal">Formal</option>
+                <option value="casual">Casual</option>
+                <option value="technical">Technical</option>
+                <option value="creative">Creative</option>
+                <option value="academic">Academic</option>
+                <option value="persuasive">Persuasive</option>
+                <option value="concise">Concise</option>
+              </select>
+            </div>
+          )}
+          {showParamForm === "outline" && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] text-[var(--color-text-dim)]">Depth (1-4)</label>
+              <input
+                type="number"
+                min={1}
+                max={4}
+                value={activeParams.outlineDepth ?? 2}
+                onChange={(e) => setActiveParams({ ...activeParams, outlineDepth: Number(e.target.value) })}
+                className="rounded-md border border-[var(--color-border)] bg-white/[0.03] px-2 py-1 text-[12px] text-[var(--color-text)] focus:border-[var(--color-accent)]/50 focus:outline-none"
+              />
+            </div>
+          )}
+          {showParamForm === "research_draft" && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] text-[var(--color-text-dim)]">Research Topic / Query</label>
+              <input
+                type="text"
+                value={activeParams.researchQuery ?? ""}
+                onChange={(e) => setActiveParams({ ...activeParams, researchQuery: e.target.value })}
+                placeholder="e.g., latest advances in..."
+                className="rounded-md border border-[var(--color-border)] bg-white/[0.03] px-2 py-1 text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-accent)]/50 focus:outline-none"
+              />
+            </div>
+          )}
+          <div className="flex gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowParamForm(null);
+                setActiveParams({});
+              }}
+              className="flex-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] text-[var(--color-text-dim)] hover:bg-white/[0.03]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleParamSubmit}
+              disabled={isStreaming || !doc}
+              className="flex-1 rounded-md bg-[var(--color-accent)] px-2 py-1 text-[11px] font-medium text-white hover:brightness-110 disabled:opacity-40"
+            >
+              Run
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div
+        className="flex-1 overflow-y-auto px-3 py-3"
+        onClick={() => {
+          if (showParamForm) {
+            setShowParamForm(null);
+            setActiveParams({});
+          }
+        }}
+      >
         {messages.length === 0 && !isStreaming ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <div className="grid size-12 place-items-center rounded-xl bg-white/[0.03]">
@@ -277,7 +440,15 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
         </div>
       )}
 
-      <div className="border-t border-[var(--color-border)] px-3 py-2">
+      <div
+        className="border-t border-[var(--color-border)] px-3 py-2"
+        onClick={() => {
+          if (showParamForm) {
+            setShowParamForm(null);
+            setActiveParams({});
+          }
+        }}
+      >
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
@@ -285,6 +456,7 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
             placeholder="Ask AI anything..."
             disabled={isStreaming}
             className="flex-1 rounded-md border border-[var(--color-border)] bg-white/[0.03] px-3 py-1.5 text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-accent)]/50 focus:outline-none disabled:opacity-50"

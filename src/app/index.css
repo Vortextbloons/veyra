@@ -233,3 +233,48 @@ body {
 .markdown-rendered > p:last-child {
   margin-bottom: 0;
 }
+
+/* Print styles */
+@media print {
+  /* Hide everything except document content */
+  .primary-sidebar,
+  .document-list-panel,
+  .ai-assist-panel,
+  .document-toolbar,
+  .doc-editor-header,
+  .bottom-bar {
+    display: none !important;
+  }
+
+  /* Show editor content */
+  .split-editor {
+    display: block !important;
+  }
+
+  .markdown-preview {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Clean typography for print */
+  body {
+    font-size: 12pt;
+    color: black;
+    background: white;
+  }
+
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  pre, blockquote {
+    page-break-inside: avoid;
+  }
+
+  /* Remove dark theme colors for print */
+  * {
+    color: black !important;
+    background: white !important;
+    border-color: #ccc !important;
+  }
+}

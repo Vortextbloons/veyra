@@ -2,8 +2,18 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, History, RotateCcw } from "lucide-react";
 import { useDocumentStore } from "../document-store";
 import { formatDocumentDate, formatVersionNumber } from "../document-export";
+import { VersionCompareButton } from "./document-diff-view";
 
-export function DocumentVersionList() {
+interface DocumentVersionListProps {
+  onCompare?: (data: {
+    oldContent: string;
+    newContent: string;
+    oldLabel: string;
+    newLabel: string;
+  }) => void;
+}
+
+export function DocumentVersionList({ onCompare }: DocumentVersionListProps) {
   const activeDocumentId = useDocumentStore((s) => s.activeDocumentId);
   const versions = useDocumentStore((s) => s.versions);
   const loadVersions = useDocumentStore((s) => s.loadVersions);
@@ -61,6 +71,16 @@ export function DocumentVersionList() {
 
       {expanded && (
         <div className="max-h-48 overflow-y-auto">
+          {versions.length >= 2 && onCompare && (
+            <div className="border-t border-[var(--color-border)]/50 px-4 py-2">
+              <VersionCompareButton
+                versions={versions}
+                onCompare={(oldContent, newContent, oldLabel, newLabel) =>
+                  onCompare({ oldContent, newContent, oldLabel, newLabel })
+                }
+              />
+            </div>
+          )}
           {versions.map((version) => (
             <div
               key={version.id}

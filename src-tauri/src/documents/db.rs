@@ -5,6 +5,43 @@ use std::sync::Arc;
 
 use crate::shared::db_utils::parse_json_array;
 
+// ---------------------------------------------------------------------------
+// Folder types
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentFolderRow {
+    pub id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+    pub project_id: Option<String>,
+    pub position: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentFolderCreateInput {
+    pub id: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+    pub project_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentFolderUpdateInput {
+    pub id: String,
+    pub name: Option<String>,
+    pub parent_id: Option<Option<String>>,
+    pub position: Option<i64>,
+    pub updated_at: String,
+}
+
 pub struct DocumentDb(pub Mutex<Connection>);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -21,6 +58,7 @@ pub struct DocumentRow {
     pub editor_format: String,
     pub content_markdown: String,
     pub tags: Vec<String>,
+    pub folder_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub last_exported_at: Option<String>,
@@ -54,6 +92,7 @@ pub struct DocumentCreateInput {
     pub editor_format: Option<String>,
     pub content_markdown: Option<String>,
     pub tags: Option<Vec<String>>,
+    pub folder_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub last_exported_at: Option<String>,
@@ -73,6 +112,7 @@ pub struct DocumentUpdateInput {
     pub editor_format: Option<String>,
     pub content_markdown: Option<String>,
     pub tags: Option<Vec<String>>,
+    pub folder_id: Option<Option<String>>,
     pub updated_at: Option<String>,
     pub last_exported_at: Option<String>,
 }
@@ -102,6 +142,7 @@ CREATE TABLE IF NOT EXISTS documents (
   editor_format TEXT NOT NULL,
   content_markdown TEXT NOT NULL,
   tags TEXT,
+  folder_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   last_exported_at TEXT
@@ -115,6 +156,20 @@ CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(updated_at);
 CREATE INDEX IF NOT EXISTS idx_documents_project_updated ON documents(project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_documents_conversation_updated ON documents(conversation_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_documents_global_updated ON documents(is_global, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS document_folders (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  parent_id TEXT,
+  project_id TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (parent_id) REFERENCES document_folders(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_folders_parent ON document_folders(parent_id);
+CREATE INDEX IF NOT EXISTS idx_document_folders_project ON document_folders(project_id, position ASC);
 
 CREATE TABLE IF NOT EXISTS document_versions (
   id TEXT PRIMARY KEY,
@@ -193,6 +248,42 @@ fn validate_tags(tags: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_folder_name(value: &str) -> Result<(), String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("folder name is required".to_string());
+    }
+    if trimmed.chars().count() > 240 {
+        return Err("folder name exceeds 240 characters".to_string());
+    }
+    Ok(())
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({})", table))
+        .map_err(|e| format!("prepare table_info failed: {}", e))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| format!("query table_info failed: {}", e))?;
+    for row in rows {
+        if row.map_err(|e| format!("table_info row failed: {}", e))? == column {
+            return Ok(());
+        }
+    }
+    conn.execute(
+        &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition),
+        [],
+    )
+    .map_err(|e| format!("add column {}.{} failed: {}", table, column, e))?;
+    Ok(())
+}
+
 impl DocumentDb {
     pub fn init(app: &tauri::AppHandle) -> Result<Self, String> {
         let start = std::time::Instant::now();
@@ -210,6 +301,12 @@ impl DocumentDb {
              CREATE INDEX IF NOT EXISTS idx_documents_global_updated ON documents(is_global, updated_at DESC);",
         )
         .map_err(|e| format!("document is_global index migration failed: {}", e))?;
+        // Migration: add folder_id column if missing
+        add_column_if_missing(&conn, "documents", "folder_id", "TEXT")?;
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);",
+        )
+        .map_err(|e| format!("document folder_id index migration failed: {}", e))?;
         if cfg!(debug_assertions) {
             log::info!(
                 "DocumentDb::init completed in {}ms",
@@ -292,6 +389,7 @@ fn row_to_document(row: &rusqlite::Row) -> rusqlite::Result<DocumentRow> {
         editor_format: row.get("editor_format")?,
         content_markdown: row.get("content_markdown")?,
         tags: parse_json_array(&tags_str),
+        folder_id: row.get("folder_id")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         last_exported_at: row.get("last_exported_at")?,
@@ -341,9 +439,9 @@ pub fn create_document(conn: &Connection, input_json: String) -> Result<Document
 
     tx.execute(
         "INSERT INTO documents
-           (id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at)
+           (id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, folder_id, created_at, updated_at, last_exported_at)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         rusqlite::params![
             input.id,
             input.project_id,
@@ -355,6 +453,7 @@ pub fn create_document(conn: &Connection, input_json: String) -> Result<Document
             editor_format_val,
             content_val,
             tags_json,
+            input.folder_id,
             input.created_at,
             input.updated_at,
             input.last_exported_at,
@@ -364,7 +463,7 @@ pub fn create_document(conn: &Connection, input_json: String) -> Result<Document
 
     let created = tx
         .query_row(
-            "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
+            "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, folder_id, created_at, updated_at, last_exported_at
              FROM documents WHERE id = ?1",
             [&input.id],
             row_to_document,
@@ -379,7 +478,7 @@ pub fn create_document(conn: &Connection, input_json: String) -> Result<Document
 
 pub fn get_document(conn: &Connection, id: String) -> Result<DocumentRow, String> {
     conn.query_row(
-        "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
+        "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, folder_id, created_at, updated_at, last_exported_at
          FROM documents WHERE id = ?1",
         [&id],
         row_to_document,
@@ -441,6 +540,13 @@ pub fn update_document(conn: &Connection, input_json: String) -> Result<Document
         sets.push(format!("tags = ?{}", params.len() + 1));
         params.push(Value::Text(json));
     }
+    if let Some(v) = input.folder_id {
+        sets.push(format!("folder_id = ?{}", params.len() + 1));
+        match v {
+            Some(fid) => params.push(Value::Text(fid)),
+            None => params.push(Value::Null),
+        }
+    }
     if let Some(v) = input.updated_at {
         sets.push(format!("updated_at = ?{}", params.len() + 1));
         params.push(Value::Text(v));
@@ -467,7 +573,7 @@ pub fn update_document(conn: &Connection, input_json: String) -> Result<Document
 
     let updated = conn
         .query_row(
-            "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at
+            "SELECT id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, folder_id, created_at, updated_at, last_exported_at
              FROM documents WHERE id = ?1",
             [&input.id],
             row_to_document,
@@ -484,7 +590,7 @@ pub fn list_documents(
 ) -> Result<Vec<DocumentRow>, String> {
     let mut out = Vec::new();
 
-    let base_cols = "id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, created_at, updated_at, last_exported_at";
+    let base_cols = "id, project_id, conversation_id, is_global, title, type, status, editor_format, content_markdown, tags, folder_id, created_at, updated_at, last_exported_at";
 
     let (sql, param_values): (String, Vec<Value>) = match (project_id, conversation_id) {
         (Some(pid), Some(cid)) => (
@@ -645,4 +751,287 @@ pub fn update_document_exported_at(
     )
     .map_err(|e| format!("update_document_exported_at failed: {}", e))?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Folder CRUD
+// ---------------------------------------------------------------------------
+
+fn row_to_folder(row: &rusqlite::Row) -> rusqlite::Result<DocumentFolderRow> {
+    Ok(DocumentFolderRow {
+        id: row.get("id")?,
+        name: row.get("name")?,
+        parent_id: row.get("parent_id")?,
+        project_id: row.get("project_id")?,
+        position: row.get("position")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+    })
+}
+
+fn is_ancestor(
+    conn: &Connection,
+    folder_id: &str,
+    potential_ancestor: &str,
+) -> Result<bool, String> {
+    let mut current = Some(potential_ancestor.to_string());
+    while let Some(id) = current {
+        if id == folder_id {
+            return Ok(true);
+        }
+        current = conn
+            .query_row(
+                "SELECT parent_id FROM document_folders WHERE id = ?1",
+                [&id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .map_err(|e| format!("ancestor check failed: {}", e))?;
+    }
+    Ok(false)
+}
+
+pub fn create_folder(conn: &Connection, input_json: String) -> Result<DocumentFolderRow, String> {
+    let input: DocumentFolderCreateInput = serde_json::from_str(&input_json)
+        .map_err(|e| format!("invalid create_folder input: {}", e))?;
+    if input.id.is_empty() {
+        return Err("create_folder requires id".to_string());
+    }
+    validate_folder_name(&input.name)?;
+
+    // Validate parent exists if provided
+    if let Some(ref parent_id) = input.parent_id {
+        conn.query_row(
+            "SELECT id FROM document_folders WHERE id = ?1",
+            [parent_id],
+            |_| Ok(()),
+        )
+        .map_err(|_| format!("parent folder {} does not exist", parent_id))?;
+    }
+
+    // Get next position
+    let position: i64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM document_folders WHERE parent_id IS ?1 AND (project_id IS ?2 OR ?2 IS NULL)",
+            rusqlite::params![input.parent_id, input.project_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("get next folder position failed: {}", e))?;
+
+    conn.execute(
+        "INSERT INTO document_folders (id, name, parent_id, project_id, position, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![
+            input.id,
+            input.name,
+            input.parent_id,
+            input.project_id,
+            position,
+            input.created_at,
+            input.updated_at,
+        ],
+    )
+    .map_err(|e| format!("insert folder failed: {}", e))?;
+
+    let created = conn
+        .query_row(
+            "SELECT id, name, parent_id, project_id, position, created_at, updated_at
+             FROM document_folders WHERE id = ?1",
+            [&input.id],
+            row_to_folder,
+        )
+        .map_err(|e| format!("query after insert folder failed: {}", e))?;
+
+    Ok(created)
+}
+
+pub fn list_folders(
+    conn: &Connection,
+    project_id: Option<String>,
+) -> Result<Vec<DocumentFolderRow>, String> {
+    let (sql, params): (String, Vec<Value>) = match project_id {
+        Some(pid) => (
+            "SELECT id, name, parent_id, project_id, position, created_at, updated_at
+             FROM document_folders WHERE project_id = ?1 OR project_id IS NULL
+             ORDER BY position ASC, name ASC"
+                .to_string(),
+            vec![Value::Text(pid)],
+        ),
+        None => (
+            "SELECT id, name, parent_id, project_id, position, created_at, updated_at
+             FROM document_folders
+             ORDER BY position ASC, name ASC"
+                .to_string(),
+            vec![],
+        ),
+    };
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("prepare list_folders failed: {}", e))?;
+    let rows = stmt
+        .query_map(params_from_iter(params), row_to_folder)
+        .map_err(|e| format!("query list_folders failed: {}", e))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| format!("row error in list_folders: {}", e))?);
+    }
+    Ok(out)
+}
+
+pub fn update_folder(conn: &Connection, input_json: String) -> Result<DocumentFolderRow, String> {
+    let input: DocumentFolderUpdateInput = serde_json::from_str(&input_json)
+        .map_err(|e| format!("invalid update_folder input: {}", e))?;
+    if input.id.is_empty() {
+        return Err("update_folder requires id".to_string());
+    }
+
+    // Validate folder exists
+    conn.query_row(
+        "SELECT id FROM document_folders WHERE id = ?1",
+        [&input.id],
+        |_| Ok(()),
+    )
+    .map_err(|_| format!("folder {} does not exist", input.id))?;
+
+    // Validate name if provided
+    if let Some(ref name) = input.name {
+        validate_folder_name(name)?;
+    }
+
+    // Validate parent if provided and check for circular references
+    if let Some(ref parent_id) = input.parent_id {
+        if let Some(parent_id) = parent_id {
+            // Can't set parent to self
+            if *parent_id == input.id {
+                return Err("folder cannot be its own parent".to_string());
+            }
+            // Validate parent exists
+            conn.query_row(
+                "SELECT id FROM document_folders WHERE id = ?1",
+                [parent_id],
+                |_| Ok(()),
+            )
+            .map_err(|_| format!("parent folder {} does not exist", parent_id))?;
+            // Check for circular reference
+            if is_ancestor(conn, &input.id, parent_id)? {
+                return Err("circular folder reference detected".to_string());
+            }
+        }
+    }
+
+    let mut sets: Vec<String> = Vec::new();
+    let mut params: Vec<Value> = Vec::new();
+
+    if let Some(ref v) = input.name {
+        sets.push(format!("name = ?{}", params.len() + 1));
+        params.push(Value::Text(v.clone()));
+    }
+    if let Some(ref v) = input.parent_id {
+        sets.push(format!("parent_id = ?{}", params.len() + 1));
+        match v {
+            Some(pid) => params.push(Value::Text(pid.clone())),
+            None => params.push(Value::Null),
+        }
+    }
+    if let Some(v) = input.position {
+        sets.push(format!("position = ?{}", params.len() + 1));
+        params.push(Value::Integer(v));
+    }
+    sets.push(format!("updated_at = ?{}", params.len() + 1));
+    params.push(Value::Text(input.updated_at.clone()));
+
+    if sets.is_empty() {
+        return Err("update_folder requires at least one field to update".to_string());
+    }
+
+    let where_placeholder = params.len() + 1;
+    let sql = format!(
+        "UPDATE document_folders SET {} WHERE id = ?{}",
+        sets.join(", "),
+        where_placeholder
+    );
+    params.push(Value::Text(input.id.clone()));
+
+    conn.execute(&sql, params_from_iter(params))
+        .map_err(|e| format!("update folder failed: {}", e))?;
+
+    let updated = conn
+        .query_row(
+            "SELECT id, name, parent_id, project_id, position, created_at, updated_at
+             FROM document_folders WHERE id = ?1",
+            [&input.id],
+            row_to_folder,
+        )
+        .map_err(|e| format!("query after update folder failed: {}", e))?;
+
+    Ok(updated)
+}
+
+pub fn delete_folder(conn: &Connection, id: String) -> Result<(), String> {
+    // Check folder exists
+    conn.query_row(
+        "SELECT id FROM document_folders WHERE id = ?1",
+        [&id],
+        |_| Ok(()),
+    )
+    .map_err(|_| format!("folder {} does not exist", id))?;
+
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("begin delete_folder transaction failed: {}", e))?;
+
+    // Move child documents to root (folder_id = NULL)
+    tx.execute(
+        "UPDATE documents SET folder_id = NULL WHERE folder_id = ?1",
+        [&id],
+    )
+    .map_err(|e| format!("move child documents failed: {}", e))?;
+
+    // Move child folders to root (parent_id = NULL)
+    tx.execute(
+        "UPDATE document_folders SET parent_id = NULL WHERE parent_id = ?1",
+        [&id],
+    )
+    .map_err(|e| format!("move child folders failed: {}", e))?;
+
+    // Delete the folder
+    tx.execute("DELETE FROM document_folders WHERE id = ?1", [&id])
+        .map_err(|e| format!("delete folder failed: {}", e))?;
+
+    tx.commit()
+        .map_err(|e| format!("commit delete_folder transaction failed: {}", e))?;
+
+    Ok(())
+}
+
+pub fn move_document_to_folder(
+    conn: &Connection,
+    document_id: String,
+    folder_id: Option<String>,
+) -> Result<DocumentRow, String> {
+    // Validate document exists
+    conn.query_row(
+        "SELECT id FROM documents WHERE id = ?1",
+        [&document_id],
+        |_| Ok(()),
+    )
+    .map_err(|_| format!("document {} does not exist", document_id))?;
+
+    // Validate folder exists if provided
+    if let Some(ref fid) = folder_id {
+        conn.query_row(
+            "SELECT id FROM document_folders WHERE id = ?1",
+            [fid],
+            |_| Ok(()),
+        )
+        .map_err(|_| format!("folder {} does not exist", fid))?;
+    }
+
+    conn.execute(
+        "UPDATE documents SET folder_id = ?1 WHERE id = ?2",
+        rusqlite::params![folder_id, document_id],
+    )
+    .map_err(|e| format!("move document to folder failed: {}", e))?;
+
+    get_document(conn, document_id)
 }

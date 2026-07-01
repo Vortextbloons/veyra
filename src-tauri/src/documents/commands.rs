@@ -137,6 +137,93 @@ pub async fn export_document_txt(
     .await
 }
 
+// ---------------------------------------------------------------------------
+// Folder commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn create_document_folder(
+    name: String,
+    parent_id: Option<String>,
+    project_id: Option<String>,
+    state: State<'_, DocumentDbState>,
+) -> Result<document_db::DocumentFolderRow, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let id = format!("folder_{}", chrono::Utc::now().timestamp_millis());
+    let input = document_db::DocumentFolderCreateInput {
+        id,
+        name,
+        parent_id,
+        project_id,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    let input_json = serde_json::to_string(&input)
+        .map_err(|e| format!("failed to serialize folder input: {}", e))?;
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::create_folder(conn, input_json)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_document_folders(
+    project_id: Option<String>,
+    state: State<'_, DocumentDbState>,
+) -> Result<Vec<document_db::DocumentFolderRow>, String> {
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::list_folders(conn, project_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn update_document_folder(
+    id: String,
+    name: Option<String>,
+    parent_id: Option<Option<String>>,
+    position: Option<i64>,
+    state: State<'_, DocumentDbState>,
+) -> Result<document_db::DocumentFolderRow, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let input = document_db::DocumentFolderUpdateInput {
+        id,
+        name,
+        parent_id,
+        position,
+        updated_at: now,
+    };
+    let input_json = serde_json::to_string(&input)
+        .map_err(|e| format!("failed to serialize folder update input: {}", e))?;
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::update_folder(conn, input_json)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_document_folder(
+    id: String,
+    state: State<'_, DocumentDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::delete_folder(conn, id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn move_document_to_folder(
+    document_id: String,
+    folder_id: Option<String>,
+    state: State<'_, DocumentDbState>,
+) -> Result<document_db::DocumentRow, String> {
+    run_db_command(state.inner(), "document", move |conn| {
+        document_db::move_document_to_folder(conn, document_id, folder_id)
+    })
+    .await
+}
+
 fn strip_markdown(input: &str) -> String {
     let mut result = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();

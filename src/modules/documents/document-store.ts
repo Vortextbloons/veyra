@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   DocumentRecord,
   DocumentVersion,
+  DocumentFolder,
   DocumentStatus,
   CreateDocumentInput,
   UpdateDocumentInput,
@@ -18,6 +19,11 @@ import {
   restoreDocumentVersion as ipcRestoreVersion,
   exportDocumentMarkdown as ipcExportMarkdown,
   exportDocumentTxt as ipcExportTxt,
+  listDocumentFolders as ipcListFolders,
+  createDocumentFolder as ipcCreateFolder,
+  updateDocumentFolder as ipcUpdateFolder,
+  deleteDocumentFolder as ipcDeleteFolder,
+  moveDocumentToFolder as ipcMoveToFolder,
 } from "@/lib/document-storage";
 import { useSettingsStore } from "@/stores/settings-store";
 
@@ -49,6 +55,12 @@ type DocumentStore = {
   documentsLoaded: boolean;
   _documentsTabActive: boolean;
 
+  /** Folder state */
+  folders: DocumentFolder[];
+  expandedFolderIds: Set<string>;
+  selectedFolderId: string | null;
+  selectedDocumentIds: Set<string>;
+
   hydrateDocuments: () => Promise<void>;
   loadAllDocuments: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
@@ -77,6 +89,20 @@ type DocumentStore = {
 
   exportMarkdown: () => Promise<string | null>;
   exportTxt: () => Promise<string | null>;
+
+  /** Folder actions */
+  loadFolders: () => Promise<void>;
+  createFolder: (name: string, parentId?: string) => Promise<DocumentFolder>;
+  renameFolder: (id: string, name: string) => Promise<void>;
+  deleteFolder: (id: string) => Promise<void>;
+  moveDocumentToFolder: (documentId: string, folderId?: string) => Promise<void>;
+  toggleFolderExpanded: (id: string) => void;
+  selectFolder: (id: string | null) => void;
+
+  /** Bulk selection actions */
+  toggleDocumentSelected: (id: string) => void;
+  selectAllDocuments: () => void;
+  clearSelection: () => void;
 };
 
 function replaceDocument(documents: DocumentRecord[], doc: DocumentRecord): DocumentRecord[] {
@@ -105,11 +131,23 @@ export function filterDocuments(
   searchQuery: string,
   statusFilter: StatusFilter,
   sortMode: SortMode,
+  folderId?: string | null,
 ): DocumentRecord[] {
   let filtered = documents;
 
   if (statusFilter !== "all") {
     filtered = filtered.filter((d) => d.status === statusFilter);
+  }
+
+  // Filter by folder
+  if (folderId !== undefined) {
+    if (folderId === null) {
+      // Show documents not in any folder
+      filtered = filtered.filter((d) => !d.folderId);
+    } else {
+      // Show documents in the specified folder
+      filtered = filtered.filter((d) => d.folderId === folderId);
+    }
   }
 
   if (searchQuery.trim()) {
@@ -158,6 +196,11 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   documentsLoaded: false,
   _documentsTabActive: false,
 
+  folders: [],
+  expandedFolderIds: new Set<string>(),
+  selectedFolderId: null,
+  selectedDocumentIds: new Set<string>(),
+
   hydrateDocuments: async () => {
     if (hydrationPromise) return hydrationPromise;
     hydrationPromise = (async () => {
@@ -182,8 +225,11 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   loadAllDocuments: async () => {
     set({ isLoading: true, error: null });
     try {
-      const documents = await ipcListDocuments(undefined, undefined);
-      set({ documents, isLoading: false, documentsLoaded: true });
+      const [documents, folders] = await Promise.all([
+        ipcListDocuments(undefined, undefined),
+        ipcListFolders(undefined),
+      ]);
+      set({ documents, folders, isLoading: false, documentsLoaded: true });
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
@@ -443,6 +489,133 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
 
     const safeName = doc.title.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "document";
     return ipcExportTxt(activeId, `${safeName}.txt`);
+  },
+
+  // Folder actions
+  loadFolders: async () => {
+    try {
+      const folders = await ipcListFolders(undefined);
+      set({ folders });
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  createFolder: async (name, parentId) => {
+    try {
+      const folder = await ipcCreateFolder({ name, parentId });
+      set((state) => ({
+        folders: [...state.folders, folder],
+        expandedFolderIds: parentId
+          ? new Set([...state.expandedFolderIds, parentId])
+          : state.expandedFolderIds,
+      }));
+      return folder;
+    } catch (error) {
+      set({ error: String(error) });
+      throw error;
+    }
+  },
+
+  renameFolder: async (id, name) => {
+    try {
+      const folder = await ipcUpdateFolder({ id, name });
+      set((state) => ({
+        folders: state.folders.map((f) => (f.id === id ? folder : f)),
+      }));
+    } catch (error) {
+      set({ error: String(error) });
+      throw error;
+    }
+  },
+
+  deleteFolder: async (id) => {
+    try {
+      await ipcDeleteFolder(id);
+      set((state) => {
+        // Move documents from deleted folder to root
+        const updatedDocuments = state.documents.map((d) =>
+          d.folderId === id ? { ...d, folderId: undefined } : d,
+        );
+        // Remove folder and any subfolders
+        const folderIds = new Set<string>([id]);
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const f of state.folders) {
+            if (f.parentId && folderIds.has(f.parentId) && !folderIds.has(f.id)) {
+              folderIds.add(f.id);
+              changed = true;
+            }
+          }
+        }
+        return {
+          documents: updatedDocuments,
+          folders: state.folders.filter((f) => !folderIds.has(f.id)),
+          selectedFolderId: state.selectedFolderId === id ? null : state.selectedFolderId,
+        };
+      });
+    } catch (error) {
+      set({ error: String(error) });
+      throw error;
+    }
+  },
+
+  moveDocumentToFolder: async (documentId, folderId) => {
+    try {
+      const doc = await ipcMoveToFolder(documentId, folderId);
+      set((state) => ({
+        documents: replaceDocument(state.documents, doc),
+      }));
+    } catch (error) {
+      set({ error: String(error) });
+      throw error;
+    }
+  },
+
+  toggleFolderExpanded: (id) => {
+    set((state) => {
+      const next = new Set(state.expandedFolderIds);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return { expandedFolderIds: next };
+    });
+  },
+
+  selectFolder: (id) => {
+    set({ selectedFolderId: id, selectedDocumentIds: new Set() });
+  },
+
+  // Bulk selection actions
+  toggleDocumentSelected: (id) => {
+    set((state) => {
+      const next = new Set(state.selectedDocumentIds);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return { selectedDocumentIds: next };
+    });
+  },
+
+  selectAllDocuments: () => {
+    const state = get();
+    const filteredDocs = filterDocuments(
+      state.documents,
+      state.searchQuery,
+      state.statusFilter,
+      state.sortMode,
+      state.selectedFolderId,
+    );
+    set({ selectedDocumentIds: new Set(filteredDocs.map((d) => d.id)) });
+  },
+
+  clearSelection: () => {
+    set({ selectedDocumentIds: new Set() });
   },
 }));
 

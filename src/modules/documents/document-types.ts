@@ -31,9 +31,34 @@ export interface DocumentRecord {
   editorFormat: EditorFormat;
   contentMarkdown: string;
   tags: string[];
+  folderId?: string;
   createdAt: string;
   updatedAt: string;
   lastExportedAt?: string;
+}
+
+// Folder types for document organization
+export interface DocumentFolder {
+  id: string;
+  name: string;
+  parentId?: string;
+  projectId?: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFolderInput {
+  name: string;
+  parentId?: string;
+  projectId?: string;
+}
+
+export interface UpdateFolderInput {
+  id: string;
+  name?: string;
+  parentId?: string | null;
+  position?: number;
 }
 
 export interface DocumentVersion {
@@ -57,6 +82,7 @@ export interface CreateDocumentInput {
   conversationId?: string;
   isGlobal?: boolean;
   tags?: string[];
+  folderId?: string;
 }
 
 export interface UpdateDocumentInput {
@@ -67,6 +93,7 @@ export interface UpdateDocumentInput {
   contentMarkdown?: string;
   isGlobal?: boolean;
   tags?: string[];
+  folderId?: string | null;
   lastExportedAt?: string;
 }
 

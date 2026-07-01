@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, startTransition } from "react";
+import { useEffect, useRef, useState, startTransition, useCallback } from "react";
 import { FileText, Eye, Columns2, Code } from "lucide-react";
 import { useDocumentStore } from "../document-store";
 import type { ViewMode } from "../document-store";
@@ -8,6 +8,7 @@ import { DocEditorHeader } from "./doc-editor-header";
 import { DocumentToolbar } from "./document-toolbar";
 import { SplitEditor } from "./split-editor";
 import { DocumentVersionList } from "./document-version-list";
+import { DocumentDiffView } from "./document-diff-view";
 import { AiAssistPanel } from "./ai-assist-panel";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +25,93 @@ export function DocumentsPage() {
   const loadAllDocuments = useDocumentStore((s) => s.loadAllDocuments);
   const setDocumentsTabActive = useDocumentStore((s) => s.setDocumentsTabActive);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [diffView, setDiffView] = useState<{
+    oldContent: string;
+    newContent: string;
+    oldLabel: string;
+    newLabel: string;
+  } | null>(null);
   const prevDocIdRef = useRef<string | null>(null);
+
+  const createDocument = useDocumentStore((s) => s.createDocument);
+  const closeDocument = useDocumentStore((s) => s.closeDocument);
+  const saveNow = useDocumentStore((s) => s.saveNow);
+
+  const handleNewDocument = useCallback(() => {
+    void createDocument({
+      title: "Untitled Document",
+      type: "document",
+      contentMarkdown: "",
+      isGlobal: true,
+    });
+  }, [createDocument]);
+
+  const handleExportMarkdown = useCallback(() => {
+    void useDocumentStore.getState().exportMarkdown();
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      if (!isCtrl) return;
+
+      switch (e.key.toLowerCase()) {
+        case "n": {
+          e.preventDefault();
+          handleNewDocument();
+          break;
+        }
+        case "s": {
+          e.preventDefault();
+          void saveNow();
+          break;
+        }
+        case "w": {
+          e.preventDefault();
+          void closeDocument();
+          break;
+        }
+        case "e": {
+          if (e.shiftKey) {
+            e.preventDefault();
+            handleExportMarkdown();
+          } else {
+            e.preventDefault();
+            const modes: ViewMode[] = ["source", "split", "preview"];
+            const idx = modes.indexOf(viewMode);
+            setViewMode(modes[(idx + 1) % modes.length]);
+          }
+          break;
+        }
+        case "a": {
+          if (e.shiftKey) {
+            e.preventDefault();
+            setAiPanelOpen((prev) => !prev);
+          }
+          break;
+        }
+        case "1": {
+          e.preventDefault();
+          setViewMode("source");
+          break;
+        }
+        case "2": {
+          e.preventDefault();
+          setViewMode("split");
+          break;
+        }
+        case "3": {
+          e.preventDefault();
+          setViewMode("preview");
+          break;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleNewDocument, handleExportMarkdown, saveNow, closeDocument, setViewMode]);
 
   useEffect(() => {
     setDocumentsTabActive(true);
@@ -82,8 +169,20 @@ export function DocumentsPage() {
             </div>
             <div className="flex min-h-0 flex-1">
               <div className="flex min-w-0 flex-1 flex-col">
-                <SplitEditor onOpenAiPanel={() => setAiPanelOpen(true)} />
-                <DocumentVersionList />
+                {diffView ? (
+                  <DocumentDiffView
+                    oldContent={diffView.oldContent}
+                    newContent={diffView.newContent}
+                    oldLabel={diffView.oldLabel}
+                    newLabel={diffView.newLabel}
+                    onClose={() => setDiffView(null)}
+                  />
+                ) : (
+                  <>
+                    <SplitEditor onOpenAiPanel={() => setAiPanelOpen(true)} />
+                    <DocumentVersionList onCompare={setDiffView} />
+                  </>
+                )}
               </div>
             </div>
           </>

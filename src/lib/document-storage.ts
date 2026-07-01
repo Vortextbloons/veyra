@@ -4,9 +4,12 @@ import { newId, nowIso } from "@/lib/id";
 import type {
   DocumentRecord,
   DocumentVersion,
+  DocumentFolder,
   CreateDocumentInput,
   UpdateDocumentInput,
   CreateVersionInput,
+  CreateFolderInput,
+  UpdateFolderInput,
 } from "@/modules/documents/document-types";
 
 export async function listDocuments(projectId?: string, conversationId?: string): Promise<DocumentRecord[]> {
@@ -98,4 +101,46 @@ export async function exportDocumentTxt(documentId: string, defaultName: string)
   if (!path) return null;
   await invoke("export_document_txt", { documentId, targetPath: path });
   return path;
+}
+
+// ---------------------------------------------------------------------------
+// Folder operations
+// ---------------------------------------------------------------------------
+
+export async function listDocumentFolders(projectId?: string): Promise<DocumentFolder[]> {
+  return invoke<DocumentFolder[]>("list_document_folders", { projectId: projectId ?? null });
+}
+
+export async function createDocumentFolder(input: CreateFolderInput): Promise<DocumentFolder> {
+  const now = nowIso();
+  const id = newId("folder");
+  const payload = {
+    id,
+    name: input.name,
+    parentId: input.parentId ?? null,
+    projectId: input.projectId ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  return invoke<DocumentFolder>("create_document_folder", { input: JSON.stringify(payload) });
+}
+
+export async function updateDocumentFolder(input: UpdateFolderInput): Promise<DocumentFolder> {
+  return invoke<DocumentFolder>("update_document_folder", {
+    id: input.id,
+    name: input.name ?? null,
+    parentId: input.parentId === undefined ? null : input.parentId,
+    position: input.position ?? null,
+  });
+}
+
+export async function deleteDocumentFolder(id: string): Promise<void> {
+  await invoke<void>("delete_document_folder", { id });
+}
+
+export async function moveDocumentToFolder(documentId: string, folderId?: string): Promise<DocumentRecord> {
+  return invoke<DocumentRecord>("move_document_to_folder", {
+    documentId,
+    folderId: folderId ?? null,
+  });
 }
