@@ -121,9 +121,36 @@ function removeDocument(documents: DocumentRecord[], id: string): DocumentRecord
 export function selectActiveDocumentContent(state: DocumentStore): string {
   const { activeDocumentId, activeDraftContent, documents } = state;
   if (!activeDocumentId) return "";
+  if (activeDraftContent !== null) return activeDraftContent;
   const doc = documents.find((item) => item.id === activeDocumentId);
-  if (!doc) return "";
-  return activeDraftContent ?? doc.contentMarkdown;
+  return doc?.contentMarkdown ?? "";
+}
+
+export function selectActiveDocumentMeta(
+  state: DocumentStore,
+): { id: string; title: string; type: string } | undefined {
+  const { activeDocumentId, documents } = state;
+  if (!activeDocumentId) return undefined;
+  const doc = documents.find((item) => item.id === activeDocumentId);
+  if (doc) {
+    return { id: doc.id, title: doc.title, type: doc.type };
+  }
+  return { id: activeDocumentId, title: "Active document", type: "document" };
+}
+
+async function mergeActiveDocument(
+  documents: DocumentRecord[],
+  activeDocumentId: string | null,
+): Promise<{ documents: DocumentRecord[]; clearActive: boolean }> {
+  if (!activeDocumentId || documents.some((doc) => doc.id === activeDocumentId)) {
+    return { documents, clearActive: false };
+  }
+  try {
+    const activeDoc = await ipcGetDocument(activeDocumentId);
+    return { documents: [activeDoc, ...documents], clearActive: false };
+  } catch {
+    return { documents, clearActive: true };
+  }
 }
 
 /** Pure helper for filtering/sorting documents. Used by DocumentListPanel and tests. */
@@ -210,8 +237,25 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
         set({ isLoading: true, error: null });
         const conversationId = get().activeConversationId ?? undefined;
         const projectId = get().activeProjectId ?? undefined;
-        const documents = await ipcListDocuments(projectId, conversationId);
-        set({ documents, isLoading: false, documentsLoaded: true });
+        let documents = await ipcListDocuments(projectId, conversationId);
+        const { documents: mergedDocuments, clearActive } = await mergeActiveDocument(
+          documents,
+          get().activeDocumentId,
+        );
+        documents = mergedDocuments;
+        set({
+          documents,
+          isLoading: false,
+          documentsLoaded: true,
+          ...(clearActive
+            ? {
+                activeDocumentId: null,
+                activeDraftContent: null,
+                versions: [],
+                _lastSavedContent: null,
+              }
+            : {}),
+        });
       } catch (error) {
         set({ error: String(error), isLoading: false });
       } finally {
@@ -250,7 +294,13 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setStatusFilter: (statusFilter) => set({ statusFilter }),
   setSortMode: (sortMode) => set({ sortMode }),
-  setDocumentsTabActive: (_documentsTabActive) => set({ _documentsTabActive }),
+  setDocumentsTabActive: (documentsTabActive) => {
+    set({ _documentsTabActive: documentsTabActive });
+    if (!documentsTabActive) {
+      hydrationPromise = null;
+      void get().hydrateDocuments();
+    }
+  },
 
   createDocument: async (input) => {
     try {
@@ -332,7 +382,14 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
         saveStatus: "idle",
       }));
     } catch (error) {
-      set({ error: String(error), isLoading: false });
+      set({
+        error: String(error),
+        isLoading: false,
+        activeDocumentId: null,
+        activeDraftContent: null,
+        versions: [],
+        _lastSavedContent: null,
+      });
     }
   },
 

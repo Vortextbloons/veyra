@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { filterDocuments } from "@/modules/documents/document-store";
+import {
+  filterDocuments,
+  selectActiveDocumentContent,
+  selectActiveDocumentMeta,
+} from "@/modules/documents/document-store";
 import type { DocumentRecord } from "@/modules/documents/document-types";
 
 function createDoc(overrides: Partial<DocumentRecord> = {}): DocumentRecord {
@@ -82,5 +86,39 @@ describe("filterDocuments", () => {
 
   it("returns empty when no matches", () => {
     expect(filterDocuments(docs, "zzz", "all", "updatedAt")).toHaveLength(0);
+  });
+});
+
+describe("selectActiveDocumentContent", () => {
+  it("returns draft content when active document is filtered out of the list", () => {
+    const content = selectActiveDocumentContent({
+      activeDocumentId: "doc_active",
+      activeDraftContent: "draft content",
+      documents: [],
+    } as never);
+    expect(content).toBe("draft content");
+  });
+});
+
+describe("selectActiveDocumentMeta", () => {
+  it("returns metadata from the active document when present", () => {
+    const doc = createDoc({ id: "doc_active", title: "My Doc", type: "report" });
+    const meta = selectActiveDocumentMeta({
+      activeDocumentId: "doc_active",
+      documents: [doc],
+    } as never);
+    expect(meta).toEqual({ id: "doc_active", title: "My Doc", type: "report" });
+  });
+
+  it("falls back to active id when metadata is not in the filtered list", () => {
+    const meta = selectActiveDocumentMeta({
+      activeDocumentId: "doc_active",
+      documents: [],
+    } as never);
+    expect(meta).toEqual({
+      id: "doc_active",
+      title: "Active document",
+      type: "document",
+    });
   });
 });

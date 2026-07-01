@@ -13,12 +13,20 @@ import {
   CaseSensitive,
   ListTree,
   Search,
+  ChevronDown,
+  RotateCcw,
 } from "lucide-react";
 import { useDocumentStore, selectActiveDocumentContent } from "../document-store";
 import { buildAiMessages, streamAiAssist, streamResearchDraft } from "../document-ai";
 import type { AiAssistAction, AiAssistMessage, AiAssistParams } from "../document-ai";
 import { AiMessageBubble } from "./ai-message-bubble";
 import { cn } from "@/lib/utils";
+import { useProviderStore } from "@/stores/provider-store";
+import { ModelIcon } from "@/components/model-icon";
+
+const EDIT_ACTIONS: Set<AiAssistAction> = new Set([
+  "improve", "expand", "shorten", "rewrite", "translate", "tone", "outline", "research_draft", "custom",
+]);
 
 type QuickAction = {
   id: AiAssistAction;
@@ -49,6 +57,10 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
   const activeContent = useDocumentStore(selectActiveDocumentContent);
   const setContent = useDocumentStore((s) => s.setContent);
 
+  const providerModels = useProviderStore((s) => s.models);
+  const globalSelectedModel = useProviderStore((s) => s.selectedModel);
+  const setSelectedModel = useProviderStore((s) => s.setSelectedModel);
+
   const doc = documents.find((d) => d.id === activeDocumentId);
   const [messages, setMessages] = useState<AiAssistMessage[]>([]);
   const [input, setInput] = useState("");
@@ -58,17 +70,48 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
   const [streamingContent, setStreamingContent] = useState("");
   const [activeParams, setActiveParams] = useState<AiAssistParams>({});
   const [showParamForm, setShowParamForm] = useState<AiAssistAction | null>(null);
+  const [reasoningEnabled, setReasoningEnabled] = useState(true);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const paramFormRef = useRef<HTMLDivElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
 
   useEffect(() => {
-    if (!isStreaming) inputRef.current?.focus();
+    if (!isStreaming) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
   }, [isStreaming]);
+
+  useEffect(() => {
+    if (!showParamForm) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (paramFormRef.current && !paramFormRef.current.contains(e.target as Node)) {
+        setShowParamForm(null);
+        setActiveParams({});
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showParamForm]);
+
+  useEffect(() => {
+    if (!showModelDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
+        setShowModelDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showModelDropdown]);
+
+  const currentModel = providerModels.find((m) => m.id === globalSelectedModel);
 
   const runAction = useCallback(
     async (action: AiAssistAction, customPrompt?: string, params?: AiAssistParams) => {
@@ -140,6 +183,7 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
           await streamAiAssist({
             messages: aiMessages,
             signal: controller.signal,
+            reasoningEnabled,
             onChunk: (chunk, done) => {
               if (done) {
                 setPendingSuggestion(accumulated);
@@ -169,7 +213,7 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
         setStreamingContent("");
       }
     },
-    [doc, activeContent, input, messages, isStreaming, activeParams],
+    [doc, activeContent, input, messages, isStreaming, activeParams, reasoningEnabled],
   );
 
   const handleActionClick = useCallback(
@@ -191,12 +235,10 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
 
   const handleAccept = useCallback(() => {
     if (pendingSuggestion) {
-      if (lastAction !== "summarize") {
-        setContent(pendingSuggestion);
-      }
+      setContent(pendingSuggestion);
       setPendingSuggestion(null);
     }
-  }, [pendingSuggestion, lastAction, setContent]);
+  }, [pendingSuggestion, setContent]);
 
   const handleReject = useCallback(() => {
     setPendingSuggestion(null);
@@ -222,20 +264,127 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
     setIsStreaming(false);
   }, []);
 
+  const handleNewChat = useCallback(() => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setInput("");
+    setIsStreaming(false);
+    setPendingSuggestion(null);
+    setLastAction(null);
+    setStreamingContent("");
+    setShowParamForm(null);
+    setActiveParams({});
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
+
   return (
     <div className="ai-assist-panel flex h-full w-[360px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
+      <div className="z-10 flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2 bg-[var(--color-surface)]">
         <div className="flex items-center gap-2">
           <Sparkles className="size-4 text-[var(--color-accent)]" />
           <span className="text-[13px] font-semibold text-[var(--color-text)]">AI Assist</span>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-        >
-          <X className="size-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white transition-colors"
+            title="New chat"
+          >
+            <RotateCcw className="size-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setReasoningEnabled((v) => !v)}
+            className={cn(
+              "grid size-6 place-items-center rounded transition-colors",
+              reasoningEnabled
+                ? "bg-violet-500/20 text-violet-300"
+                : "text-[var(--color-text-dim)] hover:bg-white/5",
+            )}
+            title={reasoningEnabled ? "Reasoning on" : "Reasoning off"}
+          >
+            <Sparkles className="size-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Model selector row */}
+      <div className="border-b border-[var(--color-border)] px-3 py-1.5">
+        <div ref={modelDropdownRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setShowModelDropdown((v) => !v)}
+            className="flex h-7 w-full items-center gap-2 rounded-md border border-[var(--color-border)] bg-white/[0.03] px-2 text-[11px] text-[var(--color-text)] hover:border-[var(--color-border-strong)] transition-colors"
+          >
+            <div className="grid size-4 shrink-0 place-items-center rounded bg-indigo-500/20 text-indigo-300">
+              <ModelIcon modelId={currentModel?.id ?? ""} className="size-full" />
+            </div>
+            <span className="flex-1 truncate text-left font-medium">
+              {currentModel?.name ?? "Select model"}
+            </span>
+            <ChevronDown
+              className={cn(
+                "size-3 text-[var(--color-text-dim)] transition-transform",
+                showModelDropdown && "rotate-180",
+              )}
+            />
+          </button>
+          {showModelDropdown && (
+            <div className="absolute left-0 top-full z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-xl shadow-black/40">
+              {providerModels.length === 0 ? (
+                <div className="px-3 py-4 text-center text-[11px] text-[var(--color-text-dim)]">
+                  No models available
+                </div>
+              ) : (
+                providerModels.map((m) => {
+                  const active = m.id === globalSelectedModel;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedModel(m.id);
+                        setShowModelDropdown(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-2 py-1.5 text-[11px] transition-colors",
+                        active
+                          ? "bg-[var(--color-accent-soft)] text-white"
+                          : "text-[var(--color-text)] hover:bg-white/[0.04]",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "grid size-4 shrink-0 place-items-center rounded",
+                          active
+                            ? "bg-[var(--color-accent)] text-white"
+                            : "bg-white/[0.04] text-[var(--color-text-dim)]",
+                        )}
+                      >
+                        <ModelIcon modelId={m.id} className="size-full" />
+                      </div>
+                      <span className="flex-1 truncate text-left">{m.name}</span>
+                      {m.contextWindow && (
+                        <span className="font-mono text-[9px] text-[var(--color-text-dim)]">
+                          {(m.contextWindow / 1000).toFixed(0)}K
+                        </span>
+                      )}
+                      {active && <Check className="size-3 shrink-0 text-[var(--color-accent)]" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {doc && (
@@ -268,16 +417,15 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
         ))}
       </div>
 
-      {/* Parameter form for parameterized actions */}
       {showParamForm && (
-        <div className="border-b border-[var(--color-border)] px-3 py-2">
+        <div ref={paramFormRef} className="border-b border-[var(--color-border)] px-3 py-2">
           {showParamForm === "translate" && (
             <div className="flex flex-col gap-2">
               <label className="text-[11px] text-[var(--color-text-dim)]">Target Language</label>
               <select
                 value={activeParams.targetLanguage ?? "English"}
                 onChange={(e) => setActiveParams({ ...activeParams, targetLanguage: e.target.value })}
-                className="rounded-md border border-[var(--color-border)] bg-white/[0.03] px-2 py-1 text-[12px] text-[var(--color-text)] focus:border-[var(--color-accent)]/50 focus:outline-none"
+                className="veyra-select w-full"
               >
                 <option value="English">English</option>
                 <option value="Spanish">Spanish</option>
@@ -298,7 +446,7 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
               <select
                 value={activeParams.tone ?? "formal"}
                 onChange={(e) => setActiveParams({ ...activeParams, tone: e.target.value })}
-                className="rounded-md border border-[var(--color-border)] bg-white/[0.03] px-2 py-1 text-[12px] text-[var(--color-text)] focus:border-[var(--color-accent)]/50 focus:outline-none"
+                className="veyra-select w-full"
               >
                 <option value="formal">Formal</option>
                 <option value="casual">Casual</option>
@@ -358,15 +506,7 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
         </div>
       )}
 
-      <div
-        className="flex-1 overflow-y-auto px-3 py-3"
-        onClick={() => {
-          if (showParamForm) {
-            setShowParamForm(null);
-            setActiveParams({});
-          }
-        }}
-      >
+      <div className="flex-1 overflow-y-auto px-3 py-3">
         {messages.length === 0 && !isStreaming ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <div className="grid size-12 place-items-center rounded-xl bg-white/[0.03]">
@@ -401,54 +541,33 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
         )}
       </div>
 
-      {pendingSuggestion && (
+      {pendingSuggestion && lastAction && EDIT_ACTIONS.has(lastAction) && (
         <div className="border-t border-[var(--color-border)] px-3 py-2">
           <p className="mb-2 text-[11px] font-medium text-[var(--color-text-dim)]">
-            {lastAction === "summarize" ? "Summary ready" : "Apply this change?"}
+            Apply this change?
           </p>
           <div className="flex gap-2">
-            {lastAction === "summarize" ? (
-              <button
-                type="button"
-                onClick={handleAccept}
-                className="flex flex-1 items-center justify-center gap-1 rounded-md bg-[var(--color-accent)]/15 px-3 py-1.5 text-[12px] font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25 transition-colors"
-              >
-                <Check className="size-3.5" />
-                Dismiss
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={handleAccept}
-                  className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-500/15 px-3 py-1.5 text-[12px] font-medium text-emerald-400 hover:bg-emerald-500/25 transition-colors"
-                >
-                  <Check className="size-3.5" />
-                  Accept
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReject}
-                  className="flex flex-1 items-center justify-center gap-1 rounded-md bg-red-500/15 px-3 py-1.5 text-[12px] font-medium text-red-400 hover:bg-red-500/25 transition-colors"
-                >
-                  <X className="size-3.5" />
-                  Reject
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={handleAccept}
+              className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-500/15 px-3 py-1.5 text-[12px] font-medium text-emerald-400 hover:bg-emerald-500/25 transition-colors"
+            >
+              <Check className="size-3.5" />
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={handleReject}
+              className="flex flex-1 items-center justify-center gap-1 rounded-md bg-red-500/15 px-3 py-1.5 text-[12px] font-medium text-red-400 hover:bg-red-500/25 transition-colors"
+            >
+              <X className="size-3.5" />
+              Reject
+            </button>
           </div>
         </div>
       )}
 
-      <div
-        className="border-t border-[var(--color-border)] px-3 py-2"
-        onClick={() => {
-          if (showParamForm) {
-            setShowParamForm(null);
-            setActiveParams({});
-          }
-        }}
-      >
+      <div className="border-t border-[var(--color-border)] px-3 py-2">
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
@@ -456,7 +575,6 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            onClick={(e) => e.stopPropagation()}
             placeholder="Ask AI anything..."
             disabled={isStreaming}
             className="flex-1 rounded-md border border-[var(--color-border)] bg-white/[0.03] px-3 py-1.5 text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-accent)]/50 focus:outline-none disabled:opacity-50"

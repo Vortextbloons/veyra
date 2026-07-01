@@ -126,3 +126,12 @@ export interface DocReadIntent {
   type: "doc.read";
   documentId: string;
 }
+
+export interface InlineEditIntent {
+  type: "inline.edit";
+  documentId: string;
+  mode: "replace_text" | "replace_all" | "replace_section" | "insert_after_section";
+  target?: string;
+  contentMarkdown: string;
+  explanation?: string;
+}

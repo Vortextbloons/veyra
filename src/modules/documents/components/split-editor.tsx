@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { WandSparkles, Send, X } from "lucide-react";
+import { WandSparkles, Send, X, Loader2 } from "lucide-react";
 import { selectActiveDocumentContent, useDocumentStore } from "../document-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { countWords, countCharacters } from "../document-markdown";
 import { buildAiMessages, streamAiAssist } from "../document-ai";
-import type { InlineSubmitResult } from "./use-inline-ai";
+import type { InlineStreamParams } from "./use-inline-ai";
 import { MarkdownPreview } from "./markdown-preview";
 import { useInlineAi } from "./use-inline-ai";
+import { InlineDiffPreview } from "./inline-diff-preview";
 
 export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
   const activeDocumentId = useDocumentStore((s) => s.activeDocumentId);
@@ -29,10 +30,17 @@ export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
   const [splitPosition, setSplitPosition] = useState(50);
   const isDragging = useRef(false);
 
-  const handleInlineSubmit = useCallback(
-    async (result: InlineSubmitResult) => {
-      const { instruction, selectedText, docId, docTitle, fullContent } = result;
-      const action = selectedText ? "edit_selection" : "rewrite_document";
+  const handleApplyEdit = useCallback(
+    (newContent: string) => {
+      setContent(newContent);
+    },
+    [setContent],
+  );
+
+  const handleStreamEdit = useCallback(
+    (params: InlineStreamParams) => {
+      const { instruction, selectedText, docTitle, fullContent, signal, onChunk, onComplete, onError } =
+        params;
 
       const aiMessages = buildAiMessages(
         fullContent,
@@ -43,23 +51,24 @@ export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
       );
 
       let accumulated = "";
-      await streamAiAssist({
+      void streamAiAssist({
         messages: aiMessages,
+        reasoningEnabled: false,
+        signal,
         onChunk: (chunk, done) => {
           if (!done) {
             accumulated += chunk;
+            onChunk(chunk);
           } else {
-            setContent(accumulated);
+            onComplete(accumulated);
           }
         },
         onError: (error) => {
-          void error;
+          onError(error);
         },
       });
-      void action;
-      void docId;
     },
-    [setContent],
+    [],
   );
 
   const {
@@ -72,7 +81,11 @@ export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
     updateInlineEditFromSelection,
     submitInlineEdit,
     dismissInlineEdit,
-  } = useInlineAi(textareaRef, handleInlineSubmit);
+    isGenerating,
+    pendingEdit,
+    acceptEdit,
+    rejectEdit,
+  } = useInlineAi(textareaRef, handleStreamEdit, handleApplyEdit);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setLocalContent(activeContent), 0);
@@ -196,7 +209,7 @@ export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
         >
           <div className="border-b border-white/10 bg-emerald-400/[0.08] px-3 py-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200/80">
-              AI Assist
+              {isGenerating ? "Generating..." : "AI Assist"}
             </p>
             {inlineEdit.text ? (
               <p className="mt-1 truncate text-xs text-white/55">{inlineEdit.text}</p>
@@ -220,16 +233,23 @@ export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
                 }
               }}
               placeholder="Tell AI what to do..."
-              className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white placeholder:text-white/30 focus:border-emerald-400/40 focus:outline-none"
+              disabled={isGenerating}
+              className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white placeholder:text-white/30 focus:border-emerald-400/40 focus:outline-none disabled:opacity-40"
             />
-            <button
-              type="button"
-              onClick={submitInlineEdit}
-              disabled={!inlinePrompt.trim()}
-              className="grid size-7 shrink-0 place-items-center rounded-lg bg-emerald-400/20 text-emerald-300 hover:bg-emerald-400/30 disabled:opacity-30 transition-colors"
-            >
-              <Send className="size-3.5" />
-            </button>
+            {isGenerating ? (
+              <div className="grid size-7 shrink-0 place-items-center">
+                <Loader2 className="size-3.5 animate-spin text-emerald-300" />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={submitInlineEdit}
+                disabled={!inlinePrompt.trim()}
+                className="grid size-7 shrink-0 place-items-center rounded-lg bg-emerald-400/20 text-emerald-300 hover:bg-emerald-400/30 disabled:opacity-30 transition-colors"
+              >
+                <Send className="size-3.5" />
+              </button>
+            )}
             <button
               type="button"
               onClick={dismissInlineEdit}
@@ -246,52 +266,63 @@ export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
   const preview = <MarkdownPreview content={localContent} className="flex-1" />;
 
   return (
-    <div className="split-editor flex h-full flex-col">
-      <div className="flex min-h-0 flex-1">
-        {viewMode === "source" && textarea}
-        {viewMode === "preview" && preview}
-        {viewMode === "split" && (
-          <>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ width: `${splitPosition}%` }}>
-              {textarea}
-            </div>
-            <div
-              className="w-1 shrink-0 cursor-col-resize bg-[var(--color-border)] hover:bg-[var(--color-accent)]/50 transition-colors"
-              onMouseDown={handleDragStart}
-            />
-            <div
-              ref={previewRef}
-              className="min-h-0 flex-1 overflow-y-auto"
-              style={{ width: `${100 - splitPosition}%` }}
-            >
-              {preview}
-            </div>
-          </>
-        )}
-      </div>
-      <div className="flex items-center justify-between border-t border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-dim)]">
-        <div className="flex items-center gap-4">
-          <span>{wordCount} words</span>
-          <span>{charCount} chars</span>
-          <span>{readingTime} min read</span>
-        </div>
-        <div className="flex items-center gap-3">
-          {versions.length > 0 && (
-            <span>v{versions[0]?.versionNumber ?? 1}</span>
+    <>
+      <div className="split-editor relative flex h-full flex-col">
+        <div className="flex min-h-0 flex-1">
+          {viewMode === "source" && textarea}
+          {viewMode === "preview" && preview}
+          {viewMode === "split" && (
+            <>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ width: `${splitPosition}%` }}>
+                {textarea}
+              </div>
+              <div
+                className="w-1 shrink-0 cursor-col-resize bg-[var(--color-border)] hover:bg-[var(--color-accent)]/50 transition-colors"
+                onMouseDown={handleDragStart}
+              />
+              <div
+                ref={previewRef}
+                className="min-h-0 flex-1 overflow-y-auto"
+                style={{ width: `${100 - splitPosition}%` }}
+              >
+                {preview}
+              </div>
+            </>
           )}
-          {saveStatus === "saving" && <span className="text-amber-400">Saving...</span>}
-          {saveStatus === "saved" && <span className="text-emerald-400">Saved</span>}
-          {saveStatus === "error" && <span className="text-red-400">Save failed</span>}
-          <button
-            type="button"
-            onClick={onOpenAiPanel}
-            className="flex items-center gap-1 rounded-md bg-[var(--color-accent)]/15 px-2 py-0.5 text-[11px] font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25 transition-colors"
-          >
-            <WandSparkles className="size-3" />
-            AI Assist
-          </button>
+        </div>
+        <div className="flex items-center justify-between border-t border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-dim)]">
+          <div className="flex items-center gap-4">
+            <span>{wordCount} words</span>
+            <span>{charCount} chars</span>
+            <span>{readingTime} min read</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {versions.length > 0 && (
+              <span>v{versions[0]?.versionNumber ?? 1}</span>
+            )}
+            {saveStatus === "saving" && <span className="text-amber-400">Saving...</span>}
+            {saveStatus === "saved" && <span className="text-emerald-400">Saved</span>}
+            {saveStatus === "error" && <span className="text-red-400">Save failed</span>}
+            <button
+              type="button"
+              onClick={onOpenAiPanel}
+              className="flex items-center gap-1 rounded-md bg-[var(--color-accent)]/15 px-2 py-0.5 text-[11px] font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25 transition-colors"
+            >
+              <WandSparkles className="size-3" />
+              AI Assist
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      {pendingEdit && (
+        <InlineDiffPreview
+          originalText={pendingEdit.originalText}
+          proposedText={pendingEdit.proposedText}
+          explanation={pendingEdit.explanation}
+          onAccept={acceptEdit}
+          onReject={rejectEdit}
+        />
+      )}
+    </>
   );
 }

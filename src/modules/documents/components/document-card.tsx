@@ -74,7 +74,7 @@ export function DocumentCard({ document, isActive, compact }: DocumentCardProps)
         }
       }}
       className={cn(
-        "group flex w-full cursor-pointer flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors",
+        "group flex w-full min-w-0 cursor-pointer flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors",
         compact ? "gap-0.5 py-2" : "",
         isActive
           ? "border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)]"
@@ -82,27 +82,28 @@ export function DocumentCard({ document, isActive, compact }: DocumentCardProps)
         isDragging && "opacity-50",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-1">
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           <button
             type="button"
             {...attributes}
             {...listeners}
-            className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
             onClick={(e) => e.stopPropagation()}
           >
             <GripVertical className="size-3 text-[var(--color-text-dim)]" />
           </button>
           <span
             className={cn(
-              "truncate font-medium text-[var(--color-text)]",
+              "min-w-0 flex-1 truncate font-medium text-[var(--color-text)]",
               compact ? "text-[12px]" : "text-[13px]",
             )}
+            title={document.title}
           >
             {document.title}
           </span>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5">
           <div className="relative">
             <button
               type="button"
@@ -184,16 +185,16 @@ export function DocumentCard({ document, isActive, compact }: DocumentCardProps)
           </button>
         </div>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
         <span
           className={cn(
-            "inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium",
+            "inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium",
             STATUS_COLORS[document.status] ?? STATUS_COLORS.draft,
           )}
         >
           {formatDocumentStatus(document.status)}
         </span>
-        <span className="text-[10px] text-[var(--color-text-dim)]">
+        <span className="min-w-0 truncate text-[10px] text-[var(--color-text-dim)]">
           {formatDocumentType(document.type)}
         </span>
         {document.isGlobal && (
@@ -203,7 +204,7 @@ export function DocumentCard({ document, isActive, compact }: DocumentCardProps)
         )}
       </div>
       {!compact && (
-        <span className="text-[11px] text-[var(--color-text-dim)]">
+        <span className="truncate text-[11px] text-[var(--color-text-dim)]">
           {formatDocumentDate(document.updatedAt)}
         </span>
       )}

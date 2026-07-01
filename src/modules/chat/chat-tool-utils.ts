@@ -1,7 +1,7 @@
 import type { ProviderToolCall } from "@/lib/providers/types";
 import { getToolCallUi } from "@/lib/tool-call-ui";
 import { useChatStore } from "@/stores/chat-store";
-import type { DocCreateIntent, DocReadIntent, DocUpdateIntent, DocumentType } from "@/modules/documents/document-types";
+import type { DocCreateIntent, DocReadIntent, DocUpdateIntent, DocumentType, InlineEditIntent } from "@/modules/documents/document-types";
 
 export function stringArg(args: Record<string, unknown>, key: string): string {
   const value = args[key];
@@ -29,6 +29,24 @@ export function docReadIntentFromToolCall(call: ProviderToolCall): DocReadIntent
   const documentId = stringArg(call.arguments, "documentId");
   if (!documentId) return null;
   return { type: "doc.read", documentId };
+}
+
+export function inlineEditIntentFromToolCall(call: ProviderToolCall): InlineEditIntent | null {
+  const documentId = stringArg(call.arguments, "documentId");
+  const mode = stringArg(call.arguments, "mode") as InlineEditIntent["mode"];
+  const contentMarkdown = stringArg(call.arguments, "contentMarkdown");
+  const target = stringArg(call.arguments, "target");
+  const explanation = stringArg(call.arguments, "explanation");
+  if (!documentId || !mode || !contentMarkdown) return null;
+  if (mode === "replace_text" && !target) return null;
+  return {
+    type: "inline.edit",
+    documentId,
+    mode,
+    contentMarkdown,
+    target: target || undefined,
+    explanation: explanation || undefined,
+  };
 }
 
 export function stripPythonCodeFence(code: string): string {

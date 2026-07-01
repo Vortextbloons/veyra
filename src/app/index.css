@@ -164,6 +164,32 @@ body {
     border: 0;
     outline: 0;
   }
+
+  select {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  .veyra-select {
+    color-scheme: dark;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .veyra-select:focus {
+    border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  }
+
+  .veyra-select option {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+  }
 }
 
 ::-webkit-scrollbar {

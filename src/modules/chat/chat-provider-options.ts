@@ -82,15 +82,13 @@ export function resolveProviderTooling({
   const effectiveCodeExecutionEnabled =
     codeExecutionEnabled && codeExecutionAvailability.available;
 
-  const activeDocument = useDocumentStore.getState().documents.find(
-    (doc) => doc.id === useDocumentStore.getState().activeDocumentId,
-  );
+  const docState = useDocumentStore.getState();
 
   const providerTools = buildProviderTools({
     webSearchEnabled: effectiveWebSearchEnabled,
     documentToolsEnabled: settings.documentPanelEnabled,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
-    activeDocumentId: activeDocument?.id,
+    activeDocumentId: docState.activeDocumentId ?? undefined,
     enhancedMode,
   });
 

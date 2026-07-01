@@ -273,20 +273,6 @@ function App() {
     deleteAllConversations();
   }, [pipelineHandleNewChat, deleteAllConversations]);
 
-  // ── Custom events ────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const handleInlineDocumentEdit = (event: Event) => {
-      const detail = (event as CustomEvent<{ prompt?: string }>).detail;
-      const prompt = detail?.prompt?.trim();
-      if (!prompt) return;
-      void pipelineHandleSend(prompt);
-    };
-
-    window.addEventListener("veyra:inline-document-edit", handleInlineDocumentEdit);
-    return () => window.removeEventListener("veyra:inline-document-edit", handleInlineDocumentEdit);
-  }, [pipelineHandleSend]);
-
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (

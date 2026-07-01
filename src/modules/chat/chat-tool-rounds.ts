@@ -8,6 +8,7 @@ import {
   DOC_UPDATE_TOOL_NAME,
   SCRATCHPAD_TOOL_NAME,
   ASK_QUESTION_TOOL_NAME,
+  INLINE_EDIT_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
@@ -17,7 +18,7 @@ import {
 } from "@/modules/chat/chat-tool-utils";
 import { useChatStore } from "@/stores/chat-store";
 import { executeWebSearchCall } from "@/modules/chat/tools/web-search-tool";
-import { executeDocReadCall, executeDocMutationCalls } from "@/modules/chat/tools/document-tool";
+import { executeDocReadCall, executeDocMutationCalls, executeInlineEditCall } from "@/modules/chat/tools/document-tool";
 import {
   executeCodeExecutionCall,
   type CodeExecutionSettings,
@@ -56,6 +57,7 @@ export async function executeToolRound(
   const codeExecutionCalls = toolCalls.filter((call) => call.name === CODE_EXEC_TOOL_NAME);
   const scratchpadCalls = toolCalls.filter((call) => call.name === SCRATCHPAD_TOOL_NAME);
   const askQuestionCalls = toolCalls.filter((call) => call.name === ASK_QUESTION_TOOL_NAME);
+  const inlineEditCalls = toolCalls.filter((call) => call.name === INLINE_EDIT_TOOL_NAME);
   const docMutationCalls = toolCalls.filter(
     (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
   );
@@ -65,6 +67,7 @@ export async function executeToolRound(
     if (call.name === CODE_EXEC_TOOL_NAME) {
       return summarizeCodeSnippet(stripPythonCodeFence(stringArg(call.arguments, "code")));
     }
+    if (call.name === INLINE_EDIT_TOOL_NAME) return stringArg(call.arguments, "documentId");
     return stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId");
   });
 
@@ -135,6 +138,10 @@ export async function executeToolRound(
   for (const call of askQuestionCalls) {
     const result = await executeAskQuestionCall(call);
     toolResultSections.push(result);
+  }
+
+  for (const call of inlineEditCalls) {
+    toolResultSections.push(await executeInlineEditCall(call, ctx.docMutationConversationId));
   }
 
   if (docMutationCalls.length > 0) {

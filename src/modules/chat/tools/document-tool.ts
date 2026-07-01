@@ -3,12 +3,14 @@ import {
   DOC_CREATE_TOOL_NAME,
   DOC_READ_TOOL_NAME,
   DOC_UPDATE_TOOL_NAME,
+  INLINE_EDIT_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
   docCreateIntentFromToolCall,
   docReadIntentFromToolCall,
   docUpdateIntentFromToolCall,
+  inlineEditIntentFromToolCall,
   registerStreamingToolCall,
   registerStreamingToolCalls,
 } from "@/modules/chat/chat-tool-utils";
@@ -16,6 +18,7 @@ import {
   executeDocCreation,
   executeDocRead,
   executeDocUpdate,
+  executeInlineEdit,
 } from "@/modules/documents/document-runtime";
 import { useChatStore } from "@/stores/chat-store";
 
@@ -205,4 +208,49 @@ export async function executeDocMutationCalls(
   }
 
   return { sections, streamedChunks };
+}
+
+export async function executeInlineEditCall(call: ProviderToolCall, conversationId?: string): Promise<string> {
+  const chatStore = useChatStore.getState();
+  const label = "Inline Edit";
+  const documentId = stringArg(call.arguments, "documentId");
+  registerStreamingToolCall(call, "running", documentId);
+
+  const intent = inlineEditIntentFromToolCall(call);
+  if (!intent) {
+    const error = "Invalid inline_edit tool arguments.";
+    chatStore.setStreamingToolState({
+      id: call.id,
+      name: call.name,
+      label,
+      phase: "error",
+      error,
+    });
+    return `Tool result for ${INLINE_EDIT_TOOL_NAME}: ${error}`;
+  }
+
+  const result = await executeInlineEdit(intent, conversationId);
+  if (!result.applied) {
+    const error = result.error ?? result.sanitizedText;
+    chatStore.setStreamingToolState({
+      id: call.id,
+      name: call.name,
+      label,
+      phase: "error",
+      input: documentId,
+      error,
+    });
+    return `Tool result for ${INLINE_EDIT_TOOL_NAME}: ${error}`;
+  }
+
+  chatStore.setStreamingToolState({
+    id: call.id,
+    name: call.name,
+    label,
+    phase: "done",
+    input: intent.documentId,
+    detail: result.sanitizedText,
+  });
+
+  return `Tool result for ${INLINE_EDIT_TOOL_NAME}(${JSON.stringify({ documentId: intent.documentId })}):\n\n${result.sanitizedText}`;
 }

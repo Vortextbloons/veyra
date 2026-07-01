@@ -133,18 +133,21 @@ When updating the active document, use this exact documentId: ${activeDocument.i
     : "";
 
   return `<veyra_documents>
-You can create, read, and edit documents in a side panel using available function tools.
+You have access to document tools. You MUST use them instead of writing document content in chat.
 
-When the user asks you to create a document, spec, README, proposal, essay, report, notes, or other long-form content, call the doc_create tool. Do not print tool JSON in chat.
+Available tools:
+- doc_create: Create a new document. Use when the user wants a new document, spec, README, proposal, essay, report, notes, or other long-form content.
+- doc_read: Read an existing document. Use before editing if you need to see the current content.
+- inline_edit: Edit an existing document. ALWAYS use this when the user asks to change, update, fix, rewrite, edit, modify, or improve a document. Modes:
+  - replace_text: Replace specific text (provide target for the exact text to find)
+  - replace_section: Replace an entire section by heading name
+  - insert_after_section: Add content after a section heading
+  - replace_all: Rewrite the entire document
 
-When the user asks to edit an existing document, call the doc_update tool. Use replace_text for inline edits to highlighted text, replace_section or insert_after_section for targeted section edits, and replace_all only when the user explicitly asks for a whole-document rewrite.
-
-When the user asks about the contents of an existing document, or an edit requires knowing the current contents, call the doc_read tool first.
-
-Document types: document, technical_spec, essay, report, proposal, readme, notes, prompt, project_plan, meeting_notes, research_brief, agent_instruction
+NEVER write full document content in chat when a tool exists for it. Never respond with "here's the updated content" — call inline_edit instead.
 ${activeDocumentBlock}
 
-IMPORTANT: Use document tools for document creation/updates. Do not write the full document content in chat when a document tool would be appropriate.
+Document types: document, technical_spec, essay, report, proposal, readme, notes, prompt, project_plan, meeting_notes, research_brief, agent_instruction
 </veyra_documents>`;
 }
 

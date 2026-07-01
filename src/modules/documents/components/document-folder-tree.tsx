@@ -253,17 +253,17 @@ export function DocumentFolderTree() {
   }, [folders]);
 
   // Get document count for a folder (including subfolders)
-  const getDocumentCount = useCallback(
-    (folderId: string) => {
+  const getDocumentCount = useMemo(() => {
+    const countDocs = (folderId: string): number => {
       let count = documents.filter((d) => d.folderId === folderId).length;
       const childFolders = folders.filter((f) => f.parentId === folderId);
       for (const child of childFolders) {
-        count += getDocumentCount(child.id);
+        count += countDocs(child.id);
       }
       return count;
-    },
-    [documents, folders],
-  );
+    };
+    return countDocs;
+  }, [documents, folders]);
 
   const handleCreateFolder = useCallback(async () => {
     const trimmed = newFolderName.trim();

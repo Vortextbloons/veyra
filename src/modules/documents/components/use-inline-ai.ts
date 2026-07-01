@@ -9,12 +9,24 @@ type InlineEditState = {
   top: number;
 };
 
-export type InlineSubmitResult = {
+export type PendingInlineEdit = {
+  originalText: string;
+  proposedText: string;
+  selectionStart: number;
+  selectionEnd: number;
+  explanation?: string;
+};
+
+export type InlineStreamParams = {
   instruction: string;
   selectedText: string;
   docId: string;
   docTitle: string;
   fullContent: string;
+  signal: AbortSignal;
+  onChunk: (chunk: string) => void;
+  onComplete: (fullResponse: string) => void;
+  onError: (error: string) => void;
 };
 
 function selectedTextCoordinates(textarea: HTMLTextAreaElement) {
@@ -27,7 +39,8 @@ function selectedTextCoordinates(textarea: HTMLTextAreaElement) {
 
 export function useInlineAi(
   textareaRef: React.RefObject<HTMLTextAreaElement | null>,
-  onSubmit?: (result: InlineSubmitResult) => void,
+  streamEdit: (params: InlineStreamParams) => void,
+  onApplyEdit: (newContent: string) => void,
 ) {
   const activeDocumentId = useDocumentStore((s) => s.activeDocumentId);
   const documents = useDocumentStore((s) => s.documents);
@@ -36,9 +49,12 @@ export function useInlineAi(
   const doc = documents.find((d) => d.id === activeDocumentId);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null);
   const [inlinePrompt, setInlinePrompt] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [pendingEdit, setPendingEdit] = useState<PendingInlineEdit | null>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
 
   const showInlineEdit = useCallback(
     (start?: number, end?: number) => {
@@ -52,6 +68,7 @@ export function useInlineAi(
       const coords = selectedTextCoordinates(textarea);
       setInlineEdit({ start: selStart, end: selEnd, text, left: coords.left, top: coords.top });
       setInlinePrompt("");
+      setPendingEdit(null);
       setTimeout(() => inlineInputRef.current?.focus(), 50);
     },
     [doc, textareaRef],
@@ -59,7 +76,7 @@ export function useInlineAi(
 
   const updateInlineEditFromSelection = useCallback(() => {
     const textarea = textareaRef.current;
-    if (!textarea || !doc) return;
+    if (!textarea || !doc || isGenerating) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
@@ -71,7 +88,7 @@ export function useInlineAi(
 
     const coords = selectedTextCoordinates(textarea);
     setInlineEdit({ start, end, text, left: coords.left, top: coords.top });
-  }, [doc, textareaRef]);
+  }, [doc, textareaRef, isGenerating]);
 
   useEffect(() => {
     const handleSelectionChange = () => {
@@ -93,48 +110,81 @@ export function useInlineAi(
   }, [updateInlineEditFromSelection, textareaRef]);
 
   const submitInlineEdit = useCallback(() => {
-    if (!doc || !inlinePrompt.trim() || isSubmitting) return;
+    if (!doc || !inlinePrompt.trim() || isGenerating) return;
 
     const instruction = inlinePrompt.trim();
     const selectedText = inlineEdit?.text ?? "";
+    const selStart = inlineEdit?.start ?? 0;
+    const selEnd = inlineEdit?.end ?? 0;
 
-    if (onSubmit) {
-      setIsSubmitting(true);
-      onSubmit({
-        instruction,
-        selectedText,
-        docId: doc.id,
-        docTitle: doc.title,
-        fullContent: activeContent,
-      });
-      setInlineEdit(null);
-      setInlinePrompt("");
-      setIsSubmitting(false);
-      textareaRef.current?.focus();
-      return;
-    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+    cancelledRef.current = false;
 
-    let prompt: string;
-    if (selectedText) {
-      prompt = `Use the doc_update tool to edit the active document with mode replace_text. Set target to the exact selected text below, and set contentMarkdown to the rewritten replacement only.\n\nDocument id: ${doc.id}\nDocument title: ${doc.title}\nInstruction: ${instruction}\n\nSelected text target:\n${selectedText}\n\nImportant: preserve the rest of the document unchanged and apply the edit directly to the document.`;
-    } else {
-      prompt = `Use the doc_update tool to edit the active document with mode replace_all. Set contentMarkdown to the full rewritten document.\n\nDocument id: ${doc.id}\nDocument title: ${doc.title}\nInstruction: ${instruction}\n\nCurrent document content:\n${activeContent}\n\nImportant: rewrite the entire document following the instruction.`;
-    }
+    setIsGenerating(true);
+    setPendingEdit(null);
 
-    window.dispatchEvent(
-      new CustomEvent("veyra:inline-document-edit", {
-        detail: { prompt },
-      }),
-    );
-    setInlineEdit(null);
+    streamEdit({
+      instruction,
+      selectedText,
+      docId: doc.id,
+      docTitle: doc.title,
+      fullContent: activeContent,
+      signal: controller.signal,
+      onChunk: () => {},
+      onComplete: (fullResponse) => {
+        if (cancelledRef.current) return;
+        setIsGenerating(false);
+        setPendingEdit({
+          originalText: selectedText || activeContent,
+          proposedText: fullResponse,
+          selectionStart: selStart,
+          selectionEnd: selEnd,
+        });
+      },
+      onError: () => {
+        if (cancelledRef.current) return;
+        setIsGenerating(false);
+      },
+    });
+
     setInlinePrompt("");
-    textareaRef.current?.focus();
-  }, [doc, inlineEdit, inlinePrompt, activeContent, textareaRef, onSubmit, isSubmitting]);
+  }, [doc, inlineEdit, inlinePrompt, activeContent, isGenerating, streamEdit]);
 
-  const dismissInlineEdit = useCallback(() => {
+  const acceptEdit = useCallback(() => {
+    if (!pendingEdit) return;
+
+    const { proposedText, selectionStart, selectionEnd } = pendingEdit;
+    const isSelectionEdit = selectionStart !== selectionEnd;
+
+    if (isSelectionEdit) {
+      const before = activeContent.slice(0, selectionStart);
+      const after = activeContent.slice(selectionEnd);
+      onApplyEdit(before + proposedText + after);
+    } else {
+      onApplyEdit(proposedText);
+    }
+
+    setPendingEdit(null);
     setInlineEdit(null);
+    textareaRef.current?.focus();
+  }, [pendingEdit, activeContent, onApplyEdit, textareaRef]);
+
+  const rejectEdit = useCallback(() => {
+    setPendingEdit(null);
     textareaRef.current?.focus();
   }, [textareaRef]);
+
+  const dismissInlineEdit = useCallback(() => {
+    if (isGenerating) {
+      cancelledRef.current = true;
+      abortRef.current?.abort();
+      setIsGenerating(false);
+    }
+    setInlineEdit(null);
+    setPendingEdit(null);
+    textareaRef.current?.focus();
+  }, [textareaRef, isGenerating]);
 
   return {
     inlineEdit,
@@ -146,5 +196,9 @@ export function useInlineAi(
     updateInlineEditFromSelection,
     submitInlineEdit,
     dismissInlineEdit,
+    isGenerating,
+    pendingEdit,
+    acceptEdit,
+    rejectEdit,
   };
 }

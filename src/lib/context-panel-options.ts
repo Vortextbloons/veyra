@@ -7,7 +7,7 @@ import {
 } from "@/lib/prompts";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProjectStore } from "@/modules/projects/project-store";
-import { useDocumentStore } from "@/modules/documents/document-store";
+import { useDocumentStore, selectActiveDocumentMeta } from "@/modules/documents/document-store";
 import { resolveCharacterBlock } from "@/lib/resolve-character-block";
 
 export function buildContextPanelOptions(input: {
@@ -41,15 +41,9 @@ export function buildContextPanelOptions(input: {
       })
     : undefined;
 
-  const activeDocument = useDocumentStore.getState().documents.find(
-    (doc) => doc.id === useDocumentStore.getState().activeDocumentId,
-  );
+  const activeDocument = selectActiveDocumentMeta(useDocumentStore.getState());
   const documentInstructionsBlock = settings.documentPanelEnabled
-    ? buildDocumentInstructionsBlock(
-        activeDocument
-          ? { id: activeDocument.id, title: activeDocument.title, type: activeDocument.type }
-          : undefined,
-      )
+    ? buildDocumentInstructionsBlock(activeDocument)
     : undefined;
 
   const userPrompt = settings.getModelSettings(input.modelId).systemPrompt || undefined;

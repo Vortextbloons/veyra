@@ -7,6 +7,7 @@ export const DOC_UPDATE_TOOL_NAME = "doc_update";
 export const CODE_EXEC_TOOL_NAME = "code_execution";
 export const SCRATCHPAD_TOOL_NAME = "scratchpad_write";
 export const ASK_QUESTION_TOOL_NAME = "ask_question";
+export const INLINE_EDIT_TOOL_NAME = "inline_edit";
 
 const DOCUMENT_TYPES = [
   "document",
@@ -104,39 +105,6 @@ export function buildProviderTools(options: {
     tools.push({
       type: "function",
       function: {
-        name: DOC_UPDATE_TOOL_NAME,
-        description: options.activeDocumentId
-          ? `Update an existing markdown document. The active document id is ${options.activeDocumentId}.`
-          : "Update an existing markdown document by id.",
-        parameters: {
-          type: "object",
-          properties: {
-            documentId: {
-              type: "string",
-              description: "Document id to update. Use the active document id when editing the active document.",
-            },
-            mode: {
-              type: "string",
-              enum: ["replace_section", "insert_after_section", "replace_all", "replace_text"],
-            },
-            target: {
-              type: "string",
-              description: "Section title for replace_section or insert_after_section. Exact text to replace for replace_text.",
-            },
-            contentMarkdown: {
-              type: "string",
-              description: "Markdown content to insert or use as replacement.",
-            },
-          },
-          required: ["documentId", "mode", "contentMarkdown"],
-          additionalProperties: false,
-        },
-      },
-    });
-
-    tools.push({
-      type: "function",
-      function: {
         name: DOC_READ_TOOL_NAME,
         description: options.activeDocumentId
           ? `Read an existing markdown document so you can answer questions about it or edit it accurately. The active document id is ${options.activeDocumentId}.`
@@ -150,6 +118,44 @@ export function buildProviderTools(options: {
             },
           },
           required: ["documentId"],
+          additionalProperties: false,
+        },
+      },
+    });
+
+    tools.push({
+      type: "function",
+      function: {
+        name: INLINE_EDIT_TOOL_NAME,
+        description: options.activeDocumentId
+          ? `Edit an existing document. Use replace_text for targeted text replacements, replace_section or insert_after_section for section edits, and replace_all for full rewrites. The active document id is ${options.activeDocumentId}.`
+          : "Edit an existing document by id. Use replace_text for targeted text replacements, replace_section or insert_after_section for section edits, and replace_all for full rewrites.",
+        parameters: {
+          type: "object",
+          properties: {
+            documentId: {
+              type: "string",
+              description: "Document id to edit. Use the active document id when editing the active document.",
+            },
+            mode: {
+              type: "string",
+              enum: ["replace_text", "replace_all", "replace_section", "insert_after_section"],
+              description: "replace_text for exact text match, replace_section to replace a heading section, insert_after_section to append after a section, replace_all to rewrite the full document.",
+            },
+            target: {
+              type: "string",
+              description: "Section heading for replace_section/insert_after_section. Exact text to replace for replace_text.",
+            },
+            contentMarkdown: {
+              type: "string",
+              description: "Markdown content to insert or use as replacement.",
+            },
+            explanation: {
+              type: "string",
+              description: "Brief explanation of what changed and why.",
+            },
+          },
+          required: ["documentId", "mode", "contentMarkdown"],
           additionalProperties: false,
         },
       },

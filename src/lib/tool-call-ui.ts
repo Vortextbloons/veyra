@@ -9,6 +9,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
   SCRATCHPAD_TOOL_NAME,
   ASK_QUESTION_TOOL_NAME,
+  INLINE_EDIT_TOOL_NAME,
 } from "@/lib/tool-registry";
 
 export type ToolCallAccent = "cyan" | "emerald" | "violet" | "amber";
@@ -54,6 +55,11 @@ export const TOOL_CALL_UI: Record<string, ToolCallUiMeta> = {
     label: "Ask Question",
     icon: MessageCircleQuestion,
     accent: "amber",
+  },
+  [INLINE_EDIT_TOOL_NAME]: {
+    label: "Inline Edit",
+    icon: FileText,
+    accent: "emerald",
   },
 };
 

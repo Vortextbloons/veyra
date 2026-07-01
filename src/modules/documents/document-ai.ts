@@ -128,8 +128,10 @@ export async function streamAiAssist(options: {
   onChunk: (content: string, done: boolean) => void;
   onError: (error: string) => void;
   signal?: AbortSignal;
+  reasoningEnabled?: boolean;
+  model?: string;
 }): Promise<void> {
-  const { messages, onChunk, onError, signal } = options;
+  const { messages, onChunk, onError, signal, reasoningEnabled, model } = options;
 
   const providerState = useProviderStore.getState();
   const adapter = getProviderAdapter(providerState.selectedProvider);
@@ -138,16 +140,18 @@ export async function streamAiAssist(options: {
     return;
   }
 
-  const modelSettings = useSettingsStore.getState().getModelSettings(providerState.selectedModel);
+  const selectedModel = model ?? providerState.selectedModel;
+  const modelSettings = useSettingsStore.getState().getModelSettings(selectedModel);
 
   await adapter.sendChat({
     messages,
-    model: providerState.selectedModel,
+    model: selectedModel,
     temperature: modelSettings.temperature,
     maxTokens: modelSettings.maxTokens,
     topP: modelSettings.topP,
     repetitionPenalty: modelSettings.repetitionPenalty,
     contextLength: modelSettings.contextLength,
+    reasoningEnabled,
     signal,
     onChunk,
     onError,
