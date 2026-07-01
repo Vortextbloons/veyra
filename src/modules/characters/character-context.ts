@@ -4,6 +4,7 @@ import type {
   CharacterRecord,
 } from "./character-types";
 import { DEFAULT_CHARACTER_CHAT_DEFAULTS } from "./character-types";
+import { escapeXml } from "./character-text";
 
 export interface BuildCharacterContextOptions {
   /** Matched lorebook entries. */
@@ -15,15 +16,6 @@ export interface BuildCharacterContextOptions {
 }
 
 const SOFT_DEFAULT_MAX_CHARS = 16_000;
-
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
 
 function trim(s: string | undefined | null): string {
   return (s ?? "").trim();

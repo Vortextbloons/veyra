@@ -217,7 +217,7 @@ async function loadFallback(): Promise<Conversation[]> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return decryptSnapshot(raw);
+    return await decryptSnapshot(raw);
   } catch {
     return [];
   }
@@ -284,7 +284,7 @@ export async function loadConversationSnapshot(): Promise<Conversation[]> {
   try {
     const raw = await invoke<string>("load_conversations");
     if (!raw) return loadFallback();
-    return decryptSnapshot(raw);
+    return await decryptSnapshot(raw);
   } catch {
     return loadFallback();
   }

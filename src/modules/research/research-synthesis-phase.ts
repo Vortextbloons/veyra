@@ -1,3 +1,4 @@
+import { clamp } from "@/lib/number";
 import type { ResearchSource, ResearchEvidence, CreateResearchReportInput } from "./research-types";
 import type { ResearchRuntimeContext } from "./research-runtime-context";
 import { callResearchAi, getTemporalContext } from "./research-ai";
@@ -6,10 +7,6 @@ import { sourceTypeLabel, synthesisBudget, nowIso } from "./research-source-util
 import { roundRobinSampleBySourceScore, sourceSynthesisPriority, getSourceNumber, extractCitationContext } from "./research-citation-utils";
 import { prepareReportSection } from "./report-sanitize";
 import { getCredibilityScore } from "./source-credibility";
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
-}
 
 export async function synthesisPhase(
   ctx: ResearchRuntimeContext,

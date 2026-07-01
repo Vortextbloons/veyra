@@ -20,20 +20,12 @@ import { DEFAULT_CHARACTER_CHAT_DEFAULTS } from "./character-types";
 import type { CharacterGroupRecord } from "./character-group-types";
 import { evaluateLorebook } from "./lorebook";
 import { buildCharacterContextBlock } from "./character-context";
+import { escapeXml } from "./character-text";
 
 export interface BuildGroupContextOptions {
   chatDefaults?: Partial<CharacterChatDefaults>;
   /** Soft cap on the rendered block, in characters. 0 = unlimited. */
   maxChars?: number;
-}
-
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
 }
 
 function trim(s: string | undefined | null): string {

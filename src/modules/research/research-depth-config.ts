@@ -1,4 +1,5 @@
 import { useSettingsStore } from "@/stores/settings-store";
+import { clamp } from "@/lib/number";
 import type { ResearchDepth } from "./research-types";
 import {
   resolveResearchProfileForRun,
@@ -38,10 +39,6 @@ export type DepthConfig = {
   liteModelId: string;
   liteModelProviderId: string;
 };
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
-}
 
 function profileToDepthConfig(p: ResearchProfileOverride): DepthConfig {
   const liteModelId = p.liteModelId ?? "";

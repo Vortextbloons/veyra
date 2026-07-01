@@ -45,7 +45,7 @@ export function SliderControl({
 
   const track = (
     <div className="relative">
-      <div className={variant === "card" ? "h-1.5 rounded-full bg-white/[0.06]" : "h-1.5 rounded-full bg-white/[0.06]"}>
+      <div className="h-1.5 rounded-full bg-white/[0.06]">
         <div
           className="h-full rounded-full bg-[var(--color-accent)]"
           style={{ width: `${percent}%` }}
