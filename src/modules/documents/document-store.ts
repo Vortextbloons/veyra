@@ -32,6 +32,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 export type ViewMode = "source" | "split" | "preview";
 export type SortMode = "updatedAt" | "createdAt" | "title";
 export type StatusFilter = DocumentStatus | "all";
+export type FolderFilter = "all" | "unfiled" | string;
 
 type DocumentStore = {
   documents: DocumentRecord[];
@@ -58,7 +59,7 @@ type DocumentStore = {
   /** Folder state */
   folders: DocumentFolder[];
   expandedFolderIds: Set<string>;
-  selectedFolderId: string | null;
+  selectedFolderId: FolderFilter;
   selectedDocumentIds: Set<string>;
 
   hydrateDocuments: () => Promise<void>;
@@ -97,7 +98,7 @@ type DocumentStore = {
   deleteFolder: (id: string) => Promise<void>;
   moveDocumentToFolder: (documentId: string, folderId?: string) => Promise<void>;
   toggleFolderExpanded: (id: string) => void;
-  selectFolder: (id: string | null) => void;
+  selectFolder: (id: FolderFilter) => void;
 
   /** Bulk selection actions */
   toggleDocumentSelected: (id: string) => void;
@@ -131,7 +132,7 @@ export function filterDocuments(
   searchQuery: string,
   statusFilter: StatusFilter,
   sortMode: SortMode,
-  folderId?: string | null,
+  folderFilter?: FolderFilter,
 ): DocumentRecord[] {
   let filtered = documents;
 
@@ -140,13 +141,11 @@ export function filterDocuments(
   }
 
   // Filter by folder
-  if (folderId !== undefined) {
-    if (folderId === null) {
-      // Show documents not in any folder
+  if (folderFilter && folderFilter !== "all") {
+    if (folderFilter === "unfiled") {
       filtered = filtered.filter((d) => !d.folderId);
     } else {
-      // Show documents in the specified folder
-      filtered = filtered.filter((d) => d.folderId === folderId);
+      filtered = filtered.filter((d) => d.folderId === folderFilter);
     }
   }
 
@@ -198,7 +197,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
 
   folders: [],
   expandedFolderIds: new Set<string>(),
-  selectedFolderId: null,
+  selectedFolderId: "all",
   selectedDocumentIds: new Set<string>(),
 
   hydrateDocuments: async () => {
@@ -532,29 +531,15 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   deleteFolder: async (id) => {
     try {
       await ipcDeleteFolder(id);
-      set((state) => {
-        // Move documents from deleted folder to root
-        const updatedDocuments = state.documents.map((d) =>
+      // Re-fetch folders to get the updated tree (child folders moved to root)
+      const folders = await ipcListFolders(undefined);
+      set((state) => ({
+        documents: state.documents.map((d) =>
           d.folderId === id ? { ...d, folderId: undefined } : d,
-        );
-        // Remove folder and any subfolders
-        const folderIds = new Set<string>([id]);
-        let changed = true;
-        while (changed) {
-          changed = false;
-          for (const f of state.folders) {
-            if (f.parentId && folderIds.has(f.parentId) && !folderIds.has(f.id)) {
-              folderIds.add(f.id);
-              changed = true;
-            }
-          }
-        }
-        return {
-          documents: updatedDocuments,
-          folders: state.folders.filter((f) => !folderIds.has(f.id)),
-          selectedFolderId: state.selectedFolderId === id ? null : state.selectedFolderId,
-        };
-      });
+        ),
+        folders,
+        selectedFolderId: state.selectedFolderId === id ? "all" : state.selectedFolderId,
+      }));
     } catch (error) {
       set({ error: String(error) });
       throw error;

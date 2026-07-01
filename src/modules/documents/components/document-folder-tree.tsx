@@ -12,17 +12,21 @@ import {
 import { useDroppable } from "@dnd-kit/core";
 import { useDocumentStore } from "../document-store";
 import type { DocumentFolder } from "../document-types";
+import type { FolderFilter } from "../document-store";
 import { cn } from "@/lib/utils";
 
 interface FolderNodeProps {
   folder: DocumentFolder;
   depth: number;
-  childFolders: DocumentFolder[];
+  allFolders: DocumentFolder[];
+  documents: Array<{ folderId?: string }>;
   documentCount: number;
   isExpanded: boolean;
   isSelected: boolean;
+  expandedFolderIds: Set<string>;
+  selectedFolderId: FolderFilter;
   onToggle: (id: string) => void;
-  onSelect: (id: string) => void;
+  onSelect: (id: FolderFilter) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
   onCreateSubfolder: (parentId: string) => void;
@@ -31,10 +35,13 @@ interface FolderNodeProps {
 function FolderNode({
   folder,
   depth,
-  childFolders,
+  allFolders,
+  documents,
   documentCount,
   isExpanded,
   isSelected,
+  expandedFolderIds,
+  selectedFolderId,
   onToggle,
   onSelect,
   onRename,
@@ -76,7 +83,7 @@ function FolderNode({
   );
 
   return (
-    <div>
+    <div className="relative">
       <div
         ref={setNodeRef}
         className={cn(
@@ -192,22 +199,34 @@ function FolderNode({
       )}
 
       {isExpanded &&
-        childFolders.map((child) => (
-          <FolderNode
-            key={child.id}
-            folder={child}
-            depth={depth + 1}
-            childFolders={childFolders}
-            documentCount={0}
-            isExpanded={false}
-            isSelected={false}
-            onToggle={onToggle}
-            onSelect={onSelect}
-            onRename={onRename}
-            onDelete={onDelete}
-            onCreateSubfolder={onCreateSubfolder}
-          />
-        ))}
+        allFolders
+          .filter((f) => f.parentId === folder.id)
+          .map((child) => {
+            const childCount = documents.filter((d) => d.folderId === child.id).length +
+              allFolders.filter((f) => f.parentId === child.id).reduce(
+                (sum, sub) => sum + documents.filter((d) => d.folderId === sub.id).length,
+                0,
+              );
+            return (
+              <FolderNode
+                key={child.id}
+                folder={child}
+                depth={depth + 1}
+                allFolders={allFolders}
+                documents={documents}
+                documentCount={childCount}
+                isExpanded={expandedFolderIds.has(child.id)}
+                isSelected={selectedFolderId === child.id}
+                expandedFolderIds={expandedFolderIds}
+                selectedFolderId={selectedFolderId}
+                onToggle={onToggle}
+                onSelect={onSelect}
+                onRename={onRename}
+                onDelete={onDelete}
+                onCreateSubfolder={onCreateSubfolder}
+              />
+            );
+          })}
     </div>
   );
 }
@@ -232,12 +251,6 @@ export function DocumentFolderTree() {
     const rootFolders = folders.filter((f) => !f.parentId);
     return rootFolders;
   }, [folders]);
-
-  // Get child folders for a given parent
-  const getChildFolders = useCallback(
-    (parentId: string) => folders.filter((f) => f.parentId === parentId),
-    [folders],
-  );
 
   // Get document count for a folder (including subfolders)
   const getDocumentCount = useCallback(
@@ -283,6 +296,9 @@ export function DocumentFolderTree() {
 
   const unfiledCount = documents.filter((d) => !d.folderId).length;
 
+  const { setNodeRef: setAllRef, isOver: isAllOver } = useDroppable({ id: "folder-root" });
+  const { setNodeRef: setUnfiledRef, isOver: isUnfiledOver } = useDroppable({ id: "folder-unfiled" });
+
   return (
     <div className="border-b border-[var(--color-border)]">
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
@@ -306,13 +322,15 @@ export function DocumentFolderTree() {
       <div className="px-1 pb-2">
         {/* All documents */}
         <div
+          ref={setAllRef}
           className={cn(
             "flex items-center gap-2 rounded-md px-2 py-1 text-[12px] cursor-pointer transition-colors",
-            selectedFolderId === null
+            selectedFolderId === "all"
               ? "bg-[var(--color-accent-soft)] text-white"
               : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]",
+            isAllOver && "bg-[var(--color-accent)]/20 ring-1 ring-[var(--color-accent)]/50",
           )}
-          onClick={() => selectFolder(null)}
+          onClick={() => selectFolder("all")}
         >
           <Folder className="size-3.5 shrink-0 text-[var(--color-accent)]" />
           <span className="flex-1">All Documents</span>
@@ -323,13 +341,15 @@ export function DocumentFolderTree() {
 
         {/* Unfiled documents */}
         <div
+          ref={setUnfiledRef}
           className={cn(
             "flex items-center gap-2 rounded-md px-2 py-1 text-[12px] cursor-pointer transition-colors",
-            selectedFolderId === undefined
+            selectedFolderId === "unfiled"
               ? "bg-[var(--color-accent-soft)] text-white"
               : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]",
+            isUnfiledOver && "bg-[var(--color-accent)]/20 ring-1 ring-[var(--color-accent)]/50",
           )}
-          onClick={() => selectFolder(undefined as unknown as null)}
+          onClick={() => selectFolder("unfiled")}
         >
           <Folder className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
           <span className="flex-1">Unfiled</span>
@@ -344,10 +364,13 @@ export function DocumentFolderTree() {
             key={folder.id}
             folder={folder}
             depth={0}
-            childFolders={getChildFolders(folder.id)}
+            allFolders={folders}
+            documents={documents}
             documentCount={getDocumentCount(folder.id)}
             isExpanded={expandedFolderIds.has(folder.id)}
             isSelected={selectedFolderId === folder.id}
+            expandedFolderIds={expandedFolderIds}
+            selectedFolderId={selectedFolderId}
             onToggle={toggleFolderExpanded}
             onSelect={selectFolder}
             onRename={renameFolder}

@@ -36,3 +36,4 @@ Desktop.ini
 !src-tauri/icons/**
 AGENTS.md
 plans/
+.codex/

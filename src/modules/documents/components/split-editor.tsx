@@ -246,7 +246,7 @@ export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
   const preview = <MarkdownPreview content={localContent} className="flex-1" />;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="split-editor flex h-full flex-col">
       <div className="flex min-h-0 flex-1">
         {viewMode === "source" && textarea}
         {viewMode === "preview" && preview}

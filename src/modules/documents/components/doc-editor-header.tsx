@@ -118,7 +118,7 @@ export function DocEditorHeader() {
   if (!doc) return null;
 
   return (
-    <div className="border-b border-[var(--color-border)]">
+    <div className="doc-editor-header border-b border-[var(--color-border)]">
       <div className="flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {editing ? (

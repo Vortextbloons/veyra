@@ -77,8 +77,8 @@ export function DocumentListPanel() {
   );
 
   // Determine folder filter value
-  // null = "All Documents" (show everything)
-  // undefined = "Unfiled" (show only documents without folderId)
+  // "all" = show everything
+  // "unfiled" = show only documents without folderId
   // string = specific folder ID
   const folderFilter = selectedFolderId;
 
@@ -89,8 +89,8 @@ export function DocumentListPanel() {
 
   // Get current folder name for breadcrumb
   const currentFolderName = useMemo(() => {
-    if (folderFilter === null) return null;
-    if (folderFilter === undefined) return "Unfiled";
+    if (folderFilter === "all") return null;
+    if (folderFilter === "unfiled") return "Unfiled";
     const folder = folders.find((f) => f.id === folderFilter);
     return folder?.name ?? "Unknown Folder";
   }, [folderFilter, folders]);
@@ -98,13 +98,14 @@ export function DocumentListPanel() {
   const handleNewDocument = useCallback(
     (templateId?: string) => {
       const template = templateId ? DOCUMENT_TEMPLATES.find((t) => t.id === templateId) : undefined;
+      const folderId = folderFilter !== "all" && folderFilter !== "unfiled" ? folderFilter : undefined;
       void createDocument({
         title: template?.name ?? "Untitled Document",
         type: template?.type ?? "document",
         contentMarkdown: template?.contentMarkdown ?? "",
         isGlobal: true,
         tags: template?.tags,
-        folderId: folderFilter === null || folderFilter === undefined ? undefined : folderFilter,
+        folderId,
       });
       setShowNewMenu(false);
     },
@@ -123,7 +124,7 @@ export function DocumentListPanel() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full w-[280px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="document-list-panel flex h-full w-[280px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="flex items-center justify-between px-3 pt-3 pb-2">
           <span className="text-[13px] font-semibold text-[var(--color-text)]">
             Documents
@@ -196,7 +197,7 @@ export function DocumentListPanel() {
           <div className="flex items-center gap-1 px-3 py-1 text-[11px]">
             <button
               type="button"
-              onClick={() => selectFolder(null)}
+              onClick={() => selectFolder("all")}
               className="text-[var(--color-accent)] hover:underline"
             >
               All
@@ -205,7 +206,7 @@ export function DocumentListPanel() {
             <span className="text-[var(--color-text)]">{currentFolderName}</span>
             <button
               type="button"
-              onClick={() => selectFolder(null)}
+              onClick={() => selectFolder("all")}
               className="ml-auto text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
             >
               <X className="size-3" />

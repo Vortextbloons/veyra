@@ -111,7 +111,7 @@ export function DocumentsPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleNewDocument, handleExportMarkdown, saveNow, closeDocument, setViewMode]);
+  }, [handleNewDocument, handleExportMarkdown, saveNow, closeDocument, setViewMode, viewMode]);
 
   useEffect(() => {
     setDocumentsTabActive(true);

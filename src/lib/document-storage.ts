@@ -36,6 +36,7 @@ export async function createDocument(
     editorFormat: "markdown",
     contentMarkdown: input.contentMarkdown ?? "",
     tags: input.tags ?? [],
+    folderId: input.folderId ?? null,
     createdAt: now,
     updatedAt: now,
     lastExportedAt: null,
@@ -112,26 +113,19 @@ export async function listDocumentFolders(projectId?: string): Promise<DocumentF
 }
 
 export async function createDocumentFolder(input: CreateFolderInput): Promise<DocumentFolder> {
-  const now = nowIso();
-  const id = newId("folder");
-  const payload = {
-    id,
+  return invoke<DocumentFolder>("create_document_folder", {
     name: input.name,
     parentId: input.parentId ?? null,
     projectId: input.projectId ?? null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  return invoke<DocumentFolder>("create_document_folder", { input: JSON.stringify(payload) });
+  });
 }
 
 export async function updateDocumentFolder(input: UpdateFolderInput): Promise<DocumentFolder> {
-  return invoke<DocumentFolder>("update_document_folder", {
-    id: input.id,
-    name: input.name ?? null,
-    parentId: input.parentId === undefined ? null : input.parentId,
-    position: input.position ?? null,
-  });
+  const args: Record<string, unknown> = { id: input.id };
+  if (input.name !== undefined) args.name = input.name;
+  if (input.parentId !== undefined) args.parentId = input.parentId;
+  if (input.position !== undefined) args.position = input.position;
+  return invoke<DocumentFolder>("update_document_folder", args);
 }
 
 export async function deleteDocumentFolder(id: string): Promise<void> {

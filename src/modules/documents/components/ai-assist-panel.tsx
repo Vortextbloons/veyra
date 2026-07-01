@@ -223,7 +223,7 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
   }, []);
 
   return (
-    <div className="flex h-full w-[360px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="ai-assist-panel flex h-full w-[360px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
         <div className="flex items-center gap-2">
           <Sparkles className="size-4 text-[var(--color-accent)]" />
