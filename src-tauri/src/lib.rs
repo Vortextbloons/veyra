@@ -239,6 +239,7 @@ pub fn run() {
             email::commands::email_archive_thread,
             email::commands::email_mark_read,
             email::commands::email_mark_unread,
+            email::commands::email_reparse_message,
             projects::commands::create_project,
             projects::commands::get_project,
             projects::commands::update_project,

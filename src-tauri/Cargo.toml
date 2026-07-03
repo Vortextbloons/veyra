@@ -52,3 +52,4 @@ rayon = "1.10"
 htmd = "0.2"
 keyring = "3"
 uuid = { version = "1", features = ["v4"] }
+ammonia = "3"

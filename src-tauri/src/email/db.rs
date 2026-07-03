@@ -56,6 +56,10 @@ pub struct EmailMessageRow {
     pub is_starred: bool,
     pub labels: Vec<String>,
     pub attachments: Vec<EmailAttachmentRow>,
+    pub body_html: Option<String>,
+    pub sanitized_html: Option<String>,
+    pub body_parse_status: String,
+    pub parsed_parts: crate::email::thread_parser::ParsedBody,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -260,9 +264,21 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         add_column_if_missing(conn, "email_messages", "body_html", "TEXT")?;
         add_column_if_missing(conn, "email_messages", "sanitized_html", "TEXT")?;
         add_column_if_missing(conn, "email_messages", "body_parse_status", "TEXT NOT NULL DEFAULT 'pending'")?;
-        add_column_if_missing(conn, "email_messages", "parsed_parts_json", "TEXT NOT NULL DEFAULT '[]'")?;
+        add_column_if_missing(conn, "email_messages", "parsed_parts_json", "TEXT NOT NULL DEFAULT '{}'")?;
         add_column_if_missing(conn, "email_messages", "raw_payload_json", "TEXT")?;
         add_column_if_missing(conn, "email_messages", "updated_at", "INTEGER")?;
+
+        // Repair legacy defaults from earlier schema prep.
+        conn.execute(
+            "UPDATE email_messages SET parsed_parts_json = '{}' WHERE parsed_parts_json IN ('[]', '')",
+            [],
+        )
+        .map_err(|e| format!("email: repair parsed_parts_json failed: {e}"))?;
+        conn.execute(
+            "UPDATE email_messages SET body_text = body WHERE body_text = '' AND body != ''",
+            [],
+        )
+        .map_err(|e| format!("email: backfill body_text failed: {e}"))?;
     }
 
     if schema_version < 2 {
@@ -1151,7 +1167,35 @@ fn upsert_gmail_message(
         .and_then(Value::as_str)
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or_else(now_ms);
-    let body = gmail_body_text(payload);
+    let body_text = gmail_body_text(payload);
+    let body_html_raw = gmail_body_html(payload);
+    let sanitized_html = if !body_html_raw.is_empty() {
+        crate::email::html::sanitize_email_html(&body_html_raw)
+    } else {
+        String::new()
+    };
+    // If no text/plain, fall back to extracting text from sanitized HTML.
+    let body = if body_text.is_empty() && !sanitized_html.is_empty() {
+        crate::email::html::html_to_plain_text(&sanitized_html)
+    } else {
+        body_text.clone()
+    };
+    let html_for_parse = html_for_body_parse(&body_html_raw, &sanitized_html);
+    let parsed = crate::email::thread_parser::parse_message_body(html_for_parse, &body_text);
+    let body_parse_status = parsed.parse_status.clone();
+    let parsed_parts_json =
+        serde_json::to_string(&parsed).map_err(|e| e.to_string())?;
+    let body_html_val: Option<String> = if body_html_raw.is_empty() {
+        None
+    } else {
+        Some(body_html_raw)
+    };
+    let sanitized_html_val: Option<String> = if sanitized_html.is_empty() {
+        None
+    } else {
+        Some(sanitized_html)
+    };
+
     let snippet = message
         .get("snippet")
         .and_then(Value::as_str)
@@ -1190,8 +1234,8 @@ fn upsert_gmail_message(
 
     // Upsert message.
     conn.execute(
-        "INSERT OR REPLACE INTO email_messages (id, thread_id, account_id, from_name, from_email, to_json, cc_json, subject, body, snippet, timestamp, is_read, is_archived, is_starred, labels_json, attachments_json, provider_message_id, provider_thread_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+        "INSERT OR REPLACE INTO email_messages (id, thread_id, account_id, from_name, from_email, to_json, cc_json, subject, body, snippet, timestamp, is_read, is_archived, is_starred, labels_json, attachments_json, provider_message_id, provider_thread_id, body_html, sanitized_html, body_parse_status, parsed_parts_json, body_text, headers_json, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
         params![
             format!("gmail-msg-{provider_id}"),
             thread_id,
@@ -1211,6 +1255,13 @@ fn upsert_gmail_message(
             attachments_json,
             provider_id,
             provider_thread_id,
+            body_html_val,
+            sanitized_html_val,
+            body_parse_status,
+            parsed_parts_json,
+            body_text,
+            "{}",
+            now,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -1338,6 +1389,14 @@ fn parse_address_list(raw: &str) -> Vec<EmailAddressRow> {
         .collect()
 }
 
+fn html_for_body_parse<'a>(body_html_raw: &'a str, sanitized_html: &'a str) -> &'a str {
+    if !sanitized_html.is_empty() {
+        sanitized_html
+    } else {
+        body_html_raw
+    }
+}
+
 fn gmail_body_text(payload: &Value) -> String {
     if payload
         .get("mimeType")
@@ -1352,6 +1411,28 @@ fn gmail_body_text(payload: &Value) -> String {
     if let Some(parts) = payload.get("parts").and_then(Value::as_array) {
         for part in parts {
             let body = gmail_body_text(part);
+            if !body.is_empty() {
+                return body;
+            }
+        }
+    }
+    String::new()
+}
+
+fn gmail_body_html(payload: &Value) -> String {
+    if payload
+        .get("mimeType")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .starts_with("text/html")
+    {
+        if let Some(data) = payload.pointer("/body/data").and_then(Value::as_str) {
+            return decode_gmail_data(data);
+        }
+    }
+    if let Some(parts) = payload.get("parts").and_then(Value::as_array) {
+        for part in parts {
+            let body = gmail_body_html(part);
             if !body.is_empty() {
                 return body;
             }
@@ -1459,9 +1540,18 @@ fn load_thread(conn: &Connection, thread_id: String) -> Result<EmailThreadRow, S
 }
 
 fn load_messages(conn: &Connection, thread_id: &str) -> Result<Vec<EmailMessageRow>, String> {
-    let mut stmt = conn.prepare("SELECT id, thread_id, account_id, from_name, from_email, to_json, cc_json, subject, body, snippet, timestamp, is_read, is_archived, is_starred, labels_json, attachments_json FROM email_messages WHERE thread_id = ?1 ORDER BY timestamp ASC").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, thread_id, account_id, from_name, from_email, to_json, cc_json,
+         subject, body, snippet, timestamp, is_read, is_archived, is_starred,
+         labels_json, attachments_json, body_html, sanitized_html, body_parse_status, parsed_parts_json
+         FROM email_messages WHERE thread_id = ?1 ORDER BY timestamp ASC"
+    ).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![thread_id], |row| {
+            let body_parse_status: String = row.get(18).unwrap_or_else(|_| "pending".into());
+            let parsed_parts_json: String = row.get(19).unwrap_or_else(|_| "{}".into());
+            let parsed_parts: crate::email::thread_parser::ParsedBody =
+                serde_json::from_str(&parsed_parts_json).unwrap_or_default();
             Ok(EmailMessageRow {
                 id: row.get(0)?,
                 thread_id: row.get(1)?,
@@ -1481,11 +1571,61 @@ fn load_messages(conn: &Connection, thread_id: &str) -> Result<Vec<EmailMessageR
                 is_starred: row.get::<_, i64>(13)? != 0,
                 labels: parse_json_vec(row.get(14)?),
                 attachments: parse_json_vec(row.get(15)?),
+                body_html: row.get(16)?,
+                sanitized_html: row.get(17)?,
+                body_parse_status,
+                parsed_parts,
             })
         })
         .map_err(|e| e.to_string())?;
     rows.collect::<rusqlite::Result<Vec<_>>>()
         .map_err(|e| e.to_string())
+}
+
+pub fn reparse_message(conn: &Connection, message_id: &str) -> Result<EmailMessageRow, String> {
+    let (body_text, body, body_html, sanitized_html): (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+    ) = conn
+        .query_row(
+            "SELECT body_text, body, body_html, sanitized_html FROM email_messages WHERE id = ?1",
+            params![message_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|e| format!("email: message {message_id} not found: {e}"))?;
+
+    let effective_body_text = if body_text.is_empty() { body } else { body_text };
+    let body_html_raw = body_html.unwrap_or_default();
+    let sanitized = sanitized_html.unwrap_or_default();
+    let html_for_parse = html_for_body_parse(&body_html_raw, &sanitized);
+    let parsed =
+        crate::email::thread_parser::parse_message_body(html_for_parse, &effective_body_text);
+    let body_parse_status = parsed.parse_status.clone();
+    let parsed_parts_json =
+        serde_json::to_string(&parsed).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE email_messages SET body_parse_status = ?1, parsed_parts_json = ?2 WHERE id = ?3",
+        params![body_parse_status, parsed_parts_json, message_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // Reload and return the full message.
+    let thread_id: String = conn
+        .query_row(
+            "SELECT thread_id FROM email_messages WHERE id = ?1",
+            params![message_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let messages = load_messages(conn, &thread_id)?;
+    messages
+        .into_iter()
+        .find(|m| m.id == message_id)
+        .ok_or_else(|| format!("email: message {message_id} not found after reparse"))
 }
 
 pub fn list_folders(
@@ -1733,6 +1873,10 @@ fn list_draft_threads(
                 is_starred: false,
                 labels: vec!["draft".into()],
                 attachments: Vec::new(),
+                body_html: None,
+                sanitized_html: None,
+                body_parse_status: "fallback".into(),
+                parsed_parts: crate::email::thread_parser::ParsedBody::default(),
             };
             Ok(EmailThreadRow {
                 id: thread_id,

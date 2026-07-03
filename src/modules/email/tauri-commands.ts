@@ -4,6 +4,7 @@ import type {
   EmailThread,
   EmailDraft,
   EmailFolder,
+  EmailMessage,
 } from "./email-types";
 
 export async function emailListAccounts(): Promise<EmailAccount[]> {
@@ -107,4 +108,10 @@ export async function emailSyncAccount(accountId: string): Promise<void> {
 
 export async function emailSyncAllGmail(): Promise<void> {
   return invoke<void>("email_sync_all_gmail");
+}
+
+export async function emailReparseMessage(
+  messageId: string,
+): Promise<EmailMessage> {
+  return invoke<EmailMessage>("email_reparse_message", { messageId });
 }

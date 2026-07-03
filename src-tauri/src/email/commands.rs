@@ -182,3 +182,14 @@ pub async fn email_sync_all_gmail(
 ) -> Result<(), String> {
     run_db_command(state.inner(), "email", email_db::sync_all_gmail).await
 }
+
+#[tauri::command]
+pub async fn email_reparse_message(
+    message_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailMessageRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::reparse_message(conn, &message_id)
+    })
+    .await
+}

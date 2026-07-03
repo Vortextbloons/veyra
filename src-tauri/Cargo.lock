@@ -77,6 +77,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ammonia"
+version = "3.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59a872ef09ca19445fe32d0bbace6a22229d0421718eb01440c200d3e8b32b55"
+dependencies = [
+ "html5ever 0.26.0",
+ "maplit",
+ "once_cell",
+ "tendril 0.4.3",
+ "url",
+]
+
+[[package]]
 name = "android_log-sys"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -112,6 +125,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 name = "app"
 version = "0.2.0"
 dependencies = [
+ "ammonia",
  "base64 0.22.1",
  "calamine",
  "chrono",
@@ -2536,6 +2550,12 @@ name = "mac"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
+
+[[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "markup5ever"

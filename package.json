@@ -27,7 +27,9 @@
     "tauri": "tauri",
     "sync-version": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
-    "docs:combine": "node scripts/combine-docs.mjs"
+    "docs:combine": "node scripts/combine-docs.mjs",
+    "clean": "powershell -ExecutionPolicy Bypass -File scripts/clean-target.ps1",
+    "clean:incremental": "powershell -ExecutionPolicy Bypass -File scripts/clean-target.ps1 -Incremental"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

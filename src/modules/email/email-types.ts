@@ -62,6 +62,14 @@ export type EmailAttachment = {
   error?: string;
 };
 
+export type ParsedParts = {
+  latestReply: string;
+  quotedHtml: string;
+  signature: string;
+  forwarded: string;
+  parseStatus: "parsed" | "fallback" | "failed";
+};
+
 export type EmailMessage = {
   id: string;
   threadId: string;
@@ -78,6 +86,10 @@ export type EmailMessage = {
   isStarred: boolean;
   labels?: string[];
   attachments?: { filename: string; size: number; mimeType: string }[];
+  bodyHtml?: string;
+  sanitizedHtml?: string;
+  bodyParseStatus?: string;
+  parsedParts?: ParsedParts;
 };
 
 export type EmailThread = {
