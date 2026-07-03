@@ -15,6 +15,7 @@ import {
   emailConnectGmailWithConfig,
   emailHasGmailOauthConfig,
   emailSyncAccount,
+  emailSyncAllGmail,
   emailRemoveAccount,
   emailListFolders,
 } from "./tauri-commands";
@@ -41,6 +42,7 @@ type EmailStore = {
   connectGmailWithConfig: (clientId: string, clientSecret: string) => Promise<void>;
   hasGmailOauthConfig: boolean;
   syncAccount: (accountId: string) => Promise<void>;
+  syncAllGmail: () => Promise<void>;
   removeAccount: (accountId: string) => Promise<void>;
   selectAccount: (id: string | null) => void;
   selectThread: (id: string | null) => void;
@@ -106,11 +108,12 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   },
 
   loadFolders: async (accountId) => {
+    const targetId = accountId ?? get().activeAccountId;
     try {
-      const folders = await emailListFolders(accountId);
-      set({ folders });
-    } catch {
-      // Non-fatal: folders just won't populate.
+      const folders = await emailListFolders(targetId ?? undefined);
+      set({ folders, error: null });
+    } catch (err) {
+      set({ error: `Failed to load folders: ${String(err)}` });
     }
   },
 
@@ -178,14 +181,15 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
 
   syncAccount: async (accountId) => {
     set({ isLoading: true, error: null });
+    // Show syncing state immediately.
+    set((state) => ({
+      accounts: state.accounts.map((a) =>
+        a.id === accountId ? { ...a, status: "syncing" as const } : a,
+      ),
+    }));
     try {
       await emailSyncAccount(accountId);
-      set((state) => ({
-        accounts: state.accounts.map((a) =>
-          a.id === accountId ? { ...a, status: "syncing" as const } : a,
-        ),
-        isLoading: false,
-      }));
+      set({ isLoading: false });
       if (get().activeAccountId === accountId) {
         await Promise.all([get().loadFolders(), get().loadThreads()]);
       }
@@ -211,6 +215,35 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         isLoading: false,
         accounts: state.accounts.map((a) =>
           a.id === accountId ? { ...a, status: "disconnected" as const } : a,
+        ),
+      }));
+    }
+  },
+
+  syncAllGmail: async () => {
+    set({ isLoading: true, error: null });
+    set((state) => ({
+      accounts: state.accounts.map((a) =>
+        a.provider === "gmail" && a.status === "connected"
+          ? { ...a, status: "syncing" as const }
+          : a,
+      ),
+    }));
+    try {
+      await emailSyncAllGmail();
+      set({ isLoading: false });
+      await Promise.all([get().loadFolders(), get().loadThreads()]);
+      set((state) => ({
+        accounts: state.accounts.map((a) =>
+          a.status === "syncing" ? { ...a, status: "connected" as const } : a,
+        ),
+      }));
+    } catch (error) {
+      set((state) => ({
+        error: String(error),
+        isLoading: false,
+        accounts: state.accounts.map((a) =>
+          a.status === "syncing" ? { ...a, status: "connected" as const } : a,
         ),
       }));
     }

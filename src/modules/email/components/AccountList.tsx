@@ -14,6 +14,7 @@ import {
   Trash2,
   ShieldAlert,
   Folder,
+  Layers,
 } from "lucide-react";
 import { useEmailStore } from "../email-store";
 import type { EmailAccount, EmailFolder } from "../email-types";
@@ -66,6 +67,7 @@ export function AccountList() {
   const selectAccount = useEmailStore((s) => s.selectAccount);
   const setFolder = useEmailStore((s) => s.setFolder);
   const syncAccount = useEmailStore((s) => s.syncAccount);
+  const syncAllGmail = useEmailStore((s) => s.syncAllGmail);
   const isLoading = useEmailStore((s) => s.isLoading);
   const [detailsAccount, setDetailsAccount] = useState<EmailAccount | null>(null);
 
@@ -76,6 +78,17 @@ export function AccountList() {
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-3">
         <Mail className="size-3.5 text-[var(--color-text-dim)]" />
         <span className="text-[12px] font-medium text-[var(--color-text)]">Accounts</span>
+        {accounts.filter((a) => a.provider === "gmail").length > 1 && (
+          <button
+            type="button"
+            onClick={() => void syncAllGmail()}
+            disabled={isLoading}
+            className="ml-auto grid size-5 place-items-center rounded text-[var(--color-text-dim)] transition-colors hover:bg-white/5 hover:text-[var(--color-text)]"
+            title="Sync all Gmail accounts"
+          >
+            <RefreshCw className={`size-3 ${isLoading ? "animate-spin" : ""}`} />
+          </button>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto p-2">
         {accounts.length === 0 ? (
@@ -157,12 +170,30 @@ export function AccountList() {
 
       {/* Folder list */}
       <div className="border-t border-[var(--color-border)] p-2">
-        {/* Hardcoded virtual folders */}
         <div className="flex flex-col gap-0.5">
+          {/* Unified inbox — visible when multiple accounts exist */}
+          {accounts.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setFolder("unified")}
+              className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors ${
+                activeFolder === "unified"
+                  ? "bg-[var(--color-accent-soft)] text-white"
+                  : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]"
+              }`}
+            >
+              <Layers className="size-3.5" />
+              <span className="flex-1">Unified Inbox</span>
+            </button>
+          )}
+          {/* Per-account system folders */}
           {(["inbox", "starred", "sent", "drafts", "archive"] as const).map((kind) => {
             const Icon = KIND_ICONS[kind];
             const active = activeFolder === kind;
-            const dbFolder = folders.find((f) => f.kind === kind);
+            // Scope unread count to the active account's folder.
+            const dbFolder = folders.find(
+              (f) => f.kind === kind && (activeAccountId ? f.accountId === activeAccountId : true),
+            );
             const unread = dbFolder?.unreadCount ?? 0;
             return (
               <button

@@ -18,6 +18,9 @@ pub struct EmailAccountRow {
     pub provider: String,
     pub status: String,
     pub avatar: Option<String>,
+    pub sync_status: Option<String>,
+    pub last_sync_at: Option<i64>,
+    pub ai_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -318,6 +321,8 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
             );
             CREATE INDEX IF NOT EXISTS idx_email_attachments_message
               ON email_attachments(message_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_email_attachments_msg_provider
+              ON email_attachments(message_id, provider_attachment_id);
             CREATE INDEX IF NOT EXISTS idx_email_messages_account_provider
               ON email_messages(account_id, provider_message_id);",
         )
@@ -325,6 +330,29 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
 
         // Add thread-level labels_json for denormalized label access.
         add_column_if_missing(conn, "email_threads", "labels_json", "TEXT NOT NULL DEFAULT '[]'")?;
+
+        // Backfill thread labels_json from message labels.
+        conn.execute_batch(
+            "UPDATE email_threads SET labels_json = (
+                SELECT COALESCE(json_group_array(DISTINCT value), '[]')
+                FROM email_messages, json_each(email_messages.labels_json)
+                WHERE email_messages.thread_id = email_threads.id
+            ) WHERE labels_json = '[]' OR labels_json IS NULL;"
+        )
+        .map_err(|e| format!("email: backfill thread labels_json failed: {e}"))?;
+
+        // Backfill thread-folder joins from message labels → folder mapping.
+        // Uses UPPER(provider_id) for system labels (INBOX, SENT, etc.) and original case for user labels.
+        conn.execute_batch(
+            "INSERT OR IGNORE INTO email_thread_folders (thread_id, folder_id)
+             SELECT DISTINCT m.thread_id, f.id
+             FROM email_messages m
+             JOIN json_each(m.labels_json) je
+             JOIN email_folders f ON f.account_id = m.account_id
+               AND (f.provider_id = je.value OR f.provider_id = UPPER(je.value))
+             WHERE je.value != '';"
+        )
+        .map_err(|e| format!("email: backfill thread-folder joins failed: {e}"))?;
     }
 
     conn.execute(
@@ -751,6 +779,9 @@ fn upsert_gmail_account(
         provider: "gmail".into(),
         status: "connected".into(),
         avatar: Some(avatar),
+        sync_status: Some("idle".into()),
+        last_sync_at: None,
+        ai_enabled: Some(true),
     })
 }
 
@@ -927,22 +958,24 @@ fn upsert_gmail_message(
         serde_json::to_string(&parse_address_list(&header("To"))).map_err(|e| e.to_string())?;
     let cc_json =
         serde_json::to_string(&parse_address_list(&header("Cc"))).map_err(|e| e.to_string())?;
-    let labels: Vec<String> = message
+    let labels_raw: Vec<String> = message
         .get("labelIds")
         .and_then(Value::as_array)
         .map(|v| {
             v.iter()
                 .filter_map(Value::as_str)
-                .map(|s| s.to_lowercase())
+                .map(|s| s.to_string())
                 .collect()
         })
         .unwrap_or_default();
-    let is_read = !labels.iter().any(|label| label == "unread");
-    let has_inbox = labels.iter().any(|label| label == "inbox");
-    let has_sent = labels.iter().any(|label| label == "sent");
+    // Lowercase copies for boolean checks only.
+    let labels_lower: Vec<String> = labels_raw.iter().map(|s| s.to_lowercase()).collect();
+    let is_read = !labels_lower.iter().any(|label| label == "unread");
+    let has_inbox = labels_lower.iter().any(|label| label == "inbox");
+    let has_sent = labels_lower.iter().any(|label| label == "sent");
     // Archived = has at least one label but neither inbox nor sent.
-    let is_archived = !labels.is_empty() && !has_inbox && !has_sent;
-    let is_starred = labels.iter().any(|l| l == "starred");
+    let is_archived = !labels_lower.is_empty() && !has_inbox && !has_sent;
+    let is_starred = labels_lower.iter().any(|l| l == "starred");
     let timestamp = message
         .get("internalDate")
         .and_then(Value::as_str)
@@ -956,7 +989,7 @@ fn upsert_gmail_message(
         .to_string();
     let now = now_ms();
     let labels_json =
-        serde_json::to_string(&labels).map_err(|e| e.to_string())?;
+        serde_json::to_string(&labels_raw).map_err(|e| e.to_string())?;
     let attachments_json = serde_json::to_string(
         &gmail_attachment_metadata(payload),
     )
@@ -1012,34 +1045,52 @@ fn upsert_gmail_message(
     )
     .map_err(|e| e.to_string())?;
 
-    // Populate thread-folder joins: map each label to its folder and insert.
+    // Rebuild thread-folder joins from the union of all message labels in this thread.
+    // This prevents one message's label set from overwriting another's.
+    let all_thread_labels: Vec<String> = query_thread_ids(
+        conn,
+        "SELECT DISTINCT value FROM email_messages, json_each(email_messages.labels_json) WHERE thread_id = ?1",
+        params![thread_id],
+    )?;
+    // Update thread-level labels_json with the union.
+    let thread_labels_json =
+        serde_json::to_string(&all_thread_labels).map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE email_threads SET labels_json = ?1 WHERE id = ?2",
+        params![thread_labels_json, thread_id],
+    )
+    .map_err(|e| e.to_string())?;
+    // Rebuild folder joins.
     conn.execute(
         "DELETE FROM email_thread_folders WHERE thread_id = ?1",
         params![thread_id],
     )
     .map_err(|e| e.to_string())?;
-    for label in &labels {
-        let provider_id_upper = label.to_uppercase();
+    for label in &all_thread_labels {
         conn.execute(
             "INSERT OR IGNORE INTO email_thread_folders (thread_id, folder_id)
              SELECT ?1, id FROM email_folders WHERE account_id = ?2 AND provider_id = ?3",
-            params![thread_id, account_id, provider_id_upper],
+            params![thread_id, account_id, label],
         )
         .map_err(|e| e.to_string())?;
     }
 
-    // Upsert attachment metadata.
+    // Upsert attachment metadata — deduplicate by (message_id, provider_attachment_id).
     let attachments = gmail_attachment_metadata(payload);
     for att in attachments {
         let att_id = new_uuid_id("att");
+        let msg_id = format!("gmail-msg-{provider_id}");
         conn.execute(
-            "INSERT OR IGNORE INTO email_attachments (id, account_id, thread_id, message_id, provider_attachment_id, filename, mime_type, size, download_status, extract_status, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'metadata', 'not_started', ?9, ?9)",
+            "INSERT INTO email_attachments (id, account_id, thread_id, message_id, provider_attachment_id, filename, mime_type, size, download_status, extract_status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'metadata', 'not_started', ?9, ?9)
+             ON CONFLICT(message_id, provider_attachment_id) DO UPDATE SET
+               filename = excluded.filename, mime_type = excluded.mime_type,
+               size = excluded.size, updated_at = excluded.updated_at",
             params![
                 att_id,
                 account_id,
                 thread_id,
-                format!("gmail-msg-{provider_id}"),
+                msg_id,
                 att.attachment_id,
                 att.filename,
                 att.mime_type,
@@ -1149,7 +1200,7 @@ fn decode_gmail_data(data: &str) -> String {
 }
 
 pub fn list_accounts(conn: &Connection) -> Result<Vec<EmailAccountRow>, String> {
-    let mut stmt = conn.prepare("SELECT id, name, email, provider, status, avatar FROM email_accounts ORDER BY created_at DESC")
+    let mut stmt = conn.prepare("SELECT id, name, email, provider, status, avatar, sync_status, last_sync_at, ai_enabled FROM email_accounts ORDER BY created_at DESC")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {
@@ -1160,6 +1211,9 @@ pub fn list_accounts(conn: &Connection) -> Result<Vec<EmailAccountRow>, String> 
                 provider: row.get(3)?,
                 status: row.get(4)?,
                 avatar: row.get(5)?,
+                sync_status: row.get(6)?,
+                last_sync_at: row.get(7)?,
+                ai_enabled: row.get::<_, Option<i64>>(8)?.map(|v| v != 0),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -1195,6 +1249,9 @@ pub fn add_account(
         provider,
         status: "connected".into(),
         avatar: Some(avatar),
+        sync_status: Some("idle".into()),
+        last_sync_at: None,
+        ai_enabled: Some(true),
     })
 }
 
