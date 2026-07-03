@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { EmailAccount, EmailThread, EmailDraft } from "./email-types";
+import type { EmailAccount, EmailThread, EmailDraft, EmailFolder } from "./email-types";
 import {
   emailListAccounts,
   emailListThreads,
@@ -16,10 +16,12 @@ import {
   emailHasGmailOauthConfig,
   emailSyncAccount,
   emailRemoveAccount,
+  emailListFolders,
 } from "./tauri-commands";
 
 type EmailStore = {
   accounts: EmailAccount[];
+  folders: EmailFolder[];
   threads: EmailThread[];
   activeAccountId: string | null;
   activeThreadId: string | null;
@@ -32,6 +34,7 @@ type EmailStore = {
   hydrationState: "loading" | "ready";
 
   hydrateAccounts: () => Promise<void>;
+  loadFolders: (accountId?: string) => Promise<void>;
   addAccount: (provider: string, email: string, name: string) => Promise<void>;
   configureGmailOauth: (clientId: string, clientSecret: string) => Promise<void>;
   connectGmail: () => Promise<void>;
@@ -67,6 +70,7 @@ function isGmailScopeIssue(error: unknown): boolean {
 
 export const useEmailStore = create<EmailStore>((set, get) => ({
   accounts: [],
+  folders: [],
   threads: [],
   activeAccountId: null,
   activeThreadId: null,
@@ -90,7 +94,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         set({ accounts, hydrationState: "ready", hasGmailOauthConfig });
         if (accounts.length > 0 && !get().activeAccountId) {
           set({ activeAccountId: accounts[0].id });
-          await get().loadThreads();
+          await Promise.all([get().loadFolders(), get().loadThreads()]);
         }
       } catch (error) {
         set({ error: String(error), hydrationState: "ready" });
@@ -99,6 +103,15 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       hydrationPromise = null;
     });
     await hydrationPromise;
+  },
+
+  loadFolders: async (accountId) => {
+    try {
+      const folders = await emailListFolders(accountId);
+      set({ folders });
+    } catch {
+      // Non-fatal: folders just won't populate.
+    }
   },
 
   addAccount: async (provider, email, name) => {
@@ -112,7 +125,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         activeFolder: "inbox",
         isLoading: false,
       }));
-      await get().loadThreads();
+      await Promise.all([get().loadFolders(), get().loadThreads()]);
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
@@ -139,7 +152,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         activeFolder: "inbox",
         isLoading: false,
       }));
-      await get().loadThreads();
+      await Promise.all([get().loadFolders(), get().loadThreads()]);
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
@@ -157,7 +170,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         hasGmailOauthConfig: true,
         isLoading: false,
       }));
-      await get().loadThreads();
+      await Promise.all([get().loadFolders(), get().loadThreads()]);
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
@@ -174,7 +187,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         isLoading: false,
       }));
       if (get().activeAccountId === accountId) {
-        await get().loadThreads();
+        await Promise.all([get().loadFolders(), get().loadThreads()]);
       }
       set((state) => ({
         accounts: state.accounts.map((a) =>
@@ -219,6 +232,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
           activeThreadId:
             state.activeAccountId === accountId ? null : state.activeThreadId,
           threads: state.activeAccountId === accountId ? [] : state.threads,
+          folders: state.activeAccountId === accountId ? [] : state.folders,
           isLoading: false,
         };
       });
@@ -232,10 +246,14 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       activeAccountId: id,
       activeThreadId: null,
       threads: [],
+      folders: [],
       draft: null,
       isComposing: false,
     });
-    if (id) void get().loadThreads();
+    if (id) {
+      void get().loadFolders();
+      void get().loadThreads();
+    }
   },
 
   selectThread: (id) => {

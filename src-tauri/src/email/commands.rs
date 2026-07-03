@@ -84,14 +84,25 @@ pub async fn email_remove_account(
 }
 
 #[tauri::command]
+pub async fn email_list_folders(
+    account_id: Option<String>,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<email_db::EmailFolderRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::list_folders(conn, account_id)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn email_list_threads(
     account_id: String,
-    folder: String,
+    folder_id: String,
     query: Option<String>,
     state: State<'_, EmailDbState>,
 ) -> Result<Vec<email_db::EmailThreadRow>, String> {
     run_db_command(state.inner(), "email", move |conn| {
-        email_db::list_threads(conn, account_id, folder, query)
+        email_db::list_threads(conn, account_id, folder_id, query)
     })
     .await
 }
@@ -163,4 +174,11 @@ pub async fn email_mark_unread(
         email_db::set_read(conn, thread_id, account_id, false)
     })
     .await
+}
+
+#[tauri::command]
+pub async fn email_sync_all_gmail(
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "email", email_db::sync_all_gmail).await
 }

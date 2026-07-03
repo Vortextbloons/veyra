@@ -75,7 +75,7 @@ export function InboxList() {
               return (
                 <div
                   key={thread.id}
-                  className={`group relative border-b border-[var(--color-border)] px-3 py-2.5 transition-colors ${
+                  className={`group flex gap-2 border-b border-[var(--color-border)] px-3 py-2.5 transition-colors ${
                     active
                       ? "bg-[var(--color-accent-soft)]/60"
                       : "hover:bg-white/[0.02]"
@@ -84,22 +84,17 @@ export function InboxList() {
                   <button
                     type="button"
                     onClick={() => selectThread(thread.id)}
-                    className="flex w-full flex-col gap-1 text-left"
+                    className="flex min-w-0 flex-1 flex-col gap-1 text-left"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`min-w-0 truncate text-[12.5px] ${
-                          thread.isRead
-                            ? "font-normal text-[var(--color-text-dim)]"
-                            : "font-medium text-[var(--color-text)]"
-                        }`}
-                      >
-                        {thread.participants.join(", ")}
-                      </span>
-                      <span className="shrink-0 text-[10.5px] text-[var(--color-text-dim)]">
-                        {date}
-                      </span>
-                    </div>
+                    <span
+                      className={`truncate text-[12.5px] ${
+                        thread.isRead
+                          ? "font-normal text-[var(--color-text-dim)]"
+                          : "font-medium text-[var(--color-text)]"
+                      }`}
+                    >
+                      {thread.participants.join(", ")}
+                    </span>
                     <div className="flex items-center gap-1.5">
                       {!thread.isRead && (
                         <span className="inline-block size-1.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
@@ -113,35 +108,35 @@ export function InboxList() {
                     </p>
                   </button>
 
-                  {/* Actions on hover */}
-                  <div className="absolute right-2 top-2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (thread.isRead) void markUnread(thread.id);
-                        else void markRead(thread.id);
-                      }}
-                      className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-                      title={thread.isRead ? "Mark unread" : "Mark read"}
-                    >
-                      {thread.isRead ? (
-                        <Mail className="size-3" />
-                      ) : (
-                        <MailOpen className="size-3" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void archiveThread(thread.id);
-                      }}
-                      className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-                      title="Archive"
-                    >
-                      <Archive className="size-3" />
-                    </button>
+                  <div className="relative flex h-6 w-[52px] shrink-0 items-center justify-end self-start">
+                    <span className="text-[10.5px] text-[var(--color-text-dim)] transition-opacity group-hover:pointer-events-none group-hover:opacity-0">
+                      {date}
+                    </span>
+                    <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (thread.isRead) void markUnread(thread.id);
+                          else void markRead(thread.id);
+                        }}
+                        className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+                        title={thread.isRead ? "Mark unread" : "Mark read"}
+                      >
+                        {thread.isRead ? (
+                          <Mail className="size-3" />
+                        ) : (
+                          <MailOpen className="size-3" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void archiveThread(thread.id)}
+                        className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+                        title="Archive"
+                      >
+                        <Archive className="size-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

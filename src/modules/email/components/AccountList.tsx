@@ -10,21 +10,57 @@ import {
   Loader2,
   RefreshCw,
   MoreVertical,
+  Tag,
+  Trash2,
+  ShieldAlert,
+  Folder,
 } from "lucide-react";
 import { useEmailStore } from "../email-store";
-import type { EmailAccount } from "../email-types";
+import type { EmailAccount, EmailFolder } from "../email-types";
 import { AccountDetails } from "./AccountDetails";
 
-const FOLDERS = [
-  { id: "inbox", label: "Inbox", icon: Inbox },
-  { id: "starred", label: "Starred", icon: Star },
-  { id: "sent", label: "Sent", icon: Send },
-  { id: "drafts", label: "Drafts", icon: FileText },
-  { id: "archive", label: "Archive", icon: Archive },
-] as const;
+const KIND_ICONS: Record<string, typeof Inbox> = {
+  inbox: Inbox,
+  starred: Star,
+  sent: Send,
+  drafts: FileText,
+  archive: Archive,
+  trash: Trash2,
+  spam: ShieldAlert,
+  important: ShieldAlert,
+  category: Tag,
+  custom: Folder,
+  unknown: Folder,
+};
+
+const KIND_ORDER = [
+  "inbox",
+  "starred",
+  "sent",
+  "drafts",
+  "archive",
+  "trash",
+  "spam",
+  "important",
+  "category",
+  "custom",
+  "unknown",
+];
+
+function groupFolders(folders: EmailFolder[]): EmailFolder[] {
+  const system = folders.filter((f) => f.isSystem);
+  const custom = folders.filter((f) => !f.isSystem);
+  const sorted = [...system, ...custom].sort((a, b) => {
+    const ai = KIND_ORDER.indexOf(a.kind);
+    const bi = KIND_ORDER.indexOf(b.kind);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+  return sorted;
+}
 
 export function AccountList() {
   const accounts = useEmailStore((s) => s.accounts);
+  const folders = useEmailStore((s) => s.folders);
   const activeAccountId = useEmailStore((s) => s.activeAccountId);
   const activeFolder = useEmailStore((s) => s.activeFolder);
   const selectAccount = useEmailStore((s) => s.selectAccount);
@@ -32,6 +68,8 @@ export function AccountList() {
   const syncAccount = useEmailStore((s) => s.syncAccount);
   const isLoading = useEmailStore((s) => s.isLoading);
   const [detailsAccount, setDetailsAccount] = useState<EmailAccount | null>(null);
+
+  const grouped = groupFolders(folders);
 
   return (
     <aside className="flex w-[220px] min-w-[220px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -117,17 +155,20 @@ export function AccountList() {
         )}
       </div>
 
-      {/* Folder tabs */}
+      {/* Folder list */}
       <div className="border-t border-[var(--color-border)] p-2">
+        {/* Hardcoded virtual folders */}
         <div className="flex flex-col gap-0.5">
-          {FOLDERS.map((folder) => {
-            const Icon = folder.icon;
-            const active = activeFolder === folder.id;
+          {(["inbox", "starred", "sent", "drafts", "archive"] as const).map((kind) => {
+            const Icon = KIND_ICONS[kind];
+            const active = activeFolder === kind;
+            const dbFolder = folders.find((f) => f.kind === kind);
+            const unread = dbFolder?.unreadCount ?? 0;
             return (
               <button
-                key={folder.id}
+                key={kind}
                 type="button"
-                onClick={() => setFolder(folder.id)}
+                onClick={() => setFolder(kind)}
                 className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors ${
                   active
                     ? "bg-[var(--color-accent-soft)] text-white"
@@ -135,11 +176,52 @@ export function AccountList() {
                 }`}
               >
                 <Icon className="size-3.5" />
-                {folder.label}
+                <span className="flex-1 capitalize">{kind}</span>
+                {unread > 0 && (
+                  <span className="min-w-[18px] rounded-full bg-[var(--color-accent)]/20 px-1.5 text-center text-[10px] font-medium text-[var(--color-accent)]">
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+
+        {/* Dynamic folders from Gmail labels */}
+        {grouped.filter((f) => !["inbox", "sent", "drafts", "archive"].includes(f.kind) || f.kind === "category" || f.kind === "custom" || f.kind === "trash" || f.kind === "spam").length > 0 && (
+          <>
+            <div className="my-1.5 border-t border-[var(--color-border)]/50" />
+            <div className="flex flex-col gap-0.5">
+              {grouped
+                .filter((f) => ["category", "custom", "trash", "spam", "important"].includes(f.kind))
+                .map((folder) => {
+                  const Icon = KIND_ICONS[folder.kind] ?? Folder;
+                  const active = activeFolder === folder.id;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      onClick={() => setFolder(folder.id)}
+                      className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors ${
+                        active
+                          ? "bg-[var(--color-accent-soft)] text-white"
+                          : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]"
+                      }`}
+                      title={folder.providerId}
+                    >
+                      <Icon className="size-3.5" />
+                      <span className="flex-1 truncate">{folder.name}</span>
+                      {folder.unreadCount > 0 && (
+                        <span className="min-w-[18px] rounded-full bg-[var(--color-accent)]/20 px-1.5 text-center text-[10px] font-medium text-[var(--color-accent)]">
+                          {folder.unreadCount > 99 ? "99+" : folder.unreadCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
+          </>
+        )}
       </div>
       {detailsAccount && (
         <AccountDetails

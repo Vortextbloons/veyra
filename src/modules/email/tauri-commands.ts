@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { EmailAccount, EmailThread, EmailDraft } from "./email-types";
+import type {
+  EmailAccount,
+  EmailThread,
+  EmailDraft,
+  EmailFolder,
+} from "./email-types";
 
 export async function emailListAccounts(): Promise<EmailAccount[]> {
   return invoke<EmailAccount[]>("email_list_accounts");
@@ -17,12 +22,24 @@ export async function emailRemoveAccount(accountId: string): Promise<void> {
   return invoke<void>("email_remove_account", { accountId });
 }
 
+export async function emailListFolders(
+  accountId?: string,
+): Promise<EmailFolder[]> {
+  return invoke<EmailFolder[]>("email_list_folders", {
+    accountId: accountId ?? null,
+  });
+}
+
 export async function emailListThreads(
   accountId: string,
-  folder: string,
+  folderId: string,
   query?: string,
 ): Promise<EmailThread[]> {
-  return invoke<EmailThread[]>("email_list_threads", { accountId, folder, query: query || null });
+  return invoke<EmailThread[]>("email_list_threads", {
+    accountId,
+    folderId,
+    query: query || null,
+  });
 }
 
 export async function emailGetThread(threadId: string): Promise<EmailThread> {
@@ -35,23 +52,37 @@ export async function emailSendMessage(
   return invoke("email_send_message", { draft });
 }
 
-export async function emailSaveDraft(draft: Partial<EmailDraft>): Promise<EmailDraft> {
+export async function emailSaveDraft(
+  draft: Partial<EmailDraft>,
+): Promise<EmailDraft> {
   return invoke<EmailDraft>("email_save_draft", { draft });
 }
 
-export async function emailArchiveThread(threadId: string, accountId: string): Promise<void> {
+export async function emailArchiveThread(
+  threadId: string,
+  accountId: string,
+): Promise<void> {
   return invoke<void>("email_archive_thread", { threadId, accountId });
 }
 
-export async function emailMarkRead(threadId: string, accountId: string): Promise<void> {
+export async function emailMarkRead(
+  threadId: string,
+  accountId: string,
+): Promise<void> {
   return invoke<void>("email_mark_read", { threadId, accountId });
 }
 
-export async function emailMarkUnread(threadId: string, accountId: string): Promise<void> {
+export async function emailMarkUnread(
+  threadId: string,
+  accountId: string,
+): Promise<void> {
   return invoke<void>("email_mark_unread", { threadId, accountId });
 }
 
-export async function emailConfigureGmailOauth(config: { clientId: string; clientSecret: string }): Promise<void> {
+export async function emailConfigureGmailOauth(config: {
+  clientId: string;
+  clientSecret: string;
+}): Promise<void> {
   return invoke<void>("email_configure_gmail_oauth", { config });
 }
 
@@ -59,7 +90,10 @@ export async function emailConnectGmail(): Promise<EmailAccount> {
   return invoke<EmailAccount>("email_connect_gmail");
 }
 
-export async function emailConnectGmailWithConfig(config: { clientId: string; clientSecret: string }): Promise<EmailAccount> {
+export async function emailConnectGmailWithConfig(config: {
+  clientId: string;
+  clientSecret: string;
+}): Promise<EmailAccount> {
   return invoke<EmailAccount>("email_connect_gmail_with_config", { config });
 }
 
@@ -69,4 +103,8 @@ export async function emailHasGmailOauthConfig(): Promise<boolean> {
 
 export async function emailSyncAccount(accountId: string): Promise<void> {
   return invoke<void>("email_sync_account", { accountId });
+}
+
+export async function emailSyncAllGmail(): Promise<void> {
+  return invoke<void>("email_sync_all_gmail");
 }
