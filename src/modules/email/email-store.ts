@@ -61,6 +61,23 @@ type EmailStore = {
 
 let hydrationPromise: Promise<void> | null = null;
 
+function mapAccountFromBackend(account: EmailAccount): EmailAccount {
+  let status: EmailAccount["status"] = account.status;
+  if (account.syncStatus === "syncing") {
+    status = "syncing";
+  } else if (account.syncStatus === "error") {
+    status = "disconnected";
+  } else if (status !== "disconnected") {
+    status = "connected";
+  }
+  return { ...account, status };
+}
+
+async function fetchMappedAccounts(): Promise<EmailAccount[]> {
+  const accounts = await emailListAccounts();
+  return accounts.map(mapAccountFromBackend);
+}
+
 function isGmailScopeIssue(error: unknown): boolean {
   const message = String(error);
   return (
@@ -90,7 +107,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     hydrationPromise ??= (async () => {
       try {
         const [accounts, hasGmailOauthConfig] = await Promise.all([
-          emailListAccounts(),
+          fetchMappedAccounts(),
           emailHasGmailOauthConfig(),
         ]);
         set({ accounts, hydrationState: "ready", hasGmailOauthConfig });
@@ -120,7 +137,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   addAccount: async (provider, email, name) => {
     set({ isLoading: true, error: null });
     try {
-      const account = await emailAddAccount(provider, email, name);
+      const account = mapAccountFromBackend(await emailAddAccount(provider, email, name));
       set((state) => ({
         accounts: [account, ...state.accounts],
         activeAccountId: account.id,
@@ -147,7 +164,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   connectGmail: async () => {
     set({ isLoading: true, error: null });
     try {
-      const account = await emailConnectGmail();
+      const account = mapAccountFromBackend(await emailConnectGmail());
       set((state) => ({
         accounts: [account, ...state.accounts],
         activeAccountId: account.id,
@@ -164,7 +181,9 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   connectGmailWithConfig: async (clientId, clientSecret) => {
     set({ isLoading: true, error: null });
     try {
-      const account = await emailConnectGmailWithConfig({ clientId, clientSecret });
+      const account = mapAccountFromBackend(
+        await emailConnectGmailWithConfig({ clientId, clientSecret }),
+      );
       set((state) => ({
         accounts: [account, ...state.accounts],
         activeAccountId: account.id,
@@ -189,34 +208,32 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     }));
     try {
       await emailSyncAccount(accountId);
-      set({ isLoading: false });
-      if (get().activeAccountId === accountId) {
+      const accounts = await fetchMappedAccounts();
+      set({ isLoading: false, accounts });
+      if (get().activeAccountId === accountId || get().activeFolder === "unified") {
         await Promise.all([get().loadFolders(), get().loadThreads()]);
       }
-      set((state) => ({
-        accounts: state.accounts.map((a) =>
-          a.id === accountId ? { ...a, status: "connected" as const } : a,
-        ),
-      }));
     } catch (error) {
       if (isGmailScopeIssue(error)) {
-        set((state) => ({
+        const accounts = await fetchMappedAccounts().catch(() => get().accounts);
+        set({
           error:
             "Google connected, but Gmail scopes were not granted. Revoke Veyra access, reconnect with the correct test user, and confirm gmail.modify / gmail.send / gmail.compose are saved in Google Cloud.",
           isLoading: false,
-          accounts: state.accounts.map((a) =>
-            a.id === accountId ? { ...a, status: "connected" as const } : a,
-          ),
-        }));
+          accounts,
+        });
         return;
       }
-      set((state) => ({
-        error: String(error),
-        isLoading: false,
-        accounts: state.accounts.map((a) =>
+      const accounts = await fetchMappedAccounts().catch(() =>
+        get().accounts.map((a) =>
           a.id === accountId ? { ...a, status: "disconnected" as const } : a,
         ),
-      }));
+      );
+      set({
+        error: String(error),
+        isLoading: false,
+        accounts,
+      });
     }
   },
 
@@ -231,21 +248,16 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     }));
     try {
       await emailSyncAllGmail();
-      set({ isLoading: false });
+      const accounts = await fetchMappedAccounts();
+      set({ isLoading: false, accounts });
       await Promise.all([get().loadFolders(), get().loadThreads()]);
-      set((state) => ({
-        accounts: state.accounts.map((a) =>
-          a.status === "syncing" ? { ...a, status: "connected" as const } : a,
-        ),
-      }));
     } catch (error) {
-      set((state) => ({
+      const accounts = await fetchMappedAccounts().catch(() => get().accounts);
+      set({
         error: String(error),
         isLoading: false,
-        accounts: state.accounts.map((a) =>
-          a.status === "syncing" ? { ...a, status: "connected" as const } : a,
-        ),
-      }));
+        accounts,
+      });
     }
   },
 
@@ -296,7 +308,9 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
 
   setFolder: (folder) => {
     set({ activeFolder: folder, activeThreadId: null, threads: [] });
-    void get().loadThreads();
+    if (folder === "unified" || get().activeAccountId) {
+      void get().loadThreads();
+    }
   },
 
   setSearchQuery: (query) => {
@@ -304,12 +318,18 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   },
 
   loadThreads: async () => {
-    const { activeAccountId, activeFolder, searchQuery } = get();
-    if (!activeAccountId) return;
+    const { activeAccountId, activeFolder, searchQuery, accounts } = get();
+    if (activeFolder !== "unified" && !activeAccountId) return;
+
+    const accountId =
+      activeFolder === "unified"
+        ? (activeAccountId ?? accounts[0]?.id ?? "")
+        : activeAccountId!;
+
     set({ isLoading: true, error: null });
     try {
       const threads = await emailListThreads(
-        activeAccountId,
+        accountId,
         activeFolder,
         searchQuery || undefined,
       );

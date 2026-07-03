@@ -129,7 +129,7 @@ pub struct GmailOAuthConfigInput {
     pub client_secret: String,
 }
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS email_accounts (
@@ -355,6 +355,16 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         .map_err(|e| format!("email: backfill thread-folder joins failed: {e}"))?;
     }
 
+    if schema_version < 3 {
+        // Re-run for DBs that already reached v2 before backfill/index fixes landed.
+        conn.execute_batch(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_email_attachments_msg_provider
+              ON email_attachments(message_id, provider_attachment_id);",
+        )
+        .map_err(|e| format!("email: schema v3 attachment index failed: {e}"))?;
+        rebuild_thread_labels_and_folders(conn)?;
+    }
+
     conn.execute(
         "INSERT INTO _schema_migrations (module, version, applied_at) VALUES ('email', ?1, datetime('now'))
          ON CONFLICT(module) DO UPDATE SET version = excluded.version, applied_at = excluded.applied_at",
@@ -362,6 +372,159 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| format!("email: set schema version failed: {e}"))?;
 
+    Ok(())
+}
+
+/// Rebuild thread labels and folder joins for all accounts (migration / repair).
+fn rebuild_thread_labels_and_folders(conn: &Connection) -> Result<(), String> {
+    normalize_message_label_casing(conn)?;
+
+    conn.execute_batch(
+        "UPDATE email_threads SET labels_json = (
+            SELECT COALESCE(json_group_array(DISTINCT value), '[]')
+            FROM email_messages, json_each(email_messages.labels_json)
+            WHERE email_messages.thread_id = email_threads.id
+        );",
+    )
+    .map_err(|e| format!("email: rebuild thread labels_json failed: {e}"))?;
+
+    conn.execute_batch("DELETE FROM email_thread_folders;")
+        .map_err(|e| format!("email: clear thread-folder joins failed: {e}"))?;
+
+    conn.execute_batch(
+        "INSERT OR IGNORE INTO email_thread_folders (thread_id, folder_id)
+         SELECT DISTINCT m.thread_id, f.id
+         FROM email_messages m
+         JOIN json_each(m.labels_json) je
+         JOIN email_folders f ON f.account_id = m.account_id
+           AND UPPER(f.provider_id) = UPPER(je.value)
+         WHERE je.value != '';",
+    )
+    .map_err(|e| format!("email: rebuild thread-folder joins failed: {e}"))?;
+
+    Ok(())
+}
+
+fn rebuild_thread_labels_and_folders_for_account(
+    conn: &Connection,
+    account_id: &str,
+) -> Result<(), String> {
+    normalize_message_label_casing_for_account(conn, account_id)?;
+
+    conn.execute(
+        "UPDATE email_threads SET labels_json = (
+            SELECT COALESCE(json_group_array(DISTINCT value), '[]')
+            FROM email_messages, json_each(email_messages.labels_json)
+            WHERE email_messages.thread_id = email_threads.id
+        ) WHERE account_id = ?1",
+        params![account_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "DELETE FROM email_thread_folders WHERE thread_id IN (
+            SELECT id FROM email_threads WHERE account_id = ?1
+        )",
+        params![account_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO email_thread_folders (thread_id, folder_id)
+         SELECT DISTINCT m.thread_id, f.id
+         FROM email_messages m
+         JOIN json_each(m.labels_json) je
+         JOIN email_folders f ON f.account_id = m.account_id
+           AND UPPER(f.provider_id) = UPPER(je.value)
+         WHERE m.account_id = ?1 AND je.value != ''",
+        params![account_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+fn normalize_message_label_casing(conn: &Connection) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare("SELECT id, account_id, labels_json FROM email_messages WHERE labels_json != '[]'")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| e.to_string())?;
+
+    for (msg_id, account_id, labels_json) in rows {
+        normalize_one_message_labels(conn, &msg_id, &account_id, &labels_json)?;
+    }
+    Ok(())
+}
+
+fn normalize_message_label_casing_for_account(
+    conn: &Connection,
+    account_id: &str,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, labels_json FROM email_messages WHERE account_id = ?1 AND labels_json != '[]'",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![account_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| e.to_string())?;
+
+    for (msg_id, labels_json) in rows {
+        normalize_one_message_labels(conn, &msg_id, account_id, &labels_json)?;
+    }
+    Ok(())
+}
+
+fn normalize_one_message_labels(
+    conn: &Connection,
+    msg_id: &str,
+    account_id: &str,
+    labels_json: &str,
+) -> Result<(), String> {
+    let labels: Vec<String> = parse_json_vec(labels_json.to_string());
+    if labels.is_empty() {
+        return Ok(());
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    let mut normalized = Vec::new();
+    for label in labels {
+        let canonical: String = conn
+            .query_row(
+                "SELECT provider_id FROM email_folders
+                 WHERE account_id = ?1 AND UPPER(provider_id) = UPPER(?2)
+                 LIMIT 1",
+                params![account_id, &label],
+                |row| row.get(0),
+            )
+            .unwrap_or(label);
+        if seen.insert(canonical.clone()) {
+            normalized.push(canonical);
+        }
+    }
+
+    let updated = serde_json::to_string(&normalized).map_err(|e| e.to_string())?;
+    if updated != labels_json {
+        conn.execute(
+            "UPDATE email_messages SET labels_json = ?1 WHERE id = ?2",
+            params![updated, msg_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -786,6 +949,12 @@ fn upsert_gmail_account(
 }
 
 pub fn sync_gmail_account(conn: &Connection, account_id: String) -> Result<(), String> {
+    conn.execute(
+        "UPDATE email_accounts SET sync_status = 'syncing' WHERE id = ?1",
+        params![account_id],
+    )
+    .map_err(|e| e.to_string())?;
+
     let token = refresh_gmail_token(conn, &account_id)?;
     let client = reqwest::blocking::Client::new();
     sync_gmail_labels(conn, &account_id, &token, &client)?;
@@ -812,6 +981,7 @@ pub fn sync_gmail_account(conn: &Connection, account_id: String) -> Result<(), S
         )?;
         upsert_gmail_message(conn, &account_id, &message)?;
     }
+    rebuild_thread_labels_and_folders_for_account(conn, &account_id)?;
     conn.execute(
         "UPDATE email_accounts SET sync_status = 'idle', last_sync_at = ?1 WHERE id = ?2",
         params![now_ms(), account_id],
@@ -1047,7 +1217,7 @@ fn upsert_gmail_message(
 
     // Rebuild thread-folder joins from the union of all message labels in this thread.
     // This prevents one message's label set from overwriting another's.
-    let all_thread_labels: Vec<String> = query_thread_ids(
+    let all_thread_labels: Vec<String> = query_strings(
         conn,
         "SELECT DISTINCT value FROM email_messages, json_each(email_messages.labels_json) WHERE thread_id = ?1",
         params![thread_id],
@@ -1069,7 +1239,7 @@ fn upsert_gmail_message(
     for label in &all_thread_labels {
         conn.execute(
             "INSERT OR IGNORE INTO email_thread_folders (thread_id, folder_id)
-             SELECT ?1, id FROM email_folders WHERE account_id = ?2 AND provider_id = ?3",
+             SELECT ?1, id FROM email_folders WHERE account_id = ?2 AND UPPER(provider_id) = UPPER(?3)",
             params![thread_id, account_id, label],
         )
         .map_err(|e| e.to_string())?;
@@ -1370,16 +1540,9 @@ pub fn list_threads(
     }
 
     let ids: Vec<String> = if folder_id == "unified" {
-        query_thread_ids(conn,
-            "SELECT DISTINCT t.id FROM email_threads t
-             JOIN email_thread_folders tf ON tf.thread_id = t.id
-             JOIN email_folders f ON f.id = tf.folder_id
-             WHERE f.kind = 'inbox'
-             ORDER BY t.last_message_at DESC",
-            [],
-        )?
+        query_unified_inbox_thread_ids(conn)?
     } else if folder_id.starts_with("folder-") {
-        query_thread_ids(conn,
+        query_strings(conn,
             "SELECT t.id FROM email_threads t
              JOIN email_thread_folders tf ON tf.thread_id = t.id
              WHERE tf.folder_id = ?1
@@ -1389,30 +1552,17 @@ pub fn list_threads(
     } else {
         let kind = folder_id.as_str();
         match kind {
-            "starred" => query_thread_ids(conn,
+            "starred" => query_strings(conn,
                 "SELECT id FROM email_threads WHERE account_id = ?1 AND is_starred = 1 ORDER BY last_message_at DESC",
                 params![account_id],
             )?,
-            "archive" => query_thread_ids(conn,
+            "archive" => query_strings(conn,
                 "SELECT id FROM email_threads WHERE account_id = ?1 AND is_archived = 1 ORDER BY last_message_at DESC",
                 params![account_id],
             )?,
-            "sent" => query_thread_ids(conn,
-                "SELECT DISTINCT t.id FROM email_threads t
-                 JOIN email_thread_folders tf ON tf.thread_id = t.id
-                 JOIN email_folders f ON f.id = tf.folder_id
-                 WHERE t.account_id = ?1 AND f.kind = 'sent'
-                 ORDER BY t.last_message_at DESC",
-                params![account_id],
-            )?,
-            _ => query_thread_ids(conn,
-                "SELECT DISTINCT t.id FROM email_threads t
-                 JOIN email_thread_folders tf ON tf.thread_id = t.id
-                 JOIN email_folders f ON f.id = tf.folder_id
-                 WHERE t.account_id = ?1 AND f.kind = 'inbox'
-                 ORDER BY t.last_message_at DESC",
-                params![account_id],
-            )?,
+            "sent" => query_sent_thread_ids(conn, &account_id)?,
+            "inbox" => query_inbox_thread_ids(conn, &account_id)?,
+            _ => query_inbox_thread_ids(conn, &account_id)?,
         }
     };
 
@@ -1435,7 +1585,7 @@ pub fn list_threads(
     Ok(threads)
 }
 
-fn query_thread_ids<P: rusqlite::Params>(
+fn query_strings<P: rusqlite::Params>(
     conn: &Connection,
     sql: &str,
     params: P,
@@ -1447,6 +1597,93 @@ fn query_thread_ids<P: rusqlite::Params>(
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(|e| e.to_string())?;
     Ok(ids)
+}
+
+fn query_inbox_thread_ids(conn: &Connection, account_id: &str) -> Result<Vec<String>, String> {
+    let ids = query_strings(
+        conn,
+        "SELECT DISTINCT t.id FROM email_threads t
+         JOIN email_thread_folders tf ON tf.thread_id = t.id
+         JOIN email_folders f ON f.id = tf.folder_id
+         WHERE t.account_id = ?1 AND f.kind = 'inbox'
+         ORDER BY t.last_message_at DESC",
+        params![account_id],
+    )?;
+    if !ids.is_empty() {
+        return Ok(ids);
+    }
+    let label_ids = query_strings(
+        conn,
+        "SELECT DISTINCT t.id FROM email_threads t
+         JOIN email_messages m ON m.thread_id = t.id
+         JOIN json_each(m.labels_json) je ON UPPER(je.value) = 'INBOX'
+         WHERE t.account_id = ?1
+         ORDER BY t.last_message_at DESC",
+        params![account_id],
+    )?;
+    if !label_ids.is_empty() {
+        return Ok(label_ids);
+    }
+    query_strings(
+        conn,
+        "SELECT id FROM email_threads WHERE account_id = ?1 AND is_archived = 0 ORDER BY last_message_at DESC",
+        params![account_id],
+    )
+}
+
+fn query_sent_thread_ids(conn: &Connection, account_id: &str) -> Result<Vec<String>, String> {
+    let ids = query_strings(
+        conn,
+        "SELECT DISTINCT t.id FROM email_threads t
+         JOIN email_thread_folders tf ON tf.thread_id = t.id
+         JOIN email_folders f ON f.id = tf.folder_id
+         WHERE t.account_id = ?1 AND f.kind = 'sent'
+         ORDER BY t.last_message_at DESC",
+        params![account_id],
+    )?;
+    if !ids.is_empty() {
+        return Ok(ids);
+    }
+    query_strings(
+        conn,
+        "SELECT DISTINCT t.id FROM email_threads t
+         JOIN email_messages m ON m.thread_id = t.id
+         JOIN json_each(m.labels_json) je ON UPPER(je.value) = 'SENT'
+         WHERE t.account_id = ?1
+         ORDER BY t.last_message_at DESC",
+        params![account_id],
+    )
+}
+
+fn query_unified_inbox_thread_ids(conn: &Connection) -> Result<Vec<String>, String> {
+    let ids = query_strings(
+        conn,
+        "SELECT DISTINCT t.id FROM email_threads t
+         JOIN email_thread_folders tf ON tf.thread_id = t.id
+         JOIN email_folders f ON f.id = tf.folder_id
+         WHERE f.kind = 'inbox'
+         ORDER BY t.last_message_at DESC",
+        [],
+    )?;
+    if !ids.is_empty() {
+        return Ok(ids);
+    }
+    let label_ids = query_strings(
+        conn,
+        "SELECT DISTINCT t.id FROM email_threads t
+         JOIN email_messages m ON m.thread_id = t.id
+         JOIN json_each(m.labels_json) je ON UPPER(je.value) = 'INBOX'
+         ORDER BY t.last_message_at DESC",
+        [],
+    )?;
+    if !label_ids.is_empty() {
+        return Ok(label_ids);
+    }
+    query_strings(
+        conn,
+        "SELECT id FROM email_threads WHERE is_archived = 0 ORDER BY last_message_at DESC",
+        [],
+    )
 }
 
 fn list_draft_threads(
@@ -2303,7 +2540,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, SCHEMA_VERSION);
     }
 
     #[test]
@@ -2427,11 +2664,11 @@ mod tests {
         conn.execute("INSERT INTO email_thread_folders (thread_id, folder_id) VALUES ('t2', 'f2')", []).unwrap();
 
         // Query threads in folder f1 should only return t1.
-        let ids = query_thread_ids(&conn, "SELECT t.id FROM email_threads t JOIN email_thread_folders tf ON tf.thread_id = t.id WHERE tf.folder_id = 'f1'", []).unwrap();
+        let ids = query_strings(&conn, "SELECT t.id FROM email_threads t JOIN email_thread_folders tf ON tf.thread_id = t.id WHERE tf.folder_id = 'f1'", []).unwrap();
         assert_eq!(ids, vec!["t1".to_string()]);
 
         // Query threads in folder f2 should only return t2.
-        let ids = query_thread_ids(&conn, "SELECT t.id FROM email_threads t JOIN email_thread_folders tf ON tf.thread_id = t.id WHERE tf.folder_id = 'f2'", []).unwrap();
+        let ids = query_strings(&conn, "SELECT t.id FROM email_threads t JOIN email_thread_folders tf ON tf.thread_id = t.id WHERE tf.folder_id = 'f2'", []).unwrap();
         assert_eq!(ids, vec!["t2".to_string()]);
     }
 
@@ -2452,5 +2689,124 @@ mod tests {
         let payload = msg.get("payload").unwrap();
         let attachments = gmail_attachment_metadata(payload);
         assert!(attachments.is_empty());
+    }
+
+    #[test]
+    fn migrations_v3_creates_attachment_dedup_index() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("migrations should succeed");
+
+        let indexes: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_email_attachments%'")
+                .unwrap();
+            stmt.query_map([], |row| row.get(0))
+                .unwrap()
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+
+        assert!(indexes.contains(&"idx_email_attachments_msg_provider".to_string()));
+    }
+
+    #[test]
+    fn migrations_v3_normalizes_lowercase_labels_to_folder_casing() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO email_accounts (id, name, email, provider, status, created_at) VALUES ('a1', 'A', 'a@e.com', 'gmail', 'connected', 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_folders (id, account_id, provider_id, name, kind, type, is_system, is_visible, unread_count, total_count, created_at, updated_at)
+             VALUES ('f-custom', 'a1', 'Label_42', 'My Label', 'custom', 'user', 0, 1, 0, 0, 0, 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_threads (id, account_id, subject, last_message_at, labels_json) VALUES ('t1', 'a1', 'Test', 100, '[]')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_messages (id, thread_id, account_id, from_name, from_email, to_json, cc_json, subject, body, snippet, timestamp, labels_json, attachments_json)
+             VALUES ('m1', 't1', 'a1', 'A', 'a@e.com', '[]', '[]', 'Test', 'body', 'snippet', 100, '[\"label_42\", \"inbox\"]', '[]')",
+            [],
+        ).unwrap();
+
+        rebuild_thread_labels_and_folders(&conn).unwrap();
+
+        let labels_json: String = conn
+            .query_row("SELECT labels_json FROM email_messages WHERE id = 'm1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(labels_json.contains("Label_42"), "expected canonical label casing, got {labels_json}");
+        assert!(labels_json.contains("inbox") || labels_json.contains("INBOX"));
+
+        let join_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM email_thread_folders tf
+                 JOIN email_folders f ON f.id = tf.folder_id
+                 WHERE tf.thread_id = 't1' AND f.provider_id = 'Label_42'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(join_count, 1);
+    }
+
+    #[test]
+    fn attachment_upsert_is_idempotent() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO email_accounts (id, name, email, provider, status, created_at) VALUES ('a1', 'A', 'a@e.com', 'gmail', 'connected', 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_threads (id, account_id, subject, last_message_at, labels_json) VALUES ('t1', 'a1', 'Test', 100, '[]')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_messages (id, thread_id, account_id, from_name, from_email, to_json, cc_json, subject, body, snippet, timestamp, labels_json, attachments_json)
+             VALUES ('m1', 't1', 'a1', 'A', 'a@e.com', '[]', '[]', 'Test', 'body', 'snippet', 100, '[]', '[]')",
+            [],
+        ).unwrap();
+
+        for _ in 0..2 {
+            conn.execute(
+                "INSERT INTO email_attachments (id, account_id, thread_id, message_id, provider_attachment_id, filename, mime_type, size, download_status, extract_status, created_at, updated_at)
+                 VALUES ('att-1', 'a1', 't1', 'm1', 'prov-att-1', 'file.pdf', 'application/pdf', 100, 'metadata', 'not_started', 0, 0)
+                 ON CONFLICT(message_id, provider_attachment_id) DO UPDATE SET
+                   filename = excluded.filename, size = excluded.size, updated_at = excluded.updated_at",
+                [],
+            ).unwrap();
+        }
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM email_attachments WHERE message_id = 'm1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn list_threads_inbox_falls_back_without_folder_joins() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO email_accounts (id, name, email, provider, status, created_at) VALUES ('a1', 'A', 'a@e.com', 'gmail', 'connected', 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_threads (id, account_id, subject, last_message_at, is_archived, labels_json) VALUES ('t1', 'a1', 'Hello', 100, 0, '[]')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_threads (id, account_id, subject, last_message_at, is_archived, labels_json) VALUES ('t2', 'a1', 'Archived', 50, 1, '[]')",
+            [],
+        ).unwrap();
+
+        let ids = query_inbox_thread_ids(&conn, "a1").unwrap();
+        assert_eq!(ids, vec!["t1".to_string()]);
     }
 }

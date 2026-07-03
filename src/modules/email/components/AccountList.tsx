@@ -186,8 +186,9 @@ export function AccountList() {
               <span className="flex-1">Unified Inbox</span>
             </button>
           )}
-          {/* Per-account system folders */}
-          {(["inbox", "starred", "sent", "drafts", "archive"] as const).map((kind) => {
+          {/* Per-account system folders — hidden while unified inbox is active */}
+          {activeFolder !== "unified" &&
+            (["inbox", "starred", "sent", "drafts", "archive"] as const).map((kind) => {
             const Icon = KIND_ICONS[kind];
             const active = activeFolder === kind;
             // Scope unread count to the active account's folder.
@@ -216,10 +217,10 @@ export function AccountList() {
               </button>
             );
           })}
-        </div>
 
         {/* Dynamic folders from Gmail labels */}
-        {grouped.filter((f) => !["inbox", "sent", "drafts", "archive"].includes(f.kind) || f.kind === "category" || f.kind === "custom" || f.kind === "trash" || f.kind === "spam").length > 0 && (
+        {activeFolder !== "unified" &&
+        grouped.filter((f) => !["inbox", "sent", "drafts", "archive"].includes(f.kind) || f.kind === "category" || f.kind === "custom" || f.kind === "trash" || f.kind === "spam").length > 0 ? (
           <>
             <div className="my-1.5 border-t border-[var(--color-border)]/50" />
             <div className="flex flex-col gap-0.5">
@@ -252,7 +253,8 @@ export function AccountList() {
                 })}
             </div>
           </>
-        )}
+        ) : null}
+        </div>
       </div>
       {detailsAccount && (
         <AccountDetails
