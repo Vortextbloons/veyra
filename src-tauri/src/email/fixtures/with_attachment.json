@@ -1,0 +1,44 @@
+{
+  "id": "38d1a2b3c4d5e6f9",
+  "threadId": "38d1a2b3c4d5e6f9",
+  "labelIds": ["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
+  "snippet": "Please find the attached spreadsheet.",
+  "historyId": "12347",
+  "internalDate": "1704240000000",
+  "payload": {
+    "partId": "",
+    "mimeType": "multipart/mixed",
+    "filename": "",
+    "headers": [
+      { "name": "From", "value": "Carol Davis <carol@example.com>" },
+      { "name": "To", "value": "alice@example.com" },
+      { "name": "Subject", "value": "Budget Spreadsheet" },
+      { "name": "Date", "value": "Wed, 03 Jan 2024 12:00:00 +0000" },
+      { "name": "Message-ID", "value": "<attachment-003@example.com>" }
+    ],
+    "body": {},
+    "parts": [
+      {
+        "partId": "0",
+        "mimeType": "text/plain",
+        "filename": "",
+        "headers": [],
+        "body": {
+          "size": 37,
+          "data": "UGxlYXNlIGZpbmQgdGhlIGF0dGFjaGVkIHNwcmVhZHNoZWV0Lg"
+        }
+      },
+      {
+        "partId": "1",
+        "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "filename": "budget_2024.xlsx",
+        "headers": [],
+        "body": {
+          "attachmentId": "ANGjdJ8a7F3kLm9nP2qR5sT8vW1yZ4",
+          "size": 24576
+        }
+      }
+    ]
+  },
+  "sizeEstimate": 25200
+}

@@ -109,6 +109,8 @@ pub struct GmailOAuthConfigInput {
     pub client_secret: String,
 }
 
+const SCHEMA_VERSION: i64 = 1;
+
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS email_accounts (
   id TEXT PRIMARY KEY,
@@ -180,6 +182,14 @@ CREATE TABLE IF NOT EXISTS email_account_tokens (
   FOREIGN KEY(account_id) REFERENCES email_accounts(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS email_ai_settings (
+  scope TEXT NOT NULL,
+  account_id TEXT NOT NULL DEFAULT '',
+  settings_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (scope, account_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_email_threads_account ON email_threads(account_id, is_archived, last_message_at);
 CREATE INDEX IF NOT EXISTS idx_email_messages_thread ON email_messages(thread_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_email_messages_search ON email_messages(account_id, subject, from_email);
@@ -188,10 +198,89 @@ CREATE INDEX IF NOT EXISTS idx_email_messages_search ON email_messages(account_i
 impl EmailDb {
     pub fn init(app: &tauri::AppHandle) -> Result<Self, String> {
         let conn = crate::shared::db_utils::open_app_sqlite(app, "veyra.sqlite")?;
-        conn.execute_batch(SCHEMA)
-            .map_err(|e| format!("email schema migration failed: {e}"))?;
+        run_migrations(&conn)?;
         Ok(EmailDb(Mutex::new(conn)))
     }
+}
+
+fn run_migrations(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS _schema_migrations (
+            module TEXT PRIMARY KEY,
+            version INTEGER NOT NULL,
+            applied_at TEXT NOT NULL
+        );",
+    )
+    .map_err(|e| format!("email: create _schema_migrations table failed: {e}"))?;
+
+    let schema_version: i64 = conn
+        .query_row(
+            "SELECT version FROM _schema_migrations WHERE module = 'email'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if schema_version < 1 {
+        conn.execute_batch(SCHEMA)
+            .map_err(|e| format!("email: schema v1 migration failed: {e}"))?;
+
+        // Phase 1 prep: add new columns to email_accounts when that phase lands.
+        add_column_if_missing(conn, "email_accounts", "sync_status", "TEXT NOT NULL DEFAULT 'idle'")?;
+        add_column_if_missing(conn, "email_accounts", "last_sync_at", "INTEGER")?;
+        add_column_if_missing(conn, "email_accounts", "sync_cursor", "TEXT")?;
+        add_column_if_missing(conn, "email_accounts", "ai_enabled", "INTEGER NOT NULL DEFAULT 1")?;
+        add_column_if_missing(conn, "email_accounts", "settings_json", "TEXT NOT NULL DEFAULT '{}'")?;
+
+        // Phase 2 prep: add body/html columns to email_messages.
+        add_column_if_missing(conn, "email_messages", "provider_message_id", "TEXT")?;
+        add_column_if_missing(conn, "email_messages", "provider_thread_id", "TEXT")?;
+        add_column_if_missing(conn, "email_messages", "headers_json", "TEXT NOT NULL DEFAULT '{}'")?;
+        add_column_if_missing(conn, "email_messages", "body_text", "TEXT NOT NULL DEFAULT ''")?;
+        add_column_if_missing(conn, "email_messages", "body_html", "TEXT")?;
+        add_column_if_missing(conn, "email_messages", "sanitized_html", "TEXT")?;
+        add_column_if_missing(conn, "email_messages", "body_parse_status", "TEXT NOT NULL DEFAULT 'pending'")?;
+        add_column_if_missing(conn, "email_messages", "parsed_parts_json", "TEXT NOT NULL DEFAULT '[]'")?;
+        add_column_if_missing(conn, "email_messages", "raw_payload_json", "TEXT")?;
+        add_column_if_missing(conn, "email_messages", "updated_at", "INTEGER")?;
+    }
+
+    // Future migrations:
+    // if schema_version < 2 { ... }
+
+    conn.execute(
+        "INSERT INTO _schema_migrations (module, version, applied_at) VALUES ('email', ?1, datetime('now'))
+         ON CONFLICT(module) DO UPDATE SET version = excluded.version, applied_at = excluded.applied_at",
+        [SCHEMA_VERSION],
+    )
+    .map_err(|e| format!("email: set schema version failed: {e}"))?;
+
+    Ok(())
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({})", table))
+        .map_err(|e| format!("email: prepare table_info for {table}.{column} failed: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| format!("email: query table_info for {table}.{column} failed: {e}"))?;
+    for row in rows {
+        if row.map_err(|e| format!("email: table_info row failed: {e}"))? == column {
+            return Ok(());
+        }
+    }
+    conn.execute(
+        &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+        [],
+    )
+    .map_err(|e| format!("email: add column {table}.{column} failed: {e}"))?;
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -251,6 +340,13 @@ fn now_ms() -> i64 {
 
 fn new_id(prefix: &str) -> String {
     format!("{}-{}", prefix, now_ms())
+}
+
+/// UUID-based ID for new entity types (folders, attachments, tags, AI jobs, AI outputs, AI drafts).
+/// Kept separate from `new_id` so existing account IDs retain backward-compatible format.
+#[allow(dead_code)]
+fn new_uuid_id(prefix: &str) -> String {
+    format!("{}-{}", prefix, uuid::Uuid::new_v4())
 }
 
 fn parse_json_vec<T: for<'de> Deserialize<'de>>(value: String) -> Vec<T> {
@@ -1218,4 +1314,468 @@ fn apply_gmail_thread_labels(
         .error_for_status()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    fn load_fixture(name: &str) -> Value {
+        let path = format!("{}/src/email/fixtures/{}.json", env!("CARGO_MANIFEST_DIR"), name);
+        let data = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
+        serde_json::from_str(&data).unwrap_or_else(|e| panic!("failed to parse fixture {path}: {e}"))
+    }
+
+    #[test]
+    fn new_id_uses_prefix_and_timestamp() {
+        let id = new_id("acct");
+        assert!(id.starts_with("acct-"));
+        assert!(id.len() > 5);
+    }
+
+    #[test]
+    fn new_uuid_id_uses_prefix_and_uuid() {
+        let id = new_uuid_id("tag");
+        assert!(id.starts_with("tag-"));
+        let uuid_part = id.strip_prefix("tag-").unwrap();
+        assert_eq!(uuid_part.len(), 36, "UUID should be 36 chars");
+        assert_eq!(uuid_part.chars().filter(|c| *c == '-').count(), 4);
+    }
+
+    #[test]
+    fn new_uuid_id_produces_unique_values() {
+        let a = new_uuid_id("job");
+        let b = new_uuid_id("job");
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn gmail_body_text_extracts_plain_text_simple() {
+        let msg = load_fixture("simple_text");
+        let payload = msg.get("payload").unwrap();
+        let body = gmail_body_text(payload);
+        assert_eq!(body, "Hey, just wanted to check in on the project timeline.");
+    }
+
+    #[test]
+    fn gmail_body_text_extracts_plain_from_multipart() {
+        let msg = load_fixture("multipart_html_text");
+        let payload = msg.get("payload").unwrap();
+        let body = gmail_body_text(payload);
+        assert_eq!(body, "Here is the quarterly report with some formatting.");
+    }
+
+    #[test]
+    fn gmail_body_text_returns_empty_for_attachment_only() {
+        let msg = load_fixture("with_attachment");
+        let payload = msg.get("payload").unwrap();
+        let body = gmail_body_text(payload);
+        assert_eq!(body, "Please find the attached spreadsheet.");
+    }
+
+    #[test]
+    fn gmail_body_text_extracts_from_html_only_message() {
+        let msg = load_fixture("outlook_reply");
+        let payload = msg.get("payload").unwrap();
+        // outlook_reply has only text/html body, no text/plain part
+        let body = gmail_body_text(payload);
+        assert!(body.is_empty(), "gmail_body_text only extracts text/plain, not text/html");
+    }
+
+    #[test]
+    fn gmail_body_text_extracts_plain_text_gt_quotes() {
+        let msg = load_fixture("plain_text_gt_quotes");
+        let payload = msg.get("payload").unwrap();
+        let body = gmail_body_text(payload);
+        assert!(body.contains("Agreed, we should ship it this week."));
+        assert!(body.contains("> We are ready to ship."));
+    }
+
+    #[test]
+    fn gmail_body_text_extracts_cjk_content() {
+        let msg = load_fixture("cjk_attribution");
+        let payload = msg.get("payload").unwrap();
+        let body = gmail_body_text(payload);
+        assert!(body.contains("提案について確認しました"));
+    }
+
+    #[test]
+    fn gmail_body_text_extracts_forwarded_message() {
+        let msg = load_fixture("forwarded_message");
+        let payload = msg.get("payload").unwrap();
+        let body = gmail_body_text(payload);
+        assert!(body.contains("---------- Forwarded message ----------"));
+        assert!(body.contains("We should use RESTful for the new API."));
+    }
+
+    #[test]
+    fn decode_gmail_data_handles_base64url() {
+        // "Hello World" in base64url without padding
+        let encoded = "SGVsbG8gV29ybGQ";
+        let decoded = decode_gmail_data(encoded);
+        assert_eq!(decoded, "Hello World");
+    }
+
+    #[test]
+    fn decode_gmail_data_handles_base64url_with_padding() {
+        let encoded = "SGVsbG8gV29ybGQ=";
+        let decoded = decode_gmail_data(encoded);
+        assert_eq!(decoded, "Hello World");
+    }
+
+    #[test]
+    fn decode_gmail_data_returns_empty_for_invalid() {
+        let decoded = decode_gmail_data("!!!not-base64!!!");
+        assert_eq!(decoded, "");
+    }
+
+    #[test]
+    fn parse_address_extracts_name_and_email() {
+        let (name, email) = parse_address("Alice Smith <alice@example.com>");
+        assert_eq!(name, "Alice Smith");
+        assert_eq!(email, "alice@example.com");
+    }
+
+    #[test]
+    fn parse_address_handles_email_only() {
+        let (name, email) = parse_address("bob@example.com");
+        assert_eq!(name, "bob@example.com");
+        assert_eq!(email, "bob@example.com");
+    }
+
+    #[test]
+    fn parse_address_handles_quoted_name() {
+        let (name, email) = parse_address("\"Carol D.\" <carol@example.com>");
+        assert_eq!(name, "Carol D.");
+        assert_eq!(email, "carol@example.com");
+    }
+
+    #[test]
+    fn parse_address_list_splits_multiple() {
+        let list = parse_address_list("alice@example.com, Bob <bob@example.com>");
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].email, "alice@example.com");
+        assert_eq!(list[1].name, "Bob");
+        assert_eq!(list[1].email, "bob@example.com");
+    }
+
+    #[test]
+    fn parse_address_list_handles_empty() {
+        let list = parse_address_list("");
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn fixture_simple_text_has_expected_labels() {
+        let msg = load_fixture("simple_text");
+        let labels: Vec<String> = msg
+            .get("labelIds")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|s| s.to_string())
+            .collect();
+        assert!(labels.contains(&"INBOX".to_string()));
+        assert!(labels.contains(&"UNREAD".to_string()));
+        assert!(labels.contains(&"CATEGORY_PERSONAL".to_string()));
+    }
+
+    #[test]
+    fn fixture_system_labels_has_starred_and_important() {
+        let msg = load_fixture("system_labels");
+        let labels: Vec<String> = msg
+            .get("labelIds")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|s| s.to_string())
+            .collect();
+        assert!(labels.contains(&"STARRED".to_string()));
+        assert!(labels.contains(&"IMPORTANT".to_string()));
+    }
+
+    #[test]
+    fn fixture_custom_labels_has_user_label() {
+        let msg = load_fixture("custom_labels");
+        let labels: Vec<String> = msg
+            .get("labelIds")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|s| s.to_string())
+            .collect();
+        assert!(labels.contains(&"Label_42".to_string()));
+        assert!(labels.contains(&"CATEGORY_UPDATES".to_string()));
+    }
+
+    #[test]
+    fn fixture_with_attachment_has_attachment_part() {
+        let msg = load_fixture("with_attachment");
+        let parts = msg
+            .pointer("/payload/parts")
+            .and_then(Value::as_array)
+            .unwrap();
+        let att_part = parts
+            .iter()
+            .find(|p| {
+                p.get("mimeType")
+                    .and_then(Value::as_str)
+                    .map(|m| m.starts_with("application/"))
+                    .unwrap_or(false)
+            })
+            .expect("should have attachment part");
+        assert_eq!(
+            att_part.get("filename").and_then(Value::as_str).unwrap(),
+            "budget_2024.xlsx"
+        );
+        assert!(att_part.get("body").unwrap().get("attachmentId").is_some());
+    }
+
+    // ── Gmail quoted reply fixture ────────────────────────────────────────
+
+    #[test]
+    fn gmail_body_text_extracts_gmail_quoted_reply() {
+        let msg = load_fixture("gmail_quoted_reply");
+        let payload = msg.get("payload").unwrap();
+        let body = gmail_body_text(payload);
+        assert!(body.contains("Sounds good, let me evaluate the draft."));
+        assert!(body.contains("We should meet next week"));
+    }
+
+    #[test]
+    fn fixture_gmail_quoted_reply_has_html_part() {
+        let msg = load_fixture("gmail_quoted_reply");
+        let parts = msg
+            .pointer("/payload/parts")
+            .and_then(Value::as_array)
+            .unwrap();
+        let html_part = parts
+            .iter()
+            .find(|p| {
+                p.get("mimeType")
+                    .and_then(Value::as_str)
+                    .map(|m| m == "text/html")
+                    .unwrap_or(false)
+            })
+            .expect("should have text/html part");
+        let data = html_part
+            .pointer("/body/data")
+            .and_then(Value::as_str)
+            .unwrap();
+        let decoded = decode_gmail_data(data);
+        assert!(decoded.contains("gmail_quote"), "HTML should contain Gmail quote class");
+    }
+
+    // ── Nested blockquotes fixture ────────────────────────────────────────
+
+    #[test]
+    fn gmail_body_text_extracts_nested_blockquotes() {
+        let msg = load_fixture("nested_blockquotes");
+        let payload = msg.get("payload").unwrap();
+        // nested_blockquotes is text/html only — gmail_body_text extracts text/plain
+        let body = gmail_body_text(payload);
+        assert!(body.is_empty(), "nested_blockquotes is html-only, plain text extractor returns empty");
+    }
+
+    #[test]
+    fn fixture_nested_blockquotes_has_nested_structure() {
+        let msg = load_fixture("nested_blockquotes");
+        let body_data = msg
+            .pointer("/payload/body/data")
+            .and_then(Value::as_str)
+            .unwrap();
+        let decoded = decode_gmail_data(body_data);
+        assert!(decoded.contains("<blockquote"), "should contain blockquote elements");
+        // Count nested blockquotes — the fixture has 3 levels
+        let bq_count = decoded.matches("<blockquote").count();
+        assert!(bq_count >= 2, "should have at least 2 nested blockquotes, got {bq_count}");
+    }
+
+    // ── run_migrations tests ──────────────────────────────────────────────
+
+    fn open_test_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("create in-memory db");
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA foreign_keys = ON;",
+        )
+        .expect("set pragmas");
+        conn
+    }
+
+    #[test]
+    fn migrations_creates_all_base_tables() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("migrations should succeed");
+
+        let tables: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                .unwrap();
+            stmt.query_map([], |row| row.get(0))
+                .unwrap()
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+
+        assert!(tables.contains(&"email_accounts".to_string()));
+        assert!(tables.contains(&"email_threads".to_string()));
+        assert!(tables.contains(&"email_messages".to_string()));
+        assert!(tables.contains(&"email_drafts".to_string()));
+        assert!(tables.contains(&"email_oauth_config".to_string()));
+        assert!(tables.contains(&"email_account_tokens".to_string()));
+        assert!(tables.contains(&"email_ai_settings".to_string()));
+        assert!(tables.contains(&"_schema_migrations".to_string()));
+    }
+
+    #[test]
+    fn migrations_sets_schema_version() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("migrations should succeed");
+
+        let version: i64 = conn
+            .query_row(
+                "SELECT version FROM _schema_migrations WHERE module = 'email'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("should have email version row");
+        assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn migrations_creates_phase1_prep_columns() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("migrations should succeed");
+
+        // Verify Phase 1 prep columns exist on email_accounts
+        let columns: Vec<String> = {
+            let mut stmt = conn.prepare("PRAGMA table_info(email_accounts)").unwrap();
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+
+        assert!(columns.contains(&"sync_status".to_string()));
+        assert!(columns.contains(&"last_sync_at".to_string()));
+        assert!(columns.contains(&"sync_cursor".to_string()));
+        assert!(columns.contains(&"ai_enabled".to_string()));
+        assert!(columns.contains(&"settings_json".to_string()));
+    }
+
+    #[test]
+    fn migrations_creates_phase2_prep_columns() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("migrations should succeed");
+
+        let columns: Vec<String> = {
+            let mut stmt = conn.prepare("PRAGMA table_info(email_messages)").unwrap();
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+
+        assert!(columns.contains(&"provider_message_id".to_string()));
+        assert!(columns.contains(&"provider_thread_id".to_string()));
+        assert!(columns.contains(&"headers_json".to_string()));
+        assert!(columns.contains(&"body_text".to_string()));
+        assert!(columns.contains(&"body_html".to_string()));
+        assert!(columns.contains(&"sanitized_html".to_string()));
+        assert!(columns.contains(&"body_parse_status".to_string()));
+        assert!(columns.contains(&"parsed_parts_json".to_string()));
+        assert!(columns.contains(&"raw_payload_json".to_string()));
+        assert!(columns.contains(&"updated_at".to_string()));
+    }
+
+    #[test]
+    fn migrations_is_idempotent() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("first migration should succeed");
+        run_migrations(&conn).expect("second migration should also succeed (idempotent)");
+
+        let version: i64 = conn
+            .query_row(
+                "SELECT version FROM _schema_migrations WHERE module = 'email'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("should have email version row");
+        assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn migrations_does_not_seed_ai_settings() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("migrations should succeed");
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM email_ai_settings", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0, "run_migrations should not seed AI settings — frontend Zustand is source of truth");
+    }
+
+    #[test]
+    fn ai_settings_global_scope_uses_empty_sentinel() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("migrations should succeed");
+
+        // Insert a global row using the '' sentinel
+        conn.execute(
+            "INSERT INTO email_ai_settings (scope, account_id, settings_json, updated_at) VALUES ('global', '', '{}', 0)",
+            [],
+        )
+        .expect("insert global row");
+
+        // Inserting a second ('global', '') should fail due to PK constraint
+        let result = conn.execute(
+            "INSERT INTO email_ai_settings (scope, account_id, settings_json, updated_at) VALUES ('global', '', '{}', 0)",
+            [],
+        );
+        assert!(result.is_err(), "duplicate (scope, account_id) should violate PRIMARY KEY");
+
+        // But ('global', 'some-account') should succeed
+        conn.execute(
+            "INSERT INTO email_ai_settings (scope, account_id, settings_json, updated_at) VALUES ('global', 'acct-123', '{}', 0)",
+            [],
+        )
+        .expect("insert account-scoped row should succeed");
+    }
+
+    #[test]
+    fn add_column_if_missing_adds_new_column() {
+        let conn = open_test_db();
+        conn.execute_batch("CREATE TABLE test_table (id TEXT PRIMARY KEY)")
+            .unwrap();
+
+        add_column_if_missing(&conn, "test_table", "name", "TEXT NOT NULL DEFAULT ''")
+            .expect("should add column");
+
+        let columns: Vec<String> = {
+            let mut stmt = conn.prepare("PRAGMA table_info(test_table)").unwrap();
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+        assert!(columns.contains(&"name".to_string()));
+    }
+
+    #[test]
+    fn add_column_if_missing_is_idempotent() {
+        let conn = open_test_db();
+        conn.execute_batch("CREATE TABLE test_table (id TEXT PRIMARY KEY)")
+            .unwrap();
+
+        add_column_if_missing(&conn, "test_table", "name", "TEXT NOT NULL DEFAULT ''")
+            .expect("first add should succeed");
+        add_column_if_missing(&conn, "test_table", "name", "TEXT NOT NULL DEFAULT ''")
+            .expect("second add should be a no-op");
+    }
 }

@@ -1,0 +1,26 @@
+{
+  "id": "78d1a2b3c4d5e6fd",
+  "threadId": "78d1a2b3c4d5e6fd",
+  "labelIds": ["INBOX", "CATEGORY_PERSONAL"],
+  "snippet": "Agreed, we should ship it this week.",
+  "historyId": "12351",
+  "internalDate": "1704585600000",
+  "payload": {
+    "partId": "",
+    "mimeType": "text/plain",
+    "filename": "",
+    "headers": [
+      { "name": "From", "value": "Grace Kim <grace@example.com>" },
+      { "name": "To", "value": "alice@example.com" },
+      { "name": "Subject", "value": "Re: Release plan" },
+      { "name": "Date", "value": "Sun, 07 Jan 2024 12:00:00 +0000" },
+      { "name": "Message-ID", "value": "<gt-quote-007@example.com>" },
+      { "name": "In-Reply-To", "value": "<release-001@example.com>" }
+    ],
+    "body": {
+      "size": 185,
+      "data": "QWdyZWVkLCB3ZSBzaG91bGQgc2hpcCBpdCB0aGlzIHdlZWsuCgpPbiBTdW4sIEphbiAwNywgMjAyNCBhdCAxMjowMCBBTSwgQWxpY2UgU21pdGggPHNtaXRoQGV4YW1wbGUuY29tPiB3cm90ZToKPiBXZSBhcmUgcmVhZHkgdG8gc2hpcC4KPiBTaGFsbCB3ZSBnbyBsaXZlIG9uIE1vbmRheT8KPiAKPiAtIEFsaWNlCj4gVGVzdGVkIGJ5IFFBLCBhbGwgZ3JlZW4u"
+    }
+  },
+  "sizeEstimate": 520
+}

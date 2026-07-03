@@ -1,0 +1,25 @@
+{
+  "id": "98d1a2b3c4d5e6ff",
+  "threadId": "98d1a2b3c4d5e6ff",
+  "labelIds": ["INBOX", "CATEGORY_PERSONAL"],
+  "snippet": "FYI - forwarded conversation about the API design.",
+  "historyId": "12353",
+  "internalDate": "1704758400000",
+  "payload": {
+    "partId": "",
+    "mimeType": "text/plain",
+    "filename": "",
+    "headers": [
+      { "name": "From", "value": "Hank Brown <hank@example.com>" },
+      { "name": "To", "value": "alice@example.com" },
+      { "name": "Subject", "value": "Fwd: API design discussion" },
+      { "name": "Date", "value": "Tue, 09 Jan 2024 12:00:00 +0000" },
+      { "name": "Message-ID", "value": "<fwd-009@example.com>" }
+    ],
+    "body": {
+      "size": 267,
+      "data": "RllJIC0gZm9yd2FyZGVkIGNvbnZlcnNhdGlvbiBhYm91dCB0aGUgQVBJIGRlc2lnbi4KCi0tLS0tLS0tLS0gRm9yd2FyZGVkIG1lc3NhZ2UgLS0tLS0tLS0tLQpGcm9tOiBCb2IgSm9uZXMgPGJvYkBleGFtcGxlLmNvbT4KRGF0ZTogTW9uLCAwMSBKYW4gMjAyNCAxMjowMDowMCArMDAwMApTdWJqZWN0OiBBUEkgZGVzaWduIGRpc2N1c3Npb24KVG86IEhhbmsgQnJvd24gPGhhbmtAZXhhbXBsZS5jb20-CgpXZSBzaG91bGQgdXNlIFJFU1RmdWwgZm9yIHRoZSBuZXcgQVBJLiBXaGF0IGRvIHlvdSB0aGluaz8"
+    }
+  },
+  "sizeEstimate": 620
+}

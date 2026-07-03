@@ -2,7 +2,7 @@
 
 import {
   FileText,
-  Youtube,
+  Video,
   GraduationCap,
   Globe,
   Archive,
@@ -97,7 +97,7 @@ const BADGE_TITLES: Record<SourceExtractionKind, string> = {
 };
 
 const BADGE_ICONS: Record<SourceExtractionKind, typeof FileText> = {
-  youtube_transcript: Youtube,
+  youtube_transcript: Video,
   pdf_text: FileText,
   docx_text: FileText,
   pptx_text: Presentation,
@@ -106,7 +106,7 @@ const BADGE_ICONS: Record<SourceExtractionKind, typeof FileText> = {
   arxiv_paper: GraduationCap,
   wikipedia_article: Globe,
   wayback_recovered: Archive,
-  youtube_failed: Youtube,
+  youtube_failed: Video,
   pdf_failed: FileText,
   docx_failed: FileText,
   pptx_failed: Presentation,
@@ -381,7 +381,7 @@ export function ResearchExtractionIndicators({
           title="YouTube transcripts extracted via Advanced Search Bundle"
           className="inline-flex items-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[10.5px] font-medium text-rose-300"
         >
-          <Youtube className="size-3" />
+          <Video className="size-3" />
           {counts.transcripts} transcript{counts.transcripts !== 1 ? "s" : ""}
         </span>
       )}

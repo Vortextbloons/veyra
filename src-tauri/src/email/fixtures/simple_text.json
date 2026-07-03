@@ -1,0 +1,25 @@
+{
+  "id": "18d1a2b3c4d5e6f7",
+  "threadId": "18d1a2b3c4d5e6f7",
+  "labelIds": ["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
+  "snippet": "Hey, just wanted to check in on the project timeline.",
+  "historyId": "12345",
+  "internalDate": "1704067200000",
+  "payload": {
+    "partId": "",
+    "mimeType": "text/plain",
+    "filename": "",
+    "headers": [
+      { "name": "From", "value": "Alice Smith <alice@example.com>" },
+      { "name": "To", "value": "bob@example.com" },
+      { "name": "Subject", "value": "Project timeline update" },
+      { "name": "Date", "value": "Mon, 01 Jan 2024 12:00:00 +0000" },
+      { "name": "Message-ID", "value": "<simple-text-001@example.com>" }
+    ],
+    "body": {
+      "size": 56,
+      "data": "SGV5LCBqdXN0IHdhbnRlZCB0byBjaGVjayBpbiBvbiB0aGUgcHJvamVjdCB0aW1lbGluZS4="
+    }
+  },
+  "sizeEstimate": 520
+}
