@@ -4,7 +4,11 @@ import { useProviderStore } from "@/stores/provider-store";
 import { Toggle } from "@/components/toggle";
 import { ModelDropdown } from "./model-dropdown";
 import { emailAiWorker } from "@/modules/email/email-ai-worker";
-import { startEmailAiWorker, stopEmailAiWorker } from "@/modules/email/email-store";
+import {
+  startEmailAiWorker,
+  stopEmailAiWorker,
+  useEmailStore,
+} from "@/modules/email/email-store";
 import { emailReconcileAiJobs } from "@/modules/email/tauri-commands";
 
 const POLL_OPTIONS = [
@@ -47,6 +51,8 @@ export function EmailSettings() {
   const setEmailAiDraftModel = useSettingsStore((s) => s.setEmailAiDraftModel);
 
   const workerStatus = useEmailAiWorkerStatus();
+  const resetEmailAi = useEmailStore((s) => s.resetEmailAi);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (emailAiEnabled) {
@@ -61,6 +67,18 @@ export function EmailSettings() {
     } else {
       stopEmailAiWorker();
     }
+  };
+
+  const handleResetEmailAi = () => {
+    if (
+      !window.confirm(
+        "Reset all Email AI data? This clears queued jobs, analysis results, AI drafts, and AI-applied tags, and restores Email AI settings to defaults. Your emails and accounts are not affected.",
+      )
+    ) {
+      return;
+    }
+    setResetting(true);
+    void resetEmailAi().finally(() => setResetting(false));
   };
 
   return (
@@ -213,7 +231,11 @@ export function EmailSettings() {
                     <button
                       key={n}
                       type="button"
-                      onClick={() => setEmailAiWorkerCount(n)}
+                      onClick={() => {
+                        setEmailAiWorkerCount(n);
+                        emailAiWorker.applyRuntimeSettings();
+                        emailAiWorker.wake();
+                      }}
                       className={`grid size-8 place-items-center rounded-md text-[12px] font-medium transition ${
                         emailAiWorkerCount === n
                           ? "bg-[var(--color-accent)] text-white"
@@ -237,7 +259,7 @@ export function EmailSettings() {
                   value={emailAiPollInterval}
                   onChange={(e) => {
                     setEmailAiPollInterval(Number(e.target.value));
-                    emailAiWorker.restartPollTimer();
+                    emailAiWorker.applyRuntimeSettings();
                   }}
                   className="h-8 w-full max-w-xs rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 text-[12px] text-[var(--color-text)]"
                 >
@@ -278,6 +300,27 @@ export function EmailSettings() {
           </section>
         </>
       )}
+
+      <section>
+        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
+          Data
+        </h2>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
+          <div className="text-[12.5px] font-medium text-white">Reset Email AI</div>
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-text-dim)]">
+            Clear all AI jobs, summaries, classifications, drafts, and AI tags. Restores
+            Email AI settings to defaults. Does not delete your emails or connected accounts.
+          </p>
+          <button
+            type="button"
+            onClick={handleResetEmailAi}
+            disabled={resetting}
+            className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[11.5px] font-medium text-red-300 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {resetting ? "Resetting…" : "Reset all Email AI data"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

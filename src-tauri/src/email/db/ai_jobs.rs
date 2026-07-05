@@ -226,6 +226,46 @@ pub fn reconcile_orphaned_running_jobs(conn: &Connection, stale_after_ms: i64) -
     Ok(updated as u64)
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EmailAiClearResult {
+    pub jobs_deleted: u64,
+    pub outputs_deleted: u64,
+    pub drafts_deleted: u64,
+    pub message_tags_deleted: u64,
+    pub tags_deleted: u64,
+}
+
+/// Delete all Email AI jobs, outputs, drafts, and AI-applied tags.
+pub fn clear_all_email_ai_data(conn: &Connection) -> Result<EmailAiClearResult, String> {
+    let message_tags_deleted = conn
+        .execute("DELETE FROM email_message_tags WHERE source = 'ai'", [])
+        .map_err(|e| e.to_string())? as u64;
+    let drafts_deleted = conn
+        .execute("DELETE FROM email_ai_drafts", [])
+        .map_err(|e| e.to_string())? as u64;
+    let outputs_deleted = conn
+        .execute("DELETE FROM email_ai_outputs", [])
+        .map_err(|e| e.to_string())? as u64;
+    let jobs_deleted = conn
+        .execute("DELETE FROM email_ai_jobs", [])
+        .map_err(|e| e.to_string())? as u64;
+    let tags_deleted = conn
+        .execute(
+            "DELETE FROM email_tags
+             WHERE source = 'ai'
+               AND id NOT IN (SELECT tag_id FROM email_message_tags)",
+            [],
+        )
+        .map_err(|e| e.to_string())? as u64;
+    Ok(EmailAiClearResult {
+        jobs_deleted,
+        outputs_deleted,
+        drafts_deleted,
+        message_tags_deleted,
+        tags_deleted,
+    })
+}
+
 pub fn list_ai_jobs(
     conn: &Connection,
     filter: &EmailAiJobFilter,

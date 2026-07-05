@@ -251,6 +251,7 @@ pub fn run() {
             email::commands::email_cancel_ai_job,
             email::commands::email_reconcile_ai_jobs,
             email::commands::email_requeue_ai_job,
+            email::commands::email_clear_ai_data,
             email::commands::email_list_ai_jobs,
             email::commands::email_list_ai_outputs,
             email::commands::email_get_unprocessed_thread_ids,

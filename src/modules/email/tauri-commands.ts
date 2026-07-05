@@ -191,6 +191,31 @@ export async function emailRequeueAiJob(jobId: string): Promise<void> {
   return invoke<void>("email_requeue_ai_job", { jobId });
 }
 
+export type EmailAiClearResult = {
+  jobsDeleted: number;
+  outputsDeleted: number;
+  draftsDeleted: number;
+  messageTagsDeleted: number;
+  tagsDeleted: number;
+};
+
+export async function emailClearAiData(): Promise<EmailAiClearResult> {
+  const result = await invoke<{
+    jobs_deleted: number;
+    outputs_deleted: number;
+    drafts_deleted: number;
+    message_tags_deleted: number;
+    tags_deleted: number;
+  }>("email_clear_ai_data");
+  return {
+    jobsDeleted: result.jobs_deleted,
+    outputsDeleted: result.outputs_deleted,
+    draftsDeleted: result.drafts_deleted,
+    messageTagsDeleted: result.message_tags_deleted,
+    tagsDeleted: result.tags_deleted,
+  };
+}
+
 export async function emailListAiJobs(
   filter: EmailAiJobFilter,
 ): Promise<EmailAiJob[]> {

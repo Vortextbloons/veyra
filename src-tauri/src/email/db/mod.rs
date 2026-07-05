@@ -378,9 +378,9 @@ impl crate::shared::db_utils::DbConnectionState for EmailDbState {
 // Re-export all public functions from submodules.
 pub use accounts::{add_account, list_accounts, remove_account};
 pub use ai_jobs::{
-    cancel_ai_job, claim_next_ai_job, complete_ai_job, enqueue_ai_jobs,
+    cancel_ai_job, claim_next_ai_job, clear_all_email_ai_data, complete_ai_job, enqueue_ai_jobs,
     fail_ai_job, get_unprocessed_thread_ids, list_ai_jobs, list_ai_outputs,
-    reconcile_orphaned_running_jobs, requeue_ai_job,
+    reconcile_orphaned_running_jobs, requeue_ai_job, EmailAiClearResult,
 };
 pub use ai_drafts::{
     delete_ai_draft, list_ai_drafts, save_ai_draft, update_ai_draft_status,

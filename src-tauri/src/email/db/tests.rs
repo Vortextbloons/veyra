@@ -3,8 +3,9 @@ use rusqlite::params;
 use serde_json::Value;
 
 use super::ai_jobs::{
-    cancel_ai_job, claim_next_ai_job, complete_ai_job, enqueue_ai_job, fail_ai_job, get_ai_job,
-    get_ai_output_for_thread, list_ai_outputs, reconcile_orphaned_running_jobs,
+    cancel_ai_job, claim_next_ai_job, clear_all_email_ai_data, complete_ai_job, enqueue_ai_job,
+    fail_ai_job, get_ai_job, get_ai_output_for_thread, list_ai_jobs, list_ai_outputs,
+    reconcile_orphaned_running_jobs,
 };
 use super::threads::{query_inbox_thread_ids, rebuild_thread_labels_and_folders, query_strings};
 
@@ -1098,6 +1099,40 @@ fn cancel_ai_job_transitions_status() {
     cancel_ai_job(&conn, &job.id).unwrap();
     let cancelled = get_ai_job(&conn, &job.id).unwrap();
     assert_eq!(cancelled.status, "cancelled");
+}
+
+#[test]
+fn clear_all_email_ai_data_removes_ai_records() {
+    let conn = open_test_db();
+    run_migrations(&conn).unwrap();
+    setup_ai_test_data(&conn);
+
+    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
+        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
+    }).unwrap();
+    claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
+    complete_ai_job(&conn, &EmailAiOutputInput {
+        job_id: job.id.clone(),
+        model_id: "model".into(),
+        prompt_version: "v1".into(),
+        source_message_ids_json: Some("[]".into()),
+        confidence: None,
+        result_json: r#"{"shortSummary":"hi"}"#.into(),
+        display_text: "hi".into(),
+    }).unwrap();
+
+    let result = clear_all_email_ai_data(&conn).unwrap();
+    assert_eq!(result.jobs_deleted, 1);
+    assert_eq!(result.outputs_deleted, 1);
+
+    let remaining_jobs = list_ai_jobs(&conn, &EmailAiJobFilter {
+        account_id: Some("a1".into()),
+        status: None,
+        task_type: None,
+        limit: Some(10),
+    }).unwrap();
+    assert!(remaining_jobs.is_empty());
 }
 
 #[test]

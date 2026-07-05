@@ -26,6 +26,7 @@ export type EmailAiSliceActions = {
   setEmailAiSummaryModel: (model: string) => void;
   setEmailAiClassificationModel: (model: string) => void;
   setEmailAiDraftModel: (model: string) => void;
+  resetEmailAiSettings: () => void;
 };
 
 export const DEFAULT_EMAIL_AI_STATE: EmailAiSliceState = {
@@ -61,4 +62,5 @@ export const createEmailAiSlice: StateCreator<EmailAiSlice, [], [], EmailAiSlice
   setEmailAiClassificationModel: (emailAiClassificationModel) =>
     set({ emailAiClassificationModel }),
   setEmailAiDraftModel: (emailAiDraftModel) => set({ emailAiDraftModel }),
+  resetEmailAiSettings: () => set({ ...DEFAULT_EMAIL_AI_STATE }),
 });

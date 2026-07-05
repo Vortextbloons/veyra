@@ -38,6 +38,7 @@ import {
   emailListAiJobs,
   emailCancelAiJob,
   emailReconcileAiJobs,
+  emailClearAiData,
 } from "./tauri-commands";
 
 export {
@@ -142,6 +143,7 @@ type EmailStore = {
   cancelQueuedAiJobs: (accountId?: string) => Promise<void>;
   startEmailAi: () => void;
   stopEmailAi: () => void;
+  resetEmailAi: () => Promise<void>;
 };
 
 let hydrationPromise: Promise<void> | null = null;
@@ -203,6 +205,10 @@ export function startEmailAiWorker(): void {
   if (!emailAiWorkerStarted) {
     emailAiWorker.start();
     emailAiWorkerStarted = true;
+  } else if (!emailAiWorker.getStatus().running) {
+    emailAiWorker.start();
+  } else {
+    emailAiWorker.applyRuntimeSettings();
   }
 }
 
@@ -958,12 +964,37 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   startEmailAi: () => {
     if (!useSettingsStore.getState().emailAiEnabled) return;
     startEmailAiWorker();
-    void emailReconcileAiJobs(0).then(() => get().loadAiCoverage());
+    emailAiWorker.wake();
+    const accountId = get().activeAccountId;
+    void emailReconcileAiJobs(0).then(() => get().loadAiCoverage(accountId ?? undefined));
   },
 
   stopEmailAi: () => {
     stopEmailAiWorker();
     void emailReconcileAiJobs(0).then(() => get().loadAiCoverage());
+  },
+
+  resetEmailAi: async () => {
+    stopEmailAiWorker();
+    try {
+      await emailClearAiData();
+      useSettingsStore.getState().resetEmailAiSettings();
+      set({
+        aiCoverage: null,
+        aiDrafts: [],
+        aiDraftThreadId: null,
+        aiDraftLoading: false,
+        aiScanLoading: false,
+        error: null,
+      });
+      await get().loadThreads();
+      const accountId = get().activeAccountId;
+      if (accountId) {
+        await get().loadAiCoverage(accountId);
+      }
+    } catch (error) {
+      set({ error: String(error) });
+    }
   },
 }));
 

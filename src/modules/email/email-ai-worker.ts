@@ -87,10 +87,14 @@ export class EmailAiWorker {
     }, settings.emailAiPollInterval);
   }
 
+  /** Re-read poll interval and other runtime settings while the worker is active. */
+  applyRuntimeSettings(): void {
+    if (!this.running) return;
+    this.startPollTimer();
+  }
+
   restartPollTimer(): void {
-    if (this.running) {
-      this.startPollTimer();
-    }
+    this.applyRuntimeSettings();
   }
 
   /** Run the worker loop immediately (e.g. after enqueueing an on-demand draft). */
@@ -164,7 +168,6 @@ export class EmailAiWorker {
           threadId,
           taskType,
           priority: 2,
-          modelId: this.resolveModelForTask(taskType as EmailAiFullTaskType),
           tone: taskType === "reply_draft" ? "concise" : undefined,
         }));
 
@@ -229,8 +232,7 @@ export class EmailAiWorker {
     job: EmailAiJob,
     signal: AbortSignal,
   ): Promise<JobExecutionOutcome> {
-    const modelId =
-      job.modelId || this.resolveModelForTask(job.taskType as EmailAiFullTaskType);
+    const modelId = this.resolveModelForTask(job.taskType as EmailAiFullTaskType);
     if (!modelId) {
       return this.failJob(job.id, "no model configured for this task");
     }

@@ -333,6 +333,13 @@ pub async fn email_requeue_ai_job(
 }
 
 #[tauri::command]
+pub async fn email_clear_ai_data(
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailAiClearResult, String> {
+    run_db_command(state.inner(), "email", email_db::clear_all_email_ai_data).await
+}
+
+#[tauri::command]
 pub async fn email_list_ai_jobs(
     filter: email_db::EmailAiJobFilter,
     state: State<'_, EmailDbState>,
