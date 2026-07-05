@@ -8,6 +8,10 @@ export type EmailAiSliceState = {
   emailAiBackgroundClassification: boolean;
   emailAiBackgroundSpam: boolean;
   emailAiBackgroundUrgency: boolean;
+  emailAiPollInterval: number;
+  emailAiSummaryModel: string;
+  emailAiClassificationModel: string;
+  emailAiDraftModel: string;
 };
 
 export type EmailAiSliceActions = {
@@ -18,6 +22,10 @@ export type EmailAiSliceActions = {
   setEmailAiBackgroundClassification: (enabled: boolean) => void;
   setEmailAiBackgroundSpam: (enabled: boolean) => void;
   setEmailAiBackgroundUrgency: (enabled: boolean) => void;
+  setEmailAiPollInterval: (interval: number) => void;
+  setEmailAiSummaryModel: (model: string) => void;
+  setEmailAiClassificationModel: (model: string) => void;
+  setEmailAiDraftModel: (model: string) => void;
 };
 
 export const DEFAULT_EMAIL_AI_STATE: EmailAiSliceState = {
@@ -28,6 +36,10 @@ export const DEFAULT_EMAIL_AI_STATE: EmailAiSliceState = {
   emailAiBackgroundClassification: true,
   emailAiBackgroundSpam: true,
   emailAiBackgroundUrgency: true,
+  emailAiPollInterval: 60000,
+  emailAiSummaryModel: "",
+  emailAiClassificationModel: "",
+  emailAiDraftModel: "",
 };
 
 export type EmailAiSlice = EmailAiSliceState & EmailAiSliceActions;
@@ -43,4 +55,10 @@ export const createEmailAiSlice: StateCreator<EmailAiSlice, [], [], EmailAiSlice
     set({ emailAiBackgroundClassification }),
   setEmailAiBackgroundSpam: (emailAiBackgroundSpam) => set({ emailAiBackgroundSpam }),
   setEmailAiBackgroundUrgency: (emailAiBackgroundUrgency) => set({ emailAiBackgroundUrgency }),
+  setEmailAiPollInterval: (emailAiPollInterval) =>
+    set({ emailAiPollInterval: Math.max(15000, emailAiPollInterval) }),
+  setEmailAiSummaryModel: (emailAiSummaryModel) => set({ emailAiSummaryModel }),
+  setEmailAiClassificationModel: (emailAiClassificationModel) =>
+    set({ emailAiClassificationModel }),
+  setEmailAiDraftModel: (emailAiDraftModel) => set({ emailAiDraftModel }),
 });

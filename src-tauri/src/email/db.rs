@@ -154,7 +154,80 @@ pub struct GmailOAuthConfigInput {
     pub client_secret: String,
 }
 
-const SCHEMA_VERSION: i64 = 3;
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailAiJobRow {
+    pub id: String,
+    pub account_id: String,
+    pub thread_id: Option<String>,
+    pub message_id: Option<String>,
+    pub attachment_id: Option<String>,
+    pub task_type: String,
+    pub priority: i64,
+    pub status: String,
+    pub model_id: Option<String>,
+    pub attempt_count: i64,
+    pub max_attempts: i64,
+    pub scheduled_at: i64,
+    pub started_at: Option<i64>,
+    pub finished_at: Option<i64>,
+    pub error: Option<String>,
+    pub input_hash: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailAiOutputRow {
+    pub id: String,
+    pub account_id: String,
+    pub thread_id: Option<String>,
+    pub message_id: Option<String>,
+    pub attachment_id: Option<String>,
+    pub task_type: String,
+    pub model_id: String,
+    pub prompt_version: String,
+    pub source_message_ids_json: String,
+    pub confidence: Option<f64>,
+    pub result_json: String,
+    pub display_text: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailAiJobInput {
+    pub account_id: String,
+    pub thread_id: Option<String>,
+    pub message_id: Option<String>,
+    pub task_type: String,
+    pub priority: i64,
+    pub model_id: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailAiOutputInput {
+    pub job_id: String,
+    pub model_id: String,
+    pub prompt_version: String,
+    pub source_message_ids_json: Option<String>,
+    pub confidence: Option<f64>,
+    pub result_json: String,
+    pub display_text: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailAiJobFilter {
+    pub account_id: Option<String>,
+    pub status: Option<String>,
+    pub task_type: Option<String>,
+    pub limit: Option<i64>,
+}
+
+const SCHEMA_VERSION: i64 = 4;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS email_accounts (
@@ -400,6 +473,59 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         )
         .map_err(|e| format!("email: schema v3 attachment index failed: {e}"))?;
         rebuild_thread_labels_and_folders(conn)?;
+    }
+
+    if schema_version < 4 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS email_ai_jobs (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                thread_id TEXT,
+                message_id TEXT,
+                attachment_id TEXT,
+                task_type TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                model_id TEXT,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 3,
+                scheduled_at INTEGER NOT NULL,
+                started_at INTEGER,
+                finished_at INTEGER,
+                error TEXT,
+                input_hash TEXT,
+                created_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS email_ai_outputs (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                thread_id TEXT,
+                message_id TEXT,
+                attachment_id TEXT,
+                task_type TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                prompt_version TEXT NOT NULL,
+                source_message_ids_json TEXT NOT NULL DEFAULT '[]',
+                confidence REAL,
+                result_json TEXT NOT NULL,
+                display_text TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_email_ai_jobs_status_priority
+                ON email_ai_jobs(status, priority, scheduled_at);
+            CREATE INDEX IF NOT EXISTS idx_email_ai_outputs_thread_task
+                ON email_ai_outputs(thread_id, task_type, updated_at);
+            CREATE INDEX IF NOT EXISTS idx_email_folders_account_kind
+                ON email_folders(account_id, kind);
+            CREATE INDEX IF NOT EXISTS idx_email_messages_account_provider
+                ON email_messages(account_id, provider_message_id);
+            CREATE INDEX IF NOT EXISTS idx_email_messages_thread_timestamp
+                ON email_messages(thread_id, timestamp);",
+        )
+        .map_err(|e| format!("email: schema v4 migration failed: {e}"))?;
     }
 
     conn.execute(
@@ -1750,6 +1876,280 @@ pub fn get_attachment_local_path(
         return Err("attachment is not downloaded".into());
     }
     att.local_path.ok_or_else(|| "attachment has no local_path".into())
+}
+
+fn read_ai_job_row(row: &rusqlite::Row) -> Result<EmailAiJobRow, rusqlite::Error> {
+    Ok(EmailAiJobRow {
+        id: row.get(0)?,
+        account_id: row.get(1)?,
+        thread_id: row.get(2)?,
+        message_id: row.get(3)?,
+        attachment_id: row.get(4)?,
+        task_type: row.get(5)?,
+        priority: row.get(6)?,
+        status: row.get(7)?,
+        model_id: row.get(8)?,
+        attempt_count: row.get(9)?,
+        max_attempts: row.get(10)?,
+        scheduled_at: row.get(11)?,
+        started_at: row.get(12)?,
+        finished_at: row.get(13)?,
+        error: row.get(14)?,
+        input_hash: row.get(15)?,
+        created_at: row.get(16)?,
+    })
+}
+
+fn read_ai_output_row(row: &rusqlite::Row) -> Result<EmailAiOutputRow, rusqlite::Error> {
+    Ok(EmailAiOutputRow {
+        id: row.get(0)?,
+        account_id: row.get(1)?,
+        thread_id: row.get(2)?,
+        message_id: row.get(3)?,
+        attachment_id: row.get(4)?,
+        task_type: row.get(5)?,
+        model_id: row.get(6)?,
+        prompt_version: row.get(7)?,
+        source_message_ids_json: row.get(8)?,
+        confidence: row.get(9)?,
+        result_json: row.get(10)?,
+        display_text: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
+    })
+}
+
+const AI_JOB_COLUMNS: &str = "id, account_id, thread_id, message_id, attachment_id, task_type, priority, status, model_id, attempt_count, max_attempts, scheduled_at, started_at, finished_at, error, input_hash, created_at";
+
+const AI_OUTPUT_COLUMNS: &str = "id, account_id, thread_id, message_id, attachment_id, task_type, model_id, prompt_version, source_message_ids_json, confidence, result_json, display_text, created_at, updated_at";
+
+pub fn enqueue_ai_job(conn: &Connection, input: &EmailAiJobInput) -> Result<EmailAiJobRow, String> {
+    let id = new_uuid_id("job");
+    let now = now_ms();
+    conn.execute(
+        "INSERT INTO email_ai_jobs (id, account_id, thread_id, message_id, task_type, priority, status, model_id, scheduled_at, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'queued', ?7, ?8, ?8)",
+        params![id, input.account_id, input.thread_id, input.message_id, input.task_type, input.priority, input.model_id, now],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_job(conn, &id)
+}
+
+pub fn enqueue_ai_jobs(conn: &Connection, inputs: &[EmailAiJobInput]) -> Result<Vec<EmailAiJobRow>, String> {
+    let mut results = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        results.push(enqueue_ai_job(conn, input)?);
+    }
+    Ok(results)
+}
+
+pub fn get_ai_job(conn: &Connection, job_id: &str) -> Result<EmailAiJobRow, String> {
+    conn.query_row(
+        &format!("SELECT {AI_JOB_COLUMNS} FROM email_ai_jobs WHERE id = ?1"),
+        params![job_id],
+        read_ai_job_row,
+    )
+    .map_err(|e| format!("ai job not found: {e}"))
+}
+
+pub fn claim_next_ai_job(conn: &Connection, task_types: &[String]) -> Result<Option<EmailAiJobRow>, String> {
+    if task_types.is_empty() {
+        return Ok(None);
+    }
+    let placeholders = task_types.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT {AI_JOB_COLUMNS} FROM email_ai_jobs
+         WHERE status = 'queued' AND task_type IN ({placeholders})
+         ORDER BY priority ASC, scheduled_at ASC LIMIT 1"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let mut rows = stmt.query_map(rusqlite::params_from_iter(task_types.iter()), read_ai_job_row)
+        .map_err(|e| e.to_string())?;
+    let job = match rows.next() {
+        Some(row) => row.map_err(|e| e.to_string())?,
+        None => return Ok(None),
+    };
+    let now = now_ms();
+    conn.execute(
+        "UPDATE email_ai_jobs SET status = 'running', started_at = ?1 WHERE id = ?2",
+        params![now, job.id],
+    )
+    .map_err(|e| e.to_string())?;
+    let mut updated = job;
+    updated.status = "running".to_string();
+    updated.started_at = Some(now);
+    Ok(Some(updated))
+}
+
+pub fn complete_ai_job(conn: &Connection, input: &EmailAiOutputInput) -> Result<EmailAiJobRow, String> {
+    let job = get_ai_job(conn, &input.job_id)?;
+    let now = now_ms();
+    let output_id = new_uuid_id("out");
+    conn.execute(
+        "INSERT INTO email_ai_outputs (id, account_id, thread_id, message_id, attachment_id, task_type, model_id, prompt_version, source_message_ids_json, confidence, result_json, display_text, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)",
+        params![
+            output_id,
+            job.account_id,
+            job.thread_id,
+            job.message_id,
+            job.attachment_id,
+            job.task_type,
+            input.model_id,
+            input.prompt_version,
+            input.source_message_ids_json.as_deref().unwrap_or("[]"),
+            input.confidence,
+            input.result_json,
+            input.display_text,
+            now,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE email_ai_jobs SET status = 'completed', finished_at = ?1 WHERE id = ?2",
+        params![now, input.job_id],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_job(conn, &input.job_id)
+}
+
+pub fn fail_ai_job(conn: &Connection, job_id: &str, error: &str) -> Result<EmailAiJobRow, String> {
+    let now = now_ms();
+    conn.execute(
+        "UPDATE email_ai_jobs SET status = 'failed', finished_at = ?1, error = ?2, attempt_count = attempt_count + 1 WHERE id = ?3",
+        params![now, error, job_id],
+    )
+    .map_err(|e| e.to_string())?;
+    get_ai_job(conn, job_id)
+}
+
+pub fn cancel_ai_job(conn: &Connection, job_id: &str) -> Result<(), String> {
+    let now = now_ms();
+    conn.execute(
+        "UPDATE email_ai_jobs SET status = 'cancelled', finished_at = ?1 WHERE id = ?2 AND status IN ('queued', 'running')",
+        params![now, job_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_ai_jobs(conn: &Connection, filter: &EmailAiJobFilter) -> Result<Vec<EmailAiJobRow>, String> {
+    let mut conditions = vec!["1=1".to_string()];
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    let mut idx = 1;
+    if let Some(account_id) = &filter.account_id {
+        conditions.push(format!("account_id = ?{idx}"));
+        param_values.push(Box::new(account_id.clone()));
+        idx += 1;
+    }
+    if let Some(status) = &filter.status {
+        conditions.push(format!("status = ?{idx}"));
+        param_values.push(Box::new(status.clone()));
+        idx += 1;
+    }
+    if let Some(task_type) = &filter.task_type {
+        conditions.push(format!("task_type = ?{idx}"));
+        param_values.push(Box::new(task_type.clone()));
+        idx += 1;
+    }
+    let limit = filter.limit.unwrap_or(100);
+    conditions.push(format!("LIMIT ?{idx}"));
+    param_values.push(Box::new(limit));
+
+    let where_clause = conditions.join(" AND ");
+    let sql = format!("SELECT {AI_JOB_COLUMNS} FROM email_ai_jobs WHERE {where_clause} ORDER BY priority ASC, scheduled_at ASC");
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(param_values.iter().map(|p| p.as_ref())), read_ai_job_row)
+        .map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
+}
+
+pub fn list_ai_outputs(conn: &Connection, thread_id: &str) -> Result<Vec<EmailAiOutputRow>, String> {
+    let mut stmt = conn
+        .prepare(&format!("SELECT {AI_OUTPUT_COLUMNS} FROM email_ai_outputs WHERE thread_id = ?1 ORDER BY created_at DESC"))
+        .map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![thread_id], read_ai_output_row)
+        .map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
+}
+
+pub fn get_ai_output_for_thread(conn: &Connection, thread_id: &str, task_type: &str) -> Result<Option<EmailAiOutputRow>, String> {
+    let mut stmt = conn
+        .prepare(&format!("SELECT {AI_OUTPUT_COLUMNS} FROM email_ai_outputs WHERE thread_id = ?1 AND task_type = ?2 ORDER BY updated_at DESC LIMIT 1"))
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query_map(params![thread_id, task_type], read_ai_output_row)
+        .map_err(|e| e.to_string())?;
+    match rows.next() {
+        Some(row) => Ok(Some(row.map_err(|e| e.to_string())?)),
+        None => Ok(None),
+    }
+}
+
+pub fn get_unprocessed_message_ids(
+    conn: &Connection,
+    account_id: &str,
+    task_type: &str,
+) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT m.id FROM email_messages m
+             WHERE m.account_id = ?1
+               AND NOT EXISTS (
+                 SELECT 1 FROM email_ai_outputs o
+                 WHERE o.message_id = m.id AND o.task_type = ?2
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM email_ai_jobs j
+                 WHERE j.message_id = m.id AND j.task_type = ?2 AND j.status IN ('queued', 'running')
+               )
+             ORDER BY m.timestamp DESC LIMIT 50",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![account_id, task_type], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
+}
+
+pub fn get_unprocessed_thread_ids(
+    conn: &Connection,
+    account_id: &str,
+    task_type: &str,
+) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT t.id FROM email_threads t
+             WHERE t.account_id = ?1
+               AND NOT EXISTS (
+                 SELECT 1 FROM email_ai_outputs o
+                 WHERE o.thread_id = t.id AND o.task_type = ?2
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM email_ai_jobs j
+                 WHERE j.thread_id = t.id AND j.task_type = ?2 AND j.status IN ('queued', 'running')
+               )
+             ORDER BY t.last_message_at DESC LIMIT 50",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![account_id, task_type], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
 }
 
 fn parse_address(raw: &str) -> (String, String) {
@@ -3479,5 +3879,199 @@ mod tests {
         assert!(pdf.extracted_text.is_none());
         assert_eq!(pdf.extracted_text_chars, 0);
         assert!(pdf.error.is_none());
+    }
+
+    fn setup_ai_test_data(conn: &Connection) {
+        conn.execute(
+            "INSERT INTO email_accounts (id, name, email, provider, status, created_at) VALUES ('a1', 'A', 'a@e.com', 'gmail', 'connected', 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_threads (id, account_id, subject, last_message_at, labels_json) VALUES ('t1', 'a1', 'Test', 100, '[]')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_messages (id, thread_id, account_id, from_name, from_email, to_json, cc_json, subject, body, snippet, timestamp, labels_json, attachments_json)
+             VALUES ('m1', 't1', 'a1', 'A', 'a@e.com', '[]', '[]', 'Test', 'body', 'snippet', 100, '[]', '[]')",
+            [],
+        ).unwrap();
+    }
+
+    #[test]
+    fn enqueue_and_claim_ai_job() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_ai_test_data(&conn);
+
+        let input = EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: Some("m1".into()),
+            task_type: "thread_summary".into(),
+            priority: 2,
+            model_id: None,
+        };
+        let job = enqueue_ai_job(&conn, &input).unwrap();
+        assert_eq!(job.status, "queued");
+        assert_eq!(job.priority, 2);
+
+        let claimed = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap().unwrap();
+        assert_eq!(claimed.id, job.id);
+        assert_eq!(claimed.status, "running");
+        assert!(claimed.started_at.is_some());
+    }
+
+    #[test]
+    fn claim_respects_priority() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_ai_test_data(&conn);
+
+        enqueue_ai_job(&conn, &EmailAiJobInput {
+            account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+            task_type: "thread_summary".into(), priority: 3, model_id: None,
+        }).unwrap();
+        let high = enqueue_ai_job(&conn, &EmailAiJobInput {
+            account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+            task_type: "thread_summary".into(), priority: 1, model_id: None,
+        }).unwrap();
+
+        let claimed = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap().unwrap();
+        assert_eq!(claimed.id, high.id);
+    }
+
+    #[test]
+    fn complete_ai_job_writes_output() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_ai_test_data(&conn);
+
+        let job = enqueue_ai_job(&conn, &EmailAiJobInput {
+            account_id: "a1".into(), thread_id: Some("t1".into()), message_id: Some("m1".into()),
+            task_type: "thread_summary".into(), priority: 2, model_id: None,
+        }).unwrap();
+        claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
+
+        let completed = complete_ai_job(&conn, &EmailAiOutputInput {
+            job_id: job.id.clone(),
+            model_id: "test-model".into(),
+            prompt_version: "1.0.0".into(),
+            source_message_ids_json: Some("[\"m1\"]".into()),
+            confidence: Some(0.9),
+            result_json: "{\"shortSummary\":\"test\"}".into(),
+            display_text: "Test summary".into(),
+        }).unwrap();
+        assert_eq!(completed.status, "completed");
+
+        let outputs = list_ai_outputs(&conn, "t1").unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].task_type, "thread_summary");
+        assert_eq!(outputs[0].display_text, "Test summary");
+    }
+
+    #[test]
+    fn fail_ai_job_increments_attempt() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_ai_test_data(&conn);
+
+        let job = enqueue_ai_job(&conn, &EmailAiJobInput {
+            account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+            task_type: "spam_score".into(), priority: 2, model_id: None,
+        }).unwrap();
+        claim_next_ai_job(&conn, &["spam_score".into()]).unwrap();
+
+        let failed = fail_ai_job(&conn, &job.id, "model error").unwrap();
+        assert_eq!(failed.status, "failed");
+        assert_eq!(failed.attempt_count, 1);
+        assert_eq!(failed.error.as_deref(), Some("model error"));
+    }
+
+    #[test]
+    fn cancel_ai_job_transitions_status() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_ai_test_data(&conn);
+
+        let job = enqueue_ai_job(&conn, &EmailAiJobInput {
+            account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+            task_type: "urgency_score".into(), priority: 2, model_id: None,
+        }).unwrap();
+
+        cancel_ai_job(&conn, &job.id).unwrap();
+        let cancelled = get_ai_job(&conn, &job.id).unwrap();
+        assert_eq!(cancelled.status, "cancelled");
+    }
+
+    #[test]
+    fn get_unprocessed_thread_ids_excludes_processed() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_ai_test_data(&conn);
+
+        // t1 has no output yet -> should appear.
+        let ids = get_unprocessed_thread_ids(&conn, "a1", "thread_summary").unwrap();
+        assert_eq!(ids, vec!["t1"]);
+
+        // Enqueue a job -> should be excluded (already queued).
+        enqueue_ai_job(&conn, &EmailAiJobInput {
+            account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+            task_type: "thread_summary".into(), priority: 2, model_id: None,
+        }).unwrap();
+        let ids = get_unprocessed_thread_ids(&conn, "a1", "thread_summary").unwrap();
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn claim_returns_none_when_no_queued_jobs() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+
+        let result = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn claim_skips_wrong_task_type() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_ai_test_data(&conn);
+
+        enqueue_ai_job(&conn, &EmailAiJobInput {
+            account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+            task_type: "spam_score".into(), priority: 2, model_id: None,
+        }).unwrap();
+
+        let result = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_ai_output_for_thread_returns_latest() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_ai_test_data(&conn);
+
+        let job = enqueue_ai_job(&conn, &EmailAiJobInput {
+            account_id: "a1".into(), thread_id: Some("t1".into()), message_id: Some("m1".into()),
+            task_type: "thread_summary".into(), priority: 2, model_id: None,
+        }).unwrap();
+        claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
+        complete_ai_job(&conn, &EmailAiOutputInput {
+            job_id: job.id,
+            model_id: "model".into(),
+            prompt_version: "1.0.0".into(),
+            source_message_ids_json: None,
+            confidence: None,
+            result_json: "{}".into(),
+            display_text: "first".into(),
+        }).unwrap();
+
+        let output = get_ai_output_for_thread(&conn, "t1", "thread_summary").unwrap();
+        assert!(output.is_some());
+        assert_eq!(output.unwrap().display_text, "first");
+
+        let none = get_ai_output_for_thread(&conn, "t1", "spam_score").unwrap();
+        assert!(none.is_none());
     }
 }

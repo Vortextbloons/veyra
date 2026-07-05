@@ -253,3 +253,93 @@ pub async fn email_open_attachment(
     open::that(&path).map_err(|e| format!("failed to open attachment: {e}"))?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn email_enqueue_ai_jobs(
+    inputs: Vec<email_db::EmailAiJobInput>,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<email_db::EmailAiJobRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::enqueue_ai_jobs(conn, &inputs)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_claim_ai_job(
+    task_types: Vec<String>,
+    state: State<'_, EmailDbState>,
+) -> Result<Option<email_db::EmailAiJobRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::claim_next_ai_job(conn, &task_types)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_complete_ai_job(
+    input: email_db::EmailAiOutputInput,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailAiJobRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::complete_ai_job(conn, &input)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_fail_ai_job(
+    job_id: String,
+    error: String,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailAiJobRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::fail_ai_job(conn, &job_id, &error)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_cancel_ai_job(
+    job_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::cancel_ai_job(conn, &job_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_list_ai_jobs(
+    filter: email_db::EmailAiJobFilter,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<email_db::EmailAiJobRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::list_ai_jobs(conn, &filter)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_list_ai_outputs(
+    thread_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<email_db::EmailAiOutputRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::list_ai_outputs(conn, &thread_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_get_unprocessed_thread_ids(
+    account_id: String,
+    task_type: String,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<String>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::get_unprocessed_thread_ids(conn, &account_id, &task_type)
+    })
+    .await
+}

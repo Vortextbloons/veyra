@@ -177,6 +177,10 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     emailAiBackgroundClassification: state.emailAiBackgroundClassification,
     emailAiBackgroundSpam: state.emailAiBackgroundSpam,
     emailAiBackgroundUrgency: state.emailAiBackgroundUrgency,
+    emailAiPollInterval: state.emailAiPollInterval,
+    emailAiSummaryModel: state.emailAiSummaryModel,
+    emailAiClassificationModel: state.emailAiClassificationModel,
+    emailAiDraftModel: state.emailAiDraftModel,
   };
 }
 

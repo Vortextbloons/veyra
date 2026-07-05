@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment } from "./email-types";
+import { useSettingsStore } from "@/stores/settings-store";
+import { emailAiWorker } from "./email-ai-worker";
 import {
   emailListAccounts,
   emailListThreads,
@@ -95,6 +97,15 @@ function isGmailScopeIssue(error: unknown): boolean {
     message.includes("insufficient authentication scopes") ||
     message.includes("Insufficient Permission")
   );
+}
+
+let emailAiWorkerStarted = false;
+
+function startEmailAiWorker(accountId: string): void {
+  if (!emailAiWorkerStarted) {
+    emailAiWorker.start(accountId);
+    emailAiWorkerStarted = true;
+  }
 }
 
 export const useEmailStore = create<EmailStore>((set, get) => ({
@@ -225,6 +236,10 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       if (get().activeAccountId === accountId || get().activeFolder === "unified") {
         await Promise.all([get().loadFolders(), get().loadThreads()]);
       }
+      if (useSettingsStore.getState().emailAiEnabled) {
+        startEmailAiWorker(accountId);
+        void emailAiWorker.enqueueForNewMessages(accountId);
+      }
     } catch (error) {
       if (isGmailScopeIssue(error)) {
         const accounts = await fetchMappedAccounts().catch(() => get().accounts);
@@ -263,6 +278,13 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       const accounts = await fetchMappedAccounts();
       set({ isLoading: false, accounts });
       await Promise.all([get().loadFolders(), get().loadThreads()]);
+      if (useSettingsStore.getState().emailAiEnabled) {
+        const accountIds = accounts.filter((a) => a.provider === "gmail").map((a) => a.id);
+        for (const id of accountIds) {
+          startEmailAiWorker(id);
+          void emailAiWorker.enqueueForNewMessages(id);
+        }
+      }
     } catch (error) {
       const accounts = await fetchMappedAccounts().catch(() => get().accounts);
       set({

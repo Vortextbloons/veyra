@@ -6,6 +6,11 @@ import type {
   EmailFolder,
   EmailMessage,
   EmailAttachment,
+  EmailAiJob,
+  EmailAiOutput,
+  EmailAiJobInput,
+  EmailAiOutputInput,
+  EmailAiJobFilter,
 } from "./email-types";
 
 export async function emailListAccounts(): Promise<EmailAccount[]> {
@@ -139,4 +144,55 @@ export async function emailExtractAttachmentText(
 
 export async function emailOpenAttachment(attachmentId: string): Promise<void> {
   return invoke<void>("email_open_attachment", { attachmentId });
+}
+
+export async function emailEnqueueAiJobs(
+  inputs: EmailAiJobInput[],
+): Promise<EmailAiJob[]> {
+  return invoke<EmailAiJob[]>("email_enqueue_ai_jobs", { inputs });
+}
+
+export async function emailClaimAiJob(
+  taskTypes: string[],
+): Promise<EmailAiJob | null> {
+  return invoke<EmailAiJob | null>("email_claim_ai_job", { taskTypes });
+}
+
+export async function emailCompleteAiJob(
+  input: EmailAiOutputInput,
+): Promise<EmailAiJob> {
+  return invoke<EmailAiJob>("email_complete_ai_job", { input });
+}
+
+export async function emailFailAiJob(
+  jobId: string,
+  error: string,
+): Promise<EmailAiJob> {
+  return invoke<EmailAiJob>("email_fail_ai_job", { jobId, error });
+}
+
+export async function emailCancelAiJob(jobId: string): Promise<void> {
+  return invoke<void>("email_cancel_ai_job", { jobId });
+}
+
+export async function emailListAiJobs(
+  filter: EmailAiJobFilter,
+): Promise<EmailAiJob[]> {
+  return invoke<EmailAiJob[]>("email_list_ai_jobs", { filter });
+}
+
+export async function emailListAiOutputs(
+  threadId: string,
+): Promise<EmailAiOutput[]> {
+  return invoke<EmailAiOutput[]>("email_list_ai_outputs", { threadId });
+}
+
+export async function emailGetUnprocessedThreadIds(
+  accountId: string,
+  taskType: string,
+): Promise<string[]> {
+  return invoke<string[]>("email_get_unprocessed_thread_ids", {
+    accountId,
+    taskType,
+  });
 }
