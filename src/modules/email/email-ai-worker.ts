@@ -11,6 +11,7 @@ import {
   emailGetUnprocessedThreadIds,
   emailEnqueueAiJobs,
   emailGetThread,
+  emailUpsertAiTags,
 } from "./tauri-commands";
 import {
   buildPromptForTask,
@@ -288,6 +289,19 @@ export class EmailAiWorker {
       resultJson: JSON.stringify(parsed),
       displayText,
     });
+
+    if (job.taskType === "classification" && job.messageId) {
+      const tags = Array.isArray(parsed.tags) ? parsed.tags.filter((t): t is string => typeof t === "string") : [];
+      const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+      const reason = typeof parsed.reason === "string" ? parsed.reason : "";
+      if (tags.length > 0) {
+        try {
+          await emailUpsertAiTags(job.messageId, tags, confidence, reason);
+        } catch (err) {
+          console.error("[EmailAiWorker] failed to apply AI tags:", err);
+        }
+      }
+    }
   }
 
   private async requeueJob(job: EmailAiJob): Promise<void> {

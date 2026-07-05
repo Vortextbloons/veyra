@@ -15,9 +15,15 @@ import {
   ShieldAlert,
   Folder,
   Layers,
+  AlertTriangle,
+  Shield,
+  Megaphone,
+  Reply,
+  Paperclip,
 } from "lucide-react";
 import { useEmailStore } from "../email-store";
-import type { EmailAccount, EmailFolder } from "../email-types";
+import { useSettingsStore } from "@/stores/settings-store";
+import type { EmailAccount, EmailFolder, SmartView } from "../email-types";
 import { AccountDetails } from "./AccountDetails";
 
 const KIND_ICONS: Record<string, typeof Inbox> = {
@@ -48,6 +54,14 @@ const KIND_ORDER = [
   "unknown",
 ];
 
+const SMART_VIEWS: { view: SmartView; icon: typeof AlertTriangle; label: string; color: string }[] = [
+  { view: "urgent", icon: AlertTriangle, label: "Urgent", color: "text-red-400" },
+  { view: "needs_reply", icon: Reply, label: "Needs Reply", color: "text-[var(--color-accent)]" },
+  { view: "spam", icon: Shield, label: "Suspected Spam", color: "text-red-400/70" },
+  { view: "marketing", icon: Megaphone, label: "Marketing", color: "text-amber-400/70" },
+  { view: "has_attachments", icon: Paperclip, label: "Attachments", color: "text-[var(--color-text-dim)]" },
+];
+
 function groupFolders(folders: EmailFolder[]): EmailFolder[] {
   const system = folders.filter((f) => f.isSystem);
   const custom = folders.filter((f) => !f.isSystem);
@@ -64,11 +78,14 @@ export function AccountList() {
   const folders = useEmailStore((s) => s.folders);
   const activeAccountId = useEmailStore((s) => s.activeAccountId);
   const activeFolder = useEmailStore((s) => s.activeFolder);
+  const activeSmartView = useEmailStore((s) => s.activeSmartView);
   const selectAccount = useEmailStore((s) => s.selectAccount);
   const setFolder = useEmailStore((s) => s.setFolder);
+  const setSmartView = useEmailStore((s) => s.setSmartView);
   const syncAccount = useEmailStore((s) => s.syncAccount);
   const syncAllGmail = useEmailStore((s) => s.syncAllGmail);
   const isLoading = useEmailStore((s) => s.isLoading);
+  const emailAiEnabled = useSettingsStore((s) => s.emailAiEnabled);
   const [detailsAccount, setDetailsAccount] = useState<EmailAccount | null>(null);
 
   const grouped = groupFolders(folders);
@@ -177,7 +194,7 @@ export function AccountList() {
               type="button"
               onClick={() => setFolder("unified")}
               className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors ${
-                activeFolder === "unified"
+                activeFolder === "unified" && !activeSmartView
                   ? "bg-[var(--color-accent-soft)] text-white"
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]"
               }`}
@@ -187,7 +204,7 @@ export function AccountList() {
             </button>
           )}
           {/* Per-account system folders — hidden while unified inbox is active */}
-          {activeFolder !== "unified" &&
+          {activeFolder !== "unified" && !activeSmartView &&
             (["inbox", "starred", "sent", "drafts", "archive"] as const).map((kind) => {
             const Icon = KIND_ICONS[kind];
             const active = activeFolder === kind;
@@ -219,7 +236,7 @@ export function AccountList() {
           })}
 
         {/* Dynamic folders from Gmail labels */}
-        {activeFolder !== "unified" &&
+        {activeFolder !== "unified" && !activeSmartView &&
         grouped.filter((f) => !["inbox", "sent", "drafts", "archive"].includes(f.kind) || f.kind === "category" || f.kind === "custom" || f.kind === "trash" || f.kind === "spam").length > 0 ? (
           <>
             <div className="my-1.5 border-t border-[var(--color-border)]/50" />
@@ -254,6 +271,38 @@ export function AccountList() {
             </div>
           </>
         ) : null}
+
+        {/* Smart Views — visible when email AI is enabled */}
+        {emailAiEnabled && activeAccountId && (
+          <>
+            <div className="my-1.5 border-t border-[var(--color-border)]/50" />
+            <div className="px-1 pb-0.5">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]/50">
+                Smart Views
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {SMART_VIEWS.map(({ view, icon: Icon, label, color }) => {
+                const active = activeSmartView === view;
+                return (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => setSmartView(active ? null : view)}
+                    className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors ${
+                      active
+                        ? "bg-[var(--color-accent-soft)] text-white"
+                        : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]"
+                    }`}
+                  >
+                    <Icon className={`size-3.5 ${active ? "" : color}`} />
+                    <span className="flex-1">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
         </div>
       </div>
       {detailsAccount && (

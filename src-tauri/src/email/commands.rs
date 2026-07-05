@@ -343,3 +343,94 @@ pub async fn email_get_unprocessed_thread_ids(
     })
     .await
 }
+
+#[tauri::command]
+pub async fn email_list_tags(
+    account_id: Option<String>,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<email_db::EmailTagRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::list_tags(conn, account_id.as_deref())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_create_tag(
+    input: email_db::EmailCreateTagInput,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailTagRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::create_tag(conn, &input)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_update_tag(
+    input: email_db::EmailUpdateTagInput,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailTagRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::update_tag(conn, &input)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_delete_tag(
+    tag_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::delete_tag(conn, &tag_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_apply_tag(
+    input: email_db::EmailApplyTagInput,
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::apply_tag_to_message(conn, &input)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_remove_tag(
+    input: email_db::EmailRemoveTagInput,
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::remove_tag_from_message(conn, &input)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_list_message_tags(
+    message_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<email_db::EmailTagRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::list_message_tags(conn, &message_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_upsert_ai_tags(
+    message_id: String,
+    tag_names: Vec<String>,
+    confidence: f64,
+    reason: String,
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::upsert_ai_tags(conn, &message_id, &tag_names, confidence, &reason)
+    })
+    .await
+}

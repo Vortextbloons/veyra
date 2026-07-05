@@ -103,6 +103,18 @@ export type EmailThread = {
   isArchived: boolean;
   isStarred: boolean;
   labels: string[];
+  aiMetadata?: EmailThreadAiMetadata;
+};
+
+export type EmailThreadAiMetadata = {
+  summary?: string;
+  urgency?: string;
+  category?: string;
+  tags: string[];
+  needsReply?: boolean;
+  spamScore?: number;
+  marketingScore?: number;
+  newsletter?: boolean;
 };
 
 export type EmailDraft = {
@@ -179,3 +191,47 @@ export type EmailAiJobFilter = {
   taskType?: string;
   limit?: number;
 };
+
+export type EmailTag = {
+  id: string;
+  accountId?: string;
+  name: string;
+  slug: string;
+  color?: string;
+  source: "system" | "ai" | "user" | "rule" | "provider";
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type EmailCreateTagInput = {
+  accountId?: string;
+  name: string;
+  color?: string;
+  source: string;
+};
+
+export type EmailUpdateTagInput = {
+  tagId: string;
+  name?: string;
+  color?: string;
+};
+
+export type EmailApplyTagInput = {
+  messageId: string;
+  tagId: string;
+  source: string;
+  confidence?: number;
+  reason?: string;
+};
+
+export type EmailRemoveTagInput = {
+  messageId: string;
+  tagId: string;
+};
+
+export type SmartView =
+  | "urgent"
+  | "spam"
+  | "marketing"
+  | "needs_reply"
+  | "has_attachments";

@@ -11,6 +11,11 @@ import type {
   EmailAiJobInput,
   EmailAiOutputInput,
   EmailAiJobFilter,
+  EmailTag,
+  EmailCreateTagInput,
+  EmailUpdateTagInput,
+  EmailApplyTagInput,
+  EmailRemoveTagInput,
 } from "./email-types";
 
 export async function emailListAccounts(): Promise<EmailAccount[]> {
@@ -194,5 +199,57 @@ export async function emailGetUnprocessedThreadIds(
   return invoke<string[]>("email_get_unprocessed_thread_ids", {
     accountId,
     taskType,
+  });
+}
+
+export async function emailListTags(
+  accountId?: string,
+): Promise<EmailTag[]> {
+  return invoke<EmailTag[]>("email_list_tags", {
+    accountId: accountId ?? null,
+  });
+}
+
+export async function emailCreateTag(
+  input: EmailCreateTagInput,
+): Promise<EmailTag> {
+  return invoke<EmailTag>("email_create_tag", { input });
+}
+
+export async function emailUpdateTag(
+  input: EmailUpdateTagInput,
+): Promise<EmailTag> {
+  return invoke<EmailTag>("email_update_tag", { input });
+}
+
+export async function emailDeleteTag(tagId: string): Promise<void> {
+  return invoke<void>("email_delete_tag", { tagId });
+}
+
+export async function emailApplyTag(input: EmailApplyTagInput): Promise<void> {
+  return invoke<void>("email_apply_tag", { input });
+}
+
+export async function emailRemoveTag(input: EmailRemoveTagInput): Promise<void> {
+  return invoke<void>("email_remove_tag", { input });
+}
+
+export async function emailListMessageTags(
+  messageId: string,
+): Promise<EmailTag[]> {
+  return invoke<EmailTag[]>("email_list_message_tags", { messageId });
+}
+
+export async function emailUpsertAiTags(
+  messageId: string,
+  tagNames: string[],
+  confidence: number,
+  reason: string,
+): Promise<void> {
+  return invoke<void>("email_upsert_ai_tags", {
+    messageId,
+    tagNames,
+    confidence,
+    reason,
   });
 }

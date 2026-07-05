@@ -96,6 +96,8 @@ pub struct EmailThreadRow {
     pub is_archived: bool,
     pub is_starred: bool,
     pub labels: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ai_metadata: Option<EmailThreadAiMetadata>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -227,7 +229,67 @@ pub struct EmailAiJobFilter {
     pub limit: Option<i64>,
 }
 
-const SCHEMA_VERSION: i64 = 4;
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailTagRow {
+    pub id: String,
+    pub account_id: Option<String>,
+    pub name: String,
+    pub slug: String,
+    pub color: Option<String>,
+    pub source: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailCreateTagInput {
+    pub account_id: Option<String>,
+    pub name: String,
+    pub color: Option<String>,
+    pub source: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailUpdateTagInput {
+    pub tag_id: String,
+    pub name: Option<String>,
+    pub color: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailApplyTagInput {
+    pub message_id: String,
+    pub tag_id: String,
+    pub source: String,
+    pub confidence: Option<f64>,
+    pub reason: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailRemoveTagInput {
+    pub message_id: String,
+    pub tag_id: String,
+}
+
+#[derive(Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailThreadAiMetadata {
+    pub summary: Option<String>,
+    pub urgency: Option<String>,
+    pub category: Option<String>,
+    pub tags: Vec<String>,
+    pub needs_reply: Option<bool>,
+    pub spam_score: Option<f64>,
+    pub marketing_score: Option<f64>,
+    pub newsletter: Option<bool>,
+}
+
+const SCHEMA_VERSION: i64 = 5;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS email_accounts (
@@ -526,6 +588,40 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
                 ON email_messages(thread_id, timestamp);",
         )
         .map_err(|e| format!("email: schema v4 migration failed: {e}"))?;
+    }
+
+    if schema_version < 5 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS email_tags (
+                id TEXT PRIMARY KEY,
+                account_id TEXT,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                color TEXT,
+                source TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_email_tags_account_slug
+                ON email_tags(account_id, slug);
+
+            CREATE TABLE IF NOT EXISTS email_message_tags (
+                message_id TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                confidence REAL,
+                reason TEXT,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY (message_id, tag_id),
+                FOREIGN KEY(message_id) REFERENCES email_messages(id) ON DELETE CASCADE,
+                FOREIGN KEY(tag_id) REFERENCES email_tags(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_email_message_tags_tag
+                ON email_message_tags(tag_id);",
+        )
+        .map_err(|e| format!("email: schema v5 migration failed: {e}"))?;
+
+        seed_system_tags(conn)?;
     }
 
     conn.execute(
@@ -2337,9 +2433,42 @@ pub fn remove_account(conn: &Connection, account_id: String) -> Result<(), Strin
     Ok(())
 }
 
+fn load_ai_metadata_for_thread(conn: &Connection, thread_id: &str) -> EmailThreadAiMetadata {
+    let mut meta = EmailThreadAiMetadata::default();
+    let task_types = ["thread_summary", "classification", "spam_score", "urgency_score"];
+    for task_type in &task_types {
+        if let Ok(Some(output)) = get_ai_output_for_thread(conn, thread_id, task_type) {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&output.result_json) {
+                match *task_type {
+                    "thread_summary" => {
+                        meta.summary = parsed.get("shortSummary").and_then(|v| v.as_str()).map(|s| s.to_string());
+                    }
+                    "classification" => {
+                        meta.category = parsed.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        meta.needs_reply = parsed.get("needsReply").and_then(|v| v.as_bool());
+                        if let Some(tags_arr) = parsed.get("tags").and_then(|v| v.as_array()) {
+                            meta.tags = tags_arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                        }
+                    }
+                    "spam_score" => {
+                        meta.spam_score = parsed.get("spamScore").and_then(|v| v.as_f64());
+                        meta.marketing_score = parsed.get("marketingScore").and_then(|v| v.as_f64());
+                        meta.newsletter = parsed.get("newsletter").and_then(|v| v.as_bool());
+                    }
+                    "urgency_score" => {
+                        meta.urgency = parsed.get("level").and_then(|v| v.as_str()).map(|s| s.to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    meta
+}
+
 fn load_thread(conn: &Connection, thread_id: String) -> Result<EmailThreadRow, String> {
     let mut thread = conn.query_row("SELECT id, account_id, subject, last_message_at, is_read, is_archived, is_starred, labels_json FROM email_threads WHERE id = ?1", params![thread_id], |row| Ok(EmailThreadRow {
-        id: row.get(0)?, account_id: row.get(1)?, subject: row.get(2)?, messages: Vec::new(), participants: Vec::new(), last_message_at: row.get(3)?, is_read: row.get::<_, i64>(4)? != 0, is_archived: row.get::<_, i64>(5)? != 0, is_starred: row.get::<_, i64>(6)? != 0, labels: parse_json_vec(row.get(7)?),
+        id: row.get(0)?, account_id: row.get(1)?, subject: row.get(2)?, messages: Vec::new(), participants: Vec::new(), last_message_at: row.get(3)?, is_read: row.get::<_, i64>(4)? != 0, is_archived: row.get::<_, i64>(5)? != 0, is_starred: row.get::<_, i64>(6)? != 0, labels: parse_json_vec(row.get(7)?), ai_metadata: None,
     })).map_err(|e| e.to_string())?;
     thread.messages = load_messages(conn, &thread.id)?;
     thread.participants = thread
@@ -2347,6 +2476,7 @@ fn load_thread(conn: &Connection, thread_id: String) -> Result<EmailThreadRow, S
         .iter()
         .map(|m| m.from.name.clone())
         .collect();
+    thread.ai_metadata = Some(load_ai_metadata_for_thread(conn, &thread.id));
     Ok(thread)
 }
 
@@ -2490,7 +2620,9 @@ pub fn list_threads(
         return list_draft_threads(conn, account_id, query);
     }
 
-    let ids: Vec<String> = if folder_id == "unified" {
+    let ids: Vec<String> = if let Some(smart_view) = folder_id.strip_prefix("smart:") {
+        get_smart_view_thread_ids(conn, &account_id, smart_view)?
+    } else if folder_id == "unified" {
         query_unified_inbox_thread_ids(conn)?
     } else if folder_id.starts_with("folder-") {
         query_strings(conn,
@@ -2704,6 +2836,7 @@ fn list_draft_threads(
                 is_archived: false,
                 is_starred: false,
                 labels: vec!["draft".into()],
+                ai_metadata: None,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -2958,6 +3091,257 @@ fn apply_gmail_thread_labels(
         .error_for_status()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn slugify(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn read_tag_row(row: &rusqlite::Row) -> Result<EmailTagRow, rusqlite::Error> {
+    Ok(EmailTagRow {
+        id: row.get(0)?,
+        account_id: row.get(1)?,
+        name: row.get(2)?,
+        slug: row.get(3)?,
+        color: row.get(4)?,
+        source: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
+    })
+}
+
+const TAG_COLUMNS: &str = "id, account_id, name, slug, color, source, created_at, updated_at";
+
+fn seed_system_tags(conn: &Connection) -> Result<(), String> {
+    let now = now_ms();
+    let system_tags = [
+        ("work", Some("#3b82f6")),
+        ("personal", Some("#8b5cf6")),
+        ("finance", Some("#10b981")),
+        ("travel", Some("#f59e0b")),
+        ("notification", Some("#6b7280")),
+        ("newsletter", Some("#6366f1")),
+        ("urgent", Some("#ef4444")),
+        ("action-required", Some("#f97316")),
+    ];
+    for (name, color) in &system_tags {
+        let id = new_uuid_id("tag");
+        let slug = slugify(name);
+        conn.execute(
+            &format!("INSERT OR IGNORE INTO email_tags ({TAG_COLUMNS}) VALUES (?1, NULL, ?2, ?3, ?4, 'system', ?5, ?5)"),
+            params![id, name, slug, color, now],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+pub fn list_tags(conn: &Connection, account_id: Option<&str>) -> Result<Vec<EmailTagRow>, String> {
+    let sql = match account_id {
+        Some(_) => format!(
+            "SELECT {TAG_COLUMNS} FROM email_tags WHERE account_id IS NULL OR account_id = ?1 ORDER BY source, name"
+        ),
+        None => format!("SELECT {TAG_COLUMNS} FROM email_tags ORDER BY source, name"),
+    };
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = match account_id {
+        Some(aid) => stmt.query_map(params![aid], read_tag_row),
+        None => stmt.query_map([], read_tag_row),
+    }
+    .map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
+}
+
+pub fn create_tag(conn: &Connection, input: &EmailCreateTagInput) -> Result<EmailTagRow, String> {
+    let id = new_uuid_id("tag");
+    let now = now_ms();
+    let slug = slugify(&input.name);
+    conn.execute(
+        &format!("INSERT INTO email_tags ({TAG_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)"),
+        params![id, input.account_id, input.name, slug, input.color, input.source, now],
+    )
+    .map_err(|e| e.to_string())?;
+    get_tag(conn, &id)
+}
+
+pub fn get_tag(conn: &Connection, tag_id: &str) -> Result<EmailTagRow, String> {
+    conn.query_row(
+        &format!("SELECT {TAG_COLUMNS} FROM email_tags WHERE id = ?1"),
+        params![tag_id],
+        read_tag_row,
+    )
+    .map_err(|e| format!("tag not found: {e}"))
+}
+
+pub fn update_tag(conn: &Connection, input: &EmailUpdateTagInput) -> Result<EmailTagRow, String> {
+    let now = now_ms();
+    if let Some(name) = &input.name {
+        let slug = slugify(name);
+        conn.execute(
+            "UPDATE email_tags SET name = ?1, slug = ?2, updated_at = ?3 WHERE id = ?4",
+            params![name, slug, now, input.tag_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    if let Some(color) = &input.color {
+        conn.execute(
+            "UPDATE email_tags SET color = ?1, updated_at = ?2 WHERE id = ?3",
+            params![color, now, input.tag_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    get_tag(conn, &input.tag_id)
+}
+
+pub fn delete_tag(conn: &Connection, tag_id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM email_tags WHERE id = ?1", params![tag_id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn apply_tag_to_message(conn: &Connection, input: &EmailApplyTagInput) -> Result<(), String> {
+    let now = now_ms();
+    conn.execute(
+        "INSERT INTO email_message_tags (message_id, tag_id, source, confidence, reason, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(message_id, tag_id) DO UPDATE SET source = excluded.source, confidence = excluded.confidence, reason = excluded.reason",
+        params![input.message_id, input.tag_id, input.source, input.confidence, input.reason, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn remove_tag_from_message(conn: &Connection, input: &EmailRemoveTagInput) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM email_message_tags WHERE message_id = ?1 AND tag_id = ?2",
+        params![input.message_id, input.tag_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_message_tags(conn: &Connection, message_id: &str) -> Result<Vec<EmailTagRow>, String> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT t.id, t.account_id, t.name, t.slug, t.color, t.source, t.created_at, t.updated_at
+             FROM email_tags t
+             JOIN email_message_tags mt ON mt.tag_id = t.id
+             WHERE mt.message_id = ?1 ORDER BY t.name"
+        ))
+        .map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![message_id], read_tag_row)
+        .map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
+}
+
+pub fn upsert_ai_tags(
+    conn: &Connection,
+    message_id: &str,
+    tag_names: &[String],
+    confidence: f64,
+    reason: &str,
+) -> Result<(), String> {
+    let now = now_ms();
+    for name in tag_names {
+        let slug = slugify(name);
+        let existing = conn.query_row(
+            "SELECT id FROM email_tags WHERE account_id IS NULL AND slug = ?1",
+            params![slug],
+            |row| row.get::<_, String>(0),
+        );
+        let tag_id = match existing {
+            Ok(id) => id,
+            Err(_) => {
+                let id = new_uuid_id("tag");
+                conn.execute(
+                    &format!("INSERT INTO email_tags ({TAG_COLUMNS}) VALUES (?1, NULL, ?2, ?3, NULL, 'ai', ?4, ?4)"),
+                    params![id, name, slug, now],
+                )
+                .map_err(|e| e.to_string())?;
+                id
+            }
+        };
+        conn.execute(
+            "INSERT INTO email_message_tags (message_id, tag_id, source, confidence, reason, created_at)
+             VALUES (?1, ?2, 'ai', ?3, ?4, ?5)
+             ON CONFLICT(message_id, tag_id) DO UPDATE SET confidence = excluded.confidence, reason = excluded.reason",
+            params![message_id, tag_id, confidence, reason, now],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Get thread IDs matching a smart view filter.
+pub fn get_smart_view_thread_ids(
+    conn: &Connection,
+    account_id: &str,
+    smart_view: &str,
+) -> Result<Vec<String>, String> {
+    match smart_view {
+        "urgent" => query_strings(
+            conn,
+            "SELECT DISTINCT o.thread_id FROM email_ai_outputs o
+             JOIN email_threads t ON t.id = o.thread_id
+             WHERE t.account_id = ?1 AND o.task_type = 'urgency_score'
+               AND json_extract(o.result_json, '$.level') IN ('critical', 'high')
+             ORDER BY t.last_message_at DESC",
+            params![account_id],
+        ),
+        "spam" => query_strings(
+            conn,
+            "SELECT DISTINCT o.thread_id FROM email_ai_outputs o
+             JOIN email_threads t ON t.id = o.thread_id
+             WHERE t.account_id = ?1 AND o.task_type = 'spam_score'
+               AND CAST(json_extract(o.result_json, '$.spamScore') AS REAL) > 0.7
+             ORDER BY t.last_message_at DESC",
+            params![account_id],
+        ),
+        "marketing" => query_strings(
+            conn,
+            "SELECT DISTINCT o.thread_id FROM email_ai_outputs o
+             JOIN email_threads t ON t.id = o.thread_id
+             WHERE t.account_id = ?1 AND o.task_type = 'spam_score'
+               AND (CAST(json_extract(o.result_json, '$.marketingScore') AS REAL) > 0.7
+                    OR json_extract(o.result_json, '$.newsletter') = 1)
+             ORDER BY t.last_message_at DESC",
+            params![account_id],
+        ),
+        "needs_reply" => query_strings(
+            conn,
+            "SELECT DISTINCT o.thread_id FROM email_ai_outputs o
+             JOIN email_threads t ON t.id = o.thread_id
+             WHERE t.account_id = ?1 AND o.task_type = 'classification'
+               AND json_extract(o.result_json, '$.needsReply') = 1
+             ORDER BY t.last_message_at DESC",
+            params![account_id],
+        ),
+        "has_attachments" => query_strings(
+            conn,
+            "SELECT DISTINCT t.id FROM email_threads t
+             JOIN email_messages m ON m.thread_id = t.id
+             JOIN email_attachments a ON a.message_id = m.id
+             WHERE t.account_id = ?1
+             ORDER BY t.last_message_at DESC",
+            params![account_id],
+        ),
+        _ => Ok(vec![]),
+    }
 }
 
 #[cfg(test)]
@@ -4111,7 +4495,89 @@ mod tests {
         assert!(output.is_some());
         assert_eq!(output.unwrap().display_text, "first");
 
-        let none = get_ai_output_for_thread(&conn, "t1", "spam_score").unwrap();
-        assert!(none.is_none());
-    }
+    let none = get_ai_output_for_thread(&conn, "t1", "spam_score").unwrap();
+    assert!(none.is_none());
+}
+
+#[test]
+fn schema_v5_creates_tag_tables() {
+    let conn = open_test_db();
+    run_migrations(&conn).unwrap();
+    setup_ai_test_data(&conn);
+
+    // Verify email_tags table exists and has system tags.
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM email_tags WHERE source = 'system'", [], |row| row.get(0))
+        .unwrap();
+    assert!(count > 0, "system tags should be seeded");
+
+    // Verify email_message_tags table exists.
+    let tag_id: String = conn.query_row("SELECT id FROM email_tags LIMIT 1", [], |row| row.get(0)).unwrap();
+    conn.execute("INSERT INTO email_message_tags (message_id, tag_id, source, created_at) VALUES ('m1', ?1, 'user', 0)", params![tag_id]).unwrap();
+    let mt_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM email_message_tags", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(mt_count, 1);
+}
+
+#[test]
+fn tag_crud_operations() {
+    let conn = open_test_db();
+    run_migrations(&conn).unwrap();
+    setup_ai_test_data(&conn);
+
+    // Create a custom tag.
+    let tag = create_tag(&conn, &EmailCreateTagInput {
+        account_id: Some("a1".into()),
+        name: "Important".into(),
+        color: Some("#ff0000".into()),
+        source: "user".into(),
+    }).unwrap();
+    assert_eq!(tag.name, "Important");
+    assert_eq!(tag.slug, "important");
+    assert_eq!(tag.source, "user");
+
+    // List tags.
+    let all_tags = list_tags(&conn, None).unwrap();
+    assert!(all_tags.len() > 1); // system + custom
+
+    // List by account.
+    let account_tags = list_tags(&conn, Some("a1")).unwrap();
+    assert!(account_tags.iter().any(|t| t.id == tag.id));
+
+    // Update tag.
+    let updated = update_tag(&conn, &EmailUpdateTagInput {
+        tag_id: tag.id.clone(),
+        name: Some("Very Important".into()),
+        color: Some("#00ff00".into()),
+    }).unwrap();
+    assert_eq!(updated.name, "Very Important");
+    assert_eq!(updated.color, Some("#00ff00".into()));
+
+    // Apply tag to message.
+    apply_tag_to_message(&conn, &EmailApplyTagInput {
+        message_id: "m1".into(),
+        tag_id: tag.id.clone(),
+        source: "user".into(),
+        confidence: None,
+        reason: None,
+    }).unwrap();
+
+    let msg_tags = list_message_tags(&conn, "m1").unwrap();
+    assert_eq!(msg_tags.len(), 1);
+    assert_eq!(msg_tags[0].id, tag.id);
+
+    // Remove tag from message.
+    remove_tag_from_message(&conn, &EmailRemoveTagInput {
+        message_id: "m1".into(),
+        tag_id: tag.id.clone(),
+    }).unwrap();
+    let msg_tags = list_message_tags(&conn, "m1").unwrap();
+    assert!(msg_tags.is_empty());
+
+    // Delete tag.
+    delete_tag(&conn, &tag.id).unwrap();
+    let all_tags = list_tags(&conn, None).unwrap();
+    assert!(!all_tags.iter().any(|t| t.id == tag.id));
+}
 }

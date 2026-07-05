@@ -21,12 +21,13 @@ import {
   Shield,
   AlertTriangle,
   Sparkles,
+  Plus,
 } from "lucide-react";
 import { useEmailStore } from "../email-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { EmailHtmlBody } from "./EmailHtmlBody";
 import { emailListAiOutputs } from "../tauri-commands";
-import type { EmailMessage, EmailAttachment, EmailAiOutput } from "../email-types";
+import type { EmailMessage, EmailAttachment, EmailAiOutput, EmailTag } from "../email-types";
 
 export function ThreadReader() {
   const threads = useEmailStore((s) => s.threads);
@@ -443,6 +444,15 @@ function AttachmentChip({
 
 function AiOutputsPanel({ outputs }: { outputs: EmailAiOutput[] }) {
   const [expanded, setExpanded] = useState(false);
+  const tags = useEmailStore((s) => s.tags);
+  const messageTags = useEmailStore((s) => s.messageTags);
+  const applyTag = useEmailStore((s) => s.applyTag);
+  const removeTagFromMessage = useEmailStore((s) => s.removeTagFromMessage);
+  const loadMessageTags = useEmailStore((s) => s.loadMessageTags);
+  const loadTags = useEmailStore((s) => s.loadTags);
+  const [tagInput, setTagInput] = useState("");
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+
   const byType = new Map<string, EmailAiOutput>();
   for (const o of outputs) {
     if (!byType.has(o.taskType)) byType.set(o.taskType, o);
@@ -454,6 +464,38 @@ function AiOutputsPanel({ outputs }: { outputs: EmailAiOutput[] }) {
     icon: getTaskTypeIcon(type),
     label: getTaskTypeLabel(type),
   }));
+
+  const firstMessageId = outputs[0]?.messageId;
+  const appliedTags = firstMessageId ? (messageTags[firstMessageId] ?? []) : [];
+
+  useEffect(() => {
+    if (expanded && firstMessageId) {
+      void loadMessageTags(firstMessageId);
+      void loadTags();
+    }
+  }, [expanded, firstMessageId, loadMessageTags, loadTags]);
+
+  const filteredTagSuggestions = tagInput.length > 0
+    ? tags.filter(
+        (t) =>
+          t.name.toLowerCase().includes(tagInput.toLowerCase()) &&
+          !appliedTags.some((at) => at.id === t.id),
+      )
+    : [];
+
+  const handleAddTag = (tag: EmailTag) => {
+    if (firstMessageId) {
+      void applyTag(firstMessageId, tag.id, "user");
+      setTagInput("");
+      setShowTagDropdown(false);
+    }
+  };
+
+  const handleRemoveTag = (tagId: string) => {
+    if (firstMessageId) {
+      void removeTagFromMessage(firstMessageId, tagId);
+    }
+  };
 
   return (
     <div className="border-b border-[var(--color-border)] bg-[var(--color-panel)]/50">
@@ -476,13 +518,156 @@ function AiOutputsPanel({ outputs }: { outputs: EmailAiOutput[] }) {
               <div className="min-w-0 flex-1">
                 <div className="font-medium text-[var(--color-text)]">{label}</div>
                 <div className="text-[var(--color-text-dim)]">{output.displayText || "No result"}</div>
+                {type === "classification" && renderClassificationDetails(output)}
+                {type === "urgency_score" && renderUrgencyDetails(output)}
+                {type === "spam_score" && renderSpamDetails(output)}
               </div>
             </div>
           ))}
+
+          {/* Tag correction section */}
+          {firstMessageId && (
+            <div className="mt-2 rounded-md border border-[var(--color-border)]/50 p-2">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-text)]">
+                <Tag className="size-3" />
+                Tags
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {appliedTags.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-white/[0.08] px-2 py-0.5 text-[10px] text-[var(--color-text-dim)]"
+                    style={tag.color ? { borderLeft: `2px solid ${tag.color}` } : undefined}
+                  >
+                    {tag.name}
+                    {tag.source === "ai" && (
+                      <span className="text-[8px] opacity-40">AI</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag.id)}
+                      className="ml-0.5 rounded-full p-0.5 hover:bg-white/10"
+                      title="Remove tag"
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </span>
+                ))}
+                {appliedTags.length === 0 && (
+                  <span className="text-[10px] text-[var(--color-text-dim)]/50">No tags</span>
+                )}
+              </div>
+              <div className="relative mt-2">
+                <div className="flex items-center gap-1">
+                  <Plus className="size-3 text-[var(--color-text-dim)]/50" />
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => {
+                      setTagInput(e.target.value);
+                      setShowTagDropdown(true);
+                    }}
+                    onFocus={() => setShowTagDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowTagDropdown(false), 150)}
+                    placeholder="Add tag..."
+                    className="min-w-0 flex-1 bg-transparent text-[10.5px] text-[var(--color-text)] placeholder:text-[var(--color-text-dim)]/40 outline-none"
+                  />
+                </div>
+                {showTagDropdown && filteredTagSuggestions.length > 0 && (
+                  <div className="absolute left-0 top-full z-10 mt-1 max-h-[120px] w-full overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] shadow-lg">
+                    {filteredTagSuggestions.map((tag) => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleAddTag(tag);
+                        }}
+                        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[10.5px] text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-[var(--color-text)]"
+                      >
+                        {tag.color && (
+                          <span
+                            className="size-2 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                          />
+                        )}
+                        <span>{tag.name}</span>
+                        <span className="ml-auto text-[9px] opacity-40">{tag.source}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+function renderClassificationDetails(output: EmailAiOutput): React.ReactNode {
+  try {
+    const parsed = JSON.parse(output.resultJson) as Record<string, unknown>;
+    const needsReply = parsed.needsReply as boolean | undefined;
+    const confidence = parsed.confidence as number | undefined;
+    const reason = parsed.reason as string | undefined;
+    return (
+      <div className="mt-1 space-y-0.5 text-[10px] text-[var(--color-text-dim)]/70">
+        {needsReply !== undefined && (
+          <div>Needs reply: {needsReply ? "Yes" : "No"}</div>
+        )}
+        {confidence !== undefined && (
+          <div>Confidence: {Math.round(confidence * 100)}%</div>
+        )}
+        {reason && <div>Reason: {reason}</div>}
+      </div>
+    );
+  } catch {
+    return null;
+  }
+}
+
+function renderUrgencyDetails(output: EmailAiOutput): React.ReactNode {
+  try {
+    const parsed = JSON.parse(output.resultJson) as Record<string, unknown>;
+    const deadline = parsed.deadline as string | undefined;
+    const reason = parsed.reason as string | undefined;
+    return (
+      <div className="mt-1 space-y-0.5 text-[10px] text-[var(--color-text-dim)]/70">
+        {deadline && <div>Deadline: {deadline}</div>}
+        {reason && <div>Reason: {reason}</div>}
+      </div>
+    );
+  } catch {
+    return null;
+  }
+}
+
+function renderSpamDetails(output: EmailAiOutput): React.ReactNode {
+  try {
+    const parsed = JSON.parse(output.resultJson) as Record<string, unknown>;
+    const spamScore = parsed.spamScore as number | undefined;
+    const marketingScore = parsed.marketingScore as number | undefined;
+    const newsletter = parsed.newsletter as boolean | undefined;
+    const reason = parsed.reason as string | undefined;
+    return (
+      <div className="mt-1 space-y-0.5 text-[10px] text-[var(--color-text-dim)]/70">
+        {spamScore !== undefined && (
+          <div>Spam: {Math.round(spamScore * 100)}%</div>
+        )}
+        {marketingScore !== undefined && (
+          <div>Marketing: {Math.round(marketingScore * 100)}%</div>
+        )}
+        {newsletter !== undefined && (
+          <div>Newsletter: {newsletter ? "Yes" : "No"}</div>
+        )}
+        {reason && <div>Reason: {reason}</div>}
+      </div>
+    );
+  } catch {
+    return null;
+  }
 }
 
 function getTaskTypeIcon(taskType: string): React.ReactNode {

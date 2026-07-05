@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment } from "./email-types";
+import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment, EmailTag, EmailCreateTagInput, EmailUpdateTagInput, SmartView } from "./email-types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { emailAiWorker } from "./email-ai-worker";
 import {
@@ -24,6 +24,13 @@ import {
   emailDownloadAttachment,
   emailExtractAttachmentText,
   emailOpenAttachment,
+  emailListTags,
+  emailCreateTag,
+  emailUpdateTag,
+  emailDeleteTag,
+  emailApplyTag,
+  emailRemoveTag,
+  emailListMessageTags,
 } from "./tauri-commands";
 
 type EmailStore = {
@@ -33,6 +40,7 @@ type EmailStore = {
   activeAccountId: string | null;
   activeThreadId: string | null;
   activeFolder: string;
+  activeSmartView: SmartView | null;
   searchQuery: string;
   draft: EmailDraft | null;
   isComposing: boolean;
@@ -41,6 +49,8 @@ type EmailStore = {
   hydrationState: "loading" | "ready";
   attachments: Record<string, EmailAttachment[]>;
   attachmentLoadingIds: Set<string>;
+  tags: EmailTag[];
+  messageTags: Record<string, EmailTag[]>;
 
   hydrateAccounts: () => Promise<void>;
   loadFolders: (accountId?: string) => Promise<void>;
@@ -55,6 +65,7 @@ type EmailStore = {
   selectAccount: (id: string | null) => void;
   selectThread: (id: string | null) => void;
   setFolder: (folder: string) => void;
+  setSmartView: (view: SmartView | null) => void;
   setSearchQuery: (query: string) => void;
   loadThreads: () => Promise<void>;
   loadThread: (threadId: string) => Promise<void>;
@@ -69,6 +80,13 @@ type EmailStore = {
   downloadAttachment: (attachmentId: string) => Promise<void>;
   extractAttachmentText: (attachmentId: string) => Promise<void>;
   openAttachment: (attachmentId: string) => Promise<void>;
+  loadTags: (accountId?: string) => Promise<void>;
+  createTag: (input: EmailCreateTagInput) => Promise<void>;
+  updateTag: (input: EmailUpdateTagInput) => Promise<void>;
+  deleteTag: (tagId: string) => Promise<void>;
+  applyTag: (messageId: string, tagId: string, source: string) => Promise<void>;
+  removeTagFromMessage: (messageId: string, tagId: string) => Promise<void>;
+  loadMessageTags: (messageId: string) => Promise<void>;
 };
 
 let hydrationPromise: Promise<void> | null = null;
@@ -120,6 +138,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   activeAccountId: null,
   activeThreadId: null,
   activeFolder: "inbox",
+  activeSmartView: null,
   searchQuery: "",
   draft: null,
   isComposing: false,
@@ -129,6 +148,8 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   hasGmailOauthConfig: false,
   attachments: {},
   attachmentLoadingIds: new Set(),
+  tags: [],
+  messageTags: {},
 
   hydrateAccounts: async () => {
     if (get().hydrationState === "ready") return;
@@ -141,7 +162,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         set({ accounts, hydrationState: "ready", hasGmailOauthConfig });
         if (accounts.length > 0 && !get().activeAccountId) {
           set({ activeAccountId: accounts[0].id });
-          await Promise.all([get().loadFolders(), get().loadThreads()]);
+          await Promise.all([get().loadFolders(), get().loadThreads(), get().loadTags()]);
         }
       } catch (error) {
         set({ error: String(error), hydrationState: "ready" });
@@ -329,6 +350,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     set({
       activeAccountId: id,
       activeThreadId: null,
+      activeSmartView: null,
       threads: [],
       folders: [],
       draft: null,
@@ -346,8 +368,15 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   },
 
   setFolder: (folder) => {
-    set({ activeFolder: folder, activeThreadId: null, threads: [] });
+    set({ activeFolder: folder, activeSmartView: null, activeThreadId: null, threads: [] });
     if (folder === "unified" || get().activeAccountId) {
+      void get().loadThreads();
+    }
+  },
+
+  setSmartView: (view) => {
+    set({ activeSmartView: view, activeFolder: "inbox", activeThreadId: null, threads: [] });
+    if (view && get().activeAccountId) {
       void get().loadThreads();
     }
   },
@@ -357,7 +386,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   },
 
   loadThreads: async () => {
-    const { activeAccountId, activeFolder, searchQuery, accounts } = get();
+    const { activeAccountId, activeFolder, activeSmartView, searchQuery, accounts } = get();
     if (activeFolder !== "unified" && !activeAccountId) return;
 
     const accountId =
@@ -365,11 +394,13 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         ? (activeAccountId ?? accounts[0]?.id ?? "")
         : activeAccountId!;
 
+    const folderId = activeSmartView ? `smart:${activeSmartView}` : activeFolder;
+
     set({ isLoading: true, error: null });
     try {
       const threads = await emailListThreads(
         accountId,
-        activeFolder,
+        folderId,
         searchQuery || undefined,
       );
       set({ threads, isLoading: false });
@@ -578,6 +609,71 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   openAttachment: async (attachmentId) => {
     try {
       await emailOpenAttachment(attachmentId);
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  loadTags: async (accountId) => {
+    try {
+      const tags = await emailListTags(accountId);
+      set({ tags });
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  createTag: async (input) => {
+    try {
+      await emailCreateTag(input);
+      await get().loadTags(get().activeAccountId ?? undefined);
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  updateTag: async (input) => {
+    try {
+      await emailUpdateTag(input);
+      await get().loadTags(get().activeAccountId ?? undefined);
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  deleteTag: async (tagId) => {
+    try {
+      await emailDeleteTag(tagId);
+      await get().loadTags(get().activeAccountId ?? undefined);
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  applyTag: async (messageId, tagId, source) => {
+    try {
+      await emailApplyTag({ messageId, tagId, source });
+      await get().loadMessageTags(messageId);
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  removeTagFromMessage: async (messageId, tagId) => {
+    try {
+      await emailRemoveTag({ messageId, tagId });
+      await get().loadMessageTags(messageId);
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  loadMessageTags: async (messageId) => {
+    try {
+      const tags = await emailListMessageTags(messageId);
+      set((state) => ({
+        messageTags: { ...state.messageTags, [messageId]: tags },
+      }));
     } catch (error) {
       set({ error: String(error) });
     }
