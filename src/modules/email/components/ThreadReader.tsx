@@ -26,7 +26,7 @@ import {
 import { useEmailStore } from "../email-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { EmailHtmlBody } from "./EmailHtmlBody";
-import { emailListAiOutputs } from "../tauri-commands";
+import { emailListAiOutputs, emailListTags } from "../tauri-commands";
 import type { EmailMessage, EmailAttachment, EmailAiOutput, EmailTag } from "../email-types";
 
 export function ThreadReader() {
@@ -450,6 +450,7 @@ function AiOutputsPanel({ outputs }: { outputs: EmailAiOutput[] }) {
   const removeTagFromMessage = useEmailStore((s) => s.removeTagFromMessage);
   const loadMessageTags = useEmailStore((s) => s.loadMessageTags);
   const loadTags = useEmailStore((s) => s.loadTags);
+  const createTag = useEmailStore((s) => s.createTag);
   const [tagInput, setTagInput] = useState("");
   const [showTagDropdown, setShowTagDropdown] = useState(false);
 
@@ -496,6 +497,32 @@ function AiOutputsPanel({ outputs }: { outputs: EmailAiOutput[] }) {
       void removeTagFromMessage(firstMessageId, tagId);
     }
   };
+
+  const handleCreateAndApplyTag = async () => {
+    if (!firstMessageId || !tagInput.trim()) return;
+    const name = tagInput.trim();
+    const existing = tags.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      handleAddTag(existing);
+      return;
+    }
+    try {
+      await createTag({ name, source: "user" });
+      const freshTags = await emailListTags();
+      const created = freshTags.find((t) => t.name.toLowerCase() === name.toLowerCase());
+      if (created) {
+        await applyTag(firstMessageId, created.id, "user");
+      }
+      setTagInput("");
+      setShowTagDropdown(false);
+    } catch {
+      // Silently fail — store already captures errors.
+    }
+  };
+
+  const hasExactMatch = tags.some(
+    (t) => t.name.toLowerCase() === tagInput.toLowerCase(),
+  );
 
   return (
     <div className="border-b border-[var(--color-border)] bg-[var(--color-panel)]/50">
@@ -573,7 +600,7 @@ function AiOutputsPanel({ outputs }: { outputs: EmailAiOutput[] }) {
                     className="min-w-0 flex-1 bg-transparent text-[10.5px] text-[var(--color-text)] placeholder:text-[var(--color-text-dim)]/40 outline-none"
                   />
                 </div>
-                {showTagDropdown && filteredTagSuggestions.length > 0 && (
+                {showTagDropdown && (filteredTagSuggestions.length > 0 || (tagInput.trim() && !hasExactMatch)) && (
                   <div className="absolute left-0 top-full z-10 mt-1 max-h-[120px] w-full overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] shadow-lg">
                     {filteredTagSuggestions.map((tag) => (
                       <button
@@ -595,6 +622,19 @@ function AiOutputsPanel({ outputs }: { outputs: EmailAiOutput[] }) {
                         <span className="ml-auto text-[9px] opacity-40">{tag.source}</span>
                       </button>
                     ))}
+                    {tagInput.trim() && !hasExactMatch && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          void handleCreateAndApplyTag();
+                        }}
+                        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[10.5px] text-[var(--color-accent)] hover:bg-white/[0.04]"
+                      >
+                        <Plus className="size-3" />
+                        <span>Create "{tagInput.trim()}"</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

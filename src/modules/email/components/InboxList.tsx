@@ -8,6 +8,7 @@ import {
   Shield,
   Reply,
   Tag,
+  Megaphone,
 } from "lucide-react";
 import { useEmailStore } from "../email-store";
 
@@ -146,7 +147,7 @@ export function InboxList() {
                       )}
                       {!isHighSpam && isMarketing && (
                         <span title="Marketing/Newsletter">
-                          <Shield className="size-3 shrink-0 text-amber-400/60" />
+                          <Megaphone className="size-3 shrink-0 text-amber-400/60" />
                         </span>
                       )}
                     </div>

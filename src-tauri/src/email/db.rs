@@ -3,6 +3,7 @@ use parking_lot::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -2446,9 +2447,6 @@ fn load_ai_metadata_for_thread(conn: &Connection, thread_id: &str) -> EmailThrea
                     "classification" => {
                         meta.category = parsed.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
                         meta.needs_reply = parsed.get("needsReply").and_then(|v| v.as_bool());
-                        if let Some(tags_arr) = parsed.get("tags").and_then(|v| v.as_array()) {
-                            meta.tags = tags_arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
-                        }
                     }
                     "spam_score" => {
                         meta.spam_score = parsed.get("spamScore").and_then(|v| v.as_f64());
@@ -2463,7 +2461,37 @@ fn load_ai_metadata_for_thread(conn: &Connection, thread_id: &str) -> EmailThrea
             }
         }
     }
+    // Load tags from email_message_tags for the latest message (DB truth).
+    if let Ok(tags) = load_tags_for_latest_message(conn, thread_id) {
+        meta.tags = tags;
+    }
     meta
+}
+
+fn load_tags_for_latest_message(conn: &Connection, thread_id: &str) -> Result<Vec<String>, String> {
+    let latest_msg_id: Option<String> = conn
+        .query_row(
+            "SELECT id FROM email_messages WHERE thread_id = ?1 ORDER BY timestamp DESC LIMIT 1",
+            params![thread_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    match latest_msg_id {
+        Some(msg_id) => {
+            let mut stmt = conn
+                .prepare("SELECT t.name FROM email_tags t JOIN email_message_tags mt ON mt.tag_id = t.id WHERE mt.message_id = ?1 ORDER BY t.name")
+                .map_err(|e| e.to_string())?;
+            let rows = stmt.query_map(params![msg_id], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?;
+            let mut tags = Vec::new();
+            for row in rows {
+                tags.push(row.map_err(|e| e.to_string())?);
+            }
+            Ok(tags)
+        }
+        None => Ok(vec![]),
+    }
 }
 
 fn load_thread(conn: &Connection, thread_id: String) -> Result<EmailThreadRow, String> {
@@ -2476,8 +2504,95 @@ fn load_thread(conn: &Connection, thread_id: String) -> Result<EmailThreadRow, S
         .iter()
         .map(|m| m.from.name.clone())
         .collect();
-    thread.ai_metadata = Some(load_ai_metadata_for_thread(conn, &thread.id));
     Ok(thread)
+}
+
+fn load_ai_metadata_map(conn: &Connection, thread_ids: &[String]) -> Result<HashMap<String, EmailThreadAiMetadata>, String> {
+    let mut map: HashMap<String, EmailThreadAiMetadata> = HashMap::new();
+    if thread_ids.is_empty() {
+        return Ok(map);
+    }
+    for id in thread_ids {
+        map.insert(id.clone(), EmailThreadAiMetadata::default());
+    }
+    let placeholders = thread_ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect::<Vec<_>>().join(",");
+    let task_types = ["thread_summary", "classification", "spam_score", "urgency_score"];
+    for task_type in &task_types {
+        let sql = format!(
+            "SELECT thread_id, result_json FROM email_ai_outputs
+             WHERE task_type = ?1 AND thread_id IN ({placeholders})
+             AND id IN (SELECT id FROM email_ai_outputs o2 WHERE o2.thread_id = email_ai_outputs.thread_id AND o2.task_type = email_ai_outputs.task_type ORDER BY o2.updated_at DESC LIMIT 1)"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        params_vec.push(Box::new(task_type.to_string()));
+        for id in thread_ids {
+            params_vec.push(Box::new(id.clone()));
+        }
+        let rows = stmt.query_map(rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }).map_err(|e| e.to_string())?;
+        for row in rows {
+            let (tid, result_json) = row.map_err(|e| e.to_string())?;
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&result_json) {
+                if let Some(meta) = map.get_mut(&tid) {
+                    match *task_type {
+                        "thread_summary" => {
+                            meta.summary = parsed.get("shortSummary").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        }
+                        "classification" => {
+                            meta.category = parsed.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            meta.needs_reply = parsed.get("needsReply").and_then(|v| v.as_bool());
+                        }
+                        "spam_score" => {
+                            meta.spam_score = parsed.get("spamScore").and_then(|v| v.as_f64());
+                            meta.marketing_score = parsed.get("marketingScore").and_then(|v| v.as_f64());
+                            meta.newsletter = parsed.get("newsletter").and_then(|v| v.as_bool());
+                        }
+                        "urgency_score" => {
+                            meta.urgency = parsed.get("level").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    // Batch-load tags from email_message_tags for the latest message of each thread.
+    let tag_sql = format!(
+        "SELECT m.thread_id, t.name FROM email_message_tags mt
+         JOIN email_tags t ON t.id = mt.tag_id
+         JOIN email_messages m ON m.id = mt.message_id
+         WHERE m.thread_id IN ({placeholders})
+         AND m.timestamp = (SELECT MAX(m2.timestamp) FROM email_messages m2 WHERE m2.thread_id = m.thread_id)
+         ORDER BY t.name"
+    );
+    let mut tag_params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    for id in thread_ids {
+        tag_params.push(Box::new(id.clone()));
+    }
+    let mut tag_stmt = conn.prepare(&tag_sql).map_err(|e| e.to_string())?;
+    let tag_rows = tag_stmt.query_map(rusqlite::params_from_iter(tag_params.iter().map(|p| p.as_ref())), |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    }).map_err(|e| e.to_string())?;
+    for row in tag_rows {
+        let (tid, tag_name) = row.map_err(|e| e.to_string())?;
+        if let Some(meta) = map.get_mut(&tid) {
+            meta.tags.push(tag_name);
+        }
+    }
+    Ok(map)
+}
+
+fn is_metadata_empty(meta: &EmailThreadAiMetadata) -> bool {
+    meta.summary.is_none()
+        && meta.urgency.is_none()
+        && meta.category.is_none()
+        && meta.needs_reply.is_none()
+        && meta.spam_score.is_none()
+        && meta.marketing_score.is_none()
+        && meta.newsletter.is_none()
+        && meta.tags.is_empty()
 }
 
 fn load_messages(conn: &Connection, thread_id: &str) -> Result<Vec<EmailMessageRow>, String> {
@@ -2664,6 +2779,17 @@ pub fn list_threads(
             }
         }
         threads.push(thread);
+    }
+    // Batch-load AI metadata for all threads in one pass.
+    let thread_ids: Vec<String> = threads.iter().map(|t| t.id.clone()).collect();
+    if let Ok(meta_map) = load_ai_metadata_map(conn, &thread_ids) {
+        for thread in &mut threads {
+            if let Some(meta) = meta_map.get(&thread.id) {
+                if !is_metadata_empty(meta) {
+                    thread.ai_metadata = Some(meta.clone());
+                }
+            }
+        }
     }
     Ok(threads)
 }
@@ -2863,7 +2989,12 @@ pub fn get_thread(conn: &Connection, thread_id: String) -> Result<EmailThreadRow
     if let Some(draft_id) = thread_id.strip_prefix("draft-thread-") {
         return load_draft_thread(conn, draft_id.to_string());
     }
-    load_thread(conn, thread_id)
+    let mut thread = load_thread(conn, thread_id)?;
+    let meta = load_ai_metadata_for_thread(conn, &thread.id);
+    if !is_metadata_empty(&meta) {
+        thread.ai_metadata = Some(meta);
+    }
+    Ok(thread)
 }
 
 fn load_draft_thread(conn: &Connection, draft_id: String) -> Result<EmailThreadRow, String> {
@@ -3135,7 +3266,7 @@ fn seed_system_tags(conn: &Connection) -> Result<(), String> {
         let id = new_uuid_id("tag");
         let slug = slugify(name);
         conn.execute(
-            &format!("INSERT OR IGNORE INTO email_tags ({TAG_COLUMNS}) VALUES (?1, NULL, ?2, ?3, ?4, 'system', ?5, ?5)"),
+            "INSERT OR IGNORE INTO email_tags (id, account_id, name, slug, color, source, created_at, updated_at) VALUES (?1, NULL, ?2, ?3, ?4, 'system', ?5, ?5)",
             params![id, name, slug, color, now],
         )
         .map_err(|e| e.to_string())?;
@@ -3167,6 +3298,15 @@ pub fn create_tag(conn: &Connection, input: &EmailCreateTagInput) -> Result<Emai
     let id = new_uuid_id("tag");
     let now = now_ms();
     let slug = slugify(&input.name);
+    // Check for duplicate slug within the same account scope.
+    let exists = conn.query_row(
+        "SELECT COUNT(*) FROM email_tags WHERE slug = ?1 AND (account_id IS ?2 OR (account_id IS NULL AND ?2 IS NULL))",
+        params![slug, input.account_id],
+        |row| row.get::<_, i64>(0),
+    ).map_err(|e| e.to_string())?;
+    if exists > 0 {
+        return Err(format!("A tag named '{}' already exists", input.name));
+    }
     conn.execute(
         &format!("INSERT INTO email_tags ({TAG_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)"),
         params![id, input.account_id, input.name, slug, input.color, input.source, now],
@@ -3205,6 +3345,12 @@ pub fn update_tag(conn: &Connection, input: &EmailUpdateTagInput) -> Result<Emai
 }
 
 pub fn delete_tag(conn: &Connection, tag_id: &str) -> Result<(), String> {
+    let source: String = conn
+        .query_row("SELECT source FROM email_tags WHERE id = ?1", params![tag_id], |row| row.get(0))
+        .map_err(|e| format!("tag not found: {e}"))?;
+    if source == "system" {
+        return Err("cannot delete system tags".into());
+    }
     conn.execute("DELETE FROM email_tags WHERE id = ?1", params![tag_id])
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -3298,7 +3444,7 @@ pub fn get_smart_view_thread_ids(
             conn,
             "SELECT DISTINCT o.thread_id FROM email_ai_outputs o
              JOIN email_threads t ON t.id = o.thread_id
-             WHERE t.account_id = ?1 AND o.task_type = 'urgency_score'
+             WHERE t.account_id = ?1 AND t.is_archived = 0 AND o.task_type = 'urgency_score'
                AND json_extract(o.result_json, '$.level') IN ('critical', 'high')
              ORDER BY t.last_message_at DESC",
             params![account_id],
@@ -3307,7 +3453,7 @@ pub fn get_smart_view_thread_ids(
             conn,
             "SELECT DISTINCT o.thread_id FROM email_ai_outputs o
              JOIN email_threads t ON t.id = o.thread_id
-             WHERE t.account_id = ?1 AND o.task_type = 'spam_score'
+             WHERE t.account_id = ?1 AND t.is_archived = 0 AND o.task_type = 'spam_score'
                AND CAST(json_extract(o.result_json, '$.spamScore') AS REAL) > 0.7
              ORDER BY t.last_message_at DESC",
             params![account_id],
@@ -3316,7 +3462,7 @@ pub fn get_smart_view_thread_ids(
             conn,
             "SELECT DISTINCT o.thread_id FROM email_ai_outputs o
              JOIN email_threads t ON t.id = o.thread_id
-             WHERE t.account_id = ?1 AND o.task_type = 'spam_score'
+             WHERE t.account_id = ?1 AND t.is_archived = 0 AND o.task_type = 'spam_score'
                AND (CAST(json_extract(o.result_json, '$.marketingScore') AS REAL) > 0.7
                     OR json_extract(o.result_json, '$.newsletter') = 1)
              ORDER BY t.last_message_at DESC",
@@ -3326,7 +3472,7 @@ pub fn get_smart_view_thread_ids(
             conn,
             "SELECT DISTINCT o.thread_id FROM email_ai_outputs o
              JOIN email_threads t ON t.id = o.thread_id
-             WHERE t.account_id = ?1 AND o.task_type = 'classification'
+             WHERE t.account_id = ?1 AND t.is_archived = 0 AND o.task_type = 'classification'
                AND json_extract(o.result_json, '$.needsReply') = 1
              ORDER BY t.last_message_at DESC",
             params![account_id],
@@ -3336,7 +3482,7 @@ pub fn get_smart_view_thread_ids(
             "SELECT DISTINCT t.id FROM email_threads t
              JOIN email_messages m ON m.thread_id = t.id
              JOIN email_attachments a ON a.message_id = m.id
-             WHERE t.account_id = ?1
+             WHERE t.account_id = ?1 AND t.is_archived = 0
              ORDER BY t.last_message_at DESC",
             params![account_id],
         ),

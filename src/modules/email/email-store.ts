@@ -359,6 +359,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     if (id) {
       void get().loadFolders();
       void get().loadThreads();
+      void get().loadTags();
     }
   },
 
@@ -376,7 +377,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
 
   setSmartView: (view) => {
     set({ activeSmartView: view, activeFolder: "inbox", activeThreadId: null, threads: [] });
-    if (view && get().activeAccountId) {
+    if (get().activeAccountId) {
       void get().loadThreads();
     }
   },
