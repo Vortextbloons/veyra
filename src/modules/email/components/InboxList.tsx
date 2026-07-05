@@ -74,6 +74,14 @@ export function InboxList() {
         {isLoading && <Loader2 className="size-3.5 animate-spin text-[var(--color-text-dim)]" />}
       </div>
 
+      {/* List header */}
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--color-border)]/60 px-3">
+        <span className="text-[11px] font-medium text-[var(--color-text)]">{headerLabel}</span>
+        <span className="text-[10px] tabular-nums text-[var(--color-text-dim)]">
+          {threads.length} thread{threads.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
       {/* Thread list */}
       <div className="flex-1 overflow-y-auto">
         {threads.length === 0 ? (

@@ -231,6 +231,23 @@ export type EmailAiJobFilter = {
   limit?: number;
 };
 
+export type EmailAiTaskCoverage = {
+  taskType: string;
+  label: string;
+  covered: number;
+  queued: number;
+  running: number;
+  pending: number;
+  failed: number;
+};
+
+export type EmailAiCoverageSnapshot = {
+  tasks: EmailAiTaskCoverage[];
+  activeJobs: EmailAiJob[];
+  totalThreads: number;
+  loadedAt: number;
+};
+
 export type EmailTag = {
   id: string;
   accountId?: string;

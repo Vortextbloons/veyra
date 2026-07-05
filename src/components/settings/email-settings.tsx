@@ -5,6 +5,7 @@ import { Toggle } from "@/components/toggle";
 import { ModelDropdown } from "./model-dropdown";
 import { emailAiWorker } from "@/modules/email/email-ai-worker";
 import { startEmailAiWorker, stopEmailAiWorker } from "@/modules/email/email-store";
+import { emailReconcileAiJobs } from "@/modules/email/tauri-commands";
 
 const POLL_OPTIONS = [
   { label: "30s", value: 30000 },
@@ -49,7 +50,7 @@ export function EmailSettings() {
 
   useEffect(() => {
     if (emailAiEnabled) {
-      startEmailAiWorker();
+      void emailReconcileAiJobs(0);
     }
   }, [emailAiEnabled]);
 
@@ -251,8 +252,16 @@ export function EmailSettings() {
               {workerStatus.running && (
                 <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
                   <div className="flex items-center gap-2 text-[12px]">
-                    <div className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-[var(--color-text)]">Worker active</span>
+                    <div
+                      className={`size-1.5 rounded-full ${
+                        workerStatus.processingJob
+                          ? "animate-pulse bg-sky-400"
+                          : "bg-emerald-400"
+                      }`}
+                    />
+                    <span className="text-[var(--color-text)]">
+                      {workerStatus.processingJob ? "Processing job" : "Worker ready"}
+                    </span>
                     {workerStatus.processingJob && (
                       <span className="text-[var(--color-text-dim)]">
                         — {workerStatus.processingJob.taskType}

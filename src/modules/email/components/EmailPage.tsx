@@ -8,8 +8,10 @@ import {
   RefreshCw,
   KeyRound,
   ShieldCheck,
+  Settings2,
 } from "lucide-react";
 import { useEmailStore } from "../email-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { AccountList } from "./AccountList";
 import { InboxList } from "./InboxList";
 import ThreadReader from "./ThreadReader";
@@ -27,6 +29,7 @@ export function EmailPage() {
   const syncAccount = useEmailStore((s) => s.syncAccount);
   const isLoading = useEmailStore((s) => s.isLoading);
   const error = useEmailStore((s) => s.error);
+  const setActiveNav = useSettingsStore((s) => s.setActiveNav);
 
   useEffect(() => {
     void hydrateAccounts();
@@ -76,6 +79,14 @@ export function EmailPage() {
               Sync
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setActiveNav("settings")}
+            className="grid size-7 place-items-center rounded-md border border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-[var(--color-text)]"
+            title="Email AI settings"
+          >
+            <Settings2 className="size-3.5" />
+          </button>
           <button
             type="button"
             onClick={() => startCompose()}

@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use super::ai_jobs::{
     cancel_ai_job, claim_next_ai_job, complete_ai_job, enqueue_ai_job, fail_ai_job, get_ai_job,
-    get_ai_output_for_thread, list_ai_outputs,
+    get_ai_output_for_thread, list_ai_outputs, reconcile_orphaned_running_jobs,
 };
 use super::threads::{query_inbox_thread_ids, rebuild_thread_labels_and_folders, query_strings};
 
@@ -1043,6 +1043,45 @@ fn fail_ai_job_increments_attempt() {
     let failed = fail_ai_job(&conn, &job.id, "model error 3").unwrap();
     assert_eq!(failed.status, "failed");
     assert_eq!(failed.attempt_count, 3);
+}
+
+#[test]
+fn reconcile_orphaned_running_jobs_requeues_stale() {
+    let conn = open_test_db();
+    run_migrations(&conn).unwrap();
+    setup_ai_test_data(&conn);
+
+    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
+        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
+    }).unwrap();
+    claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
+
+    let updated = reconcile_orphaned_running_jobs(&conn, 0).unwrap();
+    assert_eq!(updated, 1);
+
+    let requeued = get_ai_job(&conn, &job.id).unwrap();
+    assert_eq!(requeued.status, "queued");
+    assert!(requeued.started_at.is_none());
+}
+
+#[test]
+fn reconcile_orphaned_running_jobs_keeps_recent() {
+    let conn = open_test_db();
+    run_migrations(&conn).unwrap();
+    setup_ai_test_data(&conn);
+
+    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
+        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
+        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
+    }).unwrap();
+    claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
+
+    let updated = reconcile_orphaned_running_jobs(&conn, 60_000).unwrap();
+    assert_eq!(updated, 0);
+
+    let still_running = get_ai_job(&conn, &job.id).unwrap();
+    assert_eq!(still_running.status, "running");
 }
 
 #[test]

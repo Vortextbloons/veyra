@@ -7,7 +7,7 @@ import {
   emailClaimAiJob,
   emailCompleteAiJob,
   emailFailAiJob,
-  emailCancelAiJob,
+  emailRequeueAiJob,
   emailGetUnprocessedThreadIds,
   emailEnqueueAiJobs,
   emailGetThread,
@@ -22,6 +22,13 @@ import {
   type EmailAiTaskType,
 } from "./email-ai-prompts";
 import type { EmailAiJob, EmailMessage } from "./email-types";
+
+export type EmailAiJobSettledEvent = {
+  job: EmailAiJob;
+  outcome: "completed" | "failed";
+};
+
+type JobExecutionOutcome = "completed" | "failed" | "requeued";
 
 export type EmailAiWorkerStatus = {
   running: boolean;
@@ -47,6 +54,7 @@ export class EmailAiWorker {
   private jobsFailed = 0;
   private abortController: AbortController | null = null;
   private listeners: Set<StatusListener> = new Set();
+  private jobSettledListeners: Set<(event: EmailAiJobSettledEvent) => void> = new Set();
   private unsubscribeScheduler: (() => void) | null = null;
 
   start(): void {
@@ -117,6 +125,19 @@ export class EmailAiWorker {
     };
   }
 
+  onJobSettled(listener: (event: EmailAiJobSettledEvent) => void): () => void {
+    this.jobSettledListeners.add(listener);
+    return () => {
+      this.jobSettledListeners.delete(listener);
+    };
+  }
+
+  private emitJobSettled(event: EmailAiJobSettledEvent): void {
+    for (const listener of this.jobSettledListeners) {
+      listener(event);
+    }
+  }
+
   getStatus(): EmailAiWorkerStatus {
     return {
       running: this.running,
@@ -177,10 +198,17 @@ export class EmailAiWorker {
         this.abortController = new AbortController();
         this.notify();
 
-        await this.executeJob(job, this.abortController.signal);
-        this.jobsCompleted++;
-        this.lastError = null;
-        processed++;
+        const outcome = await this.executeJob(job, this.abortController.signal);
+        if (outcome === "completed") {
+          this.jobsCompleted++;
+          this.emitJobSettled({ job, outcome: "completed" });
+          this.lastError = null;
+          processed++;
+        } else if (outcome === "failed") {
+          this.jobsFailed++;
+          this.emitJobSettled({ job, outcome: "failed" });
+          this.lastError = null;
+        }
       } catch (err) {
         if (this.abortController?.signal.aborted) {
           // Aborted by pause or stop — the job was already re-queued or failed in executeJob
@@ -200,12 +228,11 @@ export class EmailAiWorker {
   private async executeJob(
     job: EmailAiJob,
     signal: AbortSignal,
-  ): Promise<void> {
+  ): Promise<JobExecutionOutcome> {
     const modelId =
       job.modelId || this.resolveModelForTask(job.taskType as EmailAiFullTaskType);
     if (!modelId) {
-      await emailFailAiJob(job.id, "no model configured for this task");
-      return;
+      return this.failJob(job.id, "no model configured for this task");
     }
 
     let messages: EmailMessage[] = [];
@@ -214,14 +241,12 @@ export class EmailAiWorker {
         const thread = await emailGetThread(job.threadId);
         messages = thread.messages;
       } catch {
-        await emailFailAiJob(job.id, "failed to load thread");
-        return;
+        return this.failJob(job.id, "failed to load thread");
       }
     }
 
     if (messages.length === 0) {
-      await emailFailAiJob(job.id, "no messages to process");
-      return;
+      return this.failJob(job.id, "no messages to process");
     }
 
     // For reply_draft, use the tone from the job; otherwise use buildPromptForTask
@@ -246,15 +271,17 @@ export class EmailAiWorker {
     } catch (err) {
       if (signal.aborted) {
         await this.requeueJob(job);
-      } else {
-        await emailFailAiJob(job.id, `model load failed: ${err instanceof Error ? err.message : String(err)}`);
+        return "requeued";
       }
-      return;
+      return this.failJob(
+        job.id,
+        `model load failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     if (signal.aborted) {
       await this.requeueJob(job);
-      return;
+      return "requeued";
     }
 
     let output = "";
@@ -281,22 +308,24 @@ export class EmailAiWorker {
       if (signal.aborted) {
         await this.requeueJob(job);
       } else {
-        await emailFailAiJob(job.id, `inference failed: ${err instanceof Error ? err.message : String(err)}`);
+        return this.failJob(
+          job.id,
+          `inference failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
-      return;
+      return "requeued";
     }
 
     if (signal.aborted) {
       await this.requeueJob(job);
-      return;
+      return "requeued";
     }
 
     let parsed: Record<string, unknown>;
     try {
       parsed = parseJsonResponse<Record<string, unknown>>(output);
     } catch {
-      await emailFailAiJob(job.id, "failed to parse AI response as JSON");
-      return;
+      return this.failJob(job.id, "failed to parse AI response as JSON");
     }
 
     const displayText = this.buildDisplayText(job.taskType, parsed);
@@ -349,15 +378,20 @@ export class EmailAiWorker {
         }
       }
     }
+
+    return "completed";
+  }
+
+  private async failJob(jobId: string, error: string): Promise<JobExecutionOutcome> {
+    const updated = await emailFailAiJob(jobId, error);
+    return updated.status === "failed" ? "failed" : "requeued";
   }
 
   private async requeueJob(job: EmailAiJob): Promise<void> {
     try {
-      // Cancel the running job so it can be re-claimed later
-      await emailCancelAiJob(job.id);
+      await emailRequeueAiJob(job.id);
     } catch {
-      // Best effort — if cancel fails, the job stays running but will be
-      // picked up by the next tick if claim is atomic, or timed out.
+      // Best effort — stale jobs are reconciled on the next coverage refresh.
     }
   }
 

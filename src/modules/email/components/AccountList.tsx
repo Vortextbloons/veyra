@@ -25,6 +25,7 @@ import { useEmailStore } from "../email-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { EmailAccount, EmailFolder, SmartView } from "../email-types";
 import { AccountDetails } from "./AccountDetails";
+import { EmailAiSidebarDashboard } from "./EmailDashboard";
 
 const KIND_ICONS: Record<string, typeof Inbox> = {
   inbox: Inbox,
@@ -311,6 +312,7 @@ export function AccountList() {
           onClose={() => setDetailsAccount(null)}
         />
       )}
+      {activeAccountId && <EmailAiSidebarDashboard accountId={activeAccountId} />}
     </aside>
   );
 }

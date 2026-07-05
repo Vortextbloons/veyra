@@ -16,6 +16,7 @@ import { MessageBody } from "./MessageBody";
 import { AttachmentChip } from "./AttachmentChip";
 import { AiOutputsPanel } from "./AiOutputsPanel";
 import { EmailAiDraftPanel } from "./EmailAiDraftPanel";
+import { EmailDashboard } from "./EmailDashboard";
 
 export default function ThreadReader() {
   const threads = useEmailStore((s) => s.threads);
@@ -34,6 +35,7 @@ export default function ThreadReader() {
 
   const thread = threads.find((t) => t.id === activeThreadId);
   const emailAiEnabled = useSettingsStore((s) => s.emailAiEnabled);
+  const activeAccountId = useEmailStore((s) => s.activeAccountId);
   const [aiOutputs, setAiOutputs] = useState<EmailAiOutput[]>([]);
 
   const stableLoadAttachments = useCallback(loadAttachments, [loadAttachments]);
@@ -54,10 +56,18 @@ export default function ThreadReader() {
   }, [thread?.id, stableLoadAttachments, emailAiEnabled]);
 
   if (!thread) {
+    if (activeAccountId) {
+      return <EmailDashboard accountId={activeAccountId} />;
+    }
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-[var(--color-text-dim)]">
-        <MailOpen className="size-10 text-[var(--color-text-dim)]/30" />
-        <p className="text-[13px]">Select a thread to read</p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-[var(--color-bg)] px-6 text-[var(--color-text-dim)]">
+        <div className="grid size-14 place-items-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)]/50">
+          <MailOpen className="size-7 text-[var(--color-text-dim)]/30" />
+        </div>
+        <p className="text-[13px] font-medium text-[var(--color-text)]">Select an account</p>
+        <p className="max-w-xs text-center text-[12px] text-[var(--color-text-dim)]">
+          Connect a mailbox to view the AI dashboard and your threads.
+        </p>
       </div>
     );
   }

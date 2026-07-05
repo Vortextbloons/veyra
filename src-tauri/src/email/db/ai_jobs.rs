@@ -190,6 +190,42 @@ pub fn cancel_ai_job(conn: &Connection, job_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Put a running job back in the queue without counting as a failed attempt.
+pub fn requeue_ai_job(conn: &Connection, job_id: &str) -> Result<(), String> {
+    let now = now_ms();
+    conn.execute(
+        "UPDATE email_ai_jobs SET status = 'queued', started_at = NULL, scheduled_at = ?1 WHERE id = ?2 AND status = 'running'",
+        params![now, job_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Requeue jobs left in `running` after a crash, stop, or stale worker tick.
+/// When `stale_after_ms <= 0`, all running jobs are requeued (startup / worker stopped).
+pub fn reconcile_orphaned_running_jobs(conn: &Connection, stale_after_ms: i64) -> Result<u64, String> {
+    let now = now_ms();
+    let updated = if stale_after_ms <= 0 {
+        conn.execute(
+            "UPDATE email_ai_jobs
+             SET status = 'queued', started_at = NULL, scheduled_at = ?1
+             WHERE status = 'running'",
+            params![now],
+        )
+        .map_err(|e| e.to_string())?
+    } else {
+        let cutoff = now.saturating_sub(stale_after_ms);
+        conn.execute(
+            "UPDATE email_ai_jobs
+             SET status = 'queued', started_at = NULL, scheduled_at = ?1
+             WHERE status = 'running' AND (started_at IS NULL OR started_at < ?2)",
+            params![now, cutoff],
+        )
+        .map_err(|e| e.to_string())?
+    };
+    Ok(updated as u64)
+}
+
 pub fn list_ai_jobs(
     conn: &Connection,
     filter: &EmailAiJobFilter,

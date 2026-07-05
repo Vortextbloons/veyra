@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment, EmailTag, EmailCreateTagInput, EmailUpdateTagInput, SmartView, EmailAiDraft, EmailAiDraftGenerateInput } from "./email-types";
+import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment, EmailTag, EmailCreateTagInput, EmailUpdateTagInput, SmartView, EmailAiDraft, EmailAiDraftGenerateInput, EmailAiCoverageSnapshot, EmailAiJob } from "./email-types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { emailAiWorker } from "./email-ai-worker";
+import { fetchEmailAiCoverage } from "./email-ai-coverage";
 import {
   emailListAccounts,
   emailListThreads,
@@ -35,6 +36,8 @@ import {
   emailListAiDrafts,
   emailUpdateAiDraftStatus,
   emailListAiJobs,
+  emailCancelAiJob,
+  emailReconcileAiJobs,
 } from "./tauri-commands";
 
 export {
@@ -90,6 +93,9 @@ type EmailStore = {
   aiDraftLoading: boolean;
   aiDraftThreadId: string | null;
   isAiDraft: boolean;
+  aiCoverage: EmailAiCoverageSnapshot | null;
+  aiCoverageLoading: boolean;
+  aiScanLoading: boolean;
 
   hydrateAccounts: () => Promise<void>;
   loadFolders: (accountId?: string) => Promise<void>;
@@ -107,7 +113,7 @@ type EmailStore = {
   setSmartView: (view: SmartView | null) => void;
   setSearchQuery: (query: string) => void;
   loadThreads: () => Promise<void>;
-  loadThread: (threadId: string) => Promise<void>;
+  loadThread: (threadId: string, options?: { silent?: boolean }) => Promise<void>;
   archiveThread: (threadId: string) => Promise<void>;
   markRead: (threadId: string) => Promise<void>;
   markUnread: (threadId: string) => Promise<void>;
@@ -130,6 +136,12 @@ type EmailStore = {
   generateAiDraft: (input: EmailAiDraftGenerateInput) => Promise<void>;
   deleteAiDraft: (draftId: string) => Promise<void>;
   insertAiDraftIntoCompose: (draft: EmailAiDraft) => void;
+  loadAiCoverage: (accountId?: string, options?: { silent?: boolean }) => Promise<void>;
+  refreshAfterEmailAiJob: (job: EmailAiJob) => Promise<void>;
+  runEmailAiScan: (accountId?: string) => Promise<void>;
+  cancelQueuedAiJobs: (accountId?: string) => Promise<void>;
+  startEmailAi: () => void;
+  stopEmailAi: () => void;
 };
 
 let hydrationPromise: Promise<void> | null = null;
@@ -161,8 +173,33 @@ function isGmailScopeIssue(error: unknown): boolean {
 }
 
 let emailAiWorkerStarted = false;
+let emailAiJobSettledHandlerRegistered = false;
+let aiCoverageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingAiCoverageAccountIds = new Set<string>();
+
+function scheduleAiCoverageRefresh(accountId: string): void {
+  pendingAiCoverageAccountIds.add(accountId);
+  if (aiCoverageRefreshTimer) return;
+  aiCoverageRefreshTimer = setTimeout(() => {
+    aiCoverageRefreshTimer = null;
+    const accountIds = [...pendingAiCoverageAccountIds];
+    pendingAiCoverageAccountIds.clear();
+    for (const id of accountIds) {
+      void useEmailStore.getState().loadAiCoverage(id, { silent: true });
+    }
+  }, 250);
+}
+
+function registerEmailAiJobSettledHandler(): void {
+  if (emailAiJobSettledHandlerRegistered) return;
+  emailAiJobSettledHandlerRegistered = true;
+  emailAiWorker.onJobSettled(({ job }) => {
+    void useEmailStore.getState().refreshAfterEmailAiJob(job);
+  });
+}
 
 export function startEmailAiWorker(): void {
+  registerEmailAiJobSettledHandler();
   if (!emailAiWorkerStarted) {
     emailAiWorker.start();
     emailAiWorkerStarted = true;
@@ -204,6 +241,9 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   aiDraftLoading: false,
   aiDraftThreadId: null,
   isAiDraft: false,
+  aiCoverage: null,
+  aiCoverageLoading: false,
+  aiScanLoading: false,
 
   hydrateAccounts: async () => {
     if (get().hydrationState === "ready") return;
@@ -217,9 +257,6 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         if (accounts.length > 0 && !get().activeAccountId) {
           set({ activeAccountId: accounts[0].id });
           await Promise.all([get().loadFolders(), get().loadThreads(), get().loadTags()]);
-        }
-        if (useSettingsStore.getState().emailAiEnabled) {
-          startEmailAiWorker();
         }
       } catch (error) {
         set({ error: String(error), hydrationState: "ready" });
@@ -467,16 +504,21 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     }
   },
 
-  loadThread: async (threadId) => {
-    set({ isLoading: true, error: null });
+  loadThread: async (threadId, options) => {
+    if (!options?.silent) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const thread = await emailGetThread(threadId);
       set((state) => ({
         threads: state.threads.map((t) => (t.id === thread.id ? thread : t)),
-        isLoading: false,
+        isLoading: options?.silent ? state.isLoading : false,
       }));
     } catch (error) {
-      set({ error: String(error), isLoading: false });
+      set((state) => ({
+        error: String(error),
+        isLoading: options?.silent ? state.isLoading : false,
+      }));
     }
   },
 
@@ -849,4 +891,80 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     });
     void emailUpdateAiDraftStatus(draft.id, "inserted").catch(() => {});
   },
+
+  loadAiCoverage: async (accountId, options) => {
+    const targetId = accountId ?? get().activeAccountId;
+    if (!targetId) {
+      set({ aiCoverage: null });
+      return;
+    }
+    if (!options?.silent) {
+      set({ aiCoverageLoading: true });
+    }
+    try {
+      const threadCount = get().threads.filter((thread) => thread.accountId === targetId).length;
+      const snapshot = await fetchEmailAiCoverage(targetId, threadCount);
+      set({ aiCoverage: snapshot, aiCoverageLoading: false, error: null });
+    } catch (error) {
+      set({ aiCoverageLoading: false, error: String(error) });
+    }
+  },
+
+  refreshAfterEmailAiJob: async (job) => {
+    scheduleAiCoverageRefresh(job.accountId);
+    if (job.threadId) {
+      try {
+        await get().loadThread(job.threadId, { silent: true });
+      } catch {
+        // Thread may have been deleted; coverage refresh still runs.
+      }
+      if (job.taskType === "reply_draft" && get().aiDraftThreadId === job.threadId) {
+        await get().loadAiDrafts(job.threadId);
+      }
+    }
+  },
+
+  runEmailAiScan: async (accountId) => {
+    const targetId = accountId ?? get().activeAccountId;
+    if (!targetId) return;
+    set({ aiScanLoading: true, error: null });
+    try {
+      ensureEmailAiWorkerRunning();
+      await emailAiWorker.enqueueForNewMessages(targetId);
+      emailAiWorker.wake();
+      await get().loadAiCoverage(targetId);
+      set({ aiScanLoading: false });
+    } catch (error) {
+      set({ aiScanLoading: false, error: String(error) });
+    }
+  },
+
+  cancelQueuedAiJobs: async (accountId) => {
+    const targetId = accountId ?? get().activeAccountId;
+    if (!targetId) return;
+    try {
+      const queued = await emailListAiJobs({
+        accountId: targetId,
+        status: "queued",
+        limit: 200,
+      });
+      await Promise.all(queued.map((job) => emailCancelAiJob(job.id)));
+      await get().loadAiCoverage(targetId);
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  startEmailAi: () => {
+    if (!useSettingsStore.getState().emailAiEnabled) return;
+    startEmailAiWorker();
+    void emailReconcileAiJobs(0).then(() => get().loadAiCoverage());
+  },
+
+  stopEmailAi: () => {
+    stopEmailAiWorker();
+    void emailReconcileAiJobs(0).then(() => get().loadAiCoverage());
+  },
 }));
+
+registerEmailAiJobSettledHandler();

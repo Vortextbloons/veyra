@@ -183,6 +183,14 @@ export async function emailCancelAiJob(jobId: string): Promise<void> {
   return invoke<void>("email_cancel_ai_job", { jobId });
 }
 
+export async function emailReconcileAiJobs(staleAfterMs = 0): Promise<number> {
+  return invoke<number>("email_reconcile_ai_jobs", { staleAfterMs });
+}
+
+export async function emailRequeueAiJob(jobId: string): Promise<void> {
+  return invoke<void>("email_requeue_ai_job", { jobId });
+}
+
 export async function emailListAiJobs(
   filter: EmailAiJobFilter,
 ): Promise<EmailAiJob[]> {

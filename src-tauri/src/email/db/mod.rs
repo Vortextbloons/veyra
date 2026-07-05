@@ -293,6 +293,9 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| format!("email: set schema version failed: {e}"))?;
 
+    // Jobs can be left in `running` if the app exits mid-inference.
+    ai_jobs::reconcile_orphaned_running_jobs(conn, 0)?;
+
     Ok(())
 }
 
@@ -377,6 +380,7 @@ pub use accounts::{add_account, list_accounts, remove_account};
 pub use ai_jobs::{
     cancel_ai_job, claim_next_ai_job, complete_ai_job, enqueue_ai_jobs,
     fail_ai_job, get_unprocessed_thread_ids, list_ai_jobs, list_ai_outputs,
+    reconcile_orphaned_running_jobs, requeue_ai_job,
 };
 pub use ai_drafts::{
     delete_ai_draft, list_ai_drafts, save_ai_draft, update_ai_draft_status,

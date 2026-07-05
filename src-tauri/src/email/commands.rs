@@ -311,6 +311,28 @@ pub async fn email_cancel_ai_job(
 }
 
 #[tauri::command]
+pub async fn email_reconcile_ai_jobs(
+    stale_after_ms: Option<i64>,
+    state: State<'_, EmailDbState>,
+) -> Result<u64, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::reconcile_orphaned_running_jobs(conn, stale_after_ms.unwrap_or(0))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_requeue_ai_job(
+    job_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::requeue_ai_job(conn, &job_id)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn email_list_ai_jobs(
     filter: email_db::EmailAiJobFilter,
     state: State<'_, EmailDbState>,
