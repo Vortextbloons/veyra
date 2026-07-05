@@ -3,6 +3,7 @@ import { Activity, Pause, Play, X } from "lucide-react";
 import { useAiScheduler } from "@/hooks/use-ai-scheduler";
 import { aiScheduler, JOB_LABELS } from "@/lib/ai-scheduler";
 import type { AiJobSnapshot } from "@/lib/ai-scheduler";
+import { emailCancelAiJob } from "@/modules/email/tauri-commands";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { PriorityChip } from "@/components/scheduler/priority-chip";
 import { JobRow, SectionHeader } from "@/components/scheduler/job-row";
@@ -17,7 +18,7 @@ function SchedulerStatusDot() {
     color = "bg-gray-400";
   } else if (snapshot.isUserJobRunning) {
     color = "bg-indigo-400";
-  } else if (snapshot.activeJob) {
+  } else if (snapshot.activeJob || snapshot.isEmailJobRunning) {
     color = "bg-amber-400";
   } else {
     color = "bg-emerald-400";
@@ -39,12 +40,27 @@ export function SchedulerPopover() {
 
   const allJobs = [
     ...(snapshot.activeJob ? [snapshot.activeJob] : []),
+    ...snapshot.emailActiveJobs,
     ...snapshot.queuedJobs,
+    ...snapshot.emailQueuedJobs,
     ...snapshot.recentJobs,
+    ...snapshot.emailRecentJobs,
   ];
   const selectedJob = selectedJobId ? allJobs.find((j) => j.id === selectedJobId) ?? null : null;
 
-  const queuedBackground = snapshot.queuedJobs.filter((j) => j.priority > 0);
+  const queuedBackground = [
+    ...snapshot.queuedJobs.filter((j) => j.priority > 0),
+    ...snapshot.emailQueuedJobs,
+  ];
+
+  const runningJobs = [
+    ...(snapshot.activeJob ? [snapshot.activeJob] : []),
+    ...snapshot.emailActiveJobs,
+  ];
+
+  const recentJobs = [...snapshot.recentJobs, ...snapshot.emailRecentJobs]
+    .sort((a, b) => (b.finishedAt ?? b.createdAt) - (a.finishedAt ?? a.createdAt))
+    .slice(0, 8);
 
   const handleSelectJob = useCallback((job: AiJobSnapshot) => {
     setSelectedJobId(job.id);
@@ -111,37 +127,39 @@ export function SchedulerPopover() {
             <div className="max-h-[400px] overflow-y-auto p-3">
               {/* Now Running */}
               <div className="mb-3">
-                <SectionHeader title="Now" />
-                {snapshot.activeJob ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const active = snapshot.activeJob;
-                      if (active) handleSelectJob(active);
-                    }}
-                    className="w-full rounded-lg border border-indigo-500/20 bg-indigo-500/[0.06] p-2 text-left transition-colors hover:bg-indigo-500/[0.1]"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="relative flex size-2">
-                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-indigo-400 opacity-60" />
-                        <span className="relative inline-flex size-2 rounded-full bg-indigo-400" />
-                      </span>
-                      <span className="text-[11.5px] font-medium text-white">
-                        {JOB_LABELS[snapshot.activeJob.type] ?? snapshot.activeJob.title}
-                      </span>
-                      <PriorityChip priority={snapshot.activeJob.priority} />
-                      {snapshot.activeJob.startedAt && (
-                        <span className="ml-auto font-mono text-[10px] text-indigo-300">
-                          {formatElapsed(snapshot.activeJob.startedAt)}
-                        </span>
-                      )}
-                    </div>
-                    {snapshot.activeJob.description && (
-                      <p className="mt-1 truncate text-[10px] text-[var(--color-text-dim)]">
-                        {snapshot.activeJob.description}
-                      </p>
-                    )}
-                  </button>
+                <SectionHeader title="Now" count={runningJobs.length > 1 ? runningJobs.length : undefined} />
+                {runningJobs.length > 0 ? (
+                  <div className="space-y-1">
+                    {runningJobs.map((job) => (
+                      <button
+                        key={job.id}
+                        type="button"
+                        onClick={() => handleSelectJob(job)}
+                        className="w-full rounded-lg border border-indigo-500/20 bg-indigo-500/[0.06] p-2 text-left transition-colors hover:bg-indigo-500/[0.1]"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="relative flex size-2">
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+                            <span className="relative inline-flex size-2 rounded-full bg-indigo-400" />
+                          </span>
+                          <span className="text-[11.5px] font-medium text-white">
+                            {JOB_LABELS[job.type] ?? job.title}
+                          </span>
+                          <PriorityChip priority={job.priority} />
+                          {job.startedAt && (
+                            <span className="ml-auto font-mono text-[10px] text-indigo-300">
+                              {formatElapsed(job.startedAt)}
+                            </span>
+                          )}
+                        </div>
+                        {job.description && (
+                          <p className="mt-1 truncate text-[10px] text-[var(--color-text-dim)]">
+                            {job.description}
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2 text-center text-[11px] text-[var(--color-text-dim)]">
                     Idle
@@ -167,11 +185,11 @@ export function SchedulerPopover() {
               )}
 
               {/* Recent */}
-              {snapshot.recentJobs.length > 0 && (
+              {recentJobs.length > 0 && (
                 <div className="mb-3">
                   <SectionHeader title="History" />
                   <div className="max-h-32 space-y-0.5 overflow-y-auto">
-                    {snapshot.recentJobs.slice(0, 6).map((job) => (
+                    {recentJobs.map((job) => (
                       <JobRow
                         key={job.id}
                         job={job}
@@ -203,12 +221,15 @@ export function SchedulerPopover() {
                     Pause
                   </button>
                 )}
-                {snapshot.queuedBackgroundJobs > 0 && (
+                {(snapshot.queuedBackgroundJobs > 0 || snapshot.queuedEmailJobs > 0) && (
                   <button
                     type="button"
                     onClick={() => {
                       for (const job of snapshot.queuedJobs) {
                         if (job.priority > 0) aiScheduler.cancelAiJob(job.id);
+                      }
+                      for (const job of snapshot.emailQueuedJobs) {
+                        void emailCancelAiJob(aiScheduler.externalEmailJobId(job.id));
                       }
                     }}
                     className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.04] hover:text-red-400"

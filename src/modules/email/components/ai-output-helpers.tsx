@@ -97,6 +97,8 @@ export function getTaskTypeLabel(taskType: string): string {
       return "Spam / Marketing";
     case "urgency_score":
       return "Urgency";
+    case "reply_draft":
+      return "Reply draft";
     default:
       return taskType;
   }

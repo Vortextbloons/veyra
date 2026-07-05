@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment, EmailTag, EmailCreateTagInput, EmailUpdateTagInput, SmartView, EmailAiDraft, EmailAiDraftGenerateInput, EmailAiCoverageSnapshot, EmailAiJob } from "./email-types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { emailAiWorker } from "./email-ai-worker";
+import { startEmailAiSchedulerSync } from "./email-ai-scheduler-sync";
 import { fetchEmailAiCoverage } from "./email-ai-coverage";
 import {
   emailListAccounts,
@@ -999,3 +1000,4 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
 }));
 
 registerEmailAiJobSettledHandler();
+startEmailAiSchedulerSync();
