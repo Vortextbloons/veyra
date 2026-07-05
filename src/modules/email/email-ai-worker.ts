@@ -268,6 +268,7 @@ export class EmailAiWorker {
         temperature: 0.3,
         maxTokens: 1024,
         responseFormat: { type: "json_object" },
+        reasoningEnabled: false,
         signal,
         onChunk: (content) => {
           output += content;

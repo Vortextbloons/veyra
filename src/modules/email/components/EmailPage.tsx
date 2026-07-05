@@ -14,7 +14,6 @@ import { AccountList } from "./AccountList";
 import { InboxList } from "./InboxList";
 import ThreadReader from "./ThreadReader";
 import { ComposePanel } from "./ComposePanel";
-import { EmailAiSettingsPanel } from "./EmailAiSettingsPanel";
 
 export function EmailPage() {
   const hydrateAccounts = useEmailStore((s) => s.hydrateAccounts);
@@ -77,7 +76,6 @@ export function EmailPage() {
               Sync
             </button>
           )}
-          <EmailAiSettingsPanel />
           <button
             type="button"
             onClick={() => startCompose()}

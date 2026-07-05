@@ -9,6 +9,7 @@ import {
   Shield,
   Drama,
   FlaskConical,
+  Mail,
 } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
@@ -18,6 +19,7 @@ import { ModelsSettings } from "./models-settings";
 import { ToolsSettings } from "./tools-settings";
 import { CharacterSettings } from "./character-settings";
 import { ResearchSettings } from "./research-settings";
+import { EmailSettings } from "./email-settings";
 
 type SettingsTab =
   | "general"
@@ -26,6 +28,7 @@ type SettingsTab =
   | "memories"
   | "models"
   | "tools"
+  | "email"
   | "characters"
   | "research";
 
@@ -36,6 +39,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "memories", label: "Memories", icon: <Database className="size-4" /> },
   { id: "models", label: "Models", icon: <Boxes className="size-4" /> },
   { id: "tools", label: "Tools", icon: <Wrench className="size-4" /> },
+  { id: "email", label: "Email", icon: <Mail className="size-4" /> },
   { id: "research", label: "Research", icon: <FlaskConical className="size-4" /> },
   { id: "characters", label: "Characters", icon: <Drama className="size-4" /> },
 ];
@@ -84,6 +88,7 @@ export function SettingsPage() {
           {activeTab === "memories" && <MemoriesSettings />}
           {activeTab === "models" && <ModelsSettings />}
           {activeTab === "tools" && <ToolsSettings />}
+          {activeTab === "email" && <EmailSettings />}
           {activeTab === "research" && <ResearchSettings />}
           {activeTab === "characters" && <CharacterSettings />}
         </div>
