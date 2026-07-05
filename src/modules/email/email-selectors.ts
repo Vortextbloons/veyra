@@ -18,6 +18,7 @@ type EmailState = {
   attachmentLoadingIds: Set<string>;
   tags: EmailTag[];
   messageTags: Record<string, EmailTag[]>;
+  isAiDraft: boolean;
 };
 
 export function selectAccounts(state: EmailState): EmailAccount[] {
@@ -132,3 +133,7 @@ export const selectThreadById = (threadId: string) =>
   (state: EmailState): EmailThread | undefined => {
     return state.threads.find((t) => t.id === threadId);
   };
+
+export function selectIsAiDraft(state: EmailState): boolean {
+  return state.isAiDraft;
+}

@@ -12,9 +12,11 @@ import {
   emailEnqueueAiJobs,
   emailGetThread,
   emailUpsertAiTags,
+  emailSaveAiDraft,
 } from "./tauri-commands";
 import {
   buildPromptForTask,
+  buildReplyDraftPrompt,
   parseJsonResponse,
   EMAIL_AI_PROMPT_VERSION,
   type EmailAiTaskType,
@@ -136,6 +138,7 @@ export class EmailAiWorker {
           taskType,
           priority: 2,
           modelId: this.resolveModelForTask(taskType as EmailAiFullTaskType),
+          tone: taskType === "reply_draft" ? "concise" : undefined,
         }));
 
         await emailEnqueueAiJobs(inputs);
@@ -215,10 +218,22 @@ export class EmailAiWorker {
       return;
     }
 
-    const { system, user } = buildPromptForTask(
-      job.taskType as EmailAiTaskType,
-      messages,
-    );
+    // For reply_draft, use the tone from the job; otherwise use buildPromptForTask
+    let system: string;
+    let user: string;
+    if (job.taskType === "reply_draft") {
+      const tone = job.tone || "concise";
+      const prompt = buildReplyDraftPrompt(messages, tone);
+      system = prompt.system;
+      user = prompt.user;
+    } else {
+      const prompt = buildPromptForTask(
+        job.taskType as EmailAiTaskType,
+        messages,
+      );
+      system = prompt.system;
+      user = prompt.user;
+    }
 
     try {
       await ensureLmStudioModel(modelId, signal);
@@ -290,6 +305,31 @@ export class EmailAiWorker {
       displayText,
     });
 
+    if (job.taskType === "reply_draft" && job.threadId) {
+      const subject = typeof parsed.subject === "string" ? parsed.subject : `Re: ${messages[messages.length - 1]?.subject ?? ""}`;
+      const body = typeof parsed.body === "string" ? parsed.body : "";
+      const tone = typeof parsed.tone === "string" ? parsed.tone : "concise";
+      const lastMsg = messages[messages.length - 1];
+      const toJson = lastMsg ? JSON.stringify([{ name: lastMsg.from.name, email: lastMsg.from.email }]) : "[]";
+      try {
+        await emailSaveAiDraft({
+          jobId: job.id,
+          accountId: job.accountId,
+          threadId: job.threadId,
+          messageId: job.messageId,
+          modelId,
+          tone,
+          toJson,
+          ccJson: "[]",
+          bccJson: "[]",
+          subject,
+          body,
+        });
+      } catch (err) {
+        console.error("[EmailAiWorker] failed to save AI draft:", err);
+      }
+    }
+
     if (job.taskType === "classification" && job.messageId) {
       const tags = Array.isArray(parsed.tags) ? parsed.tags.filter((t): t is string => typeof t === "string") : [];
       const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
@@ -344,9 +384,17 @@ export class EmailAiWorker {
     return types;
   }
 
-  /** Task types used when claiming jobs (must match enqueue list exactly). */
+  /** Task types used when claiming jobs. Always includes reply_draft for on-demand generation. */
   private getEnabledClaimTaskTypes(): string[] {
-    return this.getEnabledEnqueueTaskTypes();
+    const settings = useSettingsStore.getState();
+    const types: string[] = [];
+    if (settings.emailAiBackgroundSummary) types.push("thread_summary");
+    if (settings.emailAiBackgroundClassification) types.push("classification");
+    if (settings.emailAiBackgroundSpam) types.push("spam_score");
+    if (settings.emailAiBackgroundUrgency) types.push("urgency_score");
+    // Always claim reply_draft for on-demand generation, even if auto-draft is off
+    types.push("reply_draft");
+    return types;
   }
 
   private buildDisplayText(

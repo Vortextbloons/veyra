@@ -161,6 +161,7 @@ pub struct EmailAiJobRow {
     pub priority: i64,
     pub status: String,
     pub model_id: Option<String>,
+    pub tone: Option<String>,
     pub attempt_count: i64,
     pub max_attempts: i64,
     pub scheduled_at: i64,
@@ -199,6 +200,7 @@ pub struct EmailAiJobInput {
     pub task_type: String,
     pub priority: i64,
     pub model_id: Option<String>,
+    pub tone: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -220,6 +222,49 @@ pub struct EmailAiJobFilter {
     pub status: Option<String>,
     pub task_type: Option<String>,
     pub limit: Option<i64>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailAiDraftRow {
+    pub id: String,
+    pub account_id: String,
+    pub thread_id: String,
+    pub message_id: Option<String>,
+    pub model_id: String,
+    pub tone: String,
+    pub to_json: String,
+    pub cc_json: String,
+    pub bcc_json: String,
+    pub subject: String,
+    pub body: String,
+    pub status: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailAiDraftGenerateInput {
+    pub account_id: String,
+    pub thread_id: String,
+    pub tone: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailSaveAiDraftInput {
+    pub job_id: String,
+    pub account_id: String,
+    pub thread_id: String,
+    pub message_id: Option<String>,
+    pub model_id: String,
+    pub tone: String,
+    pub to_json: String,
+    pub cc_json: String,
+    pub bcc_json: String,
+    pub subject: String,
+    pub body: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -282,7 +327,7 @@ pub struct EmailThreadAiMetadata {
     pub newsletter: Option<bool>,
 }
 
-pub const SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
 
 pub const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS email_accounts (

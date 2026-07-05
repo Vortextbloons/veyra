@@ -139,6 +139,7 @@ export type EmailAiJob = {
   priority: number;
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
   modelId?: string;
+  tone?: string;
   attemptCount: number;
   maxAttempts: number;
   scheduledAt: number;
@@ -173,6 +174,7 @@ export type EmailAiJobInput = {
   taskType: string;
   priority: number;
   modelId?: string;
+  tone?: string;
 };
 
 export type EmailAiOutputInput = {
@@ -183,6 +185,43 @@ export type EmailAiOutputInput = {
   confidence?: number;
   resultJson: string;
   displayText: string;
+};
+
+export type EmailAiDraft = {
+  id: string;
+  accountId: string;
+  threadId: string;
+  messageId?: string;
+  modelId: string;
+  tone: string;
+  toJson: string;
+  ccJson: string;
+  bccJson: string;
+  subject: string;
+  body: string;
+  status: "suggested" | "inserted" | "edited" | "dismissed";
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type EmailAiDraftGenerateInput = {
+  accountId: string;
+  threadId: string;
+  tone?: string;
+};
+
+export type EmailSaveAiDraftInput = {
+  jobId: string;
+  accountId: string;
+  threadId: string;
+  messageId?: string;
+  modelId: string;
+  tone: string;
+  toJson: string;
+  ccJson: string;
+  bccJson: string;
+  subject: string;
+  body: string;
 };
 
 export type EmailAiJobFilter = {

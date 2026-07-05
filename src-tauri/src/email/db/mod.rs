@@ -5,6 +5,7 @@ mod gmail;
 mod threads;
 mod attachments;
 mod ai_jobs;
+mod ai_drafts;
 mod tags;
 mod smart_views;
 
@@ -179,6 +180,7 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
                 priority INTEGER NOT NULL,
                 status TEXT NOT NULL,
                 model_id TEXT,
+                tone TEXT,
                 attempt_count INTEGER NOT NULL DEFAULT 0,
                 max_attempts INTEGER NOT NULL DEFAULT 3,
                 scheduled_at INTEGER NOT NULL,
@@ -252,6 +254,32 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         .map_err(|e| format!("email: schema v5 migration failed: {e}"))?;
 
         tags::seed_system_tags(conn)?;
+    }
+
+    if schema_version < 6 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS email_ai_drafts (
+                id TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                thread_id TEXT NOT NULL,
+                message_id TEXT,
+                model_id TEXT NOT NULL,
+                tone TEXT NOT NULL DEFAULT 'concise',
+                to_json TEXT NOT NULL,
+                cc_json TEXT NOT NULL DEFAULT '[]',
+                bcc_json TEXT NOT NULL DEFAULT '[]',
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'suggested',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY(account_id) REFERENCES email_accounts(id) ON DELETE CASCADE,
+                FOREIGN KEY(thread_id) REFERENCES email_threads(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_email_ai_drafts_thread
+                ON email_ai_drafts(thread_id, created_at);",
+        )
+        .map_err(|e| format!("email: schema v6 migration failed: {e}"))?;
     }
 
     conn.execute(
@@ -345,6 +373,9 @@ pub use accounts::{add_account, list_accounts, remove_account};
 pub use ai_jobs::{
     cancel_ai_job, claim_next_ai_job, complete_ai_job, enqueue_ai_jobs,
     fail_ai_job, get_unprocessed_thread_ids, list_ai_jobs, list_ai_outputs,
+};
+pub use ai_drafts::{
+    delete_ai_draft, list_ai_drafts, save_ai_draft, update_ai_draft_status,
 };
 pub use attachments::{
     download_attachment, extract_attachment_text, get_attachment_local_path, get_attachment_row,

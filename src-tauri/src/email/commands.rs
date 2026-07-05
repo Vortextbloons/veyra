@@ -434,3 +434,74 @@ pub async fn email_upsert_ai_tags(
     })
     .await
 }
+
+#[tauri::command]
+pub async fn email_generate_ai_draft(
+    input: email_db::EmailAiDraftGenerateInput,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailAiJobRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        let thread = email_db::get_thread(conn, input.thread_id.clone())?;
+        let last_msg = thread
+            .messages
+            .last()
+            .ok_or("thread has no messages")?;
+        let job_input = email_db::EmailAiJobInput {
+            account_id: input.account_id.clone(),
+            thread_id: Some(input.thread_id.clone()),
+            message_id: Some(last_msg.id.clone()),
+            task_type: "reply_draft".to_string(),
+            priority: 1,
+            model_id: None,
+            tone: input.tone,
+        };
+        let jobs = email_db::enqueue_ai_jobs(conn, &[job_input])?;
+        jobs.into_iter().next().ok_or("failed to enqueue draft job".to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_list_ai_drafts(
+    thread_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<email_db::EmailAiDraftRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::list_ai_drafts(conn, &thread_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_delete_ai_draft(
+    draft_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::delete_ai_draft(conn, &draft_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_save_ai_draft(
+    input: email_db::EmailSaveAiDraftInput,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailAiDraftRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::save_ai_draft(conn, &input)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_update_ai_draft_status(
+    draft_id: String,
+    status: String,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::EmailAiDraftRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::update_ai_draft_status(conn, &draft_id, &status)
+    })
+    .await
+}

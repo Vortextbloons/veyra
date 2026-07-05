@@ -16,6 +16,9 @@ import type {
   EmailUpdateTagInput,
   EmailApplyTagInput,
   EmailRemoveTagInput,
+  EmailAiDraft,
+  EmailAiDraftGenerateInput,
+  EmailSaveAiDraftInput,
 } from "./email-types";
 
 export async function emailListAccounts(): Promise<EmailAccount[]> {
@@ -251,5 +254,37 @@ export async function emailUpsertAiTags(
     tagNames,
     confidence,
     reason,
+  });
+}
+
+export async function emailGenerateAiDraft(
+  input: EmailAiDraftGenerateInput,
+): Promise<EmailAiJob> {
+  return invoke<EmailAiJob>("email_generate_ai_draft", { input });
+}
+
+export async function emailListAiDrafts(
+  threadId: string,
+): Promise<EmailAiDraft[]> {
+  return invoke<EmailAiDraft[]>("email_list_ai_drafts", { threadId });
+}
+
+export async function emailDeleteAiDraft(draftId: string): Promise<void> {
+  return invoke<void>("email_delete_ai_draft", { draftId });
+}
+
+export async function emailSaveAiDraft(
+  input: EmailSaveAiDraftInput,
+): Promise<EmailAiDraft> {
+  return invoke<EmailAiDraft>("email_save_ai_draft", { input });
+}
+
+export async function emailUpdateAiDraftStatus(
+  draftId: string,
+  status: string,
+): Promise<EmailAiDraft> {
+  return invoke<EmailAiDraft>("email_update_ai_draft_status", {
+    draftId,
+    status,
   });
 }

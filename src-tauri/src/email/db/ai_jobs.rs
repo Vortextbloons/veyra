@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use super::helpers::{new_uuid_id, now_ms};
 use super::types::*;
 
-pub const AI_JOB_COLUMNS: &str = "id, account_id, thread_id, message_id, attachment_id, task_type, priority, status, model_id, attempt_count, max_attempts, scheduled_at, started_at, finished_at, error, input_hash, created_at";
+pub const AI_JOB_COLUMNS: &str = "id, account_id, thread_id, message_id, attachment_id, task_type, priority, status, model_id, tone, attempt_count, max_attempts, scheduled_at, started_at, finished_at, error, input_hash, created_at";
 
 pub const AI_OUTPUT_COLUMNS: &str = "id, account_id, thread_id, message_id, attachment_id, task_type, model_id, prompt_version, source_message_ids_json, confidence, result_json, display_text, created_at, updated_at";
 
@@ -18,14 +18,15 @@ pub fn read_ai_job_row(row: &rusqlite::Row) -> Result<EmailAiJobRow, rusqlite::E
         priority: row.get(6)?,
         status: row.get(7)?,
         model_id: row.get(8)?,
-        attempt_count: row.get(9)?,
-        max_attempts: row.get(10)?,
-        scheduled_at: row.get(11)?,
-        started_at: row.get(12)?,
-        finished_at: row.get(13)?,
-        error: row.get(14)?,
-        input_hash: row.get(15)?,
-        created_at: row.get(16)?,
+        tone: row.get(9)?,
+        attempt_count: row.get(10)?,
+        max_attempts: row.get(11)?,
+        scheduled_at: row.get(12)?,
+        started_at: row.get(13)?,
+        finished_at: row.get(14)?,
+        error: row.get(15)?,
+        input_hash: row.get(16)?,
+        created_at: row.get(17)?,
     })
 }
 
@@ -57,9 +58,9 @@ pub fn enqueue_ai_job(
     let id = new_uuid_id("job");
     let now = now_ms();
     conn.execute(
-        "INSERT INTO email_ai_jobs (id, account_id, thread_id, message_id, task_type, priority, status, model_id, scheduled_at, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'queued', ?7, ?8, ?8)",
-        params![id, input.account_id, input.thread_id, input.message_id, input.task_type, input.priority, input.model_id, now],
+        "INSERT INTO email_ai_jobs (id, account_id, thread_id, message_id, task_type, priority, status, model_id, tone, scheduled_at, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'queued', ?7, ?8, ?9, ?9)",
+        params![id, input.account_id, input.thread_id, input.message_id, input.task_type, input.priority, input.model_id, input.tone, now],
     )
     .map_err(|e| e.to_string())?;
     get_ai_job(conn, &id)

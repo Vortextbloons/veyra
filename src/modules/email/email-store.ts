@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment, EmailTag, EmailCreateTagInput, EmailUpdateTagInput, SmartView } from "./email-types";
+import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment, EmailTag, EmailCreateTagInput, EmailUpdateTagInput, SmartView, EmailAiDraft, EmailAiDraftGenerateInput } from "./email-types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { emailAiWorker } from "./email-ai-worker";
 import {
@@ -31,6 +31,10 @@ import {
   emailApplyTag,
   emailRemoveTag,
   emailListMessageTags,
+  emailGenerateAiDraft,
+  emailListAiDrafts,
+  emailUpdateAiDraftStatus,
+  emailListAiJobs,
 } from "./tauri-commands";
 
 export {
@@ -61,6 +65,7 @@ export {
   selectAccountById,
   selectIsThreadActive,
   selectThreadById,
+  selectIsAiDraft,
 } from "./email-selectors";
 
 type EmailStore = {
@@ -81,6 +86,10 @@ type EmailStore = {
   attachmentLoadingIds: Set<string>;
   tags: EmailTag[];
   messageTags: Record<string, EmailTag[]>;
+  aiDrafts: EmailAiDraft[];
+  aiDraftLoading: boolean;
+  aiDraftThreadId: string | null;
+  isAiDraft: boolean;
 
   hydrateAccounts: () => Promise<void>;
   loadFolders: (accountId?: string) => Promise<void>;
@@ -117,6 +126,10 @@ type EmailStore = {
   applyTag: (messageId: string, tagId: string, source: string) => Promise<void>;
   removeTagFromMessage: (messageId: string, tagId: string) => Promise<void>;
   loadMessageTags: (messageId: string) => Promise<void>;
+  loadAiDrafts: (threadId: string) => Promise<void>;
+  generateAiDraft: (input: EmailAiDraftGenerateInput) => Promise<void>;
+  deleteAiDraft: (draftId: string) => Promise<void>;
+  insertAiDraftIntoCompose: (draft: EmailAiDraft) => void;
 };
 
 let hydrationPromise: Promise<void> | null = null;
@@ -180,6 +193,10 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   attachmentLoadingIds: new Set(),
   tags: [],
   messageTags: {},
+  aiDrafts: [],
+  aiDraftLoading: false,
+  aiDraftThreadId: null,
+  isAiDraft: false,
 
   hydrateAccounts: async () => {
     if (get().hydrationState === "ready") return;
@@ -394,7 +411,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   },
 
   selectThread: (id) => {
-    set({ activeThreadId: id, isComposing: false });
+    set({ activeThreadId: id, isComposing: false, aiDrafts: [], aiDraftThreadId: null });
     if (id) void get().loadThread(id);
   },
 
@@ -502,6 +519,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     set({
       isComposing: true,
       activeThreadId: null,
+      isAiDraft: false,
       draft: {
         id: crypto.randomUUID(),
         accountId: activeAccountId ?? "",
@@ -518,7 +536,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   },
 
   cancelCompose: () => {
-    set({ isComposing: false, draft: null });
+    set({ isComposing: false, draft: null, isAiDraft: false });
   },
 
   sendDraft: async () => {
@@ -534,7 +552,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         subject: draft.subject,
         body: draft.body,
       });
-      set({ isComposing: false, draft: null, isLoading: false });
+      set({ isComposing: false, draft: null, isLoading: false, isAiDraft: false });
       await get().loadThreads();
     } catch (error) {
       set({ error: String(error), isLoading: false });
@@ -708,5 +726,98 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     } catch (error) {
       set({ error: String(error) });
     }
+  },
+
+  loadAiDrafts: async (threadId) => {
+    try {
+      const drafts = await emailListAiDrafts(threadId);
+      set({ aiDrafts: drafts, aiDraftThreadId: threadId });
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  generateAiDraft: async (input) => {
+    set({ aiDraftLoading: true, error: null, aiDraftThreadId: input.threadId });
+    try {
+      const job = await emailGenerateAiDraft(input);
+      // Poll for job completion
+      const maxAttempts = 60; // 30 seconds max (500ms intervals)
+      let attempts = 0;
+      while (attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const jobs = await emailListAiJobs({
+          accountId: input.accountId,
+          status: "completed",
+        });
+        const completedJob = jobs.find((j) => j.id === job.id);
+        if (completedJob) break;
+        // Check if job failed
+        const failedJobs = await emailListAiJobs({
+          accountId: input.accountId,
+          status: "failed",
+        });
+        const failedJob = failedJobs.find((j) => j.id === job.id);
+        if (failedJob) {
+          throw new Error(failedJob.error || "Draft generation failed");
+        }
+        attempts++;
+      }
+      const drafts = await emailListAiDrafts(input.threadId);
+      set({ aiDrafts: drafts, aiDraftLoading: false });
+    } catch (error) {
+      set({ error: String(error), aiDraftLoading: false });
+    }
+  },
+
+  deleteAiDraft: async (draftId) => {
+    try {
+      await emailUpdateAiDraftStatus(draftId, "dismissed");
+      set((state) => ({
+        aiDrafts: state.aiDrafts.map((d) =>
+          d.id === draftId ? { ...d, status: "dismissed" as const } : d
+        ),
+      }));
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  insertAiDraftIntoCompose: (draft) => {
+    // Parse JSON address fields into plain address strings
+    const parseAddresses = (json: string): string => {
+      try {
+        const addresses = JSON.parse(json) as Array<{ name?: string; email: string }>;
+        if (!Array.isArray(addresses) || addresses.length === 0) return "";
+        return addresses
+          .map((a) => {
+            if (a.name && a.name !== a.email) {
+              return `${a.name} <${a.email}>`;
+            }
+            return a.email;
+          })
+          .join(", ");
+      } catch {
+        return json;
+      }
+    };
+
+    set({
+      isComposing: true,
+      activeThreadId: null,
+      isAiDraft: true,
+      draft: {
+        id: crypto.randomUUID(),
+        accountId: draft.accountId,
+        to: parseAddresses(draft.toJson),
+        cc: parseAddresses(draft.ccJson),
+        bcc: parseAddresses(draft.bccJson),
+        subject: draft.subject,
+        body: draft.body,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    });
+    void emailUpdateAiDraftStatus(draft.id, "inserted").catch(() => {});
   },
 }));

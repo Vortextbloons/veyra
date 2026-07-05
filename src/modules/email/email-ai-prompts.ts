@@ -6,7 +6,8 @@ export type EmailAiTaskType =
   | "thread_summary"
   | "classification"
   | "spam_score"
-  | "urgency_score";
+  | "urgency_score"
+  | "reply_draft";
 
 function formatMessagesForPrompt(messages: EmailMessage[]): string {
   const formatted = messages
@@ -35,6 +36,10 @@ Respond with JSON only, no markdown fences:
 const URGENCY_SYSTEM = `You are an email urgency assessor. Determine how time-sensitive this email is.
 Respond with JSON only, no markdown fences:
 {"level":"critical|high|medium|low","deadline":"deadline if mentioned, or empty string","reason":"brief explanation"}`;
+
+const REPLY_DRAFT_SYSTEM = `You are an email assistant. Draft a reply to the latest message in this email thread.
+Respond with JSON only, no markdown fences:
+{"subject":"Re: original subject (or adapted)","body":"the reply body text","tone":"the tone used","assumptions":"any assumptions made, or empty string"}`;
 
 export function buildSummaryPrompt(messages: EmailMessage[]): {
   system: string;
@@ -76,6 +81,16 @@ export function buildUrgencyPrompt(messages: EmailMessage[]): {
   };
 }
 
+export function buildReplyDraftPrompt(
+  messages: EmailMessage[],
+  tone: string = "concise",
+): { system: string; user: string } {
+  return {
+    system: REPLY_DRAFT_SYSTEM,
+    user: `Draft a ${tone} reply to the latest message in this thread:\n\n${formatMessagesForPrompt(messages)}`,
+  };
+}
+
 export function buildPromptForTask(
   taskType: EmailAiTaskType,
   messages: EmailMessage[],
@@ -89,6 +104,8 @@ export function buildPromptForTask(
       return buildSpamPrompt(messages);
     case "urgency_score":
       return buildUrgencyPrompt(messages);
+    case "reply_draft":
+      return buildReplyDraftPrompt(messages);
   }
 }
 

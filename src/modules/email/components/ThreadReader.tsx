@@ -15,6 +15,7 @@ import type { EmailAiOutput } from "../email-types";
 import { MessageBody } from "./MessageBody";
 import { AttachmentChip } from "./AttachmentChip";
 import { AiOutputsPanel } from "./AiOutputsPanel";
+import { EmailAiDraftPanel } from "./EmailAiDraftPanel";
 
 export default function ThreadReader() {
   const threads = useEmailStore((s) => s.threads);
@@ -116,6 +117,11 @@ export default function ThreadReader() {
       {/* AI Outputs */}
       {aiOutputs.length > 0 && (
         <AiOutputsPanel outputs={aiOutputs} />
+      )}
+
+      {/* AI Drafts */}
+      {emailAiEnabled && (
+        <EmailAiDraftPanel threadId={thread.id} accountId={thread.accountId} />
       )}
 
       {/* Messages */}

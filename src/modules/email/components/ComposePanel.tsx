@@ -6,6 +6,7 @@ import {
   Check,
   AlertCircle,
   Loader2,
+  Bot,
 } from "lucide-react";
 import { useEmailStore } from "../email-store";
 
@@ -13,6 +14,7 @@ export function ComposePanel() {
   const draft = useEmailStore((s) => s.draft);
   const isLoading = useEmailStore((s) => s.isLoading);
   const error = useEmailStore((s) => s.error);
+  const isAiDraft = useEmailStore((s) => s.isAiDraft);
   const cancelCompose = useEmailStore((s) => s.cancelCompose);
   const sendDraft = useEmailStore((s) => s.sendDraft);
   const saveDraft = useEmailStore((s) => s.saveDraft);
@@ -49,6 +51,12 @@ export function ComposePanel() {
           <h2 className="text-[13px] font-semibold text-[var(--color-text)]">
             {draft.subject ? draft.subject : "New message"}
           </h2>
+          {isAiDraft && (
+            <span className="flex items-center gap-1 rounded-full bg-[var(--color-accent)]/15 px-2 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">
+              <Bot className="size-2.5" />
+              AI Draft
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {error && (
