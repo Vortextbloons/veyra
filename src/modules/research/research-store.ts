@@ -41,6 +41,29 @@ import {
   updateResearchReport as apiUpdateReport,
 } from "./research-storage";
 import { reconcileInterruptedResearchRuns, isActiveResearchRunStatus } from "./research-lifecycle";
+export {
+  selectRuns,
+  selectActiveRunId,
+  selectActiveRun,
+  selectIsLoading,
+  selectError,
+  selectHydrationState,
+  selectIsPausing,
+  selectValidateProgress,
+  selectExtractProgress,
+  selectContradictionProgress,
+  selectAuditProgress,
+  selectFilteredEvidenceCount,
+  selectRunById,
+  selectActiveRunSteps,
+  selectActiveRunSources,
+  selectActiveRunEvidence,
+  selectActiveRunClaims,
+  selectActiveRunContradictions,
+  selectActiveRunReport,
+  selectActiveRunStatus,
+} from "./research-selectors";
+export type { ResearchStoreState } from "./research-selectors";
 
 type ResearchStore = {
   runs: ResearchRun[];

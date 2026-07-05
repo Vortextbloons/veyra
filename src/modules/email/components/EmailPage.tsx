@@ -12,7 +12,7 @@ import {
 import { useEmailStore } from "../email-store";
 import { AccountList } from "./AccountList";
 import { InboxList } from "./InboxList";
-import { ThreadReader } from "./ThreadReader";
+import ThreadReader from "./ThreadReader";
 import { ComposePanel } from "./ComposePanel";
 import { EmailAiSettingsPanel } from "./EmailAiSettingsPanel";
 

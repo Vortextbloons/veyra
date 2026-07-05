@@ -33,6 +33,36 @@ import {
   emailListMessageTags,
 } from "./tauri-commands";
 
+export {
+  selectAccounts,
+  selectFolders,
+  selectThreads,
+  selectActiveAccountId,
+  selectActiveThreadId,
+  selectActiveFolder,
+  selectActiveSmartView,
+  selectSearchQuery,
+  selectDraft,
+  selectIsComposing,
+  selectIsLoading,
+  selectError,
+  selectHydrationState,
+  selectAttachments,
+  selectAttachmentLoadingIds,
+  selectTags,
+  selectMessageTags,
+  selectActiveAccount,
+  selectActiveThreads,
+  selectUnreadCount,
+  selectMessageAttachments,
+  selectMessageTagsForMessage,
+  selectConnectedAccounts,
+  selectGmailAccounts,
+  selectAccountById,
+  selectIsThreadActive,
+  selectThreadById,
+} from "./email-selectors";
+
 type EmailStore = {
   accounts: EmailAccount[];
   folders: EmailFolder[];

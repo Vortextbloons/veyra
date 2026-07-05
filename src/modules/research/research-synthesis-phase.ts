@@ -3,10 +3,12 @@ import type { ResearchSource, ResearchEvidence, CreateResearchReportInput } from
 import type { ResearchRuntimeContext } from "./research-runtime-context";
 import { callResearchAi, getTemporalContext } from "./research-ai";
 import { safeJsonParse, getErrorMessage } from "./research-json-utils";
-import { sourceTypeLabel, synthesisBudget, nowIso } from "./research-source-utils";
+import { synthesisBudget, nowIso } from "./research-source-utils";
 import { roundRobinSampleBySourceScore, sourceSynthesisPriority, getSourceNumber, extractCitationContext } from "./research-citation-utils";
 import { prepareReportSection } from "./report-sanitize";
-import { getCredibilityScore } from "./source-credibility";
+import { buildOutlinePrompt, buildSectionPrompt, buildSelfCritiquePrompt, buildRewritePrompt, buildCitationAuditPrompt } from "./research-synthesis-prompts";
+import { buildEvidenceSummary, buildClaimsSummary, buildContradictionsSummary, buildCitationEvidenceSummary, buildSourceQualitySummary } from "./research-evidence-summary";
+import { missingSourceResult, buildSourceContradictionsText, markUnsupportedCitations, buildAuditAppendix } from "./research-citation-audit";
 
 export async function synthesisPhase(
   ctx: ResearchRuntimeContext,
@@ -59,48 +61,11 @@ export async function synthesisPhase(
     return scoreB - scoreA;
   });
 
-  const evidenceSummary = weightedEvidence
-    .map((e, i) => {
-      const source = sources.find((s) => s.id === e.sourceId);
-      const claim = claimByEvidenceId.get(e.id);
-      const claimStatus = claim ? `[Claim: ${claim.status}]` : "";
-      return `Evidence ${i + 1} [${e.id}] ${claimStatus}:
-Source: ${source?.title || "Unknown"} (${source?.url || "N/A"})
-Type: ${e.type}
-Confidence: ${e.confidence}
-Content: ${e.content}
-Context: ${e.context}`;
-    })
-    .join("\n\n");
+  const evidenceSummary = buildEvidenceSummary({ weightedEvidence, sources, claimByEvidenceId });
 
-  const claimsSummary = claims
-    .sort((a, b) => b.confidence - a.confidence)
-    .map((c, i) => {
-      const ev = evidenceList.find((e) => e.id === c.evidenceId);
-      const source = sources.find((s) => s.id === c.sourceId);
-      return `Claim ${i + 1} [${c.id}]:
-Status: ${c.status}
-Confidence: ${c.confidence}
-Source: ${source?.title || "Unknown"}
-Evidence: ${ev?.content || "N/A"}
-Claim: ${c.claim}
-Verification: ${c.verificationReason || "Not verified"}`;
-    })
-    .join("\n\n");
+  const claimsSummary = buildClaimsSummary({ claims, evidenceList, sources });
 
-  const contradictionsSummary = contradictions.length > 0
-    ? contradictions.map((c, i) => {
-        const claimA = claims.find((cl) => cl.id === c.claimAId);
-        const claimB = claims.find((cl) => cl.id === c.claimBId);
-        const sourceA = sources.find((s) => s.id === claimA?.sourceId);
-        const sourceB = sources.find((s) => s.id === claimB?.sourceId);
-        return `Contradiction ${i + 1}:
-Claim A: ${claimA?.claim || "N/A"} (status: ${claimA?.status || "unknown"}, confidence: ${c.claimAConfidence}, source: ${sourceA?.title || "Unknown"})
-Claim B: ${claimB?.claim || "N/A"} (status: ${claimB?.status || "unknown"}, confidence: ${c.claimBConfidence}, source: ${sourceB?.title || "Unknown"})
-Reason: ${c.reason || "N/A"}
-Resolution: ${c.resolution || "Unresolved"}`;
-      }).join("\n\n")
-    : "No contradictions detected.";
+  const contradictionsSummary = buildContradictionsSummary({ contradictions, claims, sources });
 
   const budget = synthesisBudget(run.depth);
   const shownEvidenceBase = roundRobinSampleBySourceScore(weightedEvidence, budget.evidenceItems, evidenceVerificationScore);
@@ -130,65 +95,20 @@ Resolution: ${c.resolution || "Unresolved"}`;
 
   const maxCitationNumber = shownSources.length;
 
-  const citationEvidenceSummary = shownEvidence
-    .map((e) => {
-      const source = sources.find((s) => s.id === e.sourceId);
-      const sourceNumber = getSourceNumber(e.sourceId, shownSources);
-      const claim = claimByEvidenceId.get(e.id);
-      const claimStatus = claim ? ` | Claim: ${claim.status}` : "";
-      return `Citation ${sourceNumber ? `[${sourceNumber}]` : "uncited-source"} — ${source?.title || "Unknown"} (${source?.url || "N/A"})
-Type: ${e.type} | Confidence: ${e.confidence}${claimStatus}
-Evidence: ${e.content}
-Context: ${e.context}`;
-    })
-    .join("\n\n");
+  const citationEvidenceSummary = buildCitationEvidenceSummary({ shownEvidence, sources, shownSources, claimByEvidenceId });
 
-  const sourceQualitySummary = shownSources
-    .map((s, i) => {
-      const { score, label } = getCredibilityScore(s.url);
-      return `[${i + 1}] ${s.title} — ${s.url} (${sourceTypeLabel(s.sourceType)}, Authority: ${score}/5 — ${label})`;
-    })
-    .join("\n");
+  const sourceQualitySummary = buildSourceQualitySummary({ shownSources });
 
   // Pass 1: Build outline
-  const outlinePrompt = `You are a senior research analyst. Create a detailed outline for a comprehensive research report.
-
-Research Question: ${ctx.clarifiedResearchQuestion || run.question}
-${ctx.clarifiedResearchQuestion ? `Clarified Question: ${ctx.clarifiedResearchQuestion}` : ""}
-
-Key Evidence (sorted by confidence):
-${evidenceSummary.slice(0, budget.outlineChars)}
-
-Claims Summary:
-${claimsSummary.slice(0, 4000)}
-
-Contradictions:
-${contradictionsSummary}
-
-Create a detailed outline with no more than ${config.maxSections} sections total, distributed as:
-1. Executive Summary
-2. Introduction (context and scope)
-3. Main sections (fill remaining budget based on key themes)
-4. For each section: key points to cover, which evidence supports it, which claims to discuss
-5. Contradictions section (if any exist, count toward the total)
-6. Limitations and Gaps (count toward the total)
-7. Conclusion (count toward the total)
-
-The total number of sections in your JSON response must not exceed ${config.maxSections}.
-
-Return ONLY a JSON object:
-{
-  "title": "Report title",
-  "sections": [
-    {
-      "heading": "Section heading",
-      "keyPoints": ["point 1", "point 2"],
-      "supportingEvidenceIds": ["evidence-id-1"],
-      "supportingClaimIds": ["claim-id-1"],
-      "wordCount": 300
-    }
-  ]
-}`;
+  const outlinePrompt = buildOutlinePrompt({
+    clarifiedQuestion: ctx.clarifiedResearchQuestion || run.question,
+    question: run.question,
+    evidenceSummary,
+    claimsSummary,
+    contradictionsSummary,
+    maxSections: config.maxSections,
+    outlineChars: budget.outlineChars,
+  });
 
   let reportMarkdown = "";
   let outlineJson: {
@@ -268,38 +188,22 @@ Return ONLY a JSON object:
       .map((c) => `Claim: ${c.claim} (Status: ${c.status}, Confidence: ${c.confidence})`)
       .join("\n");
 
-    const sectionPrompt = `Write section "${section.heading}" for a research report.
-
-Research Question: ${ctx.clarifiedResearchQuestion || run.question}
-
-Key Points to Cover:
-${(section.keyPoints || []).map((p) => `- ${p}`).join("\n")}
-
-${sectionEvidence ? `Supporting Evidence:\n${sectionEvidence}\n\n` : ""}
-${sectionClaims ? `Related Claims:\n${sectionClaims}\n\n` : ""}
-Evidence Packets Available for Citation:
-${citationEvidenceSummary.slice(0, budget.sectionChars) || "No extracted evidence available."}
-
-
-${contradictions.length > 0 ? `Known Contradictions and Resolutions:\n${contradictionsSummary}\n\n` : ""}
-
-Requirements:
-- Write in formal, objective academic tone
-- Cite claims using only citation numbers [1] through [${maxCitationNumber}] from the evidence packets and source list below
-- Do not cite a source unless a listed evidence packet supports the sentence
-- Do not invent citation numbers outside that range
-- Address uncertainties and conflicting evidence honestly
-- Include specific statistics and quotes where available
-- Target: ${section.wordCount || 300} words (do not exceed ${config.sectionMaxWords})
-
-Sources (citation numbers [1]–[${maxCitationNumber}] only):
-${sourceQualitySummary}
-
-Output rules:
-- Return ONLY polished report prose for this section
-- Do NOT include the section heading
-- Do NOT include planning notes, checklists, self-corrections, word-count commentary, citation-mapping notes, or instructions to yourself
-- Do NOT output labels like "code", "Copy", "Drafting", or bullet lists of writing steps`;
+    const sectionPrompt = buildSectionPrompt({
+      heading: section.heading || "",
+      clarifiedQuestion: ctx.clarifiedResearchQuestion || "",
+      question: run.question,
+      keyPoints: section.keyPoints || [],
+      sectionEvidence,
+      sectionClaims,
+      citationEvidenceSummary,
+      sectionChars: budget.sectionChars,
+      contradictionsSummary,
+      hasContradictions: contradictions.length > 0,
+      maxCitationNumber,
+      sourceQualitySummary,
+      wordCount: section.wordCount || 300,
+      sectionMaxWords: config.sectionMaxWords,
+    });
 
     try {
       const sectionResult = await callResearchAi(
@@ -348,29 +252,12 @@ Output rules:
     const rewriteCap = run.depth === "exhaustive" ? 4 : run.depth === "deep" ? 3 : run.depth === "standard" ? 2 : 1;
 
     try {
-      const critiquePrompt = `You are a critical peer reviewer. Review this research draft and identify specific improvements.
-
-Research Question: "${ctx.clarifiedResearchQuestion || run.question}"
-
-Draft Report:
-${reportMarkdown.slice(0, 12000)}
-
-Evaluate:
-1. Are there logical gaps or unsupported claims?
-2. Is the structure clear and flowing well?
-3. Are there weaker sections that need more evidence or better argumentation?
-4. Are citations properly integrated?
-
-Identify up to ${rewriteCap} sections that need rewriting most.
-
-Return a JSON object:
-{
-  "overallScore": 1-10,
-  "issues": [
-    {"section": "section heading", "issue": "description", "severity": "high|medium|low", "fix": "specific suggestion"}
-  ],
-  "rewriteSections": ["section heading that needs rewriting"]
-}`;
+      const critiquePrompt = buildSelfCritiquePrompt({
+        question: run.question,
+        clarifiedQuestion: ctx.clarifiedResearchQuestion || "",
+        reportDraft: reportMarkdown,
+        rewriteCap,
+      });
 
       const critiqueResult = await callResearchAi(
         [
@@ -407,24 +294,17 @@ Return a JSON object:
               .map((issue) => `- ${issue.severity}: ${issue.issue} → ${issue.fix}`)
               .join("\n");
 
-            const rewritePrompt = `Rewrite section "${heading}" for this research report, addressing these issues:
-
-${sectionIssues || "Improve clarity, add more specific evidence, and strengthen argumentation."}
-
-Research Question: "${ctx.clarifiedResearchQuestion || run.question}"
-
-Key Points to Cover:
-${(section.keyPoints || []).map((p) => `- ${p}`).join("\n")}
-
-Requirements:
-- Write in formal, objective academic tone
-- Cite claims using citation numbers [1] through [${maxCitationNumber}]
-- Target: ${section.wordCount || 300} words (do not exceed ${config.sectionMaxWords})
-
-Sources:
-${sourceQualitySummary}
-
-Output: Return ONLY polished report prose. No headings, no meta-commentary.`;
+            const rewritePrompt = buildRewritePrompt({
+              heading,
+              sectionIssues,
+              clarifiedQuestion: ctx.clarifiedResearchQuestion || "",
+              question: run.question,
+              keyPoints: section.keyPoints || [],
+              maxCitationNumber,
+              sourceQualitySummary,
+              wordCount: section.wordCount || 300,
+              sectionMaxWords: config.sectionMaxWords,
+            });
 
             try {
               const rewriteResult = await callResearchAi(
@@ -580,57 +460,26 @@ Output: Return ONLY polished report prose. No headings, no meta-commentary.`;
     const sourceIndex = num - 1;
     const source = readSources[sourceIndex];
     if (!source) {
-      auditResults.push({
-        citationNumber: num,
-        sourceId: "missing",
-        sourceTitle: "Source not found",
-        claimFound: false,
-        supportingEvidence: [],
-        auditNotes: "Citation number refers to a source the writer did not see evidence for",
-      });
+      auditResults.push(missingSourceResult(num));
       return;
     }
 
     const citationContext = extractCitationContext(bodyMarkdown, num);
     const sourceEvidence = evidenceList.filter((e) => e.sourceId === source.id);
-    const sourceContradictions = contradictions
-      .filter((c) => {
-        const claimA = claims.find((cl) => cl.id === c.claimAId);
-        const claimB = claims.find((cl) => cl.id === c.claimBId);
-        return claimA?.sourceId === source.id || claimB?.sourceId === source.id;
-      })
-      .map((c, i) => {
-        const claimA = claims.find((cl) => cl.id === c.claimAId);
-        const claimB = claims.find((cl) => cl.id === c.claimBId);
-        return `Contradiction ${i + 1}: ${claimA?.claim || "N/A"} (${claimA?.status || "unknown"}) vs ${claimB?.claim || "N/A"} (${claimB?.status || "unknown"}). Resolution: ${c.resolution || "Unresolved"}`;
-      })
-      .join("\n")
-      .slice(0, 2000);
+    const sourceContradictions = buildSourceContradictionsText({ sourceId: source.id, claims, contradictions });
     const evidenceText = sourceEvidence
       .map((e) => e.content)
       .join("\n")
       .slice(0, 3000);
 
-    const auditPrompt = `You are a citation auditor. Verify that a cited source actually supports the claims made near its citation.
-
-Citation [${num}] — ${source.title}
-URL: ${source.url}
-
-Claims in context near this citation:
-${citationContext}
-
-Evidence from this source:
-${evidenceText || "No direct evidence extracted"}
-
-Known contradictions involving this source:
-${sourceContradictions || "None"}
-
-Audit: Does this source actually support the claims cited? Answer ONLY with a JSON object:
-{
-  "claimFound": true|false,
-  "supportingEvidence": ["exact evidence that supports the claim"],
-  "auditNotes": "Brief explanation of whether the citation is accurate, exaggerated, unsupported, or cites a disputed/contradicted claim without acknowledging the contradiction"
-}`;
+    const auditPrompt = buildCitationAuditPrompt({
+      citationNumber: num,
+      sourceTitle: source.title,
+      sourceUrl: source.url,
+      citationContext,
+      evidenceText,
+      sourceContradictions,
+    });
 
     try {
       const { value: auditResponse } = await ctx.runAiStep(
@@ -701,33 +550,16 @@ Audit: Does this source actually support the claims cited? Answer ONLY with a JS
 
   // Mark unsupported citations in the report
   const unsupportedCitations = auditResults.filter((a) => !a.claimFound);
-  let auditedReportMarkdown = reportMarkdown;
-  if (unsupportedCitations.length > 0) {
-    const sourcesMarker = "\n---\n\n## Sources";
-    const markerIndex = reportMarkdown.indexOf(sourcesMarker);
-    let reportBody = markerIndex === -1 ? reportMarkdown : reportMarkdown.slice(0, markerIndex);
-    const reportTail = markerIndex === -1 ? "" : reportMarkdown.slice(markerIndex);
-    for (const audit of unsupportedCitations) {
-      const citationPattern = new RegExp(`\\[${audit.citationNumber}\\](?!\\s*\\(citation flagged\\))`, "g");
-      reportBody = reportBody.replace(citationPattern, `[${audit.citationNumber}] (citation flagged)`);
-    }
-    auditedReportMarkdown = `${reportBody}${reportTail}`;
-  }
-  const auditNotes = unsupportedCitations.length > 0
-    ? unsupportedCitations
-        .map((a) => `- [${a.citationNumber}] ${a.sourceTitle}: ${a.auditNotes}`)
-        .join("\n")
-    : "No audited citations were flagged.";
-
-  const auditDetail = `Audited ${auditResults.length} citations, ${unsupportedCitations.length} flagged` +
-    (skippedAudit > 0 ? ` (${skippedAudit} citations skipped due to cap)` : "") +
-    (unsupportedCitations.length > 0 ? `\n\n${auditNotes}` : "");
-  const auditAppendix = `---\n\n## Citation Audit\n\n${unsupportedCitations.length > 0 ? "Unsupported citations were marked inline as `(citation flagged)`.\n\n" : ""}${auditDetail}\n`;
+  const auditedReportMarkdown = markUnsupportedCitations(reportMarkdown, unsupportedCitations);
+  const auditAppendix = buildAuditAppendix(unsupportedCitations, skippedAudit, auditResults.length);
   await store.updateReport({
     id: report.id,
-    contentMarkdown: `${auditedReportMarkdown}\n${auditAppendix}`,
-    wordCount: `${auditedReportMarkdown}\n${auditAppendix}`.split(/\s+/).filter(Boolean).length,
+    contentMarkdown: `${auditedReportMarkdown}${auditAppendix}`,
+    wordCount: `${auditedReportMarkdown}${auditAppendix}`.split(/\s+/).filter(Boolean).length,
   });
+  const auditDetail = `Audited ${auditResults.length} citations, ${unsupportedCitations.length} flagged` +
+    (skippedAudit > 0 ? ` (${skippedAudit} citations skipped due to cap)` : "") +
+    (unsupportedCitations.length > 0 ? `\n\n${unsupportedCitations.map((a) => `- [${a.citationNumber}] ${a.sourceTitle}: ${a.auditNotes}`).join("\n")}` : "");
   await ctx.completeStep(auditStep, auditDetail);
   onEvent({ type: "phase_complete", phase: "audit", stepId: auditStep.id });
   } // end of audit-when-citations-exist
