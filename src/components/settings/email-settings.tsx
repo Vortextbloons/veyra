@@ -220,10 +220,10 @@ export function EmailSettings() {
               <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
                 <div className="mb-3">
                   <div className="text-[12.5px] font-medium text-white">
-                    Worker batch size
+                    Concurrent jobs
                   </div>
                   <div className="text-[11px] text-[var(--color-text-dim)]">
-                    Jobs processed per model load cycle.
+                    How many email AI jobs run in parallel against LM Studio.
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -282,11 +282,18 @@ export function EmailSettings() {
                       }`}
                     />
                     <span className="text-[var(--color-text)]">
-                      {workerStatus.processingJob ? "Processing job" : "Worker ready"}
+                      {workerStatus.processingJobCount > 1
+                        ? `Processing ${workerStatus.processingJobCount} jobs`
+                        : workerStatus.processingJob
+                          ? "Processing job"
+                          : "Worker ready"}
                     </span>
                     {workerStatus.processingJob && (
                       <span className="text-[var(--color-text-dim)]">
                         — {workerStatus.processingJob.taskType}
+                        {workerStatus.processingJobCount > 1
+                          ? ` (+${workerStatus.processingJobCount - 1} more)`
+                          : ""}
                       </span>
                     )}
                   </div>

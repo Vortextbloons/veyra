@@ -1,7 +1,7 @@
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { ProviderToolCall, ProviderToolDefinition } from "@/lib/providers/types";
 import type { LmChatCompleteResult, StreamState } from "@/lib/lm-studio-types";
-import { runLmStudioExclusive } from "@/lib/lm-studio-session";
+import { runLmStudioBackground, runLmStudioExclusive } from "@/lib/lm-studio-session";
 import { withFetchTimeout } from "@/lib/abort-utils";
 import { readV1SseStream } from "@/lib/lm-studio-sse";
 import { buildMessagePerformance } from "@/lib/performance";
@@ -41,10 +41,16 @@ export type LmStudioChatOptions = {
   onToolCallDetected?: (call: Pick<ProviderToolCall, "id" | "name">) => void;
   onComplete?: (result: LmChatCompleteResult) => void;
   onError: (error: string) => void;
+  /** Use the email AI concurrency pool instead of the global exclusive lane. */
+  background?: boolean;
 };
 
 export async function sendLmStudioChat(options: LmStudioChatOptions): Promise<void> {
-  return runLmStudioExclusive(() => sendLmStudioChatImpl(options));
+  const run = () => sendLmStudioChatImpl(options);
+  if (options.background) {
+    return runLmStudioBackground(run);
+  }
+  return runLmStudioExclusive(run);
 }
 
 async function sendLmStudioChatImpl(options: LmStudioChatOptions): Promise<void> {

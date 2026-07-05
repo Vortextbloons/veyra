@@ -1,4 +1,5 @@
 import { ensureLmStudioModel } from "@/lib/lm-model-session";
+import { configureLmStudioBackgroundConcurrency } from "@/lib/lm-studio-session";
 import { sendLmStudioChat } from "@/lib/lm-studio-chat";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -33,6 +34,8 @@ type JobExecutionOutcome = "completed" | "failed" | "requeued";
 export type EmailAiWorkerStatus = {
   running: boolean;
   processingJob: EmailAiJob | null;
+  processingJobs: EmailAiJob[];
+  processingJobCount: number;
   lastTickAt: number;
   lastError: string | null;
   jobsCompleted: number;
@@ -47,34 +50,79 @@ export class EmailAiWorker {
   private running = false;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private pausedByUserJob = false;
-  private processingJob: EmailAiJob | null = null;
+  private processingJobs: EmailAiJob[] = [];
+  private jobControllers = new Map<string, AbortController>();
   private lastTickAt = 0;
   private lastError: string | null = null;
   private jobsCompleted = 0;
   private jobsFailed = 0;
-  private abortController: AbortController | null = null;
   private listeners: Set<StatusListener> = new Set();
   private jobSettledListeners: Set<(event: EmailAiJobSettledEvent) => void> = new Set();
   private unsubscribeScheduler: (() => void) | null = null;
+  private tickInProgress = false;
+  private pendingTick = false;
 
   start(): void {
     if (this.running) return;
     this.running = true;
+    configureLmStudioBackgroundConcurrency(
+      Math.max(1, useSettingsStore.getState().emailAiWorkerCount),
+    );
 
     this.unsubscribeScheduler = aiScheduler.subscribeToScheduler(() => {
       const snapshot = aiScheduler.getSchedulerSnapshot();
       if (snapshot.isUserJobRunning && !this.pausedByUserJob) {
         this.pausedByUserJob = true;
-        this.abortController?.abort();
+        this.abortAllActiveJobs();
       } else if (!snapshot.isUserJobRunning && this.pausedByUserJob) {
         this.pausedByUserJob = false;
-        void this.tick();
+        this.scheduleTick();
       }
     });
 
     this.startPollTimer();
-    void this.tick();
+    this.scheduleTick();
     this.notify();
+  }
+
+  private scheduleTick(): void {
+    if (!this.running || this.pausedByUserJob) return;
+    if (this.tickInProgress) {
+      this.pendingTick = true;
+      return;
+    }
+    void this.runTick();
+  }
+
+  private async runTick(): Promise<void> {
+    if (this.tickInProgress) {
+      this.pendingTick = true;
+      return;
+    }
+    this.tickInProgress = true;
+    this.pendingTick = false;
+
+    try {
+      if (!this.running || this.pausedByUserJob) return;
+
+      const settings = useSettingsStore.getState();
+      if (!settings.emailAiEnabled) return;
+
+      this.lastTickAt = Date.now();
+
+      const taskTypes = this.getEnabledClaimTaskTypes();
+      if (taskTypes.length === 0) return;
+
+      let keepGoing = true;
+      while (keepGoing && this.running && !this.pausedByUserJob) {
+        keepGoing = await this.processBatch(taskTypes);
+      }
+    } finally {
+      this.tickInProgress = false;
+      if (this.pendingTick && this.running && !this.pausedByUserJob) {
+        void this.runTick();
+      }
+    }
   }
 
   private startPollTimer(): void {
@@ -83,12 +131,15 @@ export class EmailAiWorker {
     }
     const settings = useSettingsStore.getState();
     this.pollTimer = setInterval(() => {
-      void this.tick();
+      this.scheduleTick();
     }, settings.emailAiPollInterval);
   }
 
   /** Re-read poll interval and other runtime settings while the worker is active. */
   applyRuntimeSettings(): void {
+    configureLmStudioBackgroundConcurrency(
+      Math.max(1, useSettingsStore.getState().emailAiWorkerCount),
+    );
     if (!this.running) return;
     this.startPollTimer();
   }
@@ -99,15 +150,13 @@ export class EmailAiWorker {
 
   /** Run the worker loop immediately (e.g. after enqueueing an on-demand draft). */
   wake(): void {
-    if (!this.running || this.pausedByUserJob) return;
-    void this.tick();
+    this.scheduleTick();
   }
 
   stop(): void {
     this.running = false;
-    this.abortController?.abort();
-    this.abortController = null;
-    this.processingJob = null;
+    this.abortAllActiveJobs();
+    this.processingJobs = [];
     this.pausedByUserJob = false;
 
     if (this.pollTimer) {
@@ -145,12 +194,20 @@ export class EmailAiWorker {
   getStatus(): EmailAiWorkerStatus {
     return {
       running: this.running,
-      processingJob: this.processingJob,
+      processingJob: this.processingJobs[0] ?? null,
+      processingJobs: [...this.processingJobs],
+      processingJobCount: this.processingJobs.length,
       lastTickAt: this.lastTickAt,
       lastError: this.lastError,
       jobsCompleted: this.jobsCompleted,
       jobsFailed: this.jobsFailed,
     };
+  }
+
+  private abortAllActiveJobs(): void {
+    for (const controller of this.jobControllers.values()) {
+      controller.abort();
+    }
   }
 
   async enqueueForNewMessages(accountId: string): Promise<void> {
@@ -176,63 +233,128 @@ export class EmailAiWorker {
         console.error(`[EmailAiWorker] enqueue failed for ${taskType}:`, err);
       }
     }
+    this.scheduleTick();
   }
 
-  private async tick(): Promise<void> {
-    if (!this.running || this.pausedByUserJob) return;
-
+  private async processBatch(taskTypes: string[]): Promise<boolean> {
     const settings = useSettingsStore.getState();
-    if (!settings.emailAiEnabled) return;
-
-    this.lastTickAt = Date.now();
-
-    const taskTypes = this.getEnabledClaimTaskTypes();
-    if (taskTypes.length === 0) return;
-
     const batchSize = Math.max(1, settings.emailAiWorkerCount);
-    let processed = 0;
+    configureLmStudioBackgroundConcurrency(batchSize);
 
-    while (processed < batchSize && this.running && !this.pausedByUserJob) {
+    const jobs: EmailAiJob[] = [];
+    for (let i = 0; i < batchSize && this.running && !this.pausedByUserJob; i++) {
+      const job = await emailClaimAiJob(taskTypes);
+      if (!job) break;
+      jobs.push(job);
+    }
+    if (jobs.length === 0) return false;
+
+    const jobsByModel = new Map<string, EmailAiJob[]>();
+    let handledAny = false;
+
+    for (const job of jobs) {
+      const modelId = this.resolveModelForTask(job.taskType as EmailAiFullTaskType);
+      if (!modelId) {
+        this.handleJobOutcome(job, await this.failJob(job.id, "no model configured for this task"));
+        handledAny = true;
+        continue;
+      }
+      const modelJobs = jobsByModel.get(modelId) ?? [];
+      modelJobs.push(job);
+      jobsByModel.set(modelId, modelJobs);
+    }
+
+    for (const [modelId, modelJobs] of jobsByModel) {
+      if (!this.running || this.pausedByUserJob) break;
+
+      const controllers = new Map<string, AbortController>();
+      for (const job of modelJobs) {
+        const controller = new AbortController();
+        controllers.set(job.id, controller);
+        this.jobControllers.set(job.id, controller);
+      }
+      this.processingJobs = [...this.processingJobs, ...modelJobs];
+      this.notify();
+
       try {
-        const job = await emailClaimAiJob(taskTypes);
-        if (!job) break;
-
-        this.processingJob = job;
-        this.abortController = new AbortController();
-        this.notify();
-
-        const outcome = await this.executeJob(job, this.abortController.signal);
-        if (outcome === "completed") {
-          this.jobsCompleted++;
-          this.emitJobSettled({ job, outcome: "completed" });
-          this.lastError = null;
-          processed++;
-        } else if (outcome === "failed") {
-          this.jobsFailed++;
-          this.emitJobSettled({ job, outcome: "failed" });
-          this.lastError = null;
+        try {
+          const firstSignal = controllers.values().next().value?.signal;
+          await ensureLmStudioModel(modelId, firstSignal);
+        } catch (err) {
+          for (const job of modelJobs) {
+            const signal = controllers.get(job.id)!.signal;
+            if (signal.aborted) {
+              await this.requeueJob(job);
+              this.handleJobOutcome(job, "requeued");
+            } else {
+              this.handleJobOutcome(
+                job,
+                await this.failJob(
+                  job.id,
+                  `model load failed: ${err instanceof Error ? err.message : String(err)}`,
+                ),
+              );
+            }
+          }
+          handledAny = true;
+          continue;
         }
-      } catch (err) {
-        if (this.abortController?.signal.aborted) {
-          // Aborted by pause or stop — the job was already re-queued or failed in executeJob
-        } else {
-          this.jobsFailed++;
-          this.lastError = err instanceof Error ? err.message : String(err);
+
+        if (this.pausedByUserJob) {
+          for (const job of modelJobs) {
+            await this.requeueJob(job);
+            this.handleJobOutcome(job, "requeued");
+          }
+          handledAny = true;
+          continue;
         }
-        break; // Stop batch on error
+
+        const outcomes = await Promise.all(
+          modelJobs.map((job) =>
+            this.executeJob(job, controllers.get(job.id)!.signal, {
+              modelId,
+              skipModelLoad: true,
+            }),
+          ),
+        );
+
+        modelJobs.forEach((job, index) => {
+          this.handleJobOutcome(job, outcomes[index]);
+        });
+        handledAny = true;
       } finally {
-        this.processingJob = null;
-        this.abortController = null;
+        this.processingJobs = this.processingJobs.filter(
+          (job) => !modelJobs.some((active) => active.id === job.id),
+        );
+        for (const job of modelJobs) {
+          this.jobControllers.delete(job.id);
+        }
         this.notify();
       }
+    }
+
+    return handledAny;
+  }
+
+  private handleJobOutcome(job: EmailAiJob, outcome: JobExecutionOutcome): void {
+    if (outcome === "completed") {
+      this.jobsCompleted++;
+      this.emitJobSettled({ job, outcome: "completed" });
+      this.lastError = null;
+    } else if (outcome === "failed") {
+      this.jobsFailed++;
+      this.emitJobSettled({ job, outcome: "failed" });
+      this.lastError = null;
     }
   }
 
   private async executeJob(
     job: EmailAiJob,
     signal: AbortSignal,
+    options?: { modelId?: string; skipModelLoad?: boolean },
   ): Promise<JobExecutionOutcome> {
-    const modelId = this.resolveModelForTask(job.taskType as EmailAiFullTaskType);
+    const modelId =
+      options?.modelId ?? this.resolveModelForTask(job.taskType as EmailAiFullTaskType);
     if (!modelId) {
       return this.failJob(job.id, "no model configured for this task");
     }
@@ -269,7 +391,9 @@ export class EmailAiWorker {
     }
 
     try {
-      await ensureLmStudioModel(modelId, signal);
+      if (!options?.skipModelLoad) {
+        await ensureLmStudioModel(modelId, signal);
+      }
     } catch (err) {
       if (signal.aborted) {
         await this.requeueJob(job);
@@ -298,6 +422,7 @@ export class EmailAiWorker {
         maxTokens: 1024,
         responseFormat: { type: "json_object" },
         reasoningEnabled: false,
+        background: true,
         signal,
         onChunk: (content) => {
           output += content;

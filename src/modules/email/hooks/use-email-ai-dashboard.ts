@@ -84,7 +84,7 @@ export function useEmailAiDashboard(accountId: string | null) {
   useEffect(() => {
     if (!emailAiEnabled || !accountId || !workerStatus.running) return;
     const busy =
-      workerStatus.processingJob !== null ||
+      workerStatus.processingJobCount > 0 ||
       (aiCoverage?.activeJobs.length ?? 0) > 0;
     const intervalMs = busy ? 2000 : 6000;
     const timer = setInterval(() => {
@@ -95,7 +95,8 @@ export function useEmailAiDashboard(accountId: string | null) {
     accountId,
     emailAiEnabled,
     workerStatus.running,
-    workerStatus.processingJob,
+    workerStatus.processingJobCount,
+    workerStatus.processingJobs,
     aiCoverage?.activeJobs.length,
     loadAiCoverage,
   ]);
@@ -121,12 +122,12 @@ export function useEmailAiDashboard(accountId: string | null) {
   }, [threads, accountId]);
 
   const activeJobCount = aiCoverage?.activeJobs.length ?? 0;
-  const isProcessing = workerStatus.processingJob !== null;
+  const isProcessing = workerStatus.processingJobCount > 0;
   const queuedJobCount =
     aiCoverage?.activeJobs.filter((job) => {
       if (job.status === "queued") return true;
       if (job.status === "running") {
-        return workerStatus.processingJob?.id !== job.id;
+        return !workerStatus.processingJobs.some((active) => active.id === job.id);
       }
       return false;
     }).length ?? 0;

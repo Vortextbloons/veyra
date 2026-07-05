@@ -299,8 +299,12 @@ export function EmailDashboard({ accountId }: { accountId: string }) {
   const { stats, workerStatus, aiCoverage, isProcessing, queuedJobCount } = dash;
   const workerLabel = !workerStatus.running
     ? "Worker stopped"
-    : isProcessing && workerStatus.processingJob
-      ? `Processing ${getTaskTypeLabel(workerStatus.processingJob.taskType)}`
+    : isProcessing
+      ? workerStatus.processingJobCount > 1
+        ? `Processing ${workerStatus.processingJobCount} jobs`
+        : workerStatus.processingJob
+          ? `Processing ${getTaskTypeLabel(workerStatus.processingJob.taskType)}`
+          : "Processing"
       : queuedJobCount > 0
         ? `${queuedJobCount} job${queuedJobCount === 1 ? "" : "s"} queued`
         : "Worker ready";
@@ -381,7 +385,11 @@ export function EmailDashboard({ accountId }: { accountId: string }) {
               <StatCard
                 label="In queue"
                 value={queuedJobCount}
-                hint={isProcessing ? "1 processing" : "Waiting to run"}
+                hint={
+                  isProcessing
+                    ? `${workerStatus.processingJobCount} processing`
+                    : "Waiting to run"
+                }
                 icon={<ListTodo className="size-4" />}
                 accent="from-indigo-500/20 to-violet-500/10 text-indigo-300"
               />
@@ -417,7 +425,9 @@ export function EmailDashboard({ accountId }: { accountId: string }) {
                     task={task}
                     isActivelyProcessing={
                       isProcessing &&
-                      workerStatus.processingJob?.taskType === task.taskType
+                      workerStatus.processingJobs.some(
+                        (active) => active.taskType === task.taskType,
+                      )
                     }
                   />
                 ))}
@@ -442,7 +452,8 @@ export function EmailDashboard({ accountId }: { accountId: string }) {
                       key={job.id}
                       job={job}
                       isActivelyProcessing={
-                        isProcessing && workerStatus.processingJob?.id === job.id
+                        isProcessing &&
+                      workerStatus.processingJobs.some((active) => active.id === job.id)
                       }
                     />
                   ))}
