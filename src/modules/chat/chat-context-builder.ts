@@ -70,5 +70,10 @@ export function formatToolResultsMessage(sections: string[]): string {
   if (sections.length === 0) {
     return "Tool calls completed with no usable results. Continue or answer from context.";
   }
-  return `${sections.join("\n\n")}\n\nUse the tool results above. You may call more tools if needed before answering. For web search, sources are displayed separately — do not list or cite URLs in prose.`;
+  const hasWebSearch = sections.some(
+    (section) => section.includes("<veyra_web_search>"),
+  );
+  const base = `${sections.join("\n\n")}\n\nUse the tool results above. You may call more tools if needed before answering.`;
+  if (!hasWebSearch) return base;
+  return `${base} For this chat reply, source links are shown in the UI separately — do not repeat URLs in prose unless the user explicitly asks for inline citations.`;
 }

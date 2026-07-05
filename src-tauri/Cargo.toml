@@ -53,3 +53,4 @@ htmd = "0.2"
 keyring = "3"
 uuid = { version = "1", features = ["v4"] }
 ammonia = "3"
+open = "5"

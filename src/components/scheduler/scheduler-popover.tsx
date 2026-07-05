@@ -5,7 +5,8 @@ import { aiScheduler, JOB_LABELS } from "@/lib/ai-scheduler";
 import type { AiJobSnapshot } from "@/lib/ai-scheduler";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { PriorityChip } from "@/components/scheduler/priority-chip";
-import { JobRow, SectionHeader, formatElapsed } from "@/components/scheduler/job-row";
+import { JobRow, SectionHeader } from "@/components/scheduler/job-row";
+import { formatElapsed } from "@/components/scheduler/job-row-helpers";
 import { JobDetail } from "@/components/scheduler/job-detail";
 
 function SchedulerStatusDot() {

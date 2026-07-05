@@ -1,3 +1,4 @@
+import { runWithConcurrency } from "@/lib/async-pool";
 import { resolveDirectSearchProviders } from "@/lib/direct-search-providers";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -53,21 +54,6 @@ export type RunSearchOptions = {
   directWikipediaSearch?: boolean;
   multiQuery?: boolean;
 };
-
-async function runWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-  async function loop() {
-    while (cursor < items.length) {
-      const index = cursor++;
-      const item = items[index];
-      if (item === undefined) break;
-      results[index] = await worker(item, index);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => loop()));
-  return results;
-}
 
 export async function runSearch(
   query: string,

@@ -5,6 +5,7 @@ import type {
   EmailDraft,
   EmailFolder,
   EmailMessage,
+  EmailAttachment,
 } from "./email-types";
 
 export async function emailListAccounts(): Promise<EmailAccount[]> {
@@ -114,4 +115,28 @@ export async function emailReparseMessage(
   messageId: string,
 ): Promise<EmailMessage> {
   return invoke<EmailMessage>("email_reparse_message", { messageId });
+}
+
+export async function emailListAttachments(
+  messageId: string,
+): Promise<EmailAttachment[]> {
+  return invoke<EmailAttachment[]>("email_list_attachments", { messageId });
+}
+
+export async function emailDownloadAttachment(
+  attachmentId: string,
+): Promise<EmailAttachment> {
+  return invoke<EmailAttachment>("email_download_attachment", { attachmentId });
+}
+
+export async function emailExtractAttachmentText(
+  attachmentId: string,
+): Promise<EmailAttachment> {
+  return invoke<EmailAttachment>("email_extract_attachment_text", {
+    attachmentId,
+  });
+}
+
+export async function emailOpenAttachment(attachmentId: string): Promise<void> {
+  return invoke<void>("email_open_attachment", { attachmentId });
 }

@@ -1,6 +1,6 @@
 use crate::shared::db_utils::run_db_command;
 use crate::email::db::{self as email_db, EmailDbState};
-use tauri::State;
+use tauri::{Manager, State};
 
 #[tauri::command]
 pub async fn email_list_accounts(
@@ -192,4 +192,64 @@ pub async fn email_reparse_message(
         email_db::reparse_message(conn, &message_id)
     })
     .await
+}
+
+#[tauri::command]
+pub async fn email_list_attachments(
+    message_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<Vec<email_db::FullEmailAttachmentRow>, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::list_attachments(conn, &message_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_download_attachment(
+    attachment_id: String,
+    app: tauri::AppHandle,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::FullEmailAttachmentRow, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::download_attachment(conn, &attachment_id, &app_data_dir)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_extract_attachment_text(
+    attachment_id: String,
+    state: State<'_, EmailDbState>,
+) -> Result<email_db::FullEmailAttachmentRow, String> {
+    run_db_command(state.inner(), "email", move |conn| {
+        email_db::extract_attachment_text(conn, &attachment_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn email_open_attachment(
+    attachment_id: String,
+    app: tauri::AppHandle,
+    state: State<'_, EmailDbState>,
+) -> Result<(), String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+    let path = run_db_command(state.inner(), "email", move |conn| {
+        let att = email_db::get_attachment_row(conn, &attachment_id)?;
+        if att.download_status != "downloaded" {
+            email_db::download_attachment(conn, &attachment_id, &app_data_dir)?;
+        }
+        email_db::get_attachment_local_path(conn, &attachment_id)
+    })
+    .await?;
+    open::that(&path).map_err(|e| format!("failed to open attachment: {e}"))?;
+    Ok(())
 }

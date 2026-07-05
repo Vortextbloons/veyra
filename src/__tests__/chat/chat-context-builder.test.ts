@@ -14,6 +14,14 @@ describe("formatToolResultsMessage", () => {
     expect(result).toContain("result A");
     expect(result).toContain("result B");
     expect(result).toContain("Use the tool results above");
+    expect(result).not.toContain("do not repeat URLs");
+  });
+
+  it("adds chat-only citation guidance when web search results are present", () => {
+    const result = formatToolResultsMessage([
+      'Tool result for web_search({"query":"test"}):\n\n<veyra_web_search>\nresults\n</veyra_web_search>',
+    ]);
+    expect(result).toContain("do not repeat URLs in prose");
   });
 });
 

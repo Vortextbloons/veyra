@@ -10,7 +10,7 @@ import {
   statusColor,
   statusBorderColor,
   jobTypeIcon,
-} from "@/components/scheduler/job-row";
+} from "@/components/scheduler/job-row-helpers";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);

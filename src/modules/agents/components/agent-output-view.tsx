@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { ChevronRight, Bot, Loader2, Sparkles, Square, TerminalSquare } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
-import { AgentChatTurn, buildAgentChatTurns } from "@/modules/agents/components/agent-chat-turn";
-import type { AgentChatTurnModel } from "@/modules/agents/components/agent-chat-turn";
-import { AGENT_MODES, StatusDot } from "@/modules/agents/components/agents-panel";
+import { AgentChatTurn } from "@/modules/agents/components/agent-chat-turn";
+import { buildAgentChatTurns, type AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
+import { AGENT_MODES } from "@/modules/agents/agent-mode-options";
+import { StatusDot } from "@/modules/agents/agent-status-dot";
 
 export function AgentOutputView({
   session,

@@ -59,7 +59,7 @@ function describeOptions(options?: CharacterAssistOptions): string {
 const CORE_RULES = `You help the user author a fictional character card for a local roleplay application.
 
 Hard rules:
-- Output ONLY the requested JSON object. No preamble, no markdown fences, no trailing commentary.
+- Output ONLY the requested JSON object. No preamble, no markdown fences, no trailing commentary. Start with { and end with }.
 - Never include personal data about real, named people (living or recently deceased). Refuse politely if asked to clone a real person.
 - Use neutral, second-person descriptions of the character (e.g. "Lyra is…", not "I am Lyra…").
 - Avoid slurs. Avoid sexual content involving minors. Avoid instructions that facilitate harm.

@@ -1,6 +1,6 @@
 import { Plus, Square, Trash2 } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
-import { StatusDot } from "@/modules/agents/components/agents-panel";
+import { StatusDot } from "@/modules/agents/agent-status-dot";
 
 export function AgentSessionList({
   sessions,

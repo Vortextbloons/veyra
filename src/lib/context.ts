@@ -34,7 +34,7 @@ export interface BuildChatContextOptions {
   documentInstructionsBlock?: string | null;
   /** Project-level instructions and context. */
   projectPromptBlock?: string | null;
-  /** Custom user system prompt prepended before the core prompt. */
+  /** Custom user preferences block appended after the core prompt. */
   userPrompt?: string | null;
   /** Number of tokens reserved for the model's response. */
   reservedOutputTokens?: number;

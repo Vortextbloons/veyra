@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { EmailAccount, EmailThread, EmailDraft, EmailFolder } from "./email-types";
+import type { EmailAccount, EmailThread, EmailDraft, EmailFolder, EmailAttachment } from "./email-types";
 import {
   emailListAccounts,
   emailListThreads,
@@ -18,6 +18,10 @@ import {
   emailSyncAllGmail,
   emailRemoveAccount,
   emailListFolders,
+  emailListAttachments,
+  emailDownloadAttachment,
+  emailExtractAttachmentText,
+  emailOpenAttachment,
 } from "./tauri-commands";
 
 type EmailStore = {
@@ -33,6 +37,8 @@ type EmailStore = {
   isLoading: boolean;
   error: string | null;
   hydrationState: "loading" | "ready";
+  attachments: Record<string, EmailAttachment[]>;
+  attachmentLoadingIds: Set<string>;
 
   hydrateAccounts: () => Promise<void>;
   loadFolders: (accountId?: string) => Promise<void>;
@@ -57,6 +63,10 @@ type EmailStore = {
   cancelCompose: () => void;
   sendDraft: () => Promise<void>;
   saveDraft: () => Promise<void>;
+  loadAttachments: (messageId: string) => Promise<void>;
+  downloadAttachment: (attachmentId: string) => Promise<void>;
+  extractAttachmentText: (attachmentId: string) => Promise<void>;
+  openAttachment: (attachmentId: string) => Promise<void>;
 };
 
 let hydrationPromise: Promise<void> | null = null;
@@ -101,6 +111,8 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   error: null,
   hydrationState: "loading",
   hasGmailOauthConfig: false,
+  attachments: {},
+  attachmentLoadingIds: new Set(),
 
   hydrateAccounts: async () => {
     if (get().hydrationState === "ready") return;
@@ -447,6 +459,98 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       const saved = await emailSaveDraft(draft);
       set({ draft: saved });
       if (get().activeFolder === "drafts") await get().loadThreads();
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  loadAttachments: async (messageId) => {
+    try {
+      const atts = await emailListAttachments(messageId);
+      set((state) => ({
+        attachments: { ...state.attachments, [messageId]: atts },
+      }));
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  downloadAttachment: async (attachmentId) => {
+    set((state) => ({
+      attachmentLoadingIds: new Set([...state.attachmentLoadingIds, attachmentId]),
+    }));
+    try {
+      const updated = await emailDownloadAttachment(attachmentId);
+      set((state) => {
+        const msgAtts = state.attachments[updated.messageId] ?? [];
+        const nextAtts = msgAtts.map((a) => (a.id === attachmentId ? updated : a));
+        const nextLoading = new Set(state.attachmentLoadingIds);
+        nextLoading.delete(attachmentId);
+        return {
+          attachments: { ...state.attachments, [updated.messageId]: nextAtts },
+          attachmentLoadingIds: nextLoading,
+        };
+      });
+    } catch (error) {
+      try {
+        const msgId =
+          Object.values(get().attachments)
+            .flat()
+            .find((a) => a.id === attachmentId)?.messageId ?? "";
+        const updated = await emailListAttachments(msgId);
+        const refreshed = updated.find((a) => a.id === attachmentId);
+        if (refreshed) {
+          set((state) => {
+            const msgAtts = state.attachments[refreshed.messageId] ?? [];
+            const nextAtts = msgAtts.map((a) => (a.id === attachmentId ? refreshed : a));
+            const nextLoading = new Set(state.attachmentLoadingIds);
+            nextLoading.delete(attachmentId);
+            return {
+              attachments: { ...state.attachments, [refreshed.messageId]: nextAtts },
+              attachmentLoadingIds: nextLoading,
+            };
+          });
+          return;
+        }
+      } catch {
+        // fall through to just clear loading
+      }
+      set((state) => {
+        const nextLoading = new Set(state.attachmentLoadingIds);
+        nextLoading.delete(attachmentId);
+        return { error: String(error), attachmentLoadingIds: nextLoading };
+      });
+    }
+  },
+
+  extractAttachmentText: async (attachmentId) => {
+    set((state) => ({
+      attachmentLoadingIds: new Set([...state.attachmentLoadingIds, attachmentId]),
+    }));
+    try {
+      const updated = await emailExtractAttachmentText(attachmentId);
+      set((state) => {
+        const msgAtts = state.attachments[updated.messageId] ?? [];
+        const nextAtts = msgAtts.map((a) => (a.id === attachmentId ? updated : a));
+        const nextLoading = new Set(state.attachmentLoadingIds);
+        nextLoading.delete(attachmentId);
+        return {
+          attachments: { ...state.attachments, [updated.messageId]: nextAtts },
+          attachmentLoadingIds: nextLoading,
+        };
+      });
+    } catch (error) {
+      set((state) => {
+        const nextLoading = new Set(state.attachmentLoadingIds);
+        nextLoading.delete(attachmentId);
+        return { error: String(error), attachmentLoadingIds: nextLoading };
+      });
+    }
+  },
+
+  openAttachment: async (attachmentId) => {
+    try {
+      await emailOpenAttachment(attachmentId);
     } catch (error) {
       set({ error: String(error) });
     }

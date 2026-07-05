@@ -40,6 +40,27 @@ pub struct EmailAttachmentRow {
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct FullEmailAttachmentRow {
+    pub id: String,
+    pub account_id: String,
+    pub thread_id: String,
+    pub message_id: String,
+    pub provider_attachment_id: Option<String>,
+    pub filename: String,
+    pub mime_type: String,
+    pub size: i64,
+    pub local_path: Option<String>,
+    pub download_status: String,
+    pub extract_status: String,
+    pub extracted_text: Option<String>,
+    pub extracted_text_chars: i64,
+    pub error: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct EmailMessageRow {
     pub id: String,
     pub thread_id: String,
@@ -877,7 +898,7 @@ fn refresh_gmail_token(conn: &Connection, account_id: &str) -> Result<String, St
     }
     let (client_id, client_secret) = gmail_oauth_config(conn)?;
     let client = reqwest::blocking::Client::new();
-    let value: Value = client
+    let response = client
         .post("https://oauth2.googleapis.com/token")
         .form(&[
             ("client_id", client_id.as_str()),
@@ -886,8 +907,8 @@ fn refresh_gmail_token(conn: &Connection, account_id: &str) -> Result<String, St
             ("grant_type", "refresh_token"),
         ])
         .send()
-        .map_err(|e| e.to_string())
-        .and_then(google_response_json)?;
+        .map_err(|e| e.to_string())?;
+    let value = google_refresh_response_json(conn, account_id, response)?;
     let access_token = value
         .get("access_token")
         .and_then(Value::as_str)
@@ -905,6 +926,24 @@ fn refresh_gmail_token(conn: &Connection, account_id: &str) -> Result<String, St
     )
     .map_err(|e| e.to_string())?;
     Ok(access_token)
+}
+
+fn disconnect_gmail_account_for_reauth(conn: &Connection, account_id: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE email_accounts SET status = 'disconnected', sync_status = 'error' WHERE id = ?1 AND provider = 'gmail'",
+        params![account_id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM email_account_tokens WHERE account_id = ?1",
+        params![account_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn gmail_reauth_required_error() -> String {
+    "Gmail authorization expired or was revoked. Reconnect this Gmail account to continue syncing and sending mail.".to_string()
 }
 
 fn google_api_request_json(
@@ -932,6 +971,37 @@ fn google_response_json(response: reqwest::blocking::Response) -> Result<Value, 
     }
     serde_json::from_str(&body)
         .map_err(|e| format!("failed to parse Google OAuth token response: {e}; body: {body}"))
+}
+
+fn google_refresh_response_json(
+    conn: &Connection,
+    account_id: &str,
+    response: reqwest::blocking::Response,
+) -> Result<Value, String> {
+    let status = response.status();
+    let body = response.text().map_err(|e| e.to_string())?;
+    if status.is_success() {
+        return serde_json::from_str(&body).map_err(|e| {
+            format!("failed to parse Google OAuth token response: {e}; body: {body}")
+        });
+    }
+    if is_invalid_grant_response(&body) {
+        disconnect_gmail_account_for_reauth(conn, account_id)?;
+        return Err(gmail_reauth_required_error());
+    }
+    Err(format!("Google OAuth token request failed ({status}): {body}"))
+}
+
+fn is_invalid_grant_response(body: &str) -> bool {
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("error")
+                .and_then(Value::as_str)
+                .map(|error| error == "invalid_grant")
+        })
+        .unwrap_or(false)
 }
 
 fn upsert_gmail_account(
@@ -1365,6 +1435,321 @@ fn collect_attachment_parts(payload: &Value, out: &mut Vec<GmailAttachmentMeta>)
             collect_attachment_parts(part, out);
         }
     }
+}
+
+pub fn list_attachments(conn: &Connection, message_id: &str) -> Result<Vec<FullEmailAttachmentRow>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, account_id, thread_id, message_id, provider_attachment_id,
+                    filename, mime_type, size, local_path, download_status,
+                    extract_status, extracted_text, extracted_text_chars,
+                    error, created_at, updated_at
+             FROM email_attachments WHERE message_id = ?1 ORDER BY filename",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![message_id], |row| {
+            Ok(FullEmailAttachmentRow {
+                id: row.get(0)?,
+                account_id: row.get(1)?,
+                thread_id: row.get(2)?,
+                message_id: row.get(3)?,
+                provider_attachment_id: row.get(4)?,
+                filename: row.get(5)?,
+                mime_type: row.get(6)?,
+                size: row.get(7)?,
+                local_path: row.get(8)?,
+                download_status: row.get(9)?,
+                extract_status: row.get(10)?,
+                extracted_text: row.get(11)?,
+                extracted_text_chars: row.get(12)?,
+                error: row.get(13)?,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
+}
+
+pub fn get_attachment_row(conn: &Connection, attachment_id: &str) -> Result<FullEmailAttachmentRow, String> {
+    conn.query_row(
+        "SELECT id, account_id, thread_id, message_id, provider_attachment_id,
+                filename, mime_type, size, local_path, download_status,
+                extract_status, extracted_text, extracted_text_chars,
+                error, created_at, updated_at
+         FROM email_attachments WHERE id = ?1",
+        params![attachment_id],
+        |row| {
+            Ok(FullEmailAttachmentRow {
+                id: row.get(0)?,
+                account_id: row.get(1)?,
+                thread_id: row.get(2)?,
+                message_id: row.get(3)?,
+                provider_attachment_id: row.get(4)?,
+                filename: row.get(5)?,
+                mime_type: row.get(6)?,
+                size: row.get(7)?,
+                local_path: row.get(8)?,
+                download_status: row.get(9)?,
+                extract_status: row.get(10)?,
+                extracted_text: row.get(11)?,
+                extracted_text_chars: row.get(12)?,
+                error: row.get(13)?,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
+            })
+        },
+    )
+    .map_err(|e| format!("attachment not found: {e}"))
+}
+
+pub fn download_attachment(
+    conn: &Connection,
+    attachment_id: &str,
+    app_data_dir: &std::path::Path,
+) -> Result<FullEmailAttachmentRow, String> {
+    let att = get_attachment_row(conn, attachment_id)?;
+    if att.download_status == "downloaded" {
+        return Ok(att);
+    }
+    let provider_att_id = att
+        .provider_attachment_id
+        .as_ref()
+        .ok_or("attachment has no provider_attachment_id")?;
+    let now = now_ms();
+    conn.execute(
+        "UPDATE email_attachments SET download_status = 'downloading', error = NULL, updated_at = ?1 WHERE id = ?2",
+        params![now, attachment_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let result = (|| -> Result<FullEmailAttachmentRow, String> {
+        let token = refresh_gmail_token(conn, &att.account_id)?;
+        let provider_message_id: String = conn
+            .query_row(
+                "SELECT provider_message_id FROM email_messages WHERE id = ?1",
+                params![att.message_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("failed to look up provider_message_id: {e}"))?;
+        let url = format!(
+            "https://gmail.googleapis.com/gmail/v1/users/me/messages/{}/attachments/{}",
+            provider_message_id, provider_att_id
+        );
+        let value: Value = reqwest::blocking::Client::new()
+            .get(&url)
+            .bearer_auth(&token)
+            .send()
+            .map_err(|e| e.to_string())?
+            .error_for_status()
+            .map_err(|e| e.to_string())?
+            .json()
+            .map_err(|e| e.to_string())?;
+        let data_b64 = value
+            .get("data")
+            .and_then(Value::as_str)
+            .ok_or("Gmail attachment response missing data field")?;
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(data_b64)
+            .map_err(|e| format!("failed to decode attachment base64: {e}"))?;
+
+        let dir = app_data_dir
+            .join("email_attachments")
+            .join(&att.account_id)
+            .join(&att.message_id);
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("failed to create attachment dir {:?}: {e}", dir))?;
+        let safe_filename = att
+            .filename
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+            .collect::<String>();
+        let safe_name = format!("{}_{}", attachment_id, safe_filename);
+        let file_path = dir.join(&safe_name);
+        std::fs::write(&file_path, &bytes)
+            .map_err(|e| format!("failed to write attachment {:?}: {e}", file_path))?;
+
+        let local_path_str = file_path.to_string_lossy().to_string();
+        let now = now_ms();
+        conn.execute(
+            "UPDATE email_attachments SET download_status = 'downloaded', local_path = ?1, error = NULL, updated_at = ?2 WHERE id = ?3",
+            params![local_path_str, now, attachment_id],
+        )
+        .map_err(|e| e.to_string())?;
+
+        get_attachment_row(conn, attachment_id)
+    })();
+
+    match result {
+        Ok(row) => Ok(row),
+        Err(err) => {
+            let now = now_ms();
+            let _ = conn.execute(
+                "UPDATE email_attachments SET download_status = 'failed', error = ?1, updated_at = ?2 WHERE id = ?3",
+                params![err, now, attachment_id],
+            );
+            Err(err)
+        }
+    }
+}
+
+pub fn extract_attachment_text(
+    conn: &Connection,
+    attachment_id: &str,
+) -> Result<FullEmailAttachmentRow, String> {
+    let att = get_attachment_row(conn, attachment_id)?;
+    if att.extract_status == "extracted" {
+        return Ok(att);
+    }
+    if att.download_status != "downloaded" {
+        return Err("attachment must be downloaded before extraction".into());
+    }
+    let local_path = att.local_path.as_ref().ok_or("attachment has no local_path")?;
+    let now = now_ms();
+    conn.execute(
+        "UPDATE email_attachments SET extract_status = 'extracting', error = NULL, updated_at = ?1 WHERE id = ?2",
+        params![now, attachment_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let result = (|| -> Result<(String, i64), String> {
+        let mime = att.mime_type.to_lowercase();
+        let path = std::path::Path::new(local_path);
+
+        let text = if mime.starts_with("text/")
+            || mime == "application/json"
+            || mime == "application/xml"
+            || mime == "application/javascript"
+            || mime == "application/csv"
+            || mime.ends_with("+xml")
+            || mime.ends_with("+json")
+        {
+            std::fs::read_to_string(path)
+                .map_err(|e| format!("failed to read text file: {e}"))?
+        } else if mime == "application/pdf" {
+            pdf_extract::extract_text(path)
+                .map_err(|e| format!("PDF extraction failed: {e}"))?
+        } else if mime
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            || att.filename.to_lowercase().ends_with(".docx")
+        {
+            extract_docx_text(path)?
+        } else if mime
+            == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            || att.filename.to_lowercase().ends_with(".xlsx")
+        {
+            extract_xlsx_text(path)?
+        } else if mime == "text/csv" || att.filename.to_lowercase().ends_with(".csv") {
+            std::fs::read_to_string(path)
+                .map_err(|e| format!("failed to read CSV file: {e}"))?
+        } else {
+            return Err(format!("unsupported mime type: {mime}"));
+        };
+
+        let trimmed = text.trim().to_string();
+        let chars = trimmed.chars().count() as i64;
+        Ok((trimmed, chars))
+    })();
+
+    match result {
+        Ok((text, chars)) => {
+            let now = now_ms();
+            conn.execute(
+                "UPDATE email_attachments SET extract_status = 'extracted', extracted_text = ?1, extracted_text_chars = ?2, error = NULL, updated_at = ?3 WHERE id = ?4",
+                params![text, chars, now, attachment_id],
+            )
+            .map_err(|e| e.to_string())?;
+            get_attachment_row(conn, attachment_id)
+        }
+        Err(err) => {
+            let status = if err.starts_with("unsupported mime type") {
+                "unsupported"
+            } else {
+                "failed"
+            };
+            let now = now_ms();
+            let _ = conn.execute(
+                "UPDATE email_attachments SET extract_status = ?1, error = ?2, updated_at = ?3 WHERE id = ?4",
+                params![status, err, now, attachment_id],
+            );
+            Err(err)
+        }
+    }
+}
+
+fn extract_docx_text(path: &std::path::Path) -> Result<String, String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("failed to open docx: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("failed to read docx zip: {e}"))?;
+    let doc_xml = archive
+        .by_name("word/document.xml")
+        .map_err(|e| format!("docx missing word/document.xml: {e}"))?;
+    let reader = std::io::BufReader::new(doc_xml);
+    let mut xml_reader = quick_xml::Reader::from_reader(reader);
+    let mut text = String::new();
+    let mut buf = Vec::new();
+    loop {
+        match xml_reader.read_event_into(&mut buf) {
+            Ok(quick_xml::events::Event::Text(t)) => {
+                let decoded = t.unescape().map_err(|e| e.to_string())?;
+                text.push_str(&decoded);
+                text.push(' ');
+            }
+            Ok(quick_xml::events::Event::End(ref e))
+                if e.name().as_ref() == b"w:p" =>
+            {
+                text.push('\n');
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(e) => return Err(format!("docx xml parse error: {e}")),
+            _ => {}
+        }
+        buf.clear();
+    }
+    Ok(text)
+}
+
+fn extract_xlsx_text(path: &std::path::Path) -> Result<String, String> {
+    use calamine::{open_workbook, Reader, Xlsx, Data};
+    let mut workbook: Xlsx<_> = open_workbook(path)
+        .map_err(|e| format!("failed to open xlsx: {e}"))?;
+    let mut text = String::new();
+    for sheet_name in workbook.sheet_names().to_owned() {
+        if let Ok(range) = workbook.worksheet_range(&sheet_name) {
+            text.push_str(&format!("[{sheet_name}]\n"));
+            for row in range.rows() {
+                for cell in row {
+                    match cell {
+                        Data::String(s) => text.push_str(s),
+                        Data::Float(f) => text.push_str(&f.to_string()),
+                        Data::Int(i) => text.push_str(&i.to_string()),
+                        Data::Bool(b) => text.push_str(&b.to_string()),
+                        Data::Empty => {}
+                        _ => {}
+                    }
+                    text.push('\t');
+                }
+                text.push('\n');
+            }
+        }
+    }
+    Ok(text)
+}
+
+pub fn get_attachment_local_path(
+    conn: &Connection,
+    attachment_id: &str,
+) -> Result<String, String> {
+    let att = get_attachment_row(conn, attachment_id)?;
+    if att.download_status != "downloaded" {
+        return Err("attachment is not downloaded".into());
+    }
+    att.local_path.ok_or_else(|| "attachment has no local_path".into())
 }
 
 fn parse_address(raw: &str) -> (String, String) {
@@ -2582,6 +2967,55 @@ mod tests {
     }
 
     #[test]
+    fn invalid_grant_response_is_detected_from_google_body() {
+        assert!(is_invalid_grant_response(
+            r#"{ "error": "invalid_grant", "error_description": "Token has been expired or revoked." }"#
+        ));
+        assert!(!is_invalid_grant_response(
+            r#"{ "error": "temporarily_unavailable" }"#
+        ));
+        assert!(!is_invalid_grant_response("not json"));
+    }
+
+    #[test]
+    fn disconnect_gmail_account_for_reauth_marks_account_and_removes_token() {
+        let conn = open_test_db();
+        run_migrations(&conn).expect("migrations should succeed");
+
+        conn.execute(
+            "INSERT INTO email_accounts (id, name, email, provider, status, created_at) VALUES ('acct-1', 'Test', 'test@example.com', 'gmail', 'connected', 0)",
+            [],
+        )
+        .expect("insert account");
+        conn.execute(
+            "INSERT INTO email_account_tokens (account_id, access_token, refresh_token, expires_at) VALUES ('acct-1', 'access', 'refresh', 0)",
+            [],
+        )
+        .expect("insert token");
+
+        disconnect_gmail_account_for_reauth(&conn, "acct-1").expect("disconnect account");
+
+        let (status, sync_status): (String, String) = conn
+            .query_row(
+                "SELECT status, sync_status FROM email_accounts WHERE id = 'acct-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read account");
+        assert_eq!(status, "disconnected");
+        assert_eq!(sync_status, "error");
+
+        let token_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM email_account_tokens WHERE account_id = 'acct-1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count tokens");
+        assert_eq!(token_count, 0);
+    }
+
+    #[test]
     fn add_column_if_missing_adds_new_column() {
         let conn = open_test_db();
         conn.execute_batch("CREATE TABLE test_table (id TEXT PRIMARY KEY)")
@@ -2952,5 +3386,98 @@ mod tests {
 
         let ids = query_inbox_thread_ids(&conn, "a1").unwrap();
         assert_eq!(ids, vec!["t1".to_string()]);
+    }
+
+    fn setup_attachment_test_data(conn: &Connection) {
+        conn.execute(
+            "INSERT INTO email_accounts (id, name, email, provider, status, created_at) VALUES ('a1', 'A', 'a@e.com', 'gmail', 'connected', 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_threads (id, account_id, subject, last_message_at, labels_json) VALUES ('t1', 'a1', 'Test', 100, '[]')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_messages (id, thread_id, account_id, from_name, from_email, to_json, cc_json, subject, body, snippet, timestamp, labels_json, attachments_json)
+             VALUES ('m1', 't1', 'a1', 'A', 'a@e.com', '[]', '[]', 'Test', 'body', 'snippet', 100, '[]', '[]')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_attachments (id, account_id, thread_id, message_id, provider_attachment_id, filename, mime_type, size, download_status, extract_status, created_at, updated_at)
+             VALUES ('att-1', 'a1', 't1', 'm1', 'prov-1', 'report.pdf', 'application/pdf', 1024, 'metadata', 'not_started', 0, 0)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO email_attachments (id, account_id, thread_id, message_id, provider_attachment_id, filename, mime_type, size, download_status, extract_status, created_at, updated_at)
+             VALUES ('att-2', 'a1', 't1', 'm1', 'prov-2', 'notes.txt', 'text/plain', 512, 'downloaded', 'not_started', 0, 0)",
+            [],
+        ).unwrap();
+    }
+
+    #[test]
+    fn list_attachments_returns_all_for_message() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_attachment_test_data(&conn);
+
+        let atts = list_attachments(&conn, "m1").unwrap();
+        assert_eq!(atts.len(), 2);
+        assert_eq!(atts[0].filename, "notes.txt");
+        assert_eq!(atts[1].filename, "report.pdf");
+    }
+
+    #[test]
+    fn list_attachments_returns_empty_for_unknown_message() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+
+        let atts = list_attachments(&conn, "nonexistent").unwrap();
+        assert!(atts.is_empty());
+    }
+
+    #[test]
+    fn get_attachment_local_path_requires_downloaded() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_attachment_test_data(&conn);
+
+        let err = get_attachment_local_path(&conn, "att-1").unwrap_err();
+        assert!(err.contains("not downloaded"));
+
+        let err = get_attachment_local_path(&conn, "att-2").unwrap_err();
+        assert!(err.contains("no local_path"));
+    }
+
+    #[test]
+    fn extract_attachment_text_requires_downloaded() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_attachment_test_data(&conn);
+
+        let err = extract_attachment_text(&conn, "att-1").unwrap_err();
+        assert!(err.contains("must be downloaded"));
+    }
+
+    #[test]
+    fn attachment_full_row_fields() {
+        let conn = open_test_db();
+        run_migrations(&conn).unwrap();
+        setup_attachment_test_data(&conn);
+
+        let atts = list_attachments(&conn, "m1").unwrap();
+        let pdf = atts.iter().find(|a| a.filename == "report.pdf").unwrap();
+        assert_eq!(pdf.id, "att-1");
+        assert_eq!(pdf.account_id, "a1");
+        assert_eq!(pdf.thread_id, "t1");
+        assert_eq!(pdf.message_id, "m1");
+        assert_eq!(pdf.provider_attachment_id, Some("prov-1".to_string()));
+        assert_eq!(pdf.mime_type, "application/pdf");
+        assert_eq!(pdf.size, 1024);
+        assert_eq!(pdf.download_status, "metadata");
+        assert_eq!(pdf.extract_status, "not_started");
+        assert!(pdf.local_path.is_none());
+        assert!(pdf.extracted_text.is_none());
+        assert_eq!(pdf.extracted_text_chars, 0);
+        assert!(pdf.error.is_none());
     }
 }

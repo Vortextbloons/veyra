@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import { useState } from "react";
 import {
   AlertTriangle,
@@ -6,14 +5,12 @@ import {
   CheckCircle2,
   Folder,
   FolderOpen,
-  Hammer,
-  ListTodo,
   PanelLeftClose,
   PanelLeftOpen,
   TerminalSquare,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
+import { AGENT_MODES } from "@/modules/agents/agent-mode-options";
 import { AgentEmptyState, AgentOutputView } from "@/modules/agents/components/agent-output-view";
 import { AgentSessionList } from "@/modules/agents/components/agent-session-list";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -32,11 +29,6 @@ type AgentsPanelProps = {
   onStopSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
 };
-
-export const AGENT_MODES: { id: AgentMode; label: string; detail: string; icon: ReactNode }[] = [
-  { id: "plan", label: "Plan", detail: "Read-only analysis & strategy", icon: <ListTodo className="size-3.5" /> },
-  { id: "build", label: "Build", detail: "Take action on your machine", icon: <Hammer className="size-3.5" /> },
-];
 
 export function AgentsPanel({
   sessions,
@@ -243,31 +235,4 @@ function RuntimePill({
       {isReady ? "Ready" : isMissing ? "Missing" : "Check"}
     </button>
   );
-}
-
-export function StatusDot({
-  status,
-  className = "",
-}: {
-  status: AgentSession["status"];
-  className?: string;
-}) {
-  if (status === "running") {
-    return (
-      <span
-        className={`inline-block size-2 animate-pulse rounded-full bg-indigo-400 ${className}`}
-      />
-    );
-  }
-  const color =
-    status === "completed"
-      ? "bg-emerald-400"
-      : status === "ready"
-        ? "bg-cyan-400"
-      : status === "failed"
-        ? "bg-red-400"
-        : status === "stopped"
-          ? "bg-amber-400"
-          : "bg-[var(--color-text-dim)]/50";
-  return <span className={`inline-block size-2 rounded-full ${color} ${className}`} />;
 }

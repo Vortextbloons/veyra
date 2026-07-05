@@ -133,6 +133,7 @@ dependencies = [
  "htmd",
  "keyring",
  "log",
+ "open",
  "parking_lot",
  "pdf-extract",
  "quick-xml 0.37.5",
