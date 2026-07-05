@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { emailAiWorker } from "../email-ai-worker";
+import { startEmailAiWorker, stopEmailAiWorker } from "../email-store";
 
 const POLL_OPTIONS = [
   { label: "30s", value: 30000 },
@@ -78,7 +79,14 @@ function EmailAiSettingsPopover({ onClose }: { onClose: () => void }) {
           label="Email AI enabled"
           description="Process emails with AI after sync"
           checked={settings.emailAiEnabled}
-          onChange={settings.setEmailAiEnabled}
+          onChange={(enabled) => {
+            settings.setEmailAiEnabled(enabled);
+            if (enabled) {
+              startEmailAiWorker();
+            } else {
+              stopEmailAiWorker();
+            }
+          }}
         />
 
         {settings.emailAiEnabled && (
@@ -155,9 +163,10 @@ function EmailAiSettingsPopover({ onClose }: { onClose: () => void }) {
               </div>
               <select
                 value={settings.emailAiPollInterval}
-                onChange={(e) =>
-                  settings.setEmailAiPollInterval(Number(e.target.value))
-                }
+                onChange={(e) => {
+                  settings.setEmailAiPollInterval(Number(e.target.value));
+                  emailAiWorker.restartPollTimer();
+                }}
                 className="h-7 rounded-md border border-[var(--color-border)] bg-black/20 px-2 text-[12px] text-[var(--color-text)]"
               >
                 {POLL_OPTIONS.map((opt) => (

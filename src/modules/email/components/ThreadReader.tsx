@@ -16,10 +16,17 @@ import {
   ExternalLink,
   Eye,
   X,
+  Bot,
+  Tag,
+  Shield,
+  AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 import { useEmailStore } from "../email-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { EmailHtmlBody } from "./EmailHtmlBody";
-import type { EmailMessage, EmailAttachment } from "../email-types";
+import { emailListAiOutputs } from "../tauri-commands";
+import type { EmailMessage, EmailAttachment, EmailAiOutput } from "../email-types";
 
 export function ThreadReader() {
   const threads = useEmailStore((s) => s.threads);
@@ -37,6 +44,8 @@ export function ThreadReader() {
   const openAttachment = useEmailStore((s) => s.openAttachment);
 
   const thread = threads.find((t) => t.id === activeThreadId);
+  const emailAiEnabled = useSettingsStore((s) => s.emailAiEnabled);
+  const [aiOutputs, setAiOutputs] = useState<EmailAiOutput[]>([]);
 
   const stableLoadAttachments = useCallback(loadAttachments, [loadAttachments]);
 
@@ -47,8 +56,13 @@ export function ThreadReader() {
           void stableLoadAttachments(msg.id);
         }
       }
+      if (emailAiEnabled) {
+        void emailListAiOutputs(thread.id).then(setAiOutputs).catch(() => setAiOutputs([]));
+      } else {
+        setAiOutputs([]);
+      }
     }
-  }, [thread?.id, stableLoadAttachments]);
+  }, [thread?.id, stableLoadAttachments, emailAiEnabled]);
 
   if (!thread) {
     return (
@@ -110,6 +124,11 @@ export function ThreadReader() {
           </button>
         </div>
       </div>
+
+      {/* AI Outputs */}
+      {aiOutputs.length > 0 && (
+        <AiOutputsPanel outputs={aiOutputs} />
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4">
@@ -420,4 +439,78 @@ function AttachmentChip({
       )}
     </>
   );
+}
+
+function AiOutputsPanel({ outputs }: { outputs: EmailAiOutput[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const byType = new Map<string, EmailAiOutput>();
+  for (const o of outputs) {
+    if (!byType.has(o.taskType)) byType.set(o.taskType, o);
+  }
+
+  const items = [...byType.entries()].map(([type, output]) => ({
+    type,
+    output,
+    icon: getTaskTypeIcon(type),
+    label: getTaskTypeLabel(type),
+  }));
+
+  return (
+    <div className="border-b border-[var(--color-border)] bg-[var(--color-panel)]/50">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center gap-2 px-4 py-2 text-left text-[11px] text-[var(--color-text-dim)] hover:bg-white/[0.02]"
+      >
+        <Bot className="size-3 text-[var(--color-accent)]" />
+        <span className="font-medium">AI Analysis</span>
+        <span className="text-[10px] opacity-60">{byType.size} result{byType.size === 1 ? "" : "s"}</span>
+        <div className="flex-1" />
+        {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+      </button>
+      {expanded && (
+        <div className="space-y-1 px-4 pb-3">
+          {items.map(({ type, output, icon, label }) => (
+            <div key={type} className="flex items-start gap-2 rounded-md p-2 text-[11px]">
+              {icon}
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-[var(--color-text)]">{label}</div>
+                <div className="text-[var(--color-text-dim)]">{output.displayText || "No result"}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getTaskTypeIcon(taskType: string): React.ReactNode {
+  switch (taskType) {
+    case "thread_summary":
+      return <Sparkles className="mt-0.5 size-3 shrink-0 text-[var(--color-accent)]" />;
+    case "classification":
+      return <Tag className="mt-0.5 size-3 shrink-0 text-emerald-400" />;
+    case "spam_score":
+      return <Shield className="mt-0.5 size-3 shrink-0 text-amber-400" />;
+    case "urgency_score":
+      return <AlertTriangle className="mt-0.5 size-3 shrink-0 text-red-400" />;
+    default:
+      return <Bot className="mt-0.5 size-3 shrink-0 text-[var(--color-text-dim)]" />;
+  }
+}
+
+function getTaskTypeLabel(taskType: string): string {
+  switch (taskType) {
+    case "thread_summary":
+      return "Summary";
+    case "classification":
+      return "Classification";
+    case "spam_score":
+      return "Spam / Marketing";
+    case "urgency_score":
+      return "Urgency";
+    default:
+      return taskType;
+  }
 }

@@ -1956,25 +1956,29 @@ pub fn claim_next_ai_job(conn: &Connection, task_types: &[String]) -> Result<Opt
     if task_types.is_empty() {
         return Ok(None);
     }
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let placeholders = task_types.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect::<Vec<_>>().join(",");
     let sql = format!(
         "SELECT {AI_JOB_COLUMNS} FROM email_ai_jobs
          WHERE status = 'queued' AND task_type IN ({placeholders})
          ORDER BY priority ASC, scheduled_at ASC LIMIT 1"
     );
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let mut rows = stmt.query_map(rusqlite::params_from_iter(task_types.iter()), read_ai_job_row)
-        .map_err(|e| e.to_string())?;
-    let job = match rows.next() {
-        Some(row) => row.map_err(|e| e.to_string())?,
-        None => return Ok(None),
+    let job = {
+        let mut stmt = tx.prepare(&sql).map_err(|e| e.to_string())?;
+        let mut rows = stmt.query_map(rusqlite::params_from_iter(task_types.iter()), read_ai_job_row)
+            .map_err(|e| e.to_string())?;
+        match rows.next() {
+            Some(row) => row.map_err(|e| e.to_string())?,
+            None => return Ok(None),
+        }
     };
     let now = now_ms();
-    conn.execute(
-        "UPDATE email_ai_jobs SET status = 'running', started_at = ?1 WHERE id = ?2",
+    tx.execute(
+        "UPDATE email_ai_jobs SET status = 'running', started_at = ?1 WHERE id = ?2 AND status = 'queued'",
         params![now, job.id],
     )
     .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
     let mut updated = job;
     updated.status = "running".to_string();
     updated.started_at = Some(now);
@@ -2014,12 +2018,23 @@ pub fn complete_ai_job(conn: &Connection, input: &EmailAiOutputInput) -> Result<
 }
 
 pub fn fail_ai_job(conn: &Connection, job_id: &str, error: &str) -> Result<EmailAiJobRow, String> {
+    let job = get_ai_job(conn, job_id)?;
     let now = now_ms();
-    conn.execute(
-        "UPDATE email_ai_jobs SET status = 'failed', finished_at = ?1, error = ?2, attempt_count = attempt_count + 1 WHERE id = ?3",
-        params![now, error, job_id],
-    )
-    .map_err(|e| e.to_string())?;
+    if job.attempt_count + 1 < job.max_attempts {
+        // Re-queue for retry
+        conn.execute(
+            "UPDATE email_ai_jobs SET status = 'queued', error = ?1, attempt_count = attempt_count + 1, started_at = NULL, scheduled_at = ?2 WHERE id = ?3",
+            params![error, now, job_id],
+        )
+        .map_err(|e| e.to_string())?;
+    } else {
+        // Permanently failed
+        conn.execute(
+            "UPDATE email_ai_jobs SET status = 'failed', finished_at = ?1, error = ?2, attempt_count = attempt_count + 1 WHERE id = ?3",
+            params![now, error, job_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     get_ai_job(conn, job_id)
 }
 
@@ -2052,12 +2067,11 @@ pub fn list_ai_jobs(conn: &Connection, filter: &EmailAiJobFilter) -> Result<Vec<
         param_values.push(Box::new(task_type.clone()));
         idx += 1;
     }
-    let limit = filter.limit.unwrap_or(100);
-    conditions.push(format!("LIMIT ?{idx}"));
-    param_values.push(Box::new(limit));
 
     let where_clause = conditions.join(" AND ");
-    let sql = format!("SELECT {AI_JOB_COLUMNS} FROM email_ai_jobs WHERE {where_clause} ORDER BY priority ASC, scheduled_at ASC");
+    let limit = filter.limit.unwrap_or(100);
+    param_values.push(Box::new(limit));
+    let sql = format!("SELECT {AI_JOB_COLUMNS} FROM email_ai_jobs WHERE {where_clause} ORDER BY priority ASC, scheduled_at ASC LIMIT ?{idx}");
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt.query_map(rusqlite::params_from_iter(param_values.iter().map(|p| p.as_ref())), read_ai_job_row)
@@ -2082,6 +2096,7 @@ pub fn list_ai_outputs(conn: &Connection, thread_id: &str) -> Result<Vec<EmailAi
     Ok(result)
 }
 
+#[allow(dead_code)]
 pub fn get_ai_output_for_thread(conn: &Connection, thread_id: &str, task_type: &str) -> Result<Option<EmailAiOutputRow>, String> {
     let mut stmt = conn
         .prepare(&format!("SELECT {AI_OUTPUT_COLUMNS} FROM email_ai_outputs WHERE thread_id = ?1 AND task_type = ?2 ORDER BY updated_at DESC LIMIT 1"))
@@ -2094,6 +2109,7 @@ pub fn get_ai_output_for_thread(conn: &Connection, thread_id: &str, task_type: &
     }
 }
 
+#[allow(dead_code)]
 pub fn get_unprocessed_message_ids(
     conn: &Connection,
     account_id: &str,
@@ -2133,12 +2149,22 @@ pub fn get_unprocessed_thread_ids(
             "SELECT DISTINCT t.id FROM email_threads t
              WHERE t.account_id = ?1
                AND NOT EXISTS (
-                 SELECT 1 FROM email_ai_outputs o
-                 WHERE o.thread_id = t.id AND o.task_type = ?2
-               )
-               AND NOT EXISTS (
                  SELECT 1 FROM email_ai_jobs j
                  WHERE j.thread_id = t.id AND j.task_type = ?2 AND j.status IN ('queued', 'running')
+               )
+               AND (
+                 NOT EXISTS (
+                   SELECT 1 FROM email_ai_outputs o
+                   WHERE o.thread_id = t.id AND o.task_type = ?2
+                 )
+                 OR EXISTS (
+                   SELECT 1 FROM email_messages m
+                   WHERE m.thread_id = t.id
+                     AND m.timestamp > (
+                       SELECT MAX(o2.updated_at) FROM email_ai_outputs o2
+                       WHERE o2.thread_id = t.id AND o2.task_type = ?2
+                     )
+                 )
                )
              ORDER BY t.last_message_at DESC LIMIT 50",
         )
@@ -3979,12 +4005,26 @@ mod tests {
             account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
             task_type: "spam_score".into(), priority: 2, model_id: None,
         }).unwrap();
+        assert_eq!(job.max_attempts, 3);
         claim_next_ai_job(&conn, &["spam_score".into()]).unwrap();
 
-        let failed = fail_ai_job(&conn, &job.id, "model error").unwrap();
+        // First failure: re-queued (attempt 1 < max_attempts 3)
+        let retried = fail_ai_job(&conn, &job.id, "model error").unwrap();
+        assert_eq!(retried.status, "queued");
+        assert_eq!(retried.attempt_count, 1);
+        assert_eq!(retried.error.as_deref(), Some("model error"));
+
+        // Claim again and fail again
+        claim_next_ai_job(&conn, &["spam_score".into()]).unwrap();
+        let retried2 = fail_ai_job(&conn, &job.id, "model error 2").unwrap();
+        assert_eq!(retried2.status, "queued");
+        assert_eq!(retried2.attempt_count, 2);
+
+        // Third failure: permanently failed (attempt 3 == max_attempts 3)
+        claim_next_ai_job(&conn, &["spam_score".into()]).unwrap();
+        let failed = fail_ai_job(&conn, &job.id, "model error 3").unwrap();
         assert_eq!(failed.status, "failed");
-        assert_eq!(failed.attempt_count, 1);
-        assert_eq!(failed.error.as_deref(), Some("model error"));
+        assert_eq!(failed.attempt_count, 3);
     }
 
     #[test]

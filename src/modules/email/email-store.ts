@@ -101,11 +101,16 @@ function isGmailScopeIssue(error: unknown): boolean {
 
 let emailAiWorkerStarted = false;
 
-function startEmailAiWorker(accountId: string): void {
+export function startEmailAiWorker(): void {
   if (!emailAiWorkerStarted) {
-    emailAiWorker.start(accountId);
+    emailAiWorker.start();
     emailAiWorkerStarted = true;
   }
+}
+
+export function stopEmailAiWorker(): void {
+  emailAiWorker.stop();
+  emailAiWorkerStarted = false;
 }
 
 export const useEmailStore = create<EmailStore>((set, get) => ({
@@ -237,7 +242,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         await Promise.all([get().loadFolders(), get().loadThreads()]);
       }
       if (useSettingsStore.getState().emailAiEnabled) {
-        startEmailAiWorker(accountId);
+        startEmailAiWorker();
         void emailAiWorker.enqueueForNewMessages(accountId);
       }
     } catch (error) {
@@ -279,9 +284,9 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       set({ isLoading: false, accounts });
       await Promise.all([get().loadFolders(), get().loadThreads()]);
       if (useSettingsStore.getState().emailAiEnabled) {
+        startEmailAiWorker();
         const accountIds = accounts.filter((a) => a.provider === "gmail").map((a) => a.id);
         for (const id of accountIds) {
-          startEmailAiWorker(id);
           void emailAiWorker.enqueueForNewMessages(id);
         }
       }

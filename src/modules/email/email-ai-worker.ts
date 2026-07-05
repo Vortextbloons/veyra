@@ -7,6 +7,7 @@ import {
   emailClaimAiJob,
   emailCompleteAiJob,
   emailFailAiJob,
+  emailCancelAiJob,
   emailGetUnprocessedThreadIds,
   emailEnqueueAiJobs,
   emailGetThread,
@@ -19,7 +20,7 @@ import {
 } from "./email-ai-prompts";
 import type { EmailAiJob, EmailMessage } from "./email-types";
 
-type EmailAiWorkerStatus = {
+export type EmailAiWorkerStatus = {
   running: boolean;
   processingJob: EmailAiJob | null;
   lastTickAt: number;
@@ -29,6 +30,8 @@ type EmailAiWorkerStatus = {
 };
 
 type StatusListener = (status: EmailAiWorkerStatus) => void;
+
+type EmailAiFullTaskType = EmailAiTaskType | "reply_draft";
 
 export class EmailAiWorker {
   private running = false;
@@ -43,7 +46,7 @@ export class EmailAiWorker {
   private listeners: Set<StatusListener> = new Set();
   private unsubscribeScheduler: (() => void) | null = null;
 
-  start(_accountId: string): void {
+  start(): void {
     if (this.running) return;
     this.running = true;
 
@@ -58,13 +61,25 @@ export class EmailAiWorker {
       }
     });
 
+    this.startPollTimer();
+    void this.tick();
+    this.notify();
+  }
+
+  private startPollTimer(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+    }
     const settings = useSettingsStore.getState();
     this.pollTimer = setInterval(() => {
       void this.tick();
     }, settings.emailAiPollInterval);
+  }
 
-    void this.tick();
-    this.notify();
+  restartPollTimer(): void {
+    if (this.running) {
+      this.startPollTimer();
+    }
   }
 
   stop(): void {
@@ -108,12 +123,7 @@ export class EmailAiWorker {
     const settings = useSettingsStore.getState();
     if (!settings.emailAiEnabled) return;
 
-    const taskTypes: EmailAiTaskType[] = [];
-    if (settings.emailAiBackgroundSummary) taskTypes.push("thread_summary");
-    if (settings.emailAiBackgroundClassification) taskTypes.push("classification");
-    if (settings.emailAiBackgroundSpam) taskTypes.push("spam_score");
-    if (settings.emailAiBackgroundUrgency) taskTypes.push("urgency_score");
-
+    const taskTypes = this.getEnabledEnqueueTaskTypes();
     for (const taskType of taskTypes) {
       try {
         const threadIds = await emailGetUnprocessedThreadIds(accountId, taskType);
@@ -124,7 +134,7 @@ export class EmailAiWorker {
           threadId,
           taskType,
           priority: 2,
-          modelId: this.resolveModelForTask(taskType),
+          modelId: this.resolveModelForTask(taskType as EmailAiFullTaskType),
         }));
 
         await emailEnqueueAiJobs(inputs);
@@ -142,31 +152,38 @@ export class EmailAiWorker {
 
     this.lastTickAt = Date.now();
 
-    const taskTypes = this.getEnabledTaskTypes();
+    const taskTypes = this.getEnabledClaimTaskTypes();
     if (taskTypes.length === 0) return;
 
-    try {
-      const job = await emailClaimAiJob(taskTypes);
-      if (!job) return;
+    const batchSize = Math.max(1, settings.emailAiWorkerCount);
+    let processed = 0;
 
-      this.processingJob = job;
-      this.abortController = new AbortController();
-      this.notify();
+    while (processed < batchSize && this.running && !this.pausedByUserJob) {
+      try {
+        const job = await emailClaimAiJob(taskTypes);
+        if (!job) break;
 
-      await this.executeJob(job, this.abortController.signal);
-      this.jobsCompleted++;
-      this.lastError = null;
-    } catch (err) {
-      if (this.abortController?.signal.aborted) {
-        // Aborted by pause or stop — don't count as failure
-      } else {
-        this.jobsFailed++;
-        this.lastError = err instanceof Error ? err.message : String(err);
+        this.processingJob = job;
+        this.abortController = new AbortController();
+        this.notify();
+
+        await this.executeJob(job, this.abortController.signal);
+        this.jobsCompleted++;
+        this.lastError = null;
+        processed++;
+      } catch (err) {
+        if (this.abortController?.signal.aborted) {
+          // Aborted by pause or stop — the job was already re-queued or failed in executeJob
+        } else {
+          this.jobsFailed++;
+          this.lastError = err instanceof Error ? err.message : String(err);
+        }
+        break; // Stop batch on error
+      } finally {
+        this.processingJob = null;
+        this.abortController = null;
+        this.notify();
       }
-    } finally {
-      this.processingJob = null;
-      this.abortController = null;
-      this.notify();
     }
   }
 
@@ -175,7 +192,7 @@ export class EmailAiWorker {
     signal: AbortSignal,
   ): Promise<void> {
     const modelId =
-      job.modelId || this.resolveModelForTask(job.taskType as EmailAiTaskType);
+      job.modelId || this.resolveModelForTask(job.taskType as EmailAiFullTaskType);
     if (!modelId) {
       await emailFailAiJob(job.id, "no model configured for this task");
       return;
@@ -202,28 +219,54 @@ export class EmailAiWorker {
       messages,
     );
 
-    await ensureLmStudioModel(modelId, signal);
+    try {
+      await ensureLmStudioModel(modelId, signal);
+    } catch (err) {
+      if (signal.aborted) {
+        await this.requeueJob(job);
+      } else {
+        await emailFailAiJob(job.id, `model load failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+
+    if (signal.aborted) {
+      await this.requeueJob(job);
+      return;
+    }
 
     let output = "";
-    await sendLmStudioChat({
-      messages: [
-        { id: "system", role: "system", content: system, timestamp: Date.now() },
-        { id: "user", role: "user", content: user, timestamp: Date.now() },
-      ],
-      model: modelId,
-      temperature: 0.3,
-      maxTokens: 1024,
-      responseFormat: { type: "json_object" },
-      signal,
-      onChunk: (content) => {
-        output += content;
-      },
-      onError: (err) => {
-        throw new Error(err);
-      },
-    });
+    try {
+      await sendLmStudioChat({
+        messages: [
+          { id: "system", role: "system", content: system, timestamp: Date.now() },
+          { id: "user", role: "user", content: user, timestamp: Date.now() },
+        ],
+        model: modelId,
+        temperature: 0.3,
+        maxTokens: 1024,
+        responseFormat: { type: "json_object" },
+        signal,
+        onChunk: (content) => {
+          output += content;
+        },
+        onError: (err) => {
+          throw new Error(err);
+        },
+      });
+    } catch (err) {
+      if (signal.aborted) {
+        await this.requeueJob(job);
+      } else {
+        await emailFailAiJob(job.id, `inference failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
 
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      await this.requeueJob(job);
+      return;
+    }
 
     let parsed: Record<string, unknown>;
     try {
@@ -247,33 +290,49 @@ export class EmailAiWorker {
     });
   }
 
-  private resolveModelForTask(taskType: EmailAiTaskType): string {
+  private async requeueJob(job: EmailAiJob): Promise<void> {
+    try {
+      // Cancel the running job so it can be re-claimed later
+      await emailCancelAiJob(job.id);
+    } catch {
+      // Best effort — if cancel fails, the job stays running but will be
+      // picked up by the next tick if claim is atomic, or timed out.
+    }
+  }
+
+  private resolveModelForTask(taskType: EmailAiFullTaskType): string {
     const settings = useSettingsStore.getState();
     const fallback = useProviderStore.getState().selectedModel || "";
     switch (taskType) {
       case "thread_summary":
         return settings.emailAiSummaryModel || fallback;
       case "classification":
-        return settings.emailAiClassificationModel || fallback;
       case "spam_score":
         return settings.emailAiClassificationModel || fallback;
       case "urgency_score":
         return settings.emailAiSummaryModel || fallback;
+      case "reply_draft":
+        return settings.emailAiDraftModel || fallback;
       default:
         return fallback;
     }
   }
 
-  private getEnabledTaskTypes(): string[] {
+  /** Task types used when enqueueing new jobs (per-setting toggles). */
+  private getEnabledEnqueueTaskTypes(): string[] {
     const settings = useSettingsStore.getState();
     const types: string[] = [];
     if (settings.emailAiBackgroundSummary) types.push("thread_summary");
-    if (settings.emailAiBackgroundClassification) {
-      types.push("classification");
-      types.push("spam_score");
-    }
+    if (settings.emailAiBackgroundClassification) types.push("classification");
+    if (settings.emailAiBackgroundSpam) types.push("spam_score");
     if (settings.emailAiBackgroundUrgency) types.push("urgency_score");
+    if (settings.emailAiAutoDraft) types.push("reply_draft");
     return types;
+  }
+
+  /** Task types used when claiming jobs (must match enqueue list exactly). */
+  private getEnabledClaimTaskTypes(): string[] {
+    return this.getEnabledEnqueueTaskTypes();
   }
 
   private buildDisplayText(
@@ -299,6 +358,8 @@ export class EmailAiWorker {
       }
       case "urgency_score":
         return typeof parsed.level === "string" ? parsed.level : "";
+      case "reply_draft":
+        return typeof parsed.subject === "string" ? `Draft: ${parsed.subject}` : "Draft generated";
       default:
         return "";
     }
