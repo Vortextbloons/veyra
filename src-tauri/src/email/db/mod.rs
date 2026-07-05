@@ -282,6 +282,10 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         .map_err(|e| format!("email: schema v6 migration failed: {e}"))?;
     }
 
+    if schema_version < 7 {
+        add_column_if_missing(conn, "email_ai_jobs", "tone", "TEXT")?;
+    }
+
     conn.execute(
         "INSERT INTO _schema_migrations (module, version, applied_at) VALUES ('email', ?1, datetime('now'))
          ON CONFLICT(module) DO UPDATE SET version = excluded.version, applied_at = excluded.applied_at",

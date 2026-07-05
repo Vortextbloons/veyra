@@ -85,6 +85,12 @@ export class EmailAiWorker {
     }
   }
 
+  /** Run the worker loop immediately (e.g. after enqueueing an on-demand draft). */
+  wake(): void {
+    if (!this.running || this.pausedByUserJob) return;
+    void this.tick();
+  }
+
   stop(): void {
     this.running = false;
     this.abortController?.abort();

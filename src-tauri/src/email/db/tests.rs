@@ -577,6 +577,52 @@ fn migrations_v2_is_idempotent() {
 }
 
 #[test]
+fn migrations_v7_adds_email_ai_jobs_tone_column() {
+    let conn = open_test_db();
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS _schema_migrations (
+            module TEXT PRIMARY KEY,
+            version INTEGER NOT NULL,
+            applied_at TEXT NOT NULL
+        );
+        INSERT INTO _schema_migrations (module, version, applied_at)
+        VALUES ('email', 6, datetime('now'));
+        CREATE TABLE email_ai_jobs (
+            id TEXT PRIMARY KEY,
+            account_id TEXT NOT NULL,
+            thread_id TEXT,
+            message_id TEXT,
+            attachment_id TEXT,
+            task_type TEXT NOT NULL,
+            priority INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            model_id TEXT,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            max_attempts INTEGER NOT NULL DEFAULT 3,
+            scheduled_at INTEGER NOT NULL,
+            started_at INTEGER,
+            finished_at INTEGER,
+            error TEXT,
+            input_hash TEXT,
+            created_at INTEGER NOT NULL
+        );",
+    )
+    .expect("legacy v6 schema setup should succeed");
+
+    run_migrations(&conn).expect("v7 migration should succeed");
+
+    let columns: Vec<String> = {
+        let mut stmt = conn.prepare("PRAGMA table_info(email_ai_jobs)").unwrap();
+        stmt.query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+
+    assert!(columns.contains(&"tone".to_string()));
+}
+
+#[test]
 fn gmail_label_kind_mapping() {
     assert_eq!(gmail::gmail_label_kind("INBOX"), ("inbox", "system", true));
     assert_eq!(gmail::gmail_label_kind("SENT"), ("sent", "system", true));
@@ -910,6 +956,7 @@ fn enqueue_and_claim_ai_job() {
         task_type: "thread_summary".into(),
         priority: 2,
         model_id: None,
+        tone: None,
     };
     let job = enqueue_ai_job(&conn, &input).unwrap();
     assert_eq!(job.status, "queued");
@@ -929,11 +976,11 @@ fn claim_respects_priority() {
 
     enqueue_ai_job(&conn, &EmailAiJobInput {
         account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 3, model_id: None,
+        task_type: "thread_summary".into(), priority: 3, model_id: None, tone: None,
     }).unwrap();
     let high = enqueue_ai_job(&conn, &EmailAiJobInput {
         account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 1, model_id: None,
+        task_type: "thread_summary".into(), priority: 1, model_id: None, tone: None,
     }).unwrap();
 
     let claimed = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap().unwrap();
@@ -948,7 +995,7 @@ fn complete_ai_job_writes_output() {
 
     let job = enqueue_ai_job(&conn, &EmailAiJobInput {
         account_id: "a1".into(), thread_id: Some("t1".into()), message_id: Some("m1".into()),
-        task_type: "thread_summary".into(), priority: 2, model_id: None,
+        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
     }).unwrap();
     claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
 
@@ -977,7 +1024,7 @@ fn fail_ai_job_increments_attempt() {
 
     let job = enqueue_ai_job(&conn, &EmailAiJobInput {
         account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "spam_score".into(), priority: 2, model_id: None,
+        task_type: "spam_score".into(), priority: 2, model_id: None, tone: None,
     }).unwrap();
     assert_eq!(job.max_attempts, 3);
     claim_next_ai_job(&conn, &["spam_score".into()]).unwrap();
@@ -1006,7 +1053,7 @@ fn cancel_ai_job_transitions_status() {
 
     let job = enqueue_ai_job(&conn, &EmailAiJobInput {
         account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "urgency_score".into(), priority: 2, model_id: None,
+        task_type: "urgency_score".into(), priority: 2, model_id: None, tone: None,
     }).unwrap();
 
     cancel_ai_job(&conn, &job.id).unwrap();
@@ -1025,7 +1072,7 @@ fn get_unprocessed_thread_ids_excludes_processed() {
 
     enqueue_ai_job(&conn, &EmailAiJobInput {
         account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 2, model_id: None,
+        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
     }).unwrap();
     let ids = get_unprocessed_thread_ids(&conn, "a1", "thread_summary").unwrap();
     assert!(ids.is_empty());
@@ -1048,7 +1095,7 @@ fn claim_skips_wrong_task_type() {
 
     enqueue_ai_job(&conn, &EmailAiJobInput {
         account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "spam_score".into(), priority: 2, model_id: None,
+        task_type: "spam_score".into(), priority: 2, model_id: None, tone: None,
     }).unwrap();
 
     let result = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
@@ -1063,7 +1110,7 @@ fn get_ai_output_for_thread_returns_latest() {
 
     let job = enqueue_ai_job(&conn, &EmailAiJobInput {
         account_id: "a1".into(), thread_id: Some("t1".into()), message_id: Some("m1".into()),
-        task_type: "thread_summary".into(), priority: 2, model_id: None,
+        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
     }).unwrap();
     claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
     complete_ai_job(&conn, &EmailAiOutputInput {

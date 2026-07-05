@@ -30,6 +30,8 @@ export function EmailAiDraftPanel({
 
   const aiDrafts = useEmailStore((s) => s.aiDrafts);
   const aiDraftLoading = useEmailStore((s) => s.aiDraftLoading);
+  const error = useEmailStore((s) => s.error);
+  const aiDraftThreadId = useEmailStore((s) => s.aiDraftThreadId);
   const loadAiDrafts = useEmailStore((s) => s.loadAiDrafts);
   const generateAiDraft = useEmailStore((s) => s.generateAiDraft);
   const deleteAiDraft = useEmailStore((s) => s.deleteAiDraft);
@@ -72,6 +74,8 @@ export function EmailAiDraftPanel({
 
   // Filter out dismissed drafts for display
   const visibleDrafts = aiDrafts.filter((d) => d.status !== "dismissed");
+  const draftError =
+    aiDraftThreadId === threadId && error ? error : null;
 
   return (
     <div className="border-b border-[var(--color-border)] bg-[var(--color-panel)]/50">
@@ -123,6 +127,12 @@ export function EmailAiDraftPanel({
               {visibleDrafts.length > 0 ? "Regenerate" : "Generate Draft"}
             </button>
           </div>
+
+          {draftError && (
+            <div className="rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-2 text-[11px] text-red-300">
+              {draftError}
+            </div>
+          )}
 
           {/* Loading state */}
           {aiDraftLoading && visibleDrafts.length === 0 && (

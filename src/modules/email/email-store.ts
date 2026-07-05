@@ -169,6 +169,13 @@ export function startEmailAiWorker(): void {
   }
 }
 
+function ensureEmailAiWorkerRunning(): void {
+  if (!useSettingsStore.getState().emailAiEnabled) {
+    throw new Error("Enable Email AI in settings to generate drafts.");
+  }
+  startEmailAiWorker();
+}
+
 export function stopEmailAiWorker(): void {
   emailAiWorker.stop();
   emailAiWorkerStarted = false;
@@ -210,6 +217,9 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         if (accounts.length > 0 && !get().activeAccountId) {
           set({ activeAccountId: accounts[0].id });
           await Promise.all([get().loadFolders(), get().loadThreads(), get().loadTags()]);
+        }
+        if (useSettingsStore.getState().emailAiEnabled) {
+          startEmailAiWorker();
         }
       } catch (error) {
         set({ error: String(error), hydrationState: "ready" });
@@ -740,29 +750,48 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   generateAiDraft: async (input) => {
     set({ aiDraftLoading: true, error: null, aiDraftThreadId: input.threadId });
     try {
+      ensureEmailAiWorkerRunning();
       const job = await emailGenerateAiDraft(input);
-      // Poll for job completion
-      const maxAttempts = 60; // 30 seconds max (500ms intervals)
-      let attempts = 0;
-      while (attempts < maxAttempts) {
+      emailAiWorker.wake();
+
+      const deadline = Date.now() + 120_000;
+      let completed = false;
+      while (Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         const jobs = await emailListAiJobs({
           accountId: input.accountId,
-          status: "completed",
+          limit: 100,
         });
-        const completedJob = jobs.find((j) => j.id === job.id);
-        if (completedJob) break;
-        // Check if job failed
-        const failedJobs = await emailListAiJobs({
-          accountId: input.accountId,
-          status: "failed",
-        });
-        const failedJob = failedJobs.find((j) => j.id === job.id);
-        if (failedJob) {
-          throw new Error(failedJob.error || "Draft generation failed");
+        const current = jobs.find((j) => j.id === job.id);
+        if (!current) continue;
+        if (current.status === "completed") {
+          completed = true;
+          break;
         }
-        attempts++;
+        if (current.status === "failed") {
+          throw new Error(current.error || "Draft generation failed");
+        }
+        if (current.status === "cancelled") {
+          throw new Error("Draft generation was cancelled");
+        }
+        emailAiWorker.wake();
       }
+
+      if (!completed) {
+        const jobs = await emailListAiJobs({
+          accountId: input.accountId,
+          limit: 100,
+        });
+        const current = jobs.find((j) => j.id === job.id);
+        const status = current?.status ?? "unknown";
+        if (status === "queued" || status === "running") {
+          throw new Error(
+            "Draft generation timed out. Ensure LM Studio is running and a draft model is selected in Email AI settings.",
+          );
+        }
+        throw new Error("Draft generation did not complete.");
+      }
+
       const drafts = await emailListAiDrafts(input.threadId);
       set({ aiDrafts: drafts, aiDraftLoading: false });
     } catch (error) {

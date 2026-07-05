@@ -327,7 +327,7 @@ pub struct EmailThreadAiMetadata {
     pub newsletter: Option<bool>,
 }
 
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 
 pub const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS email_accounts (
