@@ -55,6 +55,7 @@ export function ModelSelector({
     return models.filter(
       (m) =>
         m.name.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q) ||
         m.provider.toLowerCase().includes(q),
     );
   }, [models, query]);
@@ -66,6 +67,7 @@ export function ModelSelector({
     <div ref={ref} className="relative min-w-0">
       <button
         type="button"
+        title={current?.id}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -183,6 +185,7 @@ function ModelGroup({
           return (
             <div
               key={m.id}
+              title={m.id}
               role="option"
               aria-selected={active}
               className={`group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${

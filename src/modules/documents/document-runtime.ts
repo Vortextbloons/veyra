@@ -8,11 +8,39 @@ export type DocumentOperationResult = {
   applied: boolean;
   sanitizedText: string;
   error?: string;
+  documentId?: string;
 };
 
 export type DocumentReadResult = DocumentOperationResult & {
   documentContent?: string;
 };
+
+const ACTIVE_DOCUMENT_REFERENCES = new Set([
+  "active",
+  "current",
+  "active document",
+  "current document",
+  "this document",
+]);
+
+export function resolveDocumentIdReference(
+  reference: string,
+  preferredDocumentId?: string,
+): string {
+  const store = useDocumentStore.getState();
+  const normalized = reference.trim().toLocaleLowerCase();
+
+  if (store.documents.some((document) => document.id === reference)) return reference;
+
+  if (ACTIVE_DOCUMENT_REFERENCES.has(normalized)) {
+    return preferredDocumentId ?? store.activeDocumentId ?? reference;
+  }
+
+  const titleMatches = store.documents.filter(
+    (document) => document.title.trim().toLocaleLowerCase() === normalized,
+  );
+  return titleMatches.length === 1 ? titleMatches[0].id : reference;
+}
 
 export async function executeDocRead(
   intent: DocReadIntent,
@@ -70,6 +98,7 @@ export async function executeDocCreation(
     return {
       applied: true,
       sanitizedText: `Created document "${doc.title}" in the document editor.`,
+      documentId: doc.id,
     };
   } catch (error) {
     console.error("[Document] Failed to create document:", error);

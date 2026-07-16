@@ -31,6 +31,7 @@ export type ToolRoundResult = {
   webSearchSources: WebSearchSource[];
   webSearchContextBlocks: string[];
   streamedChunks: string[];
+  lastCreatedDocumentId?: string;
 };
 
 type ToolRoundContext = {
@@ -46,6 +47,7 @@ type ToolRoundContext = {
   ) => Promise<ProviderToolCall[]>;
   docMutationConversationId?: string;
   codeExecution: CodeExecutionSettings;
+  preferredDocumentId?: string;
 };
 
 export async function executeToolRound(
@@ -53,13 +55,11 @@ export async function executeToolRound(
   ctx: ToolRoundContext,
 ): Promise<ToolRoundResult> {
   const webSearchCalls = toolCalls.filter((call) => call.name === WEB_SEARCH_TOOL_NAME);
-  const docReadCalls = toolCalls.filter((call) => call.name === DOC_READ_TOOL_NAME);
   const codeExecutionCalls = toolCalls.filter((call) => call.name === CODE_EXEC_TOOL_NAME);
   const scratchpadCalls = toolCalls.filter((call) => call.name === SCRATCHPAD_TOOL_NAME);
   const askQuestionCalls = toolCalls.filter((call) => call.name === ASK_QUESTION_TOOL_NAME);
-  const inlineEditCalls = toolCalls.filter((call) => call.name === INLINE_EDIT_TOOL_NAME);
-  const docMutationCalls = toolCalls.filter(
-    (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
+  const documentCalls = toolCalls.filter((call) =>
+    [DOC_READ_TOOL_NAME, INLINE_EDIT_TOOL_NAME, DOC_CREATE_TOOL_NAME, DOC_UPDATE_TOOL_NAME].includes(call.name),
   );
 
   registerStreamingToolCalls(toolCalls, "running", (call) => {
@@ -120,10 +120,28 @@ export async function executeToolRound(
     if (result.contextBlock) webSearchContextBlocks.push(result.contextBlock);
   }
 
-  const docReadSections = await Promise.all(
-    docReadCalls.map((call) => executeDocReadCall(call)),
-  );
-  toolResultSections.push(...docReadSections);
+  let preferredDocumentId = ctx.preferredDocumentId;
+  for (const call of documentCalls) {
+    if (call.name === DOC_READ_TOOL_NAME) {
+      toolResultSections.push(await executeDocReadCall(call, preferredDocumentId));
+      continue;
+    }
+    if (call.name === INLINE_EDIT_TOOL_NAME) {
+      toolResultSections.push(
+        await executeInlineEditCall(call, ctx.docMutationConversationId, preferredDocumentId),
+      );
+      continue;
+    }
+
+    const mutationResult = await executeDocMutationCalls([call], {
+      retryWithLLM: ctx.retryDocMutationWithLLM,
+      conversationId: ctx.docMutationConversationId,
+      preferredDocumentId,
+    });
+    toolResultSections.push(...mutationResult.sections);
+    streamedChunks.push(...mutationResult.streamedChunks);
+    preferredDocumentId = mutationResult.lastCreatedDocumentId ?? preferredDocumentId;
+  }
 
   for (const call of codeExecutionCalls) {
     toolResultSections.push(await executeCodeExecutionCall(call, ctx.codeExecution));
@@ -140,23 +158,11 @@ export async function executeToolRound(
     toolResultSections.push(result);
   }
 
-  for (const call of inlineEditCalls) {
-    toolResultSections.push(await executeInlineEditCall(call, ctx.docMutationConversationId));
-  }
-
-  if (docMutationCalls.length > 0) {
-    const mutationResult = await executeDocMutationCalls(docMutationCalls, {
-      retryWithLLM: ctx.retryDocMutationWithLLM,
-      conversationId: ctx.docMutationConversationId,
-    });
-    toolResultSections.push(...mutationResult.sections);
-    streamedChunks.push(...mutationResult.streamedChunks);
-  }
-
   return {
     toolResultSections,
     webSearchSources,
     webSearchContextBlocks,
     streamedChunks,
+    lastCreatedDocumentId: preferredDocumentId,
   };
 }

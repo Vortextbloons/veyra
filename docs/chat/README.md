@@ -50,6 +50,11 @@ User types a message in the composer component and hits send.
 - **Message trimming**: Fits messages within the token budget (context limit minus reserved output)
 - **Streaming**: Provider adapter streams tokens with callbacks for content, reasoning, and tool calls
 
+Cloud providers use the same orchestration and local tool loop as LM Studio. Their
+API keys are supplied by the Rust credential store at request time. Provider presets
+and custom OpenAI-compatible endpoints share the normalized Chat Completions stream
+path, so cloud selection does not change message or tool execution behavior.
+
 ### 4. Tool Calls (up to 6 rounds)
 If the model returns tool calls, they are executed in rounds:
 

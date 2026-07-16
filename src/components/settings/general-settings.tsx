@@ -4,6 +4,8 @@ import { Toggle } from "@/components/toggle";
 import { Star } from "lucide-react";
 import { ModelIcon } from "@/components/model-icon";
 
+import { AboutUpdateSettings } from "./about-update-settings";
+
 export function GeneralSettings() {
   const favoriteModels = useSettingsStore((s) => s.favoriteModels);
   const toggleFavoriteModel = useSettingsStore((s) => s.toggleFavoriteModel);
@@ -122,6 +124,8 @@ export function GeneralSettings() {
           </p>
         </div>
       </section>
+
+      <AboutUpdateSettings />
     </div>
   );
 }

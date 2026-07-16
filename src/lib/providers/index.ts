@@ -1,14 +1,26 @@
 import { lmStudioAdapter } from "@/lib/providers/lm-studio-adapter";
+import { createOpenAiCompatibleAdapter } from "@/lib/providers/openai-compatible-adapter";
+import { defaultCloudProviders, type CloudProviderConfig } from "@/lib/providers/cloud-config";
 import type { ProviderAdapter, ProviderPrepareModelOptions } from "@/lib/providers/types";
 
-const providerAdapters = [lmStudioAdapter] satisfies ProviderAdapter[];
+let cloudProviders: CloudProviderConfig[] = defaultCloudProviders();
+
+export function configureCloudProviderAdapters(configs: CloudProviderConfig[]): void {
+  cloudProviders = configs;
+}
+
+function providerAdapters(): ProviderAdapter[] {
+  return [lmStudioAdapter, ...cloudProviders.map(createOpenAiCompatibleAdapter)];
+}
 
 export function getProviderAdapter(providerId: string): ProviderAdapter | undefined {
-  return providerAdapters.find((provider) => provider.id === providerId);
+  return providerAdapters().find((provider) => provider.id === providerId);
 }
 
 export function getInitialProviders() {
-  return providerAdapters.map((provider) => ({
+  return providerAdapters().filter((provider) =>
+    provider.id === "lm-studio" || cloudProviders.some((config) => config.id === provider.id && config.hasCredential),
+  ).map((provider) => ({
     id: provider.id,
     name: provider.name,
     icon: provider.icon,

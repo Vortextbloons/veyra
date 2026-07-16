@@ -32,12 +32,12 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     { sendChatRequest },
     { trySaveExplicitMemory },
     { handoffAfterUserChat, queuePostChatJobs },
-    { prepareUserChatModel },
+    { prepareProviderModel },
   ] = await Promise.all([
     import("@/modules/chat/chat-orchestrator"),
     import("@/lib/explicit-memory"),
     import("@/lib/post-chat-jobs"),
-    import("@/lib/lm-model-session"),
+    import("@/lib/providers"),
   ]);
 
   const {
@@ -65,7 +65,10 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     void trySaveExplicitMemory(trimmed, { conversationId, projectId });
   }
 
-  await prepareUserChatModel(selectedModel, signal, onModelLoadProgress);
+  await prepareProviderModel(selectedProvider, selectedModel, {
+    signal,
+    onProgress: onModelLoadProgress,
+  });
 
   const liveConversation = useChatStore
     .getState()

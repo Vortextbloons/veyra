@@ -81,7 +81,7 @@ export function buildProviderTools(options: {
       type: "function",
       function: {
         name: DOC_CREATE_TOOL_NAME,
-        description: "Create a markdown document in Veyra's document editor for long-form content.",
+        description: "Create a markdown document in Veyra's document editor for long-form content. The result returns the new document id; use that exact id for later reads or edits and do not use a placeholder such as 'active'.",
         parameters: {
           type: "object",
           properties: {
@@ -114,7 +114,7 @@ export function buildProviderTools(options: {
           properties: {
             documentId: {
               type: "string",
-              description: "Document id to read. Use the active document id when reading the active document.",
+              description: "Exact document id to read. Use the id returned by doc_create; do not use a title or the word 'active'.",
             },
           },
           required: ["documentId"],
@@ -135,7 +135,7 @@ export function buildProviderTools(options: {
           properties: {
             documentId: {
               type: "string",
-              description: "Document id to edit. Use the active document id when editing the active document.",
+              description: "Exact document id to edit. Use the id returned by doc_create; do not use a title or the word 'active'.",
             },
             mode: {
               type: "string",

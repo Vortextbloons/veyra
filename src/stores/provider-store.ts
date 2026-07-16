@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ModelInfo, ProviderInfo } from "@/modules/chat/chat-types";
 import { isProviderAllowedForConnectivity } from "@/lib/connectivity/provider-connectivity";
-import { getInitialProviders, getProviderAdapter } from "@/lib/providers";
+import { configureCloudProviderAdapters, getInitialProviders, getProviderAdapter } from "@/lib/providers";
+import { defaultCloudProviders, type CloudProviderConfig } from "@/lib/providers/cloud-config";
 
 export type ProviderConnectionPhase = "idle" | "connecting" | "error";
 
@@ -18,12 +19,15 @@ type ProviderStore = {
   selectedModel: string;
   connectionPhase: ProviderConnectionPhase;
   connectionError: string | null;
+  cloudProviders: CloudProviderConfig[];
   initializeProvider: () => void;
   ensureProviderReady: () => Promise<void>;
   selectProvider: (providerId: string) => Promise<void>;
   reconnectProvider: (providerId?: string) => Promise<void>;
   startProviderServer: (providerId?: string) => Promise<void>;
   setSelectedModel: (modelId: string) => void;
+  upsertCloudProvider: (config: CloudProviderConfig) => void;
+  removeCloudProvider: (providerId: string) => void;
 };
 
 type ModelCacheEntry = {
@@ -213,6 +217,7 @@ export const useProviderStore = create<ProviderStore>()(
       selectedModel: "",
       connectionPhase: "idle",
       connectionError: null,
+      cloudProviders: defaultCloudProviders(),
 
       initializeProvider: () => {
         const providerId = get().selectedProvider;
@@ -274,7 +279,7 @@ export const useProviderStore = create<ProviderStore>()(
         set({ connectionPhase: "connecting", connectionError: null });
 
         const { available, message } = await syncProviderConnection(id, {});
-        if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
+        if (requestId !== providerRequestSeq) return;
 
         applyProviderConnectionResult(
           set,
@@ -301,7 +306,7 @@ export const useProviderStore = create<ProviderStore>()(
         set({ connectionPhase: "connecting", connectionError: null });
 
         const { available, message } = await syncProviderConnection(id, { startServer: true });
-        if (requestId !== providerRequestSeq || id !== get().selectedProvider) return;
+        if (requestId !== providerRequestSeq) return;
 
         applyProviderConnectionResult(
           set,
@@ -317,6 +322,37 @@ export const useProviderStore = create<ProviderStore>()(
       setSelectedModel: (modelId) => {
         persistModelChoice(set, get, get().selectedProvider, modelId);
       },
+
+      upsertCloudProvider: (config) => {
+        const cloudProviders = [
+          ...get().cloudProviders.filter((provider) => provider.id !== config.id),
+          config,
+        ];
+        configureCloudProviderAdapters(cloudProviders);
+        const existingStatus = new Map(get().providers.map((provider) => [provider.id, provider.status]));
+        set({
+          cloudProviders,
+          providers: getInitialProviders().map((provider) => ({
+            ...provider,
+            status: existingStatus.get(provider.id) ?? "disconnected",
+          })),
+        });
+      },
+
+      removeCloudProvider: (providerId) => {
+        const cloudProviders = get().cloudProviders.filter((provider) => provider.id !== providerId);
+        configureCloudProviderAdapters(cloudProviders);
+        const selectedProvider = get().selectedProvider === providerId ? DEFAULT_PROVIDER : get().selectedProvider;
+        set({
+          cloudProviders,
+          selectedProvider,
+          selectedModel: selectedProvider === DEFAULT_PROVIDER
+            ? preferredModelForProvider(get(), DEFAULT_PROVIDER)
+            : get().selectedModel,
+          providers: getInitialProviders(),
+          models: selectedProvider === DEFAULT_PROVIDER ? loadCachedModels(DEFAULT_PROVIDER) ?? [] : get().models,
+        });
+      },
     }),
     {
       name: PROVIDER_STORAGE_KEY,
@@ -324,17 +360,22 @@ export const useProviderStore = create<ProviderStore>()(
       partialize: (state) => ({
         selectedProvider: state.selectedProvider,
         selectedModelByProvider: state.selectedModelByProvider,
+        cloudProviders: state.cloudProviders,
       }),
-      merge: (persisted, current) => ({
-        ...current,
-        ...(persisted as Partial<ProviderStore>),
-        providers: current.providers,
-        models: current.models,
-        selectedModel:
-          (persisted as Partial<ProviderStore>).selectedModelByProvider?.[
-            (persisted as Partial<ProviderStore>).selectedProvider ?? DEFAULT_PROVIDER
-          ] ?? current.selectedModel,
-      }),
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<ProviderStore>;
+        const cloudProviders = saved.cloudProviders?.length ? saved.cloudProviders : current.cloudProviders;
+        configureCloudProviderAdapters(cloudProviders);
+        return {
+          ...current,
+          ...saved,
+          cloudProviders,
+          providers: getInitialProviders(),
+          models: current.models,
+          selectedModel:
+            saved.selectedModelByProvider?.[saved.selectedProvider ?? DEFAULT_PROVIDER] ?? current.selectedModel,
+        };
+      },
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         const cached = loadCachedModels(state.selectedProvider);

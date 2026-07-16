@@ -12,7 +12,10 @@ type ModelIconProps = {
 };
 
 function matchModelFamily(modelId: string): string | null {
-  const id = modelId.toLowerCase();
+  // Cloud providers commonly namespace model IDs (for example,
+  // "deepseek-ai/deepseek-v4-flash"). Match the model segment so those
+  // entries receive the same family icon as their local equivalents.
+  const id = modelId.toLowerCase().split("/").at(-1) ?? modelId.toLowerCase();
   if (/^qwen|^qwq/i.test(id)) return "qwen";
   if (/^deepseek/i.test(id)) return "deepseek";
   if (/^llama|^codellama/i.test(id)) return "meta";
@@ -55,7 +58,9 @@ export function ModelIcon({ modelId, className, fallback }: ModelIconProps) {
       <img
         src={src}
         alt=""
-        className={className}
+        className={family === "deepseek"
+          ? `${className ?? ""} object-cover object-[5%_center]`
+          : className}
         onError={() => {
           if (!triedPng) {
             setTriedPng(true);

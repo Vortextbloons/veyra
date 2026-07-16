@@ -11,8 +11,17 @@ import { parseToolArguments, stableToolCallId, extractToolCalls } from "@/lib/lm
 import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
 import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import {
+  createReasoningProtocolState,
+  processReasoningProtocolChunk,
+} from "@/lib/reasoning-protocol";
 const DEFAULT_TEMPERATURE = 0.7;
 export const OPENAI_CHAT_PATH = "/v1/chat/completions";
+
+function openAiChatUrl(baseUrl: string): string {
+  const root = baseUrl.replace(/\/+$/, "");
+  return root.endsWith("/v1") ? `${root}/chat/completions` : `${root}${OPENAI_CHAT_PATH}`;
+}
 
 function buildOpenAiMessage(message: ChatMessage): Record<string, unknown> {
   const imageAttachments = message.attachments?.filter((a) => a.fileType === "image") ?? [];
@@ -66,6 +75,7 @@ function buildOpenAiChatBody(options: {
   stream?: boolean;
   reasoningEnabled?: boolean;
   responseFormat?: { type: "json_object" | "text" };
+  omitUnsupportedFields?: boolean;
 }): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: options.model,
@@ -81,7 +91,7 @@ function buildOpenAiChatBody(options: {
     body.tools = options.tools;
     body.tool_choice = options.toolChoice ?? "auto";
   }
-  if (options.reasoningEnabled === false) {
+  if (options.reasoningEnabled === false && !options.omitUnsupportedFields) {
     body.reasoning_effort = "none";
   }
   if (options.responseFormat?.type === "json_object") {
@@ -111,6 +121,20 @@ export function processOpenAiStreamData(
   onToolCallDetected?: (call: Pick<ProviderToolCall, "id" | "name">) => void,
 ): "continue" | "done" {
   if (data === "[DONE]") {
+    const normalized = processReasoningProtocolChunk(
+      state.reasoningProtocol ??= createReasoningProtocolState(),
+      "",
+      true,
+    );
+    if (normalized.reasoning) {
+      state.accumulatedReasoning += normalized.reasoning;
+      onReasoningChunk?.(normalized.reasoning, false);
+    }
+    if (normalized.content) {
+      if (state.firstTokenAt == null) state.firstTokenAt = Date.now();
+      state.accumulatedContent += normalized.content;
+      onChunk(normalized.content, false);
+    }
     if (!state.toolCalls?.length) {
       const toolCalls = finalizeOpenAiToolCalls(state);
       if (toolCalls.length > 0) state.toolCalls = toolCalls;
@@ -149,9 +173,19 @@ export function processOpenAiStreamData(
     }
 
     if (delta?.content) {
-      if (state.firstTokenAt == null) state.firstTokenAt = Date.now();
-      state.accumulatedContent += delta.content;
-      onChunk(delta.content, false);
+      const normalized = processReasoningProtocolChunk(
+        state.reasoningProtocol ??= createReasoningProtocolState(),
+        delta.content,
+      );
+      if (normalized.reasoning) {
+        state.accumulatedReasoning += normalized.reasoning;
+        onReasoningChunk?.(normalized.reasoning, false);
+      }
+      if (normalized.content) {
+        if (state.firstTokenAt == null) state.firstTokenAt = Date.now();
+        state.accumulatedContent += normalized.content;
+        onChunk(normalized.content, false);
+      }
     }
 
     if (delta?.tool_calls) {
@@ -210,6 +244,8 @@ export type OpenAiChatSendOptions = {
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
   responseFormat?: { type: "json_object" | "text" };
+  headers?: Record<string, string>;
+  omitUnsupportedFields?: boolean;
   signal?: AbortSignal;
   startedAt: number;
   onChunk: (content: string, done: boolean) => void;
@@ -232,9 +268,9 @@ export async function sendOpenAiCompatibleChat(
   try {
     const { signal: fetchSignal, cleanup: cleanupFetchTimeout } = withFetchTimeout(options.signal);
     try {
-      const res = await tauriFetch(`${options.baseUrl || DEFAULT_LM_STUDIO_BASE_URL}${OPENAI_CHAT_PATH}`, {
+      const res = await tauriFetch(openAiChatUrl(options.baseUrl || DEFAULT_LM_STUDIO_BASE_URL), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...options.headers },
         body: JSON.stringify(buildOpenAiChatBody({ ...options, stream: true })),
         signal: fetchSignal,
       });
@@ -272,9 +308,20 @@ export async function sendOpenAiCompatibleChat(
         }
         const content = message?.content ?? "";
         if (content) {
-          streamState.firstTokenAt = Date.now();
-          streamState.accumulatedContent = content;
-          options.onChunk(content, false);
+          const normalized = processReasoningProtocolChunk(
+            streamState.reasoningProtocol ??= createReasoningProtocolState(),
+            content,
+            true,
+          );
+          if (normalized.reasoning) {
+            streamState.accumulatedReasoning += normalized.reasoning;
+            options.onReasoningChunk?.(normalized.reasoning, false);
+          }
+          if (normalized.content) {
+            streamState.firstTokenAt = Date.now();
+            streamState.accumulatedContent = normalized.content;
+            options.onChunk(normalized.content, false);
+          }
         }
         if (json.usage) {
           streamState.stats = {

@@ -1,6 +1,7 @@
 import type { MessagePerformance } from "@/modules/chat/chat-types";
 import type { ProviderToolCall } from "@/lib/providers/types";
 import type { LmChatStats } from "@/lib/performance";
+import type { ReasoningProtocolState } from "@/lib/reasoning-protocol";
 
 export interface LmChatCompleteResult {
   performance: MessagePerformance;
@@ -34,6 +35,7 @@ export type StreamState = {
 export type OpenAiStreamState = StreamState & {
   toolCallAccumulators: Map<number, { id?: string; name?: string; arguments: string }>;
   notifiedToolIndices: Set<number>;
+  reasoningProtocol?: ReasoningProtocolState;
 };
 
 export type LmStudioModelEntry = {

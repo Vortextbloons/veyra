@@ -11,6 +11,25 @@ import { buildMessagePerformance } from "@/lib/performance";
 export const MAX_TOOL_ROUNDS = 6;
 export const MAX_TOOL_ROUNDS_ENHANCED = 10;
 
+function stripImageAttachments(messages: ChatMessage[]): ChatMessage[] {
+  let changed = false;
+  const result: ChatMessage[] = [];
+  for (const msg of messages) {
+    const hasImages = msg.attachments?.some((a) => a.fileType === "image");
+    if (!hasImages) {
+      result.push(msg);
+      continue;
+    }
+    changed = true;
+    const filtered = msg.attachments!.filter((a) => a.fileType !== "image");
+    result.push({
+      ...msg,
+      attachments: filtered.length > 0 ? filtered : undefined,
+    });
+  }
+  return changed ? result : messages;
+}
+
 export async function rePromptWithTools(params: {
   provider: ProviderAdapter;
   providerChatBase: () => Omit<ProviderChatOptions, "messages" | "onComplete">;
@@ -22,6 +41,7 @@ export async function rePromptWithTools(params: {
   enhancedMode: boolean;
   signal?: AbortSignal;
   model: string;
+  modelSupportsImages: boolean;
   onChunk: (content: string, done: boolean) => void;
   onReasoningChunk?: (content: string, done: boolean) => void;
   onError: (error: string) => void;
@@ -138,7 +158,9 @@ export async function rePromptWithTools(params: {
           }
         })();
       },
-      messages: buildRoundMessages(chainMessages, accumulatedContextBlocks, roundMessagesContext),
+      messages: params.modelSupportsImages
+        ? buildRoundMessages(chainMessages, accumulatedContextBlocks, roundMessagesContext)
+        : stripImageAttachments(buildRoundMessages(chainMessages, accumulatedContextBlocks, roundMessagesContext)),
     }).catch(reject);
   });
 }
@@ -153,11 +175,12 @@ export function createExecuteToolRoundLocal(params: {
   conversationIdForDocMutation?: string;
 }) {
   const settings = useSettingsStore.getState();
+  let preferredDocumentId: string | undefined;
   return async (toolCalls: ProviderToolCall[]) => {
     const buffer = useChatStore.getState().streamingBuffer;
     const activeProject = useProjectStore.getState().activeProject();
     const workspaceRoot = activeProject?.settings?.agentProjectPath?.trim() || null;
-    return executeToolRound(toolCalls, {
+    const result = await executeToolRound(toolCalls, {
       signal: params.signal,
       projectId: params.projectId,
       conversationId: params.conversationId,
@@ -171,6 +194,9 @@ export function createExecuteToolRoundLocal(params: {
         pythonPath: settings.customPythonPath.trim() || null,
         workspaceRoot,
       },
+      preferredDocumentId,
     });
+    preferredDocumentId = result.lastCreatedDocumentId ?? preferredDocumentId;
+    return result;
   };
 }

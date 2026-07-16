@@ -14,6 +14,7 @@ import { createCodeExecutionSlice, DEFAULT_CODE_EXECUTION_STATE } from "./slices
 import { createConnectivitySlice, DEFAULT_CONNECTIVITY_STATE } from "./slices/connectivity-slice";
 import { createChatSlice, DEFAULT_CHAT_STATE } from "./slices/chat-slice";
 import { createEmailAiSlice, DEFAULT_EMAIL_AI_STATE } from "./slices/email-ai-slice";
+import { createUpdateSlice, DEFAULT_UPDATE_STATE } from "./slices/update-slice";
 
 export type { ModelSettings, ResolvedModelSettings } from "./slices/model-slice";
 
@@ -32,7 +33,8 @@ export type SettingsStoreState = UiLayoutSliceState
   & CodeExecutionSliceState
   & ConnectivitySliceState
   & ChatSliceState
-  & EmailAiSliceState;
+  & EmailAiSliceState
+  & UpdateSliceState;
 
 export type SettingsStore = SettingsStoreState
   & UiLayoutSliceActions
@@ -45,7 +47,8 @@ export type SettingsStore = SettingsStoreState
   & CodeExecutionSliceActions
   & ConnectivitySliceActions
   & ChatSliceActions
-  & EmailAiSliceActions;
+  & EmailAiSliceActions
+  & UpdateSliceActions;
 
 // Re-import state types for the combined type above.
 import type { UiLayoutSliceState, UiLayoutSliceActions } from "./slices/ui-layout-slice";
@@ -59,6 +62,7 @@ import type { CodeExecutionSliceState, CodeExecutionSliceActions } from "./slice
 import type { ConnectivitySliceState, ConnectivitySliceActions } from "./slices/connectivity-slice";
 import type { ChatSliceState, ChatSliceActions } from "./slices/chat-slice";
 import type { EmailAiSliceState, EmailAiSliceActions } from "./slices/email-ai-slice";
+import type { UpdateSliceState, UpdateSliceActions } from "./slices/update-slice";
 
 // ── Defaults (for merge) ────────────────────────────────────────────────────
 
@@ -74,6 +78,7 @@ const DEFAULT_STATE: SettingsStoreState = {
   ...DEFAULT_CONNECTIVITY_STATE,
   ...DEFAULT_CHAT_STATE,
   ...DEFAULT_EMAIL_AI_STATE,
+  ...DEFAULT_UPDATE_STATE,
 };
 
 // ── Partialize ──────────────────────────────────────────────────────────────
@@ -181,6 +186,8 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     emailAiSummaryModel: state.emailAiSummaryModel,
     emailAiClassificationModel: state.emailAiClassificationModel,
     emailAiDraftModel: state.emailAiDraftModel,
+    autoCheckUpdatesEnabled: state.autoCheckUpdatesEnabled,
+    dismissedUpdateVersion: state.dismissedUpdateVersion,
   };
 }
 
@@ -210,6 +217,7 @@ export const useSettingsStore = create<SettingsStore>()(
       ...createConnectivitySlice(...a),
       ...createChatSlice(...a),
       ...createEmailAiSlice(...a),
+      ...createUpdateSlice(...a),
     }),
     {
       name: SETTINGS_STORAGE_KEY,

@@ -14,6 +14,7 @@ import {
 import { ProviderIcon } from "@/components/provider-icon";
 import { ModelIcon } from "@/components/model-icon";
 import { SliderControl } from "@/components/ui/slider-control";
+import { CloudProvidersSettings } from "@/components/settings/cloud-providers-settings";
 
 export function ModelsSettings() {
   const providers = useProviderStore((s) => s.providers);
@@ -47,6 +48,7 @@ export function ModelsSettings() {
 
   return (
     <div className="space-y-8">
+      <CloudProvidersSettings />
       <section>
         <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
           Provider

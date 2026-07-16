@@ -15,7 +15,7 @@ export function ProviderIcon({ providerId, className }: ProviderIconProps) {
     case "lm-studio":
       return (
         <img
-          src="/logos/lm-studio.png"
+          src="/logos/providers/lm-studio.png"
           alt=""
           className={className}
         />
@@ -23,7 +23,47 @@ export function ProviderIcon({ providerId, className }: ProviderIconProps) {
     case "ollama":
       return (
         <img
-          src="/logos/ollama.png"
+          src="/logos/providers/ollama.png"
+          alt=""
+          className={className}
+        />
+      );
+    case "openai":
+      return (
+        <img
+          src="/logos/providers/openai.svg"
+          alt=""
+          className={className}
+        />
+      );
+    case "openrouter":
+      return (
+        <img
+          src="/logos/providers/openrouter.png"
+          alt=""
+          className={className}
+        />
+      );
+    case "nvidia-nim":
+      return (
+        <img
+          src="/logos/providers/nvidia.svg"
+          alt=""
+          className={className}
+        />
+      );
+    case "groq":
+      return (
+        <img
+          src="/logos/providers/groq.ico"
+          alt=""
+          className={className}
+        />
+      );
+    case "opencode-zen":
+      return (
+        <img
+          src="/logos/providers/opencode-zen.ico"
           alt=""
           className={className}
         />

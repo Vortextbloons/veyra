@@ -18,6 +18,25 @@ import { resolveModelSettings, resolveProviderTooling } from "@/modules/chat/cha
 import { buildRoundMessages, providerChatBase as buildProviderChatBase, formatToolResultsMessage } from "@/modules/chat/chat-context-builder";
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 
+function stripImageAttachments(messages: ChatMessage[]): ChatMessage[] {
+  let changed = false;
+  const result: ChatMessage[] = [];
+  for (const msg of messages) {
+    const hasImages = msg.attachments?.some((a) => a.fileType === "image");
+    if (!hasImages) {
+      result.push(msg);
+      continue;
+    }
+    changed = true;
+    const filtered = msg.attachments!.filter((a) => a.fileType !== "image");
+    result.push({
+      ...msg,
+      attachments: filtered.length > 0 ? filtered : undefined,
+    });
+  }
+  return changed ? result : messages;
+}
+
 export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;
   memoryRetrieval: MemoryRetrievalInfo;
@@ -181,11 +200,32 @@ export async function sendChatRequest({
   const providerChatBaseBound = () =>
     buildProviderChatBase(options, resolved, providerTools, handleToolCallDetected);
 
+  const modelSupportsImages = activeModelInfo?.supportsImages ?? false;
+
   const retryDocMutationWithLLM = async (
     assistantContent: string,
     errorMessage: string,
   ): Promise<ProviderToolCall[]> => {
     let retryToolCalls: ProviderToolCall[] = [];
+    const retryMessages = buildRoundMessagesBound(
+      [
+        ...messages,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: assistantContent || accumulatedContent,
+          timestamp: Date.now(),
+          modelId: options.model,
+        },
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: `Your previous document tool call failed. Failure reason: ${errorMessage}. Retry by calling exactly one corrected document tool. Do not answer in prose.`,
+          timestamp: Date.now(),
+        },
+      ],
+      [],
+    );
     await provider.sendChat({
       ...providerChatBaseBound(),
       onChunk: () => {},
@@ -193,25 +233,7 @@ export async function sendChatRequest({
       onComplete: (nextResult) => {
         retryToolCalls = nextResult.toolCalls ?? [];
       },
-      messages: buildRoundMessagesBound(
-        [
-          ...messages,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: assistantContent || accumulatedContent,
-            timestamp: Date.now(),
-            modelId: options.model,
-          },
-          {
-            id: crypto.randomUUID(),
-            role: "user",
-            content: `Your previous document tool call failed. Failure reason: ${errorMessage}. Retry by calling exactly one corrected document tool. Do not answer in prose.`,
-            timestamp: Date.now(),
-          },
-        ],
-        [],
-      ),
+      messages: modelSupportsImages ? retryMessages : stripImageAttachments(retryMessages),
     });
     return retryToolCalls;
   };
@@ -243,6 +265,7 @@ export async function sendChatRequest({
       enhancedMode,
       signal: options.signal,
       model: options.model,
+      modelSupportsImages,
       onChunk: options.onChunk,
       onReasoningChunk: wrappedOnReasoningChunk,
       onError: options.onError,
@@ -305,6 +328,24 @@ export async function sendChatRequest({
     })();
   };
 
+  const contextMessages = buildChatContext(
+    messages,
+    {
+      memoryPack: memoryPack ?? null,
+      conversationSummary: conversation?.conversationSummary,
+      summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
+      contextAnchoringBlock,
+      documentInstructionsBlock,
+      projectPromptBlock,
+      userPrompt: resolved.userPrompt,
+      reservedOutputTokens: resolved.reservedOutputTokens,
+      modelName: activeModelName,
+      providerName: activeProviderName,
+      characterBlock: resolveCharacterBlock(conversation, messages),
+    },
+    resolved.contextLength,
+  );
+
   await provider.sendChat({
     ...options,
     temperature: options.temperature ?? settings.getModelSettings(options.model).temperature,
@@ -320,23 +361,7 @@ export async function sendChatRequest({
     reasoningEnabled: resolved.reasoningEnabled,
     onToolCallDetected: handleToolCallDetected,
     onComplete: wrappedOnComplete,
-    messages: buildChatContext(
-      messages,
-      {
-        memoryPack: memoryPack ?? null,
-        conversationSummary: conversation?.conversationSummary,
-        summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
-        contextAnchoringBlock,
-        documentInstructionsBlock,
-        projectPromptBlock,
-        userPrompt: resolved.userPrompt,
-        reservedOutputTokens: resolved.reservedOutputTokens,
-        modelName: activeModelName,
-        providerName: activeProviderName,
-        characterBlock: resolveCharacterBlock(conversation, messages),
-      },
-      resolved.contextLength,
-    ),
+    messages: modelSupportsImages ? contextMessages : stripImageAttachments(contextMessages),
   });
   await toolCompletion;
 }

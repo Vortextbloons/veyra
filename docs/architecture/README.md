@@ -135,12 +135,25 @@ interface ProviderAdapter {
 }
 ```
 
-### LM Studio Adapter
-Currently the only registered provider. Handles:
+### Provider adapters
+LM Studio remains the default local provider. Veyra also supports bring-your-own-key
+OpenAI-compatible providers through one shared cloud adapter. Built-in presets cover
+OpenAI, OpenRouter, NVIDIA NIM, OpenCode Zen, and Groq; users can add custom HTTPS
+endpoints (or localhost HTTP endpoints) and manual model IDs.
+
+Cloud API keys are stored in the operating-system credential vault through Tauri and
+are excluded from Zustand persistence. Non-secret provider configuration is stored
+under `veyra.provider.v1`.
+
+The LM Studio adapter handles:
 - Model listing with 5-minute cache
 - Streaming responses
 - Model loading/unloading
 - Server start/restart
+
+The cloud adapter handles OpenAI Chat Completions streaming, model discovery, tool
+calls, cancellation, provider authentication, and compatibility policies. OpenCode
+Zen currently exposes only models served through its Chat Completions endpoint.
 
 ## Tool System
 

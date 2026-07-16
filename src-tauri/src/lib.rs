@@ -48,6 +48,47 @@ const CONVERSATION_KEY_FILE: &str = "conversation.key";
 const MAX_CONVERSATIONS_JSON_BYTES: usize = 50 * 1024 * 1024;
 const KEYRING_SERVICE: &str = "com.veyra.app";
 const KEYRING_USER: &str = "conversation-key";
+const PROVIDER_KEYRING_PREFIX: &str = "provider:";
+
+fn provider_keyring_user(provider_id: &str) -> Result<String, String> {
+    let trimmed = provider_id.trim();
+    if trimmed.is_empty() || trimmed.len() > 100 || !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("invalid provider id".into());
+    }
+    Ok(format!("{PROVIDER_KEYRING_PREFIX}{trimmed}"))
+}
+
+#[tauri::command]
+fn save_provider_credential(provider_id: String, api_key: String) -> Result<(), String> {
+    let key = api_key.trim();
+    if key.is_empty() || key.len() > 16_384 {
+        return Err("invalid API key".into());
+    }
+    let user = provider_keyring_user(&provider_id)?;
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &user).map_err(|error| error.to_string())?;
+    entry.set_password(key).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn load_provider_credential(provider_id: String) -> Result<String, String> {
+    let user = provider_keyring_user(&provider_id)?;
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &user).map_err(|error| error.to_string())?;
+    match entry.get_password() {
+        Ok(value) => Ok(value),
+        Err(keyring::Error::NoEntry) => Ok(String::new()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+fn delete_provider_credential(provider_id: String) -> Result<(), String> {
+    let user = provider_keyring_user(&provider_id)?;
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &user).map_err(|error| error.to_string())?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
 
 fn app_data_file_path(app: &tauri::AppHandle, file_name: &str) -> Result<PathBuf, String> {
     Ok(app
@@ -171,6 +212,9 @@ pub fn run() {
             load_conversations,
             load_or_create_conversation_key,
             save_conversation_key,
+            save_provider_credential,
+            load_provider_credential,
+            delete_provider_credential,
             app_ready,
             exit_app,
             agents::commands::check_pi_available,

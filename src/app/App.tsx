@@ -23,6 +23,8 @@ import { useDocumentStore } from "@/modules/documents/document-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { ConnectivityToastHost } from "@/components/connectivity/connectivity-toast";
+import { UpdateAvailableBanner } from "@/components/update/update-available-banner";
+import { useAppUpdateCheck } from "@/hooks/use-app-update-check";
 import { useIsFeatureAvailable } from "@/lib/connectivity/useConnectivity";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
 import { useConnectivityStore } from "@/stores/connectivity-store";
@@ -141,6 +143,8 @@ function App() {
       void ensureProviderReady();
     }, 3000);
   }, []);
+
+  useAppUpdateCheck();
 
   // ── Connectivity effects ─────────────────────────────────────────────────
 
@@ -279,6 +283,7 @@ function App() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--color-bg)]">
       <ShutdownOverlay />
       <ConnectivityToastHost />
+      <UpdateAvailableBanner />
       <TitleBar
         zoom={zoom}
         onZoomIn={zoomIn}

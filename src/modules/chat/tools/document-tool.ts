@@ -19,18 +19,25 @@ import {
   executeDocRead,
   executeDocUpdate,
   executeInlineEdit,
+  resolveDocumentIdReference,
 } from "@/modules/documents/document-runtime";
 import { useChatStore } from "@/stores/chat-store";
 
 const TOOL_RETRY_LIMIT = 2;
 
-export async function executeDocReadCall(call: ProviderToolCall): Promise<string> {
+export async function executeDocReadCall(
+  call: ProviderToolCall,
+  preferredDocumentId?: string,
+): Promise<string> {
   const chatStore = useChatStore.getState();
   const label = "Read Document";
   const documentId = stringArg(call.arguments, "documentId");
   registerStreamingToolCall(call, "running", documentId);
 
-  const intent = docReadIntentFromToolCall(call);
+  const parsedIntent = docReadIntentFromToolCall(call);
+  const intent = parsedIntent
+    ? { ...parsedIntent, documentId: resolveDocumentIdReference(parsedIntent.documentId, preferredDocumentId) }
+    : null;
   if (!intent) {
     const error = "Invalid doc_read tool arguments.";
     chatStore.setStreamingToolState({
@@ -74,15 +81,17 @@ type DocMutationContext = {
     errorMessage: string,
   ) => Promise<ProviderToolCall[]>;
   conversationId?: string;
+  preferredDocumentId?: string;
 };
 
 export async function executeDocMutationCalls(
   mutationCalls: ProviderToolCall[],
   ctx: DocMutationContext,
-): Promise<{ sections: string[]; streamedChunks: string[] }> {
+): Promise<{ sections: string[]; streamedChunks: string[]; lastCreatedDocumentId?: string }> {
   const chatStore = useChatStore.getState();
   const sections: string[] = [];
   const streamedChunks: string[] = [];
+  let lastCreatedDocumentId: string | undefined;
   let callsToProcess = mutationCalls.filter(
     (call) => call.name === DOC_CREATE_TOOL_NAME || call.name === DOC_UPDATE_TOOL_NAME,
   );
@@ -146,11 +155,21 @@ export async function executeDocMutationCalls(
           input: intent.title,
         });
         sections.push(
-          `Tool result for ${DOC_CREATE_TOOL_NAME}(${JSON.stringify({ title: intent.title })}):\n\n${docResult.sanitizedText}`,
+          `Tool result for ${DOC_CREATE_TOOL_NAME}(${JSON.stringify({ title: intent.title })}):\n\n${docResult.sanitizedText}${docResult.documentId ? `\nDocument id: ${docResult.documentId}` : ""}`,
         );
+        lastCreatedDocumentId = docResult.documentId ?? lastCreatedDocumentId;
         streamedChunks.push(docResult.sanitizedText);
       } else {
-        const intent = docUpdateIntentFromToolCall(call);
+        const parsedIntent = docUpdateIntentFromToolCall(call);
+        const intent = parsedIntent
+          ? {
+              ...parsedIntent,
+              documentId: resolveDocumentIdReference(
+                parsedIntent.documentId,
+                ctx.preferredDocumentId ?? lastCreatedDocumentId,
+              ),
+            }
+          : null;
         if (!intent) {
           const error = "Invalid doc_update tool arguments.";
           failed.push(error);
@@ -207,16 +226,23 @@ export async function executeDocMutationCalls(
     callsToProcess = nextCalls;
   }
 
-  return { sections, streamedChunks };
+  return { sections, streamedChunks, lastCreatedDocumentId };
 }
 
-export async function executeInlineEditCall(call: ProviderToolCall, conversationId?: string): Promise<string> {
+export async function executeInlineEditCall(
+  call: ProviderToolCall,
+  conversationId?: string,
+  preferredDocumentId?: string,
+): Promise<string> {
   const chatStore = useChatStore.getState();
   const label = "Inline Edit";
   const documentId = stringArg(call.arguments, "documentId");
   registerStreamingToolCall(call, "running", documentId);
 
-  const intent = inlineEditIntentFromToolCall(call);
+  const parsedIntent = inlineEditIntentFromToolCall(call);
+  const intent = parsedIntent
+    ? { ...parsedIntent, documentId: resolveDocumentIdReference(parsedIntent.documentId, preferredDocumentId) }
+    : null;
   if (!intent) {
     const error = "Invalid inline_edit tool arguments.";
     chatStore.setStreamingToolState({
