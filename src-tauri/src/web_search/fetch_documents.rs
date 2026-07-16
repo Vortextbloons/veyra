@@ -132,7 +132,7 @@ fn extract_docx_text(bytes: &[u8]) -> Result<String, String> {
             }
             Ok(quick_xml::events::Event::Text(ref e)) => {
                 if in_text {
-                    if let Ok(s) = e.unescape() {
+                    if let Ok(s) = e.decode() {
                         text.push_str(&s);
                     }
                 }
@@ -232,7 +232,7 @@ fn extract_pptx_text(bytes: &[u8]) -> Result<String, String> {
                     }
                     Ok(quick_xml::events::Event::Text(ref e)) => {
                         if in_text {
-                            if let Ok(s) = e.unescape() {
+                            if let Ok(s) = e.decode() {
                                 slide_text.push_str(&s);
                             }
                         }

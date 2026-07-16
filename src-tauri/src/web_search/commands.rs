@@ -424,7 +424,7 @@ fn parse_arxiv_xml_entry(entry_xml: &str) -> Option<ArxivResult> {
             }
             Ok(quick_xml::events::Event::Text(ref e)) => {
                 if let Some(ref tag) = in_tag {
-                    let text = e.unescape().unwrap_or_default().to_string();
+                    let text = e.decode().unwrap_or_default().to_string();
                     match tag.as_str() {
                         "id" => id = text,
                         "title" => title = text,

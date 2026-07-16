@@ -187,7 +187,7 @@ fn extract_docx(bytes: &[u8]) -> Result<FileExtractionResult, String> {
             }
             Ok(quick_xml::events::Event::Text(ref e)) => {
                 if in_text {
-                    if let Ok(s) = e.unescape() {
+                    if let Ok(s) = e.decode() {
                         text.push_str(&s);
                     }
                 }
@@ -320,7 +320,7 @@ fn extract_pptx(bytes: &[u8]) -> Result<FileExtractionResult, String> {
                     }
                     Ok(quick_xml::events::Event::Text(ref e)) => {
                         if in_text {
-                            if let Ok(s) = e.unescape() {
+                            if let Ok(s) = e.decode() {
                                 slide_text.push_str(&s);
                             }
                         }
@@ -544,7 +544,7 @@ fn strip_html(html: &str) -> String {
             }
             Ok(quick_xml::events::Event::Text(ref e)) => {
                 if !in_script && !in_style {
-                    if let Ok(s) = e.unescape() {
+                    if let Ok(s) = e.decode() {
                         text.push_str(&s);
                     }
                 }

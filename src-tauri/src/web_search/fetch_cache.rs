@@ -37,7 +37,8 @@ fn key_path(url: &str, max_chars: usize, dir: &Path) -> PathBuf {
     hasher.update(url.as_bytes());
     hasher.update(b"|mc|");
     hasher.update(max_chars.to_le_bytes());
-    let hash = format!("{:x}", hasher.finalize());
+    let digest = hasher.finalize();
+    let hash: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     dir.join(format!("{hash}.json"))
 }
 

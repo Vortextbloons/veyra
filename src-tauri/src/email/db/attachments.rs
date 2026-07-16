@@ -282,7 +282,7 @@ fn extract_docx_text(path: &std::path::Path) -> Result<String, String> {
     loop {
         match xml_reader.read_event_into(&mut buf) {
             Ok(quick_xml::events::Event::Text(t)) => {
-                let decoded = t.unescape().map_err(|e| e.to_string())?;
+                let decoded = t.decode().map_err(|e| e.to_string())?;
                 text.push_str(&decoded);
                 text.push(' ');
             }
