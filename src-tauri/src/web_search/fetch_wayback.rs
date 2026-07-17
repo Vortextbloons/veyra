@@ -3,7 +3,9 @@ use crate::web_search::fetch_documents::{
     fetch_office_document, handle_epub, handle_pdf, is_epub_url, is_office_url,
 };
 use crate::web_search::fetch_html::{extract_text_from_html_body, strip_html_to_text};
-use crate::web_search::fetch_types::{FetchedPage, FETCH_CLIENT, MAX_BODY_BYTES, MIN_CONTENT_CHARS};
+use crate::web_search::fetch_types::{
+    FetchedPage, FETCH_CLIENT, MAX_BODY_BYTES, MIN_CONTENT_CHARS,
+};
 use crate::web_search::fetch_utils::{
     contains_ole_compound_signature, is_epub_content_type, is_low_quality_extracted_text,
     is_office_content_type, is_zip_archive, truncate_at_sentence_boundary,

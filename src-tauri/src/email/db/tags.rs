@@ -42,10 +42,7 @@ pub fn seed_system_tags(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-pub fn list_tags(
-    conn: &Connection,
-    account_id: Option<&str>,
-) -> Result<Vec<EmailTagRow>, String> {
+pub fn list_tags(conn: &Connection, account_id: Option<&str>) -> Result<Vec<EmailTagRow>, String> {
     let sql = match account_id {
         Some(_) => format!(
             "SELECT {TAG_COLUMNS} FROM email_tags WHERE account_id IS NULL OR account_id = ?1 ORDER BY source, name"
@@ -65,10 +62,7 @@ pub fn list_tags(
     Ok(result)
 }
 
-pub fn create_tag(
-    conn: &Connection,
-    input: &EmailCreateTagInput,
-) -> Result<EmailTagRow, String> {
+pub fn create_tag(conn: &Connection, input: &EmailCreateTagInput) -> Result<EmailTagRow, String> {
     let id = new_uuid_id("tag");
     let now = now_ms();
     let slug = slugify(&input.name);
@@ -82,7 +76,15 @@ pub fn create_tag(
     }
     conn.execute(
         &format!("INSERT INTO email_tags ({TAG_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)"),
-        params![id, input.account_id, input.name, slug, input.color, input.source, now],
+        params![
+            id,
+            input.account_id,
+            input.name,
+            slug,
+            input.color,
+            input.source,
+            now
+        ],
     )
     .map_err(|e| e.to_string())?;
     get_tag(conn, &id)
@@ -97,10 +99,7 @@ pub fn get_tag(conn: &Connection, tag_id: &str) -> Result<EmailTagRow, String> {
     .map_err(|e| format!("tag not found: {e}"))
 }
 
-pub fn update_tag(
-    conn: &Connection,
-    input: &EmailUpdateTagInput,
-) -> Result<EmailTagRow, String> {
+pub fn update_tag(conn: &Connection, input: &EmailUpdateTagInput) -> Result<EmailTagRow, String> {
     let now = now_ms();
     if let Some(name) = &input.name {
         let slug = slugify(name);
@@ -122,7 +121,11 @@ pub fn update_tag(
 
 pub fn delete_tag(conn: &Connection, tag_id: &str) -> Result<(), String> {
     let source: String = conn
-        .query_row("SELECT source FROM email_tags WHERE id = ?1", params![tag_id], |row| row.get(0))
+        .query_row(
+            "SELECT source FROM email_tags WHERE id = ?1",
+            params![tag_id],
+            |row| row.get(0),
+        )
         .map_err(|e| format!("tag not found: {e}"))?;
     if source == "system" {
         return Err("cannot delete system tags".into());
@@ -132,10 +135,7 @@ pub fn delete_tag(conn: &Connection, tag_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn apply_tag_to_message(
-    conn: &Connection,
-    input: &EmailApplyTagInput,
-) -> Result<(), String> {
+pub fn apply_tag_to_message(conn: &Connection, input: &EmailApplyTagInput) -> Result<(), String> {
     let now = now_ms();
     conn.execute(
         "INSERT INTO email_message_tags (message_id, tag_id, source, confidence, reason, created_at)
@@ -159,10 +159,7 @@ pub fn remove_tag_from_message(
     Ok(())
 }
 
-pub fn list_message_tags(
-    conn: &Connection,
-    message_id: &str,
-) -> Result<Vec<EmailTagRow>, String> {
+pub fn list_message_tags(conn: &Connection, message_id: &str) -> Result<Vec<EmailTagRow>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT t.id, t.account_id, t.name, t.slug, t.color, t.source, t.created_at, t.updated_at
@@ -171,7 +168,8 @@ pub fn list_message_tags(
              WHERE mt.message_id = ?1 ORDER BY t.name",
         )
         .map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params![message_id], read_tag_row)
+    let rows = stmt
+        .query_map(params![message_id], read_tag_row)
         .map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for row in rows {

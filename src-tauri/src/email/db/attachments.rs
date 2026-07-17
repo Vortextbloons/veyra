@@ -127,11 +127,9 @@ pub fn download_attachment(
             .get("data")
             .and_then(serde_json::Value::as_str)
             .ok_or("Gmail attachment response missing data field")?;
-        let bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-            data_b64,
-        )
-        .map_err(|e| format!("failed to decode attachment base64: {e}"))?;
+        let bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, data_b64)
+                .map_err(|e| format!("failed to decode attachment base64: {e}"))?;
 
         let dir = app_data_dir
             .join("email_attachments")
@@ -142,7 +140,13 @@ pub fn download_attachment(
         let safe_filename = att
             .filename
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
         let safe_name = format!("{}_{}", attachment_id, safe_filename);
         let file_path = dir.join(&safe_name);
@@ -184,7 +188,10 @@ pub fn extract_attachment_text(
     if att.download_status != "downloaded" {
         return Err("attachment must be downloaded before extraction".into());
     }
-    let local_path = att.local_path.as_ref().ok_or("attachment has no local_path")?;
+    let local_path = att
+        .local_path
+        .as_ref()
+        .ok_or("attachment has no local_path")?;
     let now = now_ms();
     conn.execute(
         "UPDATE email_attachments SET extract_status = 'extracting', error = NULL, updated_at = ?1 WHERE id = ?2",
@@ -204,24 +211,19 @@ pub fn extract_attachment_text(
             || mime.ends_with("+xml")
             || mime.ends_with("+json")
         {
-            std::fs::read_to_string(path)
-                .map_err(|e| format!("failed to read text file: {e}"))?
+            std::fs::read_to_string(path).map_err(|e| format!("failed to read text file: {e}"))?
         } else if mime == "application/pdf" {
-            pdf_extract::extract_text(path)
-                .map_err(|e| format!("PDF extraction failed: {e}"))?
-        } else if mime
-            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            pdf_extract::extract_text(path).map_err(|e| format!("PDF extraction failed: {e}"))?
+        } else if mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             || att.filename.to_lowercase().ends_with(".docx")
         {
             extract_docx_text(path)?
-        } else if mime
-            == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        } else if mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             || att.filename.to_lowercase().ends_with(".xlsx")
         {
             extract_xlsx_text(path)?
         } else if mime == "text/csv" || att.filename.to_lowercase().ends_with(".csv") {
-            std::fs::read_to_string(path)
-                .map_err(|e| format!("failed to read CSV file: {e}"))?
+            std::fs::read_to_string(path).map_err(|e| format!("failed to read CSV file: {e}"))?
         } else {
             return Err(format!("unsupported mime type: {mime}"));
         };
@@ -257,21 +259,19 @@ pub fn extract_attachment_text(
     }
 }
 
-pub fn get_attachment_local_path(
-    conn: &Connection,
-    attachment_id: &str,
-) -> Result<String, String> {
+pub fn get_attachment_local_path(conn: &Connection, attachment_id: &str) -> Result<String, String> {
     let att = get_attachment_row(conn, attachment_id)?;
     if att.download_status != "downloaded" {
         return Err("attachment is not downloaded".into());
     }
-    att.local_path.ok_or_else(|| "attachment has no local_path".into())
+    att.local_path
+        .ok_or_else(|| "attachment has no local_path".into())
 }
 
 fn extract_docx_text(path: &std::path::Path) -> Result<String, String> {
     let file = std::fs::File::open(path).map_err(|e| format!("failed to open docx: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| format!("failed to read docx zip: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("failed to read docx zip: {e}"))?;
     let doc_xml = archive
         .by_name("word/document.xml")
         .map_err(|e| format!("docx missing word/document.xml: {e}"))?;
@@ -286,9 +286,7 @@ fn extract_docx_text(path: &std::path::Path) -> Result<String, String> {
                 text.push_str(&decoded);
                 text.push(' ');
             }
-            Ok(quick_xml::events::Event::End(ref e))
-                if e.name().as_ref() == b"w:p" =>
-            {
+            Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == b"w:p" => {
                 text.push('\n');
             }
             Ok(quick_xml::events::Event::Eof) => break,
@@ -301,9 +299,9 @@ fn extract_docx_text(path: &std::path::Path) -> Result<String, String> {
 }
 
 fn extract_xlsx_text(path: &std::path::Path) -> Result<String, String> {
-    use calamine::{open_workbook, Reader, Xlsx, Data};
-    let mut workbook: Xlsx<_> = open_workbook(path)
-        .map_err(|e| format!("failed to open xlsx: {e}"))?;
+    use calamine::{open_workbook, Data, Reader, Xlsx};
+    let mut workbook: Xlsx<_> =
+        open_workbook(path).map_err(|e| format!("failed to open xlsx: {e}"))?;
     let mut text = String::new();
     for sheet_name in workbook.sheet_names().to_owned() {
         if let Ok(range) = workbook.worksheet_range(&sheet_name) {

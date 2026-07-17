@@ -96,7 +96,7 @@ Copy [.env.example](.env.example) to `.env.local` for optional `VITE_*` / `TAURI
 
 Veyra stores runtime data on your machine only:
 
-- `%APPDATA%\com.veyra.app\` — conversations, SQLite memory DB, keys
+- `%APPDATA%\com.veyra.app\` — encrypted conversations and SQLite feature databases
 - Browser `localStorage` — settings and caches (`veyra.*` keys)
 - Browser `localStorage` — agent sessions, selected model, and workspace path
 
@@ -107,7 +107,7 @@ Do not commit these paths or files to git.
 Some values in source are **intentional local-dev defaults**, not credentials for cloud services:
 
 - SearXNG `secret_key` in `src-tauri/src/web_search/searxng_setup.rs` — local Docker instance only
-- Conversation encryption fallback material in `src/lib/conversation-storage.ts` — legacy local storage
+- Conversation encryption fallback material in `src/lib/conversation-storage.ts` — decrypt-only migration support for legacy snapshots
 
 Do not put production passwords or API keys in the repository.
 

@@ -1,6 +1,8 @@
 # Code Execution
 
-Python code execution sandbox used by the `code_execution` chat tool.
+Native Python execution is currently disabled. The previous textual scanner did
+not isolate Python from the host operating system and therefore was not a
+security boundary.
 
 ## Contents
 

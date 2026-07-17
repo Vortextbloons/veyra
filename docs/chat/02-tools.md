@@ -7,7 +7,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG |
-| `code_execution` | `codeExecutionEnabled` | Run Python code via Tauri |
+| `code_execution` | Disabled | Reserved for a future OS-enforced sandbox |
 | `doc_create` | `documentToolsEnabled` | Create a new document |
 | `doc_read` | `documentToolsEnabled` | Read a document |
 | `inline_edit` | `documentToolsEnabled` | Edit a document with section/heading targeting |

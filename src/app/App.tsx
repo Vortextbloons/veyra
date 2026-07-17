@@ -24,6 +24,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { ConnectivityToastHost } from "@/components/connectivity/connectivity-toast";
 import { UpdateAvailableBanner } from "@/components/update/update-available-banner";
+import { ConversationStorageBanner } from "@/components/conversation-storage-banner";
 import { useAppUpdateCheck } from "@/hooks/use-app-update-check";
 import { useIsFeatureAvailable } from "@/lib/connectivity/useConnectivity";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
@@ -285,6 +286,7 @@ function App() {
       <ShutdownOverlay />
       <ConnectivityToastHost />
       <UpdateAvailableBanner />
+      <ConversationStorageBanner />
       <TitleBar
         zoom={zoom}
         onZoomIn={zoomIn}

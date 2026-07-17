@@ -170,7 +170,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   hydrateConversations: async () => {
     if (get().hydrationState === "ready") return;
     hydratePromise ??= (async () => {
-      const conversations = await loadConversationSnapshot();
+      let conversations: Conversation[];
+      try {
+        conversations = await loadConversationSnapshot();
+      } catch {
+        // The storage layer surfaces a persistent banner and blocks writes so
+        // recovery data cannot be overwritten. Keep the rest of the app usable.
+        conversations = [];
+      }
       // Normalize old attachments that may lack fileType/size
       const normalized = conversations.map((conv) => ({
         ...conv,

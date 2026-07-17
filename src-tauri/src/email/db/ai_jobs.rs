@@ -30,9 +30,7 @@ pub fn read_ai_job_row(row: &rusqlite::Row) -> Result<EmailAiJobRow, rusqlite::E
     })
 }
 
-pub fn read_ai_output_row(
-    row: &rusqlite::Row,
-) -> Result<EmailAiOutputRow, rusqlite::Error> {
+pub fn read_ai_output_row(row: &rusqlite::Row) -> Result<EmailAiOutputRow, rusqlite::Error> {
     Ok(EmailAiOutputRow {
         id: row.get(0)?,
         account_id: row.get(1)?,
@@ -51,10 +49,7 @@ pub fn read_ai_output_row(
     })
 }
 
-pub fn enqueue_ai_job(
-    conn: &Connection,
-    input: &EmailAiJobInput,
-) -> Result<EmailAiJobRow, String> {
+pub fn enqueue_ai_job(conn: &Connection, input: &EmailAiJobInput) -> Result<EmailAiJobRow, String> {
     let id = new_uuid_id("job");
     let now = now_ms();
     conn.execute(
@@ -94,7 +89,12 @@ pub fn claim_next_ai_job(
         return Ok(None);
     }
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
-    let placeholders = task_types.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect::<Vec<_>>().join(",");
+    let placeholders = task_types
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(",");
     let sql = format!(
         "SELECT {AI_JOB_COLUMNS} FROM email_ai_jobs
          WHERE status = 'queued' AND task_type IN ({placeholders})
@@ -102,7 +102,11 @@ pub fn claim_next_ai_job(
     );
     let job = {
         let mut stmt = tx.prepare(&sql).map_err(|e| e.to_string())?;
-        let mut rows = stmt.query_map(rusqlite::params_from_iter(task_types.iter()), read_ai_job_row)
+        let mut rows = stmt
+            .query_map(
+                rusqlite::params_from_iter(task_types.iter()),
+                read_ai_job_row,
+            )
             .map_err(|e| e.to_string())?;
         match rows.next() {
             Some(row) => row.map_err(|e| e.to_string())?,
@@ -157,11 +161,7 @@ pub fn complete_ai_job(
     get_ai_job(conn, &input.job_id)
 }
 
-pub fn fail_ai_job(
-    conn: &Connection,
-    job_id: &str,
-    error: &str,
-) -> Result<EmailAiJobRow, String> {
+pub fn fail_ai_job(conn: &Connection, job_id: &str, error: &str) -> Result<EmailAiJobRow, String> {
     let job = get_ai_job(conn, job_id)?;
     let now = now_ms();
     if job.attempt_count + 1 < job.max_attempts {
@@ -203,7 +203,10 @@ pub fn requeue_ai_job(conn: &Connection, job_id: &str) -> Result<(), String> {
 
 /// Requeue jobs left in `running` after a crash, stop, or stale worker tick.
 /// When `stale_after_ms <= 0`, all running jobs are requeued (startup / worker stopped).
-pub fn reconcile_orphaned_running_jobs(conn: &Connection, stale_after_ms: i64) -> Result<u64, String> {
+pub fn reconcile_orphaned_running_jobs(
+    conn: &Connection,
+    stale_after_ms: i64,
+) -> Result<u64, String> {
     let now = now_ms();
     let updated = if stale_after_ms <= 0 {
         conn.execute(
@@ -295,7 +298,11 @@ pub fn list_ai_jobs(
     let sql = format!("SELECT {AI_JOB_COLUMNS} FROM email_ai_jobs WHERE {where_clause} ORDER BY priority ASC, scheduled_at ASC LIMIT ?{idx}");
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(rusqlite::params_from_iter(param_values.iter().map(|p| p.as_ref())), read_ai_job_row)
+    let rows = stmt
+        .query_map(
+            rusqlite::params_from_iter(param_values.iter().map(|p| p.as_ref())),
+            read_ai_job_row,
+        )
         .map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for row in rows {
@@ -311,7 +318,8 @@ pub fn list_ai_outputs(
     let mut stmt = conn
         .prepare(&format!("SELECT {AI_OUTPUT_COLUMNS} FROM email_ai_outputs WHERE thread_id = ?1 ORDER BY created_at DESC"))
         .map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params![thread_id], read_ai_output_row)
+    let rows = stmt
+        .query_map(params![thread_id], read_ai_output_row)
         .map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for row in rows {
@@ -329,7 +337,8 @@ pub fn get_ai_output_for_thread(
     let mut stmt = conn
         .prepare(&format!("SELECT {AI_OUTPUT_COLUMNS} FROM email_ai_outputs WHERE thread_id = ?1 AND task_type = ?2 ORDER BY updated_at DESC LIMIT 1"))
         .map_err(|e| e.to_string())?;
-    let mut rows = stmt.query_map(params![thread_id, task_type], read_ai_output_row)
+    let mut rows = stmt
+        .query_map(params![thread_id, task_type], read_ai_output_row)
         .map_err(|e| e.to_string())?;
     match rows.next() {
         Some(row) => Ok(Some(row.map_err(|e| e.to_string())?)),
@@ -358,7 +367,8 @@ pub fn get_unprocessed_message_ids(
              ORDER BY m.timestamp DESC LIMIT 50",
         )
         .map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params![account_id, task_type], |row| row.get(0))
+    let rows = stmt
+        .query_map(params![account_id, task_type], |row| row.get(0))
         .map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for row in rows {
@@ -397,7 +407,8 @@ pub fn get_unprocessed_thread_ids(
              ORDER BY t.last_message_at DESC LIMIT 50",
         )
         .map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params![account_id, task_type], |row| row.get(0))
+    let rows = stmt
+        .query_map(params![account_id, task_type], |row| row.get(0))
         .map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for row in rows {

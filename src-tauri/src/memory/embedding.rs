@@ -107,10 +107,7 @@ pub async fn resolve_embedding_config(
 
 /// Call the embedding endpoint to compute embeddings for texts.
 /// Returns None if the endpoint is unreachable.
-pub async fn embed_texts(
-    config: &EmbeddingConfig,
-    texts: &[String],
-) -> Option<Vec<Vec<f32>>> {
+pub async fn embed_texts(config: &EmbeddingConfig, texts: &[String]) -> Option<Vec<Vec<f32>>> {
     if texts.is_empty() {
         return Some(vec![]);
     }
@@ -167,9 +164,7 @@ pub fn bytes_to_vec(b: &[u8], dim: usize) -> Option<Vec<f32>> {
     }
     let mut v = Vec::with_capacity(dim);
     for chunk in b.chunks_exact(4) {
-        v.push(f32::from_le_bytes([
-            chunk[0], chunk[1], chunk[2], chunk[3],
-        ]));
+        v.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
     }
     Some(v)
 }

@@ -1,6 +1,8 @@
 use crate::web_search::fetch_cache;
 use crate::web_search::fetch_html::{extract_text_from_html_body, strip_html_to_text};
-use crate::web_search::fetch_types::{FetchedPage, FETCH_CLIENT, MIN_CONTENT_CHARS, YOUTUBE_CACHE_TTL_SECS};
+use crate::web_search::fetch_types::{
+    FetchedPage, FETCH_CLIENT, MIN_CONTENT_CHARS, YOUTUBE_CACHE_TTL_SECS,
+};
 use crate::web_search::fetch_utils::{transient_error_page, truncate_at_sentence_boundary};
 use std::time::Duration;
 

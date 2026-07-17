@@ -24,10 +24,7 @@ pub fn read_ai_draft_row(row: &rusqlite::Row) -> Result<EmailAiDraftRow, rusqlit
     })
 }
 
-pub fn list_ai_drafts(
-    conn: &Connection,
-    thread_id: &str,
-) -> Result<Vec<EmailAiDraftRow>, String> {
+pub fn list_ai_drafts(conn: &Connection, thread_id: &str) -> Result<Vec<EmailAiDraftRow>, String> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {AI_DRAFT_COLUMNS} FROM email_ai_drafts WHERE thread_id = ?1 ORDER BY created_at DESC"
@@ -43,10 +40,7 @@ pub fn list_ai_drafts(
     Ok(result)
 }
 
-pub fn get_ai_draft(
-    conn: &Connection,
-    draft_id: &str,
-) -> Result<EmailAiDraftRow, String> {
+pub fn get_ai_draft(conn: &Connection, draft_id: &str) -> Result<EmailAiDraftRow, String> {
     conn.query_row(
         &format!("SELECT {AI_DRAFT_COLUMNS} FROM email_ai_drafts WHERE id = ?1"),
         params![draft_id],
@@ -83,10 +77,7 @@ pub fn save_ai_draft(
     get_ai_draft(conn, &id)
 }
 
-pub fn delete_ai_draft(
-    conn: &Connection,
-    draft_id: &str,
-) -> Result<(), String> {
+pub fn delete_ai_draft(conn: &Connection, draft_id: &str) -> Result<(), String> {
     conn.execute(
         "DELETE FROM email_ai_drafts WHERE id = ?1",
         params![draft_id],
@@ -103,7 +94,10 @@ pub fn update_ai_draft_status(
     // Validate status
     let valid_statuses = ["suggested", "inserted", "edited", "dismissed"];
     if !valid_statuses.contains(&status) {
-        return Err(format!("invalid status '{}', must be one of: {:?}", status, valid_statuses));
+        return Err(format!(
+            "invalid status '{}', must be one of: {:?}",
+            status, valid_statuses
+        ));
     }
     let now = now_ms();
     conn.execute(

@@ -6,7 +6,7 @@
 |--------|---------|
 | `agents/` | Pi CLI integration |
 | `characters/` | Character and group CRUD, I/O commands, avatar management |
-| `code_execution/` | Python sandbox (check + execute) |
+| `code_execution/` | Defense-in-depth rejection of native Python execution |
 | `connectivity/` | Network connectivity probe |
 | `document_extraction` | Document text extraction utility |
 | `documents/` | Document CRUD, versions, export, folders |

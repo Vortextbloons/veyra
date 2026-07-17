@@ -9,10 +9,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 
-use crate::shared::constants::LM_STUDIO_OPENAI_BASE_URL;
 use super::process::{
     register_agent_process, unregister_agent_process, PiAgentOutput, RUNNING_AGENT_STDIN,
 };
+use crate::shared::constants::LM_STUDIO_OPENAI_BASE_URL;
 
 // ---------------------------------------------------------------------------
 // Input / event types
@@ -54,7 +54,9 @@ pub(crate) fn pi_candidates() -> Vec<&'static str> {
     }
 }
 
-pub(crate) fn validate_pi_agent_input(input: &super::commands::StartPiAgentInput) -> Result<(), String> {
+pub(crate) fn validate_pi_agent_input(
+    input: &super::commands::StartPiAgentInput,
+) -> Result<(), String> {
     if input.session_id.trim().is_empty() {
         return Err("agent session id is required".into());
     }

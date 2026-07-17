@@ -1,7 +1,7 @@
-use crate::shared::db_utils::run_db_command;
 use crate::memory::db::{self as memory_db, MemoryDbState};
 use crate::memory::embedding;
 use crate::memory::vector;
+use crate::shared::db_utils::run_db_command;
 use tauri::State;
 
 #[tauri::command]
@@ -185,74 +185,75 @@ pub async fn vector_search_memory(
         .map(|node| (node.id.clone(), node.relevance_score.unwrap_or(0.0)))
         .collect();
 
-    let (mut selected, query_vector_available): (Vec<(String, f64, f64)>, bool) = if let Some(query_embedding) = query_vector {
-        let all_embeddings = run_db_command(state.inner(), "memory", move |conn| {
-            memory_db::load_all_embeddings(conn, pid_clone)
-        })
-        .await?;
+    let (mut selected, query_vector_available): (Vec<(String, f64, f64)>, bool) =
+        if let Some(query_embedding) = query_vector {
+            let all_embeddings = run_db_command(state.inner(), "memory", move |conn| {
+                memory_db::load_all_embeddings(conn, pid_clone)
+            })
+            .await?;
 
-        let node_projects: Vec<(String, Option<String>)> = all_embeddings
-            .iter()
-            .map(|(id, _, proj)| (id.clone(), proj.clone()))
-            .collect();
-        let node_embs: Vec<(String, Vec<f32>)> = all_embeddings
-            .into_iter()
-            .map(|(id, emb, _)| (id, emb))
-            .collect();
+            let node_projects: Vec<(String, Option<String>)> = all_embeddings
+                .iter()
+                .map(|(id, _, proj)| (id.clone(), proj.clone()))
+                .collect();
+            let node_embs: Vec<(String, Vec<f32>)> = all_embeddings
+                .into_iter()
+                .map(|(id, emb, _)| (id, emb))
+                .collect();
 
-        let vector_results = vector::top_k_by_cosine(
-            &node_embs,
-            &query_embedding,
-            &node_projects,
-            project_id_filter,
-            limit as usize * 3,
-        );
+            let vector_results = vector::top_k_by_cosine(
+                &node_embs,
+                &query_embedding,
+                &node_projects,
+                project_id_filter,
+                limit as usize * 3,
+            );
 
-        let vector_map: std::collections::HashMap<String, f64> = vector_results
-            .iter()
-            .map(|r| (r.id.clone(), r.vector_score as f64))
-            .collect();
+            let vector_map: std::collections::HashMap<String, f64> = vector_results
+                .iter()
+                .map(|r| (r.id.clone(), r.vector_score as f64))
+                .collect();
 
-        let vector_signal_available = !vector_results.is_empty();
-        let (effective_vector_weight, effective_bm25_weight) = if vector_signal_available {
-            let sum = vector_weight + bm25_weight;
-            if sum > 0.0 {
-                (vector_weight / sum, bm25_weight / sum)
+            let vector_signal_available = !vector_results.is_empty();
+            let (effective_vector_weight, effective_bm25_weight) = if vector_signal_available {
+                let sum = vector_weight + bm25_weight;
+                if sum > 0.0 {
+                    (vector_weight / sum, bm25_weight / sum)
+                } else {
+                    (0.0, 1.0)
+                }
             } else {
                 (0.0, 1.0)
-            }
+            };
+
+            let mut all_ids: std::collections::HashSet<String> = bm25_map.keys().cloned().collect();
+            all_ids.extend(vector_map.keys().cloned());
+
+            (
+                all_ids
+                    .into_iter()
+                    .map(|id| {
+                        let v_score = vector_map.get(&id).copied().unwrap_or(0.0);
+                        let b_score = bm25_map.get(&id).copied().unwrap_or(0.0);
+                        let hybrid = if vector_signal_available {
+                            effective_vector_weight * v_score + effective_bm25_weight * b_score
+                        } else {
+                            b_score
+                        };
+                        (id, hybrid, v_score)
+                    })
+                    .collect(),
+                vector_signal_available,
+            )
         } else {
-            (0.0, 1.0)
+            (
+                bm25_map
+                    .iter()
+                    .map(|(id, score)| (id.clone(), *score, 0.0))
+                    .collect(),
+                false,
+            )
         };
-
-        let mut all_ids: std::collections::HashSet<String> = bm25_map.keys().cloned().collect();
-        all_ids.extend(vector_map.keys().cloned());
-
-        (
-            all_ids
-                .into_iter()
-                .map(|id| {
-                    let v_score = vector_map.get(&id).copied().unwrap_or(0.0);
-                    let b_score = bm25_map.get(&id).copied().unwrap_or(0.0);
-                    let hybrid = if vector_signal_available {
-                        effective_vector_weight * v_score + effective_bm25_weight * b_score
-                    } else {
-                        b_score
-                    };
-                    (id, hybrid, v_score)
-                })
-                .collect(),
-            vector_signal_available,
-        )
-    } else {
-        (
-            bm25_map
-                .iter()
-                .map(|(id, score)| (id.clone(), *score, 0.0))
-                .collect(),
-            false,
-        )
-    };
 
     selected.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     selected.truncate(limit as usize);

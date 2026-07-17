@@ -12,10 +12,40 @@ pub fn sanitize_email_html(html: &str) -> String {
 
     builder
         .add_tags(&[
-            "p", "br", "div", "span", "a", "b", "strong", "i", "em", "u",
-            "ul", "ol", "li", "blockquote", "pre", "code", "h1", "h2", "h3",
-            "h4", "h5", "h6", "hr", "table", "thead", "tbody", "tr", "td", "th",
-            "img", "sub", "sup", "small", "font",
+            "p",
+            "br",
+            "div",
+            "span",
+            "a",
+            "b",
+            "strong",
+            "i",
+            "em",
+            "u",
+            "ul",
+            "ol",
+            "li",
+            "blockquote",
+            "pre",
+            "code",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "hr",
+            "table",
+            "thead",
+            "tbody",
+            "tr",
+            "td",
+            "th",
+            "img",
+            "sub",
+            "sup",
+            "small",
+            "font",
         ])
         .add_tag_attributes("a", &["href", "title"])
         .add_tag_attributes("img", &["src", "alt", "width", "height", "data-remote-src"])
@@ -117,8 +147,18 @@ fn collect_text_nodes(element: &scraper::ElementRef, out: &mut Vec<String>) {
                 let tag_name = tag.name();
                 if matches!(
                     tag_name,
-                    "p" | "div" | "br" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
-                        | "li" | "tr" | "blockquote" | "hr"
+                    "p" | "div"
+                        | "br"
+                        | "h1"
+                        | "h2"
+                        | "h3"
+                        | "h4"
+                        | "h5"
+                        | "h6"
+                        | "li"
+                        | "tr"
+                        | "blockquote"
+                        | "hr"
                 ) && !out.last().is_some_and(|s| s.ends_with('\n'))
                 {
                     out.push("\n".to_string());

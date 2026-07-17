@@ -2,16 +2,17 @@
 
 ## Encryption
 
-- Conversations are encrypted with **AES-GCM** using keys from the Rust backend
+- Conversations are encrypted with **AES-GCM** and authenticated snapshot revisions
 - Web Workers handle encryption/decryption without blocking the UI
-- Encryption keys are managed securely via Tauri
-- Legacy key migration is supported on startup
+- Encryption keys live in the operating-system credential vault
+- Legacy plaintext key files are migrated to the vault and removed on startup
 
 ## Persistence
 
 - Debounced saves (500ms) to avoid excessive I/O
-- Stored in `%APPDATA%/com.veyra.app/` as JSON files
-- Key rotation is supported
+- Atomic primary writes retain one rotating encrypted backup
+- An emergency browser copy is compared by authenticated revision during recovery
+- Failed recovery blocks writes and displays a persistent warning
 
 ## Conversation Identity
 

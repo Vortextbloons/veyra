@@ -1,5 +1,5 @@
-use crate::shared::db_utils::run_db_command;
 use crate::email::db::{self as email_db, EmailDbState};
+use crate::shared::db_utils::run_db_command;
 use tauri::{Manager, State};
 
 #[tauri::command]
@@ -177,9 +177,7 @@ pub async fn email_mark_unread(
 }
 
 #[tauri::command]
-pub async fn email_sync_all_gmail(
-    state: State<'_, EmailDbState>,
-) -> Result<(), String> {
+pub async fn email_sync_all_gmail(state: State<'_, EmailDbState>) -> Result<(), String> {
     run_db_command(state.inner(), "email", email_db::sync_all_gmail).await
 }
 
@@ -471,10 +469,7 @@ pub async fn email_generate_ai_draft(
 ) -> Result<email_db::EmailAiJobRow, String> {
     run_db_command(state.inner(), "email", move |conn| {
         let thread = email_db::get_thread(conn, input.thread_id.clone())?;
-        let last_msg = thread
-            .messages
-            .last()
-            .ok_or("thread has no messages")?;
+        let last_msg = thread.messages.last().ok_or("thread has no messages")?;
         let job_input = email_db::EmailAiJobInput {
             account_id: input.account_id.clone(),
             thread_id: Some(input.thread_id.clone()),
@@ -485,7 +480,9 @@ pub async fn email_generate_ai_draft(
             tone: input.tone,
         };
         let jobs = email_db::enqueue_ai_jobs(conn, &[job_input])?;
-        jobs.into_iter().next().ok_or("failed to enqueue draft job".to_string())
+        jobs.into_iter()
+            .next()
+            .ok_or("failed to enqueue draft job".to_string())
     })
     .await
 }

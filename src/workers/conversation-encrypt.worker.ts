@@ -11,6 +11,7 @@ type Conversation = {
 type EncryptRequest = {
   conversations: Conversation[];
   keyBytes: ArrayBuffer;
+  revision: number;
 };
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -27,12 +28,16 @@ async function importAesKey(keyBytes: ArrayBuffer): Promise<CryptoKey> {
 
 self.onmessage = async (event: MessageEvent<EncryptRequest>) => {
   try {
-    const { conversations, keyBytes } = event.data;
+    const { conversations, keyBytes, revision } = event.data;
     const encoder = new TextEncoder();
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await importAesKey(keyBytes);
     const encrypted = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData: encoder.encode(`veyra-conversations-v2:${revision}`),
+      },
       key,
       encoder.encode(JSON.stringify(conversations)),
     );
@@ -40,7 +45,8 @@ self.onmessage = async (event: MessageEvent<EncryptRequest>) => {
     self.postMessage({
       ok: true,
       snapshot: JSON.stringify({
-        version: 1,
+        version: 2,
+        revision,
         iv: bytesToBase64(iv),
         data: bytesToBase64(new Uint8Array(encrypted)),
       }),

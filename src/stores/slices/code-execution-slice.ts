@@ -22,7 +22,7 @@ export type CodeExecutionSlice = CodeExecutionSliceState & CodeExecutionSliceAct
 
 export const createCodeExecutionSlice: StateCreator<CodeExecutionSlice, [], [], CodeExecutionSlice> = (set) => ({
   ...DEFAULT_CODE_EXECUTION_STATE,
-  setCodeExecutionEnabled: (codeExecutionEnabled) => set({ codeExecutionEnabled }),
+  setCodeExecutionEnabled: () => set({ codeExecutionEnabled: false }),
   setCustomPythonPath: (customPythonPath) => set({ customPythonPath }),
   setCodeExecutionTimeoutSecs: (codeExecutionTimeoutSecs) => set({ codeExecutionTimeoutSecs }),
 });

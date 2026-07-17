@@ -59,11 +59,7 @@ pub fn add_account(
     })
 }
 
-pub fn seed_welcome_thread(
-    conn: &Connection,
-    account_id: &str,
-    name: &str,
-) -> Result<(), String> {
+pub fn seed_welcome_thread(conn: &Connection, account_id: &str, name: &str) -> Result<(), String> {
     let thread_id = new_id("thread");
     let message_id = new_id("msg");
     let body = format!("Welcome to Veyra Mail, {name}. This local mailbox is ready for offline drafting, search, read state, archive, and send confirmation. Connect the Gmail adapter when OAuth credentials are available.");

@@ -1,6 +1,6 @@
+use crate::projects::db::{self as project_db, ProjectDbState};
 use crate::shared::db_utils::run_db_command;
 use crate::shared::path_utils::validate_export_file_path;
-use crate::projects::db::{self as project_db, ProjectDbState};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 

@@ -1,5 +1,5 @@
+use scraper::{ElementRef, Html, Node};
 use serde::{Deserialize, Serialize};
-use scraper::{Html, ElementRef, Node};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -217,7 +217,8 @@ fn is_quote_block(el: &ElementRef, text: &str) -> bool {
         if text.contains("wrote:") || text.contains("writes:") {
             return true;
         }
-        if text.contains("寫道：") || text.contains("写道：") || text.contains("書きました：") {
+        if text.contains("寫道：") || text.contains("写道：") || text.contains("書きました：")
+        {
             return true;
         }
     }

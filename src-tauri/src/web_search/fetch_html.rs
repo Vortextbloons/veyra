@@ -97,8 +97,10 @@ pub(crate) fn extract_text_from_html_body(
 /// headings, and blockquotes, joined with double newlines.
 fn extract_paragraphs_fallback(html: &str) -> String {
     let document = Html::parse_document(html);
-    let sel = Selector::parse("p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, article, section, td, dt, dd, figcaption")
-        .expect("static selector must parse");
+    let sel = Selector::parse(
+        "p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, article, section, td, dt, dd, figcaption",
+    )
+    .expect("static selector must parse");
     let mut out = String::new();
     for element in document.select(&sel) {
         let mut text = String::new();
@@ -122,7 +124,9 @@ fn extract_paragraphs_fallback(html: &str) -> String {
 fn extract_paragraphs_regex(html: &str) -> String {
     let mut out = String::new();
     let lower = html.to_lowercase();
-    let tags: &[&str] = &["<p", "<article", "<section", "<td", "<li", "<h1", "<h2", "<h3", "<h4", "<h5", "<h6"];
+    let tags: &[&str] = &[
+        "<p", "<article", "<section", "<td", "<li", "<h1", "<h2", "<h3", "<h4", "<h5", "<h6",
+    ];
     let mut i = 0usize;
     'outer: while i < lower.len() {
         for tag in tags {

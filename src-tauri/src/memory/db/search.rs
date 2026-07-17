@@ -1,9 +1,9 @@
 use rusqlite::{params_from_iter, types::Value, Connection};
 
-use crate::memory::vector;
 use super::helpers::fts_query;
 use super::nodes::row_to_node;
 use super::types::MemoryNodeRow;
+use crate::memory::vector;
 
 pub fn search_nodes(
     conn: &Connection,

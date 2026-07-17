@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
 
-use crate::memory::embedding;
 use super::types::{DuplicatePair, EmbeddingStatus};
+use crate::memory::embedding;
 
 /// Store an embedding vector for a node.
 pub fn store_embedding(conn: &Connection, node_id: &str, embedding: &[f32]) -> Result<(), String> {

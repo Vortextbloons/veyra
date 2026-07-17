@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-17T19:14:14.172Z
+> Generated: 2026-07-17T19:48:06.550Z
 > Total files: 79
 
 ## Table of Contents
@@ -150,7 +150,7 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 
 | Data | Location | Format |
 |------|----------|--------|
-| Conversations | `%APPDATA%/com.veyra.app/` | AES-GCM encrypted JSON |
+| Conversations | `%APPDATA%/com.veyra.app/` | AES-GCM encrypted JSON with rotating backup |
 | Memory DB | `%APPDATA%/com.veyra.app/` | SQLite |
 | Settings | localStorage | `veyra.settings.v1` key |
 | Provider config | localStorage | `veyra.provider.v1` key |
@@ -166,7 +166,8 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 
 - No data leaves the machine unless the user explicitly enables web search, cloud providers, or email sync
 - Cloud API keys are stored in the operating-system credential vault through Tauri and are excluded from Zustand persistence
-- AES-GCM encryption for conversation files with keys managed by the Rust backend
+- Conversation keys are stored in the operating-system credential vault, not beside ciphertext
+- Conversation writes are atomic and retain one previous encrypted snapshot for recovery
 - Web Workers handle encryption/decryption without blocking the UI
 
 ---
@@ -335,7 +336,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG |
-| `code_execution` | `codeExecutionEnabled` | Run Python code via Tauri |
+| `code_execution` | Disabled | Reserved for a future OS-enforced sandbox |
 | `doc_create` | `documentToolsEnabled` | Create a new document |
 | `doc_read` | `documentToolsEnabled` | Read a document |
 | `inline_edit` | `documentToolsEnabled` | Edit a document with section/heading targeting |
@@ -451,16 +452,17 @@ Both LM Studio and cloud providers use the same streaming interface, ensuring co
 
 ## Encryption
 
-- Conversations are encrypted with **AES-GCM** using keys from the Rust backend
+- Conversations are encrypted with **AES-GCM** and authenticated snapshot revisions
 - Web Workers handle encryption/decryption without blocking the UI
-- Encryption keys are managed securely via Tauri
-- Legacy key migration is supported on startup
+- Encryption keys live in the operating-system credential vault
+- Legacy plaintext key files are migrated to the vault and removed on startup
 
 ## Persistence
 
 - Debounced saves (500ms) to avoid excessive I/O
-- Stored in `%APPDATA%/com.veyra.app/` as JSON files
-- Key rotation is supported
+- Atomic primary writes retain one rotating encrypted backup
+- An emergency browser copy is compared by authenticated revision during recovery
+- Failed recovery blocks writes and displays a persistent warning
 
 ## Conversation Identity
 
@@ -3040,14 +3042,14 @@ Controls online/offline behavior and determines which features are available bas
 
 # Code Execution
 
-Python code execution sandbox via Tauri backend. Used by the `code_execution` chat tool.
+Native Python execution is disabled until Veyra has an OS-enforced sandbox.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/lib/code-execution.ts` | Frontend types and Tauri invoke wrappers |
-| `src-tauri/src/code_execution/` | Rust backend: Python sandbox |
+| `src-tauri/src/code_execution/` | Rust backend: disabled-state enforcement |
 
 ## Python Availability Check
 
@@ -3061,7 +3063,8 @@ type PythonAvailabilityResult = {
 };
 ```
 
-Detects Python installation on the system. If Python is unavailable, the `code_execution` tool is disabled.
+The availability command always reports the feature as unavailable with the
+security-boundary explanation. Interpreter detection and selection were removed.
 
 ## Execution
 
@@ -3077,14 +3080,15 @@ type PythonExecutionResult = {
 };
 ```
 
-Code is executed in a temporary working directory with configurable timeout. The tool returns stdout, stderr, exit code, and duration.
+The backend rejects execution even if a stale frontend or persisted setting
+attempts to invoke the command.
 
 ## Safety
 
-- Code execution requires Python to be installed
-- The tool is disabled-safe if Python is unavailable
-- Configurable timeout prevents runaway code
-- Executes in a sandboxed temporary directory
+- No host Python process is started
+- Persisted enablement from older releases is migrated to `false`
+- The chat tool is excluded from provider tool definitions
+- Re-enabling requires an OS-enforced filesystem, process, credential, and network boundary
 
 ---
 
@@ -3094,7 +3098,9 @@ Code is executed in a temporary working directory with configurable timeout. The
 
 # Code Execution
 
-Python code execution sandbox used by the `code_execution` chat tool.
+Native Python execution is currently disabled. The previous textual scanner did
+not isolate Python from the host operating system and therefore was not a
+security boundary.
 
 ## Contents
 
@@ -3317,7 +3323,7 @@ under `veyra.provider.v1`.
 | Tool | Condition | Description |
 |------|-----------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG. Parallel execution with up to 2 retries. |
-| `code_execution` | `codeExecutionEnabled` | Run Python code in a sandboxed temp directory. |
+| `code_execution` | Disabled | Reserved for a future OS-enforced sandbox; native host Python is rejected. |
 | `doc_create` | `documentToolsEnabled` | Create a new document. |
 | `doc_read` | `documentToolsEnabled` | Read a document by ID. |
 | `inline_edit` | `documentToolsEnabled` | Edit a document (replace_all, replace_section, insert_after_section, replace_text). Retries up to 2 times with LLM re-prompt. |
@@ -3351,16 +3357,19 @@ Each tool has a JSON schema defining its parameters. Tool calls execute in round
 
 ## Conversation Encryption
 
-- AES-GCM encryption for conversation files
-- Encryption keys managed by the Rust backend
+- AES-GCM encryption with authenticated snapshot revisions
+- Encryption keys stored in the operating-system credential vault
 - Web Workers handle encryption/decryption without blocking the UI
 - Debounced saves (500ms) to avoid excessive I/O
+- Atomic primary writes with one rotating backup
+- Emergency browser storage is revision-compared rather than blindly preferred
 
 ## Key Management
 
-- Keys are stored securely via Tauri
-- Legacy key migration on startup
-- Key rotation support
+- The OS credential vault is the only source of truth for new keys
+- Legacy `conversation.key` files are migrated into the vault and removed
+- Legacy deterministic-key snapshots remain decryptable only for migration
+- If no copy can be decrypted, writes are blocked to preserve recovery data
 
 ## Key Files
 
@@ -3383,7 +3392,7 @@ Each tool has a JSON schema defining its parameters. Tool calls execute in round
 |--------|---------|
 | `agents/` | Pi CLI integration |
 | `characters/` | Character and group CRUD, I/O commands, avatar management |
-| `code_execution/` | Python sandbox (check + execute) |
+| `code_execution/` | Defense-in-depth rejection of native Python execution |
 | `connectivity/` | Network connectivity probe |
 | `document_extraction` | Document text extraction utility |
 | `documents/` | Document CRUD, versions, export, folders |

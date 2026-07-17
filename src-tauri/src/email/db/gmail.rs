@@ -24,9 +24,7 @@ pub fn gmail_reauth_required_error() -> String {
     "Gmail authorization expired or was revoked. Reconnect this Gmail account to continue syncing and sending mail.".to_string()
 }
 
-pub fn gmail_oauth_config(
-    conn: &Connection,
-) -> Result<(String, String), String> {
+pub fn gmail_oauth_config(conn: &Connection) -> Result<(String, String), String> {
     conn.query_row("SELECT client_id, client_secret FROM email_oauth_config WHERE provider = 'gmail'", [], |row| Ok((row.get(0)?, row.get(1)?)))
         .map_err(|_| "Configure Gmail OAuth credentials first. Create a Google Cloud OAuth Desktop client and paste its client ID/secret.".to_string())
 }
@@ -138,8 +136,7 @@ pub fn connect_gmail_with_config(
     let token = exchange_gmail_code(client_id.trim(), client_secret.trim(), redirect_uri, &code)?;
     let profile = google_api_request_json(
         &token.access_token,
-        reqwest::blocking::Client::new()
-            .get("https://openidconnect.googleapis.com/v1/userinfo"),
+        reqwest::blocking::Client::new().get("https://openidconnect.googleapis.com/v1/userinfo"),
     )?;
     let email = profile
         .get("emailAddress")
@@ -168,10 +165,7 @@ pub fn connect_gmail_with_config(
     Ok(account)
 }
 
-pub fn sync_gmail_account(
-    conn: &Connection,
-    account_id: String,
-) -> Result<(), String> {
+pub fn sync_gmail_account(conn: &Connection, account_id: String) -> Result<(), String> {
     conn.execute(
         "UPDATE email_accounts SET sync_status = 'syncing' WHERE id = ?1",
         params![account_id],
@@ -397,8 +391,7 @@ pub fn upsert_gmail_message(
     let html_for_parse = html_for_body_parse(&body_html_raw, &sanitized_html);
     let parsed = crate::email::thread_parser::parse_message_body(html_for_parse, &body_text);
     let body_parse_status = parsed.parse_status.clone();
-    let parsed_parts_json =
-        serde_json::to_string(&parsed).map_err(|e| e.to_string())?;
+    let parsed_parts_json = serde_json::to_string(&parsed).map_err(|e| e.to_string())?;
     let body_html_val: Option<String> = if body_html_raw.is_empty() {
         None
     } else {
@@ -416,12 +409,9 @@ pub fn upsert_gmail_message(
         .unwrap_or_default()
         .to_string();
     let now = now_ms();
-    let labels_json =
-        serde_json::to_string(&labels_raw).map_err(|e| e.to_string())?;
-    let attachments_json = serde_json::to_string(
-        &gmail_attachment_metadata(payload),
-    )
-    .map_err(|e| e.to_string())?;
+    let labels_json = serde_json::to_string(&labels_raw).map_err(|e| e.to_string())?;
+    let attachments_json =
+        serde_json::to_string(&gmail_attachment_metadata(payload)).map_err(|e| e.to_string())?;
 
     conn.execute(
         "INSERT INTO email_threads (id, account_id, subject, last_message_at, is_read, is_archived, is_starred, labels_json)
@@ -807,7 +797,9 @@ fn google_response_json(response: reqwest::blocking::Response) -> Result<Value, 
     let status = response.status();
     let body = response.text().map_err(|e| e.to_string())?;
     if !status.is_success() {
-        return Err(format!("Google OAuth token request failed ({status}): {body}"));
+        return Err(format!(
+            "Google OAuth token request failed ({status}): {body}"
+        ));
     }
     serde_json::from_str(&body)
         .map_err(|e| format!("failed to parse Google OAuth token response: {e}; body: {body}"))
@@ -829,7 +821,9 @@ fn google_refresh_response_json(
         disconnect_gmail_account_for_reauth(conn, account_id)?;
         return Err(gmail_reauth_required_error());
     }
-    Err(format!("Google OAuth token request failed ({status}): {body}"))
+    Err(format!(
+        "Google OAuth token request failed ({status}): {body}"
+    ))
 }
 
 pub fn is_invalid_grant_response(body: &str) -> bool {

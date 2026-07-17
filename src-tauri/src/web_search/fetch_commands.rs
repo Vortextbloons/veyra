@@ -11,9 +11,7 @@ use crate::web_search::fetch_documents::{
 use crate::web_search::fetch_html::extract_text_from_html_body;
 use crate::web_search::fetch_qwen::{handle_qwen_ai_blog, is_qwen_ai_blog_url};
 use crate::web_search::fetch_security::ssrf_check;
-use crate::web_search::fetch_types::{
-    FetchRequest, FetchedPage, MAX_BODY_BYTES, FETCH_CLIENT,
-};
+use crate::web_search::fetch_types::{FetchRequest, FetchedPage, FETCH_CLIENT, MAX_BODY_BYTES};
 use crate::web_search::fetch_utils::{
     contains_ole_compound_signature, is_epub_content_type, is_low_quality_extracted_text,
     is_office_content_type, is_zip_archive, make_error_page, run_blocking_extraction,
@@ -24,10 +22,7 @@ use crate::web_search::fetch_youtube::{handle_youtube, is_youtube_url};
 
 const FETCH_MAX_RETRIES: u32 = 2;
 
-fn validate_cache_dir(
-    cache_dir: &std::path::Path,
-    app: &tauri::AppHandle,
-) -> Result<(), String> {
+fn validate_cache_dir(cache_dir: &std::path::Path, app: &tauri::AppHandle) -> Result<(), String> {
     let app_data = app
         .path()
         .app_data_dir()
@@ -139,8 +134,9 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                     if status.is_success() {
                         break 'retry FetchOutcome::Ok(r);
                     }
-                    let retryable =
-                        status.as_u16() == 429 || status.as_u16() == 408 || status.is_server_error();
+                    let retryable = status.as_u16() == 429
+                        || status.as_u16() == 408
+                        || status.is_server_error();
                     if retryable && attempt < FETCH_MAX_RETRIES {
                         let retry_after = r
                             .headers()
@@ -530,10 +526,7 @@ pub async fn fetch_and_extract_pages(
 }
 
 #[tauri::command]
-pub fn clear_web_fetch_cache(
-    app: tauri::AppHandle,
-    cache_dir: PathBuf,
-) -> Result<(), String> {
+pub fn clear_web_fetch_cache(app: tauri::AppHandle, cache_dir: PathBuf) -> Result<(), String> {
     validate_cache_dir(&cache_dir, &app)?;
     fetch_cache::clear(&cache_dir)
 }

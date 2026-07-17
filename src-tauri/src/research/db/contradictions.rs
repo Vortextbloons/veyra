@@ -1,8 +1,6 @@
 use rusqlite::Connection;
 
-use super::types::{
-    generate_id, CreateResearchContradictionInput, ResearchContradictionRow,
-};
+use super::types::{generate_id, CreateResearchContradictionInput, ResearchContradictionRow};
 
 const CONTRADICTION_SELECT_COLS: &str = "id, run_id, claim_a_id, claim_b_id, claim_a_confidence, claim_b_confidence, reason, resolution, created_at";
 

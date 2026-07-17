@@ -2,6 +2,7 @@
 
 type EncryptedSnapshot = {
   version: number;
+  revision?: number;
   iv: string;
   data: string;
 };
@@ -65,17 +66,29 @@ async function decryptPayload(
 ): Promise<Conversation[]> {
   const iv = base64ToBytes(parsed.iv);
   const data = base64ToBytes(parsed.data);
+  const revision = parsed.revision ?? 0;
+  const algorithm: AesGcmParams = {
+    name: "AES-GCM",
+    iv: toArrayBuffer(iv),
+    ...(parsed.version >= 2
+      ? {
+          additionalData: new TextEncoder().encode(
+            `veyra-conversations-v2:${revision}`,
+          ),
+        }
+      : {}),
+  };
 
   let decrypted: ArrayBuffer;
   try {
     decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: toArrayBuffer(iv) },
+      algorithm,
       key,
       toArrayBuffer(data),
     );
   } catch {
     decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: toArrayBuffer(iv) },
+      algorithm,
       legacyKey,
       toArrayBuffer(data),
     );
@@ -89,14 +102,18 @@ self.onmessage = async (event: MessageEvent<DecryptRequest>) => {
     const { raw, keyBytes, legacyKeyMaterial, legacySalt } = event.data;
     const parsed = JSON.parse(raw) as EncryptedSnapshot | Conversation[];
     if (Array.isArray(parsed)) {
-      self.postMessage({ ok: true, conversations: parsed });
+      self.postMessage({ ok: true, conversations: parsed, revision: 0 });
       return;
     }
 
     const key = await importAesKey(keyBytes);
     const legacyKey = await deriveLegacyKey(legacyKeyMaterial, legacySalt);
     const conversations = await decryptPayload(parsed, key, legacyKey);
-    self.postMessage({ ok: true, conversations });
+    self.postMessage({
+      ok: true,
+      conversations,
+      revision: parsed.revision ?? 0,
+    });
   } catch (error) {
     self.postMessage({
       ok: false,

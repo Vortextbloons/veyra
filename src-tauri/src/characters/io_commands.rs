@@ -89,8 +89,8 @@ fn validate_io_path(path: &str) -> Result<(), String> {
 
     // Block known system directories (Linux/macOS)
     let unix_blocked = [
-        "/etc/", "/proc/", "/sys/", "/dev/", "/root/", "/boot/",
-        "/sbin/", "/bin/", "/lib/", "/usr/", "/var/", "/tmp/",
+        "/etc/", "/proc/", "/sys/", "/dev/", "/root/", "/boot/", "/sbin/", "/bin/", "/lib/",
+        "/usr/", "/var/", "/tmp/",
     ];
     for prefix in &unix_blocked {
         if lower.starts_with(prefix) {
@@ -123,8 +123,8 @@ fn validate_io_path(path: &str) -> Result<(), String> {
 fn validate_read_path(path: &str) -> Result<(), String> {
     validate_io_path(path)?;
     // For reads, canonicalize to verify the path resolves to a real file
-    let canonical = std::fs::canonicalize(path)
-        .map_err(|e| format!("path could not be resolved: {e}"))?;
+    let canonical =
+        std::fs::canonicalize(path).map_err(|e| format!("path could not be resolved: {e}"))?;
     if !canonical.is_file() {
         return Err("path is not a regular file".into());
     }

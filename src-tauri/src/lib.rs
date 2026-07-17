@@ -1,4 +1,6 @@
+use base64::Engine as _;
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -45,6 +47,8 @@ mod shared;
 mod web_search;
 
 const CONVERSATIONS_FILE: &str = "conversations.json";
+const CONVERSATIONS_BACKUP_FILE: &str = "conversations.json.bak";
+const CONVERSATIONS_TEMP_FILE: &str = "conversations.json.tmp";
 const CONVERSATION_KEY_FILE: &str = "conversation.key";
 const MAX_CONVERSATIONS_JSON_BYTES: usize = 50 * 1024 * 1024;
 const KEYRING_SERVICE: &str = "com.veyra.app";
@@ -53,7 +57,12 @@ const PROVIDER_KEYRING_PREFIX: &str = "provider:";
 
 fn provider_keyring_user(provider_id: &str) -> Result<String, String> {
     let trimmed = provider_id.trim();
-    if trimmed.is_empty() || trimmed.len() > 100 || !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if trimmed.is_empty()
+        || trimmed.len() > 100
+        || !trimmed
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         return Err("invalid provider id".into());
     }
     Ok(format!("{PROVIDER_KEYRING_PREFIX}{trimmed}"))
@@ -99,22 +108,44 @@ fn app_data_file_path(app: &tauri::AppHandle, file_name: &str) -> Result<PathBuf
         .join(file_name))
 }
 
-fn read_app_data_file(app: &tauri::AppHandle, file_name: &str) -> Result<String, String> {
-    let path = app_data_file_path(app, file_name)?;
-    if !path.exists() {
-        return Ok(String::new());
+fn validate_conversation_key(key: &str) -> Result<(), String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(key.trim())
+        .map_err(|_| "conversation key is not valid base64".to_string())?;
+    if bytes.len() != 32 {
+        return Err("conversation key must contain exactly 32 bytes".into());
     }
-
-    fs::read_to_string(path).map_err(|error| error.to_string())
+    Ok(())
 }
 
-fn write_app_data_file(app: &tauri::AppHandle, file_name: &str, contents: String) -> Result<(), String> {
-    let dir = app
-        .path()
-        .app_data_dir()
+fn write_conversation_snapshot_files(dir: &std::path::Path, contents: &str) -> Result<(), String> {
+    fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+    let primary = dir.join(CONVERSATIONS_FILE);
+    let backup = dir.join(CONVERSATIONS_BACKUP_FILE);
+    let temporary = dir.join(CONVERSATIONS_TEMP_FILE);
+
+    let mut file = fs::File::create(&temporary).map_err(|error| error.to_string())?;
+    file.write_all(contents.as_bytes())
         .map_err(|error| error.to_string())?;
-    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    fs::write(dir.join(file_name), contents).map_err(|error| error.to_string())
+    file.sync_all().map_err(|error| error.to_string())?;
+    drop(file);
+
+    if backup.exists() {
+        fs::remove_file(&backup).map_err(|error| error.to_string())?;
+    }
+    if primary.exists() {
+        fs::rename(&primary, &backup).map_err(|error| error.to_string())?;
+    }
+
+    if let Err(error) = fs::rename(&temporary, &primary) {
+        if !primary.exists() && backup.exists() {
+            let _ = fs::rename(&backup, &primary);
+        }
+        let _ = fs::remove_file(&temporary);
+        return Err(error.to_string());
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -127,69 +158,149 @@ fn save_conversations(app: tauri::AppHandle, conversations_json: String) -> Resu
     }
     serde_json::from_str::<serde_json::Value>(&conversations_json)
         .map_err(|error| error.to_string())?;
-    write_app_data_file(&app, CONVERSATIONS_FILE, conversations_json)
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    write_conversation_snapshot_files(&dir, &conversations_json)
 }
 
 #[tauri::command]
 fn load_or_create_conversation_key(app: tauri::AppHandle) -> Result<String, String> {
-    // File is the source of truth — always prefer it
-    let file_key = read_app_data_file(&app, CONVERSATION_KEY_FILE)?;
-    if !file_key.is_empty() {
-        let trimmed = file_key.trim().to_string();
-        if !trimmed.is_empty() {
-            // Best-effort: also write to keyring so future reads can use stronger storage
-            if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
-                let _ = entry.set_password(&trimmed);
-            }
-            return Ok(trimmed);
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
+        .map_err(|error| format!("OS credential vault is unavailable: {error}"))?;
+
+    // One-time migration from releases that stored the key beside the ciphertext.
+    // The legacy file was previously authoritative, so migrate it before
+    // consulting an older best-effort vault copy.
+    let legacy_path = app_data_file_path(&app, CONVERSATION_KEY_FILE)?;
+    if legacy_path.exists() {
+        let key = fs::read_to_string(&legacy_path)
+            .map_err(|error| format!("Could not read the legacy conversation key: {error}"))?;
+        let key = key.trim().to_string();
+        validate_conversation_key(&key)?;
+        entry.set_password(&key).map_err(|error| {
+            format!("Could not migrate the conversation key to the OS credential vault: {error}")
+        })?;
+        fs::remove_file(&legacy_path).map_err(|error| {
+            format!(
+                "Conversation key was migrated, but the insecure legacy key file could not be removed: {error}"
+            )
+        })?;
+        return Ok(key);
+    }
+
+    match entry.get_password() {
+        Ok(key) => {
+            validate_conversation_key(&key)?;
+            return Ok(key);
+        }
+        Err(keyring::Error::NoEntry) => {}
+        Err(error) => {
+            return Err(format!(
+                "Could not read the conversation key from the OS credential vault: {error}"
+            ));
         }
     }
 
-    // File missing — try keyring as fallback
-    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
-        match entry.get_password() {
-            Ok(key) => {
-                let trimmed = key.trim().to_string();
-                if !trimmed.is_empty() {
-                    eprintln!("[veyra] conversation key recovered from keyring (file missing)");
-                    return Ok(trimmed);
-                }
-            }
-            Err(e) => {
-                eprintln!("[veyra] keyring read failed: {e}");
-            }
+    let mut key_bytes = [0_u8; 32];
+    getrandom::fill(&mut key_bytes)
+        .map_err(|error| format!("Could not generate a conversation key: {error}"))?;
+    let key = base64::engine::general_purpose::STANDARD.encode(key_bytes);
+    entry.set_password(&key).map_err(|error| {
+        format!("Could not save the conversation key in the OS credential vault: {error}")
+    })?;
+    Ok(key)
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationSnapshotCandidates {
+    primary: Option<String>,
+    backup: Option<String>,
+    primary_error: Option<String>,
+    backup_error: Option<String>,
+}
+
+fn read_optional_file(path: &std::path::Path) -> (Option<String>, Option<String>) {
+    if !path.exists() {
+        return (None, None);
+    }
+    if let Ok(metadata) = fs::metadata(path) {
+        if metadata.len() > MAX_CONVERSATIONS_JSON_BYTES as u64 {
+            return (
+                None,
+                Some(format!(
+                    "{} exceeds the {} MB conversation snapshot limit",
+                    path.display(),
+                    MAX_CONVERSATIONS_JSON_BYTES / (1024 * 1024)
+                )),
+            );
         }
     }
-
-    Ok(String::new())
+    match fs::read_to_string(path) {
+        Ok(contents) => (Some(contents), None),
+        Err(error) => (None, Some(error.to_string())),
+    }
 }
 
 #[tauri::command]
-fn save_conversation_key(app: tauri::AppHandle, key: String) -> Result<(), String> {
-    let trimmed = key.trim().to_string();
-    if trimmed.len() < 40 {
-        return Err("conversation key is invalid".into());
-    }
-
-    // Always persist to file as a reliable backup
-    write_app_data_file(&app, CONVERSATION_KEY_FILE, trimmed.clone())?;
-
-    // Best-effort: also write to keyring for stronger at-rest protection
-    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
-        if entry.set_password(&trimmed).is_ok() {
-            return Ok(());
-        }
-        eprintln!("[veyra] keyring write failed; key saved to file only");
-    } else {
-        eprintln!("[veyra] keyring unavailable; key saved to file only");
-    }
-
-    Ok(())
+fn load_conversation_snapshots(
+    app: tauri::AppHandle,
+) -> Result<ConversationSnapshotCandidates, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    let (primary, primary_error) = read_optional_file(&dir.join(CONVERSATIONS_FILE));
+    let (backup, backup_error) = read_optional_file(&dir.join(CONVERSATIONS_BACKUP_FILE));
+    Ok(ConversationSnapshotCandidates {
+        primary,
+        backup,
+        primary_error,
+        backup_error,
+    })
 }
 
-#[tauri::command]
-fn load_conversations(app: tauri::AppHandle) -> Result<String, String> {
-    read_app_data_file(&app, CONVERSATIONS_FILE)
+#[cfg(test)]
+mod conversation_storage_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_dir() -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before Unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("veyra-conversation-storage-{nonce}"))
+    }
+
+    #[test]
+    fn atomic_snapshot_write_rotates_the_previous_primary_to_backup() {
+        let dir = unique_test_dir();
+        write_conversation_snapshot_files(&dir, r#"{"version":1}"#).expect("write first snapshot");
+        write_conversation_snapshot_files(&dir, r#"{"version":2}"#).expect("write second snapshot");
+
+        assert_eq!(
+            fs::read_to_string(dir.join(CONVERSATIONS_FILE)).expect("read primary"),
+            r#"{"version":2}"#
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join(CONVERSATIONS_BACKUP_FILE)).expect("read backup"),
+            r#"{"version":1}"#
+        );
+        assert!(!dir.join(CONVERSATIONS_TEMP_FILE).exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn conversation_keys_must_be_exactly_32_bytes() {
+        let valid = base64::engine::general_purpose::STANDARD.encode([7_u8; 32]);
+        let short = base64::engine::general_purpose::STANDARD.encode([7_u8; 16]);
+        assert!(validate_conversation_key(&valid).is_ok());
+        assert!(validate_conversation_key(&short).is_err());
+        assert!(validate_conversation_key("not base64").is_err());
+    }
 }
 
 #[tauri::command]
@@ -210,9 +321,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             save_conversations,
-            load_conversations,
+            load_conversation_snapshots,
             load_or_create_conversation_key,
-            save_conversation_key,
             save_provider_credential,
             load_provider_credential,
             delete_provider_credential,
@@ -356,8 +466,6 @@ pub fn run() {
             file_extraction::commands::extract_file_text,
         ])
         .setup(|app| {
-            code_execution::commands::cleanup_stale_temp_files();
-
             let db_state = memory::db::MemoryDbState::new(app.handle().clone());
             db_state.spawn_background_init();
             app.manage(db_state);
@@ -419,7 +527,9 @@ pub fn run() {
                 }
                 RunEvent::ExitRequested { .. } => {
                     agents::commands::stop_all_pi_agents();
-                    if let Some(state) = app_handle.try_state::<web_search::searxng_setup::SearxngState>() {
+                    if let Some(state) =
+                        app_handle.try_state::<web_search::searxng_setup::SearxngState>()
+                    {
                         if state.was_started_by_us() {
                             web_search::searxng_setup::stop_container();
                             state.clear_started();

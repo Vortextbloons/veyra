@@ -36,7 +36,7 @@ Feature modules built around the chat core.
 | [email/README.md](email/README.md) | Gmail OAuth, IMAP, email AI features |
 | [agents/README.md](agents/README.md) | Pi CLI integration, plan/build modes |
 | [connectivity/README.md](connectivity/README.md) | Online/offline mode, network detection |
-| [code-execution/README.md](code-execution/README.md) | Python code execution sandbox |
+| [code-execution/README.md](code-execution/README.md) | Disabled native execution and future sandbox boundary |
 
 ## Architecture
 

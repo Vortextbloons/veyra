@@ -1,6 +1,6 @@
 pub mod commands;
-pub mod fetch_commands;
 pub mod fetch_cache;
+pub mod fetch_commands;
 pub mod fetch_documents;
 pub mod fetch_html;
 pub mod fetch_qwen;

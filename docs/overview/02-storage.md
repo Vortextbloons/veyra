@@ -4,7 +4,7 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 
 | Data | Location | Format |
 |------|----------|--------|
-| Conversations | `%APPDATA%/com.veyra.app/` | AES-GCM encrypted JSON |
+| Conversations | `%APPDATA%/com.veyra.app/` | AES-GCM encrypted JSON with rotating backup |
 | Memory DB | `%APPDATA%/com.veyra.app/` | SQLite |
 | Settings | localStorage | `veyra.settings.v1` key |
 | Provider config | localStorage | `veyra.provider.v1` key |
@@ -20,5 +20,6 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 
 - No data leaves the machine unless the user explicitly enables web search, cloud providers, or email sync
 - Cloud API keys are stored in the operating-system credential vault through Tauri and are excluded from Zustand persistence
-- AES-GCM encryption for conversation files with keys managed by the Rust backend
+- Conversation keys are stored in the operating-system credential vault, not beside ciphertext
+- Conversation writes are atomic and retain one previous encrypted snapshot for recovery
 - Web Workers handle encryption/decryption without blocking the UI

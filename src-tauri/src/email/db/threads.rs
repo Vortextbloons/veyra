@@ -230,25 +230,40 @@ pub fn load_thread(conn: &Connection, thread_id: String) -> Result<EmailThreadRo
 
 pub fn load_ai_metadata_for_thread(conn: &Connection, thread_id: &str) -> EmailThreadAiMetadata {
     let mut meta = EmailThreadAiMetadata::default();
-    let task_types = ["thread_summary", "classification", "spam_score", "urgency_score"];
+    let task_types = [
+        "thread_summary",
+        "classification",
+        "spam_score",
+        "urgency_score",
+    ];
     for task_type in &task_types {
         if let Ok(Some(output)) = get_ai_output_for_thread(conn, thread_id, task_type) {
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&output.result_json) {
                 match *task_type {
                     "thread_summary" => {
-                        meta.summary = parsed.get("shortSummary").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        meta.summary = parsed
+                            .get("shortSummary")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
                     }
                     "classification" => {
-                        meta.category = parsed.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        meta.category = parsed
+                            .get("category")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
                         meta.needs_reply = parsed.get("needsReply").and_then(|v| v.as_bool());
                     }
                     "spam_score" => {
                         meta.spam_score = parsed.get("spamScore").and_then(|v| v.as_f64());
-                        meta.marketing_score = parsed.get("marketingScore").and_then(|v| v.as_f64());
+                        meta.marketing_score =
+                            parsed.get("marketingScore").and_then(|v| v.as_f64());
                         meta.newsletter = parsed.get("newsletter").and_then(|v| v.as_bool());
                     }
                     "urgency_score" => {
-                        meta.urgency = parsed.get("level").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        meta.urgency = parsed
+                            .get("level")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
                     }
                     _ => {}
                 }
@@ -276,7 +291,8 @@ fn load_tags_for_latest_message(conn: &Connection, thread_id: &str) -> Result<Ve
             let mut stmt = conn
                 .prepare("SELECT t.name FROM email_tags t JOIN email_message_tags mt ON mt.tag_id = t.id WHERE mt.message_id = ?1 ORDER BY t.name")
                 .map_err(|e| e.to_string())?;
-            let rows = stmt.query_map(params![msg_id], |row| row.get::<_, String>(0))
+            let rows = stmt
+                .query_map(params![msg_id], |row| row.get::<_, String>(0))
                 .map_err(|e| e.to_string())?;
             let mut tags = Vec::new();
             for row in rows {
@@ -299,8 +315,18 @@ pub fn load_ai_metadata_map(
     for id in thread_ids {
         map.insert(id.clone(), EmailThreadAiMetadata::default());
     }
-    let placeholders = thread_ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 2)).collect::<Vec<_>>().join(",");
-    let task_types = ["thread_summary", "classification", "spam_score", "urgency_score"];
+    let placeholders = thread_ids
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 2))
+        .collect::<Vec<_>>()
+        .join(",");
+    let task_types = [
+        "thread_summary",
+        "classification",
+        "spam_score",
+        "urgency_score",
+    ];
     for task_type in &task_types {
         let sql = format!(
             "SELECT thread_id, result_json FROM email_ai_outputs
@@ -313,28 +339,41 @@ pub fn load_ai_metadata_map(
         for id in thread_ids {
             params_vec.push(Box::new(id.clone()));
         }
-        let rows = stmt.query_map(rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())), |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        }).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(
+                rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .map_err(|e| e.to_string())?;
         for row in rows {
             let (tid, result_json) = row.map_err(|e| e.to_string())?;
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&result_json) {
                 if let Some(meta) = map.get_mut(&tid) {
                     match *task_type {
                         "thread_summary" => {
-                            meta.summary = parsed.get("shortSummary").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            meta.summary = parsed
+                                .get("shortSummary")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
                         }
                         "classification" => {
-                            meta.category = parsed.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            meta.category = parsed
+                                .get("category")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
                             meta.needs_reply = parsed.get("needsReply").and_then(|v| v.as_bool());
                         }
                         "spam_score" => {
                             meta.spam_score = parsed.get("spamScore").and_then(|v| v.as_f64());
-                            meta.marketing_score = parsed.get("marketingScore").and_then(|v| v.as_f64());
+                            meta.marketing_score =
+                                parsed.get("marketingScore").and_then(|v| v.as_f64());
                             meta.newsletter = parsed.get("newsletter").and_then(|v| v.as_bool());
                         }
                         "urgency_score" => {
-                            meta.urgency = parsed.get("level").and_then(|v| v.as_str()).map(|s| s.to_string());
+                            meta.urgency = parsed
+                                .get("level")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
                         }
                         _ => {}
                     }
@@ -355,9 +394,12 @@ pub fn load_ai_metadata_map(
         tag_params.push(Box::new(id.clone()));
     }
     let mut tag_stmt = conn.prepare(&tag_sql).map_err(|e| e.to_string())?;
-    let tag_rows = tag_stmt.query_map(rusqlite::params_from_iter(tag_params.iter().map(|p| p.as_ref())), |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-    }).map_err(|e| e.to_string())?;
+    let tag_rows = tag_stmt
+        .query_map(
+            rusqlite::params_from_iter(tag_params.iter().map(|p| p.as_ref())),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .map_err(|e| e.to_string())?;
     for row in tag_rows {
         let (tid, tag_name) = row.map_err(|e| e.to_string())?;
         if let Some(meta) = map.get_mut(&tid) {
@@ -392,15 +434,18 @@ pub fn reparse_message(conn: &Connection, message_id: &str) -> Result<EmailMessa
         )
         .map_err(|e| format!("email: message {message_id} not found: {e}"))?;
 
-    let effective_body_text = if body_text.is_empty() { body } else { body_text };
+    let effective_body_text = if body_text.is_empty() {
+        body
+    } else {
+        body_text
+    };
     let body_html_raw = body_html.unwrap_or_default();
     let sanitized = sanitized_html.unwrap_or_default();
     let html_for_parse = html_for_body_parse(&body_html_raw, &sanitized);
     let parsed =
         crate::email::thread_parser::parse_message_body(html_for_parse, &effective_body_text);
     let body_parse_status = parsed.parse_status.clone();
-    let parsed_parts_json =
-        serde_json::to_string(&parsed).map_err(|e| e.to_string())?;
+    let parsed_parts_json = serde_json::to_string(&parsed).map_err(|e| e.to_string())?;
 
     conn.execute(
         "UPDATE email_messages SET body_parse_status = ?1, parsed_parts_json = ?2 WHERE id = ?3",
@@ -442,8 +487,10 @@ pub fn list_folders(
         ),
     };
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-        params_vec.iter().map(|s| s as &dyn rusqlite::types::ToSql).collect();
+    let params_refs: Vec<&dyn rusqlite::types::ToSql> = params_vec
+        .iter()
+        .map(|s| s as &dyn rusqlite::types::ToSql)
+        .collect();
     let rows = stmt
         .query_map(params_refs.as_slice(), |row| {
             Ok(EmailFolderRow {
@@ -479,7 +526,8 @@ pub fn list_threads(
     } else if folder_id == "unified" {
         query_unified_inbox_thread_ids(conn)?
     } else if folder_id.starts_with("folder-") {
-        query_strings(conn,
+        query_strings(
+            conn,
             "SELECT t.id FROM email_threads t
              JOIN email_thread_folders tf ON tf.thread_id = t.id
              WHERE tf.folder_id = ?1

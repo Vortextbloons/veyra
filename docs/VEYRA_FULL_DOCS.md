@@ -274,7 +274,7 @@ The settings store is composed from 10 slices:
 5. **Document** — Auto-save delay, default type
 6. **Character** — Lorebook settings, chat defaults
 7. **Research** — Default depth, approval requirements
-8. **Code Execution** — Python path, timeout
+8. **Code Execution** — disabled status and required OS sandbox boundary
 9. **Connectivity** — Online/offline detection
 10. **Chat** — Streaming, context management
 
@@ -376,7 +376,7 @@ Currently the only registered provider. Handles:
 | Tool | Description |
 |------|-------------|
 | `web_search` | Search the web via SearXNG |
-| `code_execution` | Run Python code |
+| `code_execution` | Disabled pending an OS-enforced sandbox |
 | `doc_create` | Create a document |
 | `doc_read` | Read a document |
 | `doc_update` | Update a document |
@@ -386,7 +386,7 @@ Each tool has a JSON schema defining its parameters. The LLM can call any tool, 
 ## Encrypted Storage
 
 ### Conversation Encryption
-- AES-GCM encryption for conversation files
+- AES-GCM encryption with authenticated revisions and OS-vault keys
 - Encryption keys managed by the Rust backend
 - Web Workers handle encryption/decryption without blocking the UI
 - Debounced saves (500ms) to avoid excessive I/O
@@ -404,7 +404,7 @@ Each tool has a JSON schema defining its parameters. The LLM can call any tool, 
 |--------|---------|
 | `agents/` | Pi CLI integration |
 | `characters/` | Character and group CRUD |
-| `code_execution/` | Python sandbox |
+| `code_execution/` | Defense-in-depth rejection of native execution |
 | `connectivity/` | Network checks |
 | `documents/` | Document CRUD |
 | `email/` | Gmail OAuth, IMAP |
@@ -627,7 +627,7 @@ If the model returns tool calls, they are executed in rounds:
 | Tool | Description |
 |------|-------------|
 | `web_search` | Search the web via SearXNG |
-| `code_execution` | Run Python code via Tauri |
+| `code_execution` | Disabled pending an OS-enforced sandbox |
 | `doc_read` | Read a document |
 | `doc_create` | Create a new document |
 | `doc_update` | Update an existing document |
@@ -657,7 +657,7 @@ The UI supports real-time streaming of:
 
 ## Conversation Storage
 
-- Conversations are encrypted with **AES-GCM** using keys from the Rust backend
+- Conversations are encrypted with **AES-GCM** using keys from the operating-system credential vault
 - Saves are debounced (500ms) to avoid excessive writes
 - Stored in `%APPDATA%/com.veyra.app/` as JSON files
 

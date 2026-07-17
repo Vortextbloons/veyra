@@ -1,13 +1,13 @@
-mod types;
-mod helpers;
 mod accounts;
-mod gmail;
-mod threads;
-mod attachments;
-mod ai_jobs;
 mod ai_drafts;
-mod tags;
+mod ai_jobs;
+mod attachments;
+mod gmail;
+mod helpers;
 mod smart_views;
+mod tags;
+mod threads;
+mod types;
 
 pub use types::*;
 
@@ -45,20 +45,55 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("email: schema v1 migration failed: {e}"))?;
 
-        add_column_if_missing(conn, "email_accounts", "sync_status", "TEXT NOT NULL DEFAULT 'idle'")?;
+        add_column_if_missing(
+            conn,
+            "email_accounts",
+            "sync_status",
+            "TEXT NOT NULL DEFAULT 'idle'",
+        )?;
         add_column_if_missing(conn, "email_accounts", "last_sync_at", "INTEGER")?;
         add_column_if_missing(conn, "email_accounts", "sync_cursor", "TEXT")?;
-        add_column_if_missing(conn, "email_accounts", "ai_enabled", "INTEGER NOT NULL DEFAULT 1")?;
-        add_column_if_missing(conn, "email_accounts", "settings_json", "TEXT NOT NULL DEFAULT '{}'")?;
+        add_column_if_missing(
+            conn,
+            "email_accounts",
+            "ai_enabled",
+            "INTEGER NOT NULL DEFAULT 1",
+        )?;
+        add_column_if_missing(
+            conn,
+            "email_accounts",
+            "settings_json",
+            "TEXT NOT NULL DEFAULT '{}'",
+        )?;
 
         add_column_if_missing(conn, "email_messages", "provider_message_id", "TEXT")?;
         add_column_if_missing(conn, "email_messages", "provider_thread_id", "TEXT")?;
-        add_column_if_missing(conn, "email_messages", "headers_json", "TEXT NOT NULL DEFAULT '{}'")?;
-        add_column_if_missing(conn, "email_messages", "body_text", "TEXT NOT NULL DEFAULT ''")?;
+        add_column_if_missing(
+            conn,
+            "email_messages",
+            "headers_json",
+            "TEXT NOT NULL DEFAULT '{}'",
+        )?;
+        add_column_if_missing(
+            conn,
+            "email_messages",
+            "body_text",
+            "TEXT NOT NULL DEFAULT ''",
+        )?;
         add_column_if_missing(conn, "email_messages", "body_html", "TEXT")?;
         add_column_if_missing(conn, "email_messages", "sanitized_html", "TEXT")?;
-        add_column_if_missing(conn, "email_messages", "body_parse_status", "TEXT NOT NULL DEFAULT 'pending'")?;
-        add_column_if_missing(conn, "email_messages", "parsed_parts_json", "TEXT NOT NULL DEFAULT '{}'")?;
+        add_column_if_missing(
+            conn,
+            "email_messages",
+            "body_parse_status",
+            "TEXT NOT NULL DEFAULT 'pending'",
+        )?;
+        add_column_if_missing(
+            conn,
+            "email_messages",
+            "parsed_parts_json",
+            "TEXT NOT NULL DEFAULT '{}'",
+        )?;
         add_column_if_missing(conn, "email_messages", "raw_payload_json", "TEXT")?;
         add_column_if_missing(conn, "email_messages", "updated_at", "INTEGER")?;
 
@@ -136,14 +171,19 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         )
         .map_err(|e| format!("email: schema v2 migration failed: {e}"))?;
 
-        add_column_if_missing(conn, "email_threads", "labels_json", "TEXT NOT NULL DEFAULT '[]'")?;
+        add_column_if_missing(
+            conn,
+            "email_threads",
+            "labels_json",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
 
         conn.execute_batch(
             "UPDATE email_threads SET labels_json = (
                 SELECT COALESCE(json_group_array(DISTINCT value), '[]')
                 FROM email_messages, json_each(email_messages.labels_json)
                 WHERE email_messages.thread_id = email_threads.id
-            ) WHERE labels_json = '[]' OR labels_json IS NULL;"
+            ) WHERE labels_json = '[]' OR labels_json IS NULL;",
         )
         .map_err(|e| format!("email: backfill thread labels_json failed: {e}"))?;
 
@@ -154,7 +194,7 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
              JOIN json_each(m.labels_json) je
              JOIN email_folders f ON f.account_id = m.account_id
                AND (f.provider_id = je.value OR f.provider_id = UPPER(je.value))
-             WHERE je.value != '';"
+             WHERE je.value != '';",
         )
         .map_err(|e| format!("email: backfill thread-folder joins failed: {e}"))?;
     }
@@ -374,13 +414,11 @@ impl crate::shared::db_utils::DbConnectionState for EmailDbState {
 
 // Re-export all public functions from submodules.
 pub use accounts::{add_account, list_accounts, remove_account};
+pub use ai_drafts::{delete_ai_draft, list_ai_drafts, save_ai_draft, update_ai_draft_status};
 pub use ai_jobs::{
     cancel_ai_job, claim_next_ai_job, clear_all_email_ai_data, complete_ai_job, enqueue_ai_jobs,
     fail_ai_job, get_unprocessed_thread_ids, list_ai_jobs, list_ai_outputs,
     reconcile_orphaned_running_jobs, requeue_ai_job, EmailAiClearResult,
-};
-pub use ai_drafts::{
-    delete_ai_draft, list_ai_drafts, save_ai_draft, update_ai_draft_status,
 };
 pub use attachments::{
     download_attachment, extract_attachment_text, get_attachment_local_path, get_attachment_row,

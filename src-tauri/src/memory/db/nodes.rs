@@ -1,11 +1,11 @@
 use rusqlite::{params_from_iter, types::Value, Connection};
 
-use crate::shared::db_utils::parse_json_array;
 use super::helpers::escape_like_pattern;
 use super::types::{
     MemoryFileRow, MemoryFolderRow, MemoryNodeCreateInput, MemoryNodeFilter, MemoryNodeRow,
     MemoryNodeUpdateInput,
 };
+use crate::shared::db_utils::parse_json_array;
 
 pub fn row_to_node(row: &rusqlite::Row) -> rusqlite::Result<MemoryNodeRow> {
     let tags_str: String = row.get("tags")?;

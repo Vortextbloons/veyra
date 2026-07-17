@@ -1,5 +1,5 @@
-use crate::shared::db_utils::run_db_command;
 use crate::research::db::{self as research_db, ResearchDbState};
+use crate::shared::db_utils::run_db_command;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, State};
 

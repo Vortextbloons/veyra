@@ -85,7 +85,8 @@ pub fn write(
 
 pub fn clear(cache_dir: &Path) -> Result<(), String> {
     if cache_dir.exists() {
-        let entries = fs::read_dir(cache_dir).map_err(|e| format!("Failed to read cache dir: {e}"))?;
+        let entries =
+            fs::read_dir(cache_dir).map_err(|e| format!("Failed to read cache dir: {e}"))?;
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("json") {

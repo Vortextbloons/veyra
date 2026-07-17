@@ -7,10 +7,14 @@ use super::ai_jobs::{
     fail_ai_job, get_ai_job, get_ai_output_for_thread, list_ai_jobs, list_ai_outputs,
     reconcile_orphaned_running_jobs,
 };
-use super::threads::{query_inbox_thread_ids, rebuild_thread_labels_and_folders, query_strings};
+use super::threads::{query_inbox_thread_ids, query_strings, rebuild_thread_labels_and_folders};
 
 fn load_fixture(name: &str) -> Value {
-    let path = format!("{}/src/email/fixtures/{}.json", env!("CARGO_MANIFEST_DIR"), name);
+    let path = format!(
+        "{}/src/email/fixtures/{}.json",
+        env!("CARGO_MANIFEST_DIR"),
+        name
+    );
     let data = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read fixture {path}: {e}"));
     serde_json::from_str(&data).unwrap_or_else(|e| panic!("failed to parse fixture {path}: {e}"))
@@ -44,7 +48,10 @@ fn gmail_body_text_extracts_plain_text_simple() {
     let msg = load_fixture("simple_text");
     let payload = msg.get("payload").unwrap();
     let body = gmail::gmail_body_text(payload);
-    assert_eq!(body, "Hey, just wanted to check in on the project timeline.");
+    assert_eq!(
+        body,
+        "Hey, just wanted to check in on the project timeline."
+    );
 }
 
 #[test]
@@ -68,7 +75,10 @@ fn gmail_body_text_extracts_from_html_only_message() {
     let msg = load_fixture("outlook_reply");
     let payload = msg.get("payload").unwrap();
     let body = gmail::gmail_body_text(payload);
-    assert!(body.is_empty(), "gmail_body_text only extracts text/plain, not text/html");
+    assert!(
+        body.is_empty(),
+        "gmail_body_text only extracts text/plain, not text/html"
+    );
 }
 
 #[test]
@@ -252,7 +262,10 @@ fn fixture_gmail_quoted_reply_has_html_part() {
         .and_then(Value::as_str)
         .unwrap();
     let decoded = gmail::decode_gmail_data(data);
-    assert!(decoded.contains("gmail_quote"), "HTML should contain Gmail quote class");
+    assert!(
+        decoded.contains("gmail_quote"),
+        "HTML should contain Gmail quote class"
+    );
 }
 
 #[test]
@@ -260,7 +273,10 @@ fn gmail_body_text_extracts_nested_blockquotes() {
     let msg = load_fixture("nested_blockquotes");
     let payload = msg.get("payload").unwrap();
     let body = gmail::gmail_body_text(payload);
-    assert!(body.is_empty(), "nested_blockquotes is html-only, plain text extractor returns empty");
+    assert!(
+        body.is_empty(),
+        "nested_blockquotes is html-only, plain text extractor returns empty"
+    );
 }
 
 #[test]
@@ -271,9 +287,15 @@ fn fixture_nested_blockquotes_has_nested_structure() {
         .and_then(Value::as_str)
         .unwrap();
     let decoded = gmail::decode_gmail_data(body_data);
-    assert!(decoded.contains("<blockquote"), "should contain blockquote elements");
+    assert!(
+        decoded.contains("<blockquote"),
+        "should contain blockquote elements"
+    );
     let bq_count = decoded.matches("<blockquote").count();
-    assert!(bq_count >= 2, "should have at least 2 nested blockquotes, got {bq_count}");
+    assert!(
+        bq_count >= 2,
+        "should have at least 2 nested blockquotes, got {bq_count}"
+    );
 }
 
 // ── run_migrations tests ──────────────────────────────────────────────
@@ -395,9 +417,14 @@ fn migrations_does_not_seed_ai_settings() {
     run_migrations(&conn).expect("migrations should succeed");
 
     let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM email_ai_settings", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM email_ai_settings", [], |row| {
+            row.get(0)
+        })
         .unwrap();
-    assert_eq!(count, 0, "run_migrations should not seed AI settings — frontend Zustand is source of truth");
+    assert_eq!(
+        count, 0,
+        "run_migrations should not seed AI settings — frontend Zustand is source of truth"
+    );
 }
 
 #[test]
@@ -415,7 +442,10 @@ fn ai_settings_global_scope_uses_empty_sentinel() {
         "INSERT INTO email_ai_settings (scope, account_id, settings_json, updated_at) VALUES ('global', '', '{}', 0)",
         [],
     );
-    assert!(result.is_err(), "duplicate (scope, account_id) should violate PRIMARY KEY");
+    assert!(
+        result.is_err(),
+        "duplicate (scope, account_id) should violate PRIMARY KEY"
+    );
 
     conn.execute(
         "INSERT INTO email_ai_settings (scope, account_id, settings_json, updated_at) VALUES ('global', 'acct-123', '{}', 0)",
@@ -627,16 +657,40 @@ fn migrations_v7_adds_email_ai_jobs_tone_column() {
 fn gmail_label_kind_mapping() {
     assert_eq!(gmail::gmail_label_kind("INBOX"), ("inbox", "system", true));
     assert_eq!(gmail::gmail_label_kind("SENT"), ("sent", "system", true));
-    assert_eq!(gmail::gmail_label_kind("DRAFTS"), ("drafts", "system", true));
+    assert_eq!(
+        gmail::gmail_label_kind("DRAFTS"),
+        ("drafts", "system", true)
+    );
     assert_eq!(gmail::gmail_label_kind("TRASH"), ("trash", "system", true));
     assert_eq!(gmail::gmail_label_kind("SPAM"), ("spam", "system", true));
-    assert_eq!(gmail::gmail_label_kind("STARRED"), ("starred", "system", true));
-    assert_eq!(gmail::gmail_label_kind("IMPORTANT"), ("important", "system", true));
-    assert_eq!(gmail::gmail_label_kind("CATEGORY_PERSONAL"), ("category", "system", true));
-    assert_eq!(gmail::gmail_label_kind("CATEGORY_SOCIAL"), ("category", "system", true));
-    assert_eq!(gmail::gmail_label_kind("Label_42"), ("custom", "user", true));
-    assert_eq!(gmail::gmail_label_kind("UNREAD"), ("unread", "system", false));
-    assert_eq!(gmail::gmail_label_kind("CUSTOM_THING"), ("unknown", "user", true));
+    assert_eq!(
+        gmail::gmail_label_kind("STARRED"),
+        ("starred", "system", true)
+    );
+    assert_eq!(
+        gmail::gmail_label_kind("IMPORTANT"),
+        ("important", "system", true)
+    );
+    assert_eq!(
+        gmail::gmail_label_kind("CATEGORY_PERSONAL"),
+        ("category", "system", true)
+    );
+    assert_eq!(
+        gmail::gmail_label_kind("CATEGORY_SOCIAL"),
+        ("category", "system", true)
+    );
+    assert_eq!(
+        gmail::gmail_label_kind("Label_42"),
+        ("custom", "user", true)
+    );
+    assert_eq!(
+        gmail::gmail_label_kind("UNREAD"),
+        ("unread", "system", false)
+    );
+    assert_eq!(
+        gmail::gmail_label_kind("CUSTOM_THING"),
+        ("unknown", "user", true)
+    );
 }
 
 #[test]
@@ -656,7 +710,11 @@ fn folder_upsert_creates_and_updates() {
     ).unwrap();
 
     let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM email_folders WHERE account_id = 'acct-1'", [], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM email_folders WHERE account_id = 'acct-1'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(count, 1);
 
@@ -683,10 +741,18 @@ fn thread_folder_join_basic() {
     conn.execute("INSERT INTO email_folders (id, account_id, provider_id, name, kind, type, is_system, is_visible, unread_count, total_count, created_at, updated_at) VALUES ('f-inbox', 'acct-1', 'INBOX', 'Inbox', 'inbox', 'system', 1, 1, 0, 0, 0, 0)", []).unwrap();
     conn.execute("INSERT INTO email_folders (id, account_id, provider_id, name, kind, type, is_system, is_visible, unread_count, total_count, created_at, updated_at) VALUES ('f-sent', 'acct-1', 'SENT', 'Sent', 'sent', 'system', 1, 1, 0, 0, 0, 0)", []).unwrap();
     conn.execute("INSERT INTO email_threads (id, account_id, subject, last_message_at, labels_json) VALUES ('t-1', 'acct-1', 'Hello', 100, '[\"inbox\"]')", []).unwrap();
-    conn.execute("INSERT INTO email_thread_folders (thread_id, folder_id) VALUES ('t-1', 'f-inbox')", []).unwrap();
+    conn.execute(
+        "INSERT INTO email_thread_folders (thread_id, folder_id) VALUES ('t-1', 'f-inbox')",
+        [],
+    )
+    .unwrap();
 
     let folder_id: String = conn
-        .query_row("SELECT folder_id FROM email_thread_folders WHERE thread_id = 't-1'", [], |r| r.get(0))
+        .query_row(
+            "SELECT folder_id FROM email_thread_folders WHERE thread_id = 't-1'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(folder_id, "f-inbox");
 
@@ -734,8 +800,16 @@ fn account_isolation_thread_folders() {
     conn.execute("INSERT INTO email_folders (id, account_id, provider_id, name, kind, type, is_system, is_visible, unread_count, total_count, created_at, updated_at) VALUES ('f2', 'a2', 'INBOX', 'Inbox', 'inbox', 'system', 1, 1, 0, 0, 0, 0)", []).unwrap();
     conn.execute("INSERT INTO email_threads (id, account_id, subject, last_message_at, labels_json) VALUES ('t1', 'a1', 'Thread 1', 100, '[\"inbox\"]')", []).unwrap();
     conn.execute("INSERT INTO email_threads (id, account_id, subject, last_message_at, labels_json) VALUES ('t2', 'a2', 'Thread 2', 200, '[\"inbox\"]')", []).unwrap();
-    conn.execute("INSERT INTO email_thread_folders (thread_id, folder_id) VALUES ('t1', 'f1')", []).unwrap();
-    conn.execute("INSERT INTO email_thread_folders (thread_id, folder_id) VALUES ('t2', 'f2')", []).unwrap();
+    conn.execute(
+        "INSERT INTO email_thread_folders (thread_id, folder_id) VALUES ('t1', 'f1')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO email_thread_folders (thread_id, folder_id) VALUES ('t2', 'f2')",
+        [],
+    )
+    .unwrap();
 
     let ids = query_strings(&conn, "SELECT t.id FROM email_threads t JOIN email_thread_folders tf ON tf.thread_id = t.id WHERE tf.folder_id = 'f1'", []).unwrap();
     assert_eq!(ids, vec!["t1".to_string()]);
@@ -808,9 +882,16 @@ fn migrations_v3_normalizes_lowercase_labels_to_folder_casing() {
     rebuild_thread_labels_and_folders(&conn).unwrap();
 
     let labels_json: String = conn
-        .query_row("SELECT labels_json FROM email_messages WHERE id = 'm1'", [], |r| r.get(0))
+        .query_row(
+            "SELECT labels_json FROM email_messages WHERE id = 'm1'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
-    assert!(labels_json.contains("Label_42"), "expected canonical label casing, got {labels_json}");
+    assert!(
+        labels_json.contains("Label_42"),
+        "expected canonical label casing, got {labels_json}"
+    );
     assert!(labels_json.contains("inbox") || labels_json.contains("INBOX"));
 
     let join_count: i64 = conn
@@ -845,7 +926,11 @@ fn attachment_upsert_is_idempotent() {
     }
 
     let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM email_attachments WHERE message_id = 'm1'", [], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM email_attachments WHERE message_id = 'm1'",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(count, 1);
 }
@@ -963,7 +1048,9 @@ fn enqueue_and_claim_ai_job() {
     assert_eq!(job.status, "queued");
     assert_eq!(job.priority, 2);
 
-    let claimed = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap().unwrap();
+    let claimed = claim_next_ai_job(&conn, &["thread_summary".into()])
+        .unwrap()
+        .unwrap();
     assert_eq!(claimed.id, job.id);
     assert_eq!(claimed.status, "running");
     assert!(claimed.started_at.is_some());
@@ -975,16 +1062,36 @@ fn claim_respects_priority() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 3, model_id: None, tone: None,
-    }).unwrap();
-    let high = enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 1, model_id: None, tone: None,
-    }).unwrap();
+    enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "thread_summary".into(),
+            priority: 3,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
+    let high = enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "thread_summary".into(),
+            priority: 1,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
 
-    let claimed = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap().unwrap();
+    let claimed = claim_next_ai_job(&conn, &["thread_summary".into()])
+        .unwrap()
+        .unwrap();
     assert_eq!(claimed.id, high.id);
 }
 
@@ -994,21 +1101,34 @@ fn complete_ai_job_writes_output() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: Some("m1".into()),
-        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    let job = enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: Some("m1".into()),
+            task_type: "thread_summary".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
     claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
 
-    let completed = complete_ai_job(&conn, &EmailAiOutputInput {
-        job_id: job.id.clone(),
-        model_id: "test-model".into(),
-        prompt_version: "1.0.0".into(),
-        source_message_ids_json: Some("[\"m1\"]".into()),
-        confidence: Some(0.9),
-        result_json: "{\"shortSummary\":\"test\"}".into(),
-        display_text: "Test summary".into(),
-    }).unwrap();
+    let completed = complete_ai_job(
+        &conn,
+        &EmailAiOutputInput {
+            job_id: job.id.clone(),
+            model_id: "test-model".into(),
+            prompt_version: "1.0.0".into(),
+            source_message_ids_json: Some("[\"m1\"]".into()),
+            confidence: Some(0.9),
+            result_json: "{\"shortSummary\":\"test\"}".into(),
+            display_text: "Test summary".into(),
+        },
+    )
+    .unwrap();
     assert_eq!(completed.status, "completed");
 
     let outputs = list_ai_outputs(&conn, "t1").unwrap();
@@ -1023,10 +1143,19 @@ fn fail_ai_job_increments_attempt() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "spam_score".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    let job = enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "spam_score".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
     assert_eq!(job.max_attempts, 3);
     claim_next_ai_job(&conn, &["spam_score".into()]).unwrap();
 
@@ -1052,10 +1181,19 @@ fn reconcile_orphaned_running_jobs_requeues_stale() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    let job = enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "thread_summary".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
     claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
 
     let updated = reconcile_orphaned_running_jobs(&conn, 0).unwrap();
@@ -1072,10 +1210,19 @@ fn reconcile_orphaned_running_jobs_keeps_recent() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    let job = enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "thread_summary".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
     claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
 
     let updated = reconcile_orphaned_running_jobs(&conn, 60_000).unwrap();
@@ -1091,10 +1238,19 @@ fn cancel_ai_job_transitions_status() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "urgency_score".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    let job = enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "urgency_score".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
 
     cancel_ai_job(&conn, &job.id).unwrap();
     let cancelled = get_ai_job(&conn, &job.id).unwrap();
@@ -1107,31 +1263,48 @@ fn clear_all_email_ai_data_removes_ai_records() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    let job = enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "thread_summary".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
     claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
-    complete_ai_job(&conn, &EmailAiOutputInput {
-        job_id: job.id.clone(),
-        model_id: "model".into(),
-        prompt_version: "v1".into(),
-        source_message_ids_json: Some("[]".into()),
-        confidence: None,
-        result_json: r#"{"shortSummary":"hi"}"#.into(),
-        display_text: "hi".into(),
-    }).unwrap();
+    complete_ai_job(
+        &conn,
+        &EmailAiOutputInput {
+            job_id: job.id.clone(),
+            model_id: "model".into(),
+            prompt_version: "v1".into(),
+            source_message_ids_json: Some("[]".into()),
+            confidence: None,
+            result_json: r#"{"shortSummary":"hi"}"#.into(),
+            display_text: "hi".into(),
+        },
+    )
+    .unwrap();
 
     let result = clear_all_email_ai_data(&conn).unwrap();
     assert_eq!(result.jobs_deleted, 1);
     assert_eq!(result.outputs_deleted, 1);
 
-    let remaining_jobs = list_ai_jobs(&conn, &EmailAiJobFilter {
-        account_id: Some("a1".into()),
-        status: None,
-        task_type: None,
-        limit: Some(10),
-    }).unwrap();
+    let remaining_jobs = list_ai_jobs(
+        &conn,
+        &EmailAiJobFilter {
+            account_id: Some("a1".into()),
+            status: None,
+            task_type: None,
+            limit: Some(10),
+        },
+    )
+    .unwrap();
     assert!(remaining_jobs.is_empty());
 }
 
@@ -1144,10 +1317,19 @@ fn get_unprocessed_thread_ids_excludes_processed() {
     let ids = get_unprocessed_thread_ids(&conn, "a1", "thread_summary").unwrap();
     assert_eq!(ids, vec!["t1"]);
 
-    enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "thread_summary".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
     let ids = get_unprocessed_thread_ids(&conn, "a1", "thread_summary").unwrap();
     assert!(ids.is_empty());
 }
@@ -1167,10 +1349,19 @@ fn claim_skips_wrong_task_type() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: None,
-        task_type: "spam_score".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: None,
+            task_type: "spam_score".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
 
     let result = claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
     assert!(result.is_none());
@@ -1182,20 +1373,33 @@ fn get_ai_output_for_thread_returns_latest() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    let job = enqueue_ai_job(&conn, &EmailAiJobInput {
-        account_id: "a1".into(), thread_id: Some("t1".into()), message_id: Some("m1".into()),
-        task_type: "thread_summary".into(), priority: 2, model_id: None, tone: None,
-    }).unwrap();
+    let job = enqueue_ai_job(
+        &conn,
+        &EmailAiJobInput {
+            account_id: "a1".into(),
+            thread_id: Some("t1".into()),
+            message_id: Some("m1".into()),
+            task_type: "thread_summary".into(),
+            priority: 2,
+            model_id: None,
+            tone: None,
+        },
+    )
+    .unwrap();
     claim_next_ai_job(&conn, &["thread_summary".into()]).unwrap();
-    complete_ai_job(&conn, &EmailAiOutputInput {
-        job_id: job.id,
-        model_id: "model".into(),
-        prompt_version: "1.0.0".into(),
-        source_message_ids_json: None,
-        confidence: None,
-        result_json: "{}".into(),
-        display_text: "first".into(),
-    }).unwrap();
+    complete_ai_job(
+        &conn,
+        &EmailAiOutputInput {
+            job_id: job.id,
+            model_id: "model".into(),
+            prompt_version: "1.0.0".into(),
+            source_message_ids_json: None,
+            confidence: None,
+            result_json: "{}".into(),
+            display_text: "first".into(),
+        },
+    )
+    .unwrap();
 
     let output = get_ai_output_for_thread(&conn, "t1", "thread_summary").unwrap();
     assert!(output.is_some());
@@ -1212,14 +1416,22 @@ fn schema_v5_creates_tag_tables() {
     setup_ai_test_data(&conn);
 
     let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM email_tags WHERE source = 'system'", [], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM email_tags WHERE source = 'system'",
+            [],
+            |row| row.get(0),
+        )
         .unwrap();
     assert!(count > 0, "system tags should be seeded");
 
-    let tag_id: String = conn.query_row("SELECT id FROM email_tags LIMIT 1", [], |row| row.get(0)).unwrap();
+    let tag_id: String = conn
+        .query_row("SELECT id FROM email_tags LIMIT 1", [], |row| row.get(0))
+        .unwrap();
     conn.execute("INSERT INTO email_message_tags (message_id, tag_id, source, created_at) VALUES ('m1', ?1, 'user', 0)", params![tag_id]).unwrap();
     let mt_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM email_message_tags", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM email_message_tags", [], |row| {
+            row.get(0)
+        })
         .unwrap();
     assert_eq!(mt_count, 1);
 }
@@ -1230,12 +1442,16 @@ fn tag_crud_operations() {
     run_migrations(&conn).unwrap();
     setup_ai_test_data(&conn);
 
-    let tag = create_tag(&conn, &EmailCreateTagInput {
-        account_id: Some("a1".into()),
-        name: "Important".into(),
-        color: Some("#ff0000".into()),
-        source: "user".into(),
-    }).unwrap();
+    let tag = create_tag(
+        &conn,
+        &EmailCreateTagInput {
+            account_id: Some("a1".into()),
+            name: "Important".into(),
+            color: Some("#ff0000".into()),
+            source: "user".into(),
+        },
+    )
+    .unwrap();
     assert_eq!(tag.name, "Important");
     assert_eq!(tag.slug, "important");
     assert_eq!(tag.source, "user");
@@ -1246,30 +1462,42 @@ fn tag_crud_operations() {
     let account_tags = list_tags(&conn, Some("a1")).unwrap();
     assert!(account_tags.iter().any(|t| t.id == tag.id));
 
-    let updated = update_tag(&conn, &EmailUpdateTagInput {
-        tag_id: tag.id.clone(),
-        name: Some("Very Important".into()),
-        color: Some("#00ff00".into()),
-    }).unwrap();
+    let updated = update_tag(
+        &conn,
+        &EmailUpdateTagInput {
+            tag_id: tag.id.clone(),
+            name: Some("Very Important".into()),
+            color: Some("#00ff00".into()),
+        },
+    )
+    .unwrap();
     assert_eq!(updated.name, "Very Important");
     assert_eq!(updated.color, Some("#00ff00".into()));
 
-    apply_tag_to_message(&conn, &EmailApplyTagInput {
-        message_id: "m1".into(),
-        tag_id: tag.id.clone(),
-        source: "user".into(),
-        confidence: None,
-        reason: None,
-    }).unwrap();
+    apply_tag_to_message(
+        &conn,
+        &EmailApplyTagInput {
+            message_id: "m1".into(),
+            tag_id: tag.id.clone(),
+            source: "user".into(),
+            confidence: None,
+            reason: None,
+        },
+    )
+    .unwrap();
 
     let msg_tags = list_message_tags(&conn, "m1").unwrap();
     assert_eq!(msg_tags.len(), 1);
     assert_eq!(msg_tags[0].id, tag.id);
 
-    remove_tag_from_message(&conn, &EmailRemoveTagInput {
-        message_id: "m1".into(),
-        tag_id: tag.id.clone(),
-    }).unwrap();
+    remove_tag_from_message(
+        &conn,
+        &EmailRemoveTagInput {
+            message_id: "m1".into(),
+            tag_id: tag.id.clone(),
+        },
+    )
+    .unwrap();
     let msg_tags = list_message_tags(&conn, "m1").unwrap();
     assert!(msg_tags.is_empty());
 
