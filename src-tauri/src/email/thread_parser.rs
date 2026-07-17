@@ -45,7 +45,7 @@ pub fn parse_html_body(html: &str) -> ParsedBody {
     let mut found_forwarded = false;
 
     // Walk top-level element children and split at quote/sig/fwd boundaries.
-    let children: Vec<ElementRef> = root.children().filter_map(|c| ElementRef::wrap(c)).collect();
+    let children: Vec<ElementRef> = root.children().filter_map(ElementRef::wrap).collect();
     for child in &children {
         let text = element_text(child);
         let html_str = child.html();
@@ -196,7 +196,7 @@ fn is_quote_block(el: &ElementRef, text: &str) -> bool {
     }
 
     // Outlook: <div id="divRplyFwdMsg">
-    if el.value().attr("id").map_or(false, |id| id == "divRplyFwdMsg") {
+    if el.value().attr("id") == Some("divRplyFwdMsg") {
         return true;
     }
 
@@ -255,7 +255,7 @@ fn is_forwarded_block(text: &str) -> bool {
 fn has_class(el: &ElementRef, class: &str) -> bool {
     el.value()
         .attr("class")
-        .map_or(false, |c| c.split_whitespace().any(|c| c == class))
+        .is_some_and(|c| c.split_whitespace().any(|c| c == class))
 }
 
 fn element_text(el: &ElementRef) -> String {
@@ -314,8 +314,8 @@ pub fn parse_plain_text_body(text: &str) -> ParsedBody {
 
     // Look for signature (must be after reply content, before quotes)
     let search_end = split_at.or(fwd_at).unwrap_or(lines.len());
-    for i in 0..search_end {
-        let trimmed = lines[i].trim();
+    for (i, line) in lines.iter().enumerate().take(search_end) {
+        let trimmed = line.trim();
         if trimmed == "--" || trimmed == "-- " {
             sig_at = Some(i);
             break;
@@ -340,8 +340,8 @@ pub fn parse_plain_text_body(text: &str) -> ParsedBody {
     } else {
         String::new()
     };
-    let forwarded = if fwd_at.is_some() {
-        lines[fwd_at.unwrap()..].join("\n").trim().to_string()
+    let forwarded = if let Some(fwd_at) = fwd_at {
+        lines[fwd_at..].join("\n").trim().to_string()
     } else {
         String::new()
     };

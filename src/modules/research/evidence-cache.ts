@@ -37,14 +37,6 @@ class EvidenceCache {
     return Date.now() - entry.extractedAt > this.ttl;
   }
 
-  private evictExpired(): void {
-    for (const [key, entry] of this.cache) {
-      if (this.isExpired(entry)) {
-        this.cache.delete(key);
-      }
-    }
-  }
-
   private evictOldest(): void {
     if (this.cache.size <= MAX_CACHE_ENTRIES) return;
     let oldestKey: string | null = null;
@@ -80,33 +72,6 @@ class EvidenceCache {
     this.evictOldest();
   }
 
-  /**
-   * Check if a URL is cached (and not expired).
-   */
-  has(url: string): boolean {
-    const key = this.normalizeUrl(url);
-    const entry = this.cache.get(key);
-    if (!entry || this.isExpired(entry)) {
-      if (entry) this.cache.delete(key);
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Get cache stats.
-   */
-  stats(): { size: number } {
-    this.evictExpired();
-    return { size: this.cache.size };
-  }
-
-  /**
-   * Clear all cached entries.
-   */
-  clear(): void {
-    this.cache.clear();
-  }
 }
 
 /** Singleton evidence cache instance. */

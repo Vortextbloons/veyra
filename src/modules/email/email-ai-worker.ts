@@ -273,6 +273,11 @@ export class EmailAiWorker {
         controllers.set(job.id, controller);
         this.jobControllers.set(job.id, controller);
       }
+      const signalFor = (jobId: string): AbortSignal => {
+        const signal = controllers.get(jobId)?.signal;
+        if (!signal) throw new Error(`missing controller for email AI job ${jobId}`);
+        return signal;
+      };
       this.processingJobs = [...this.processingJobs, ...modelJobs];
       this.notify();
 
@@ -282,7 +287,7 @@ export class EmailAiWorker {
           await ensureLmStudioModel(modelId, firstSignal);
         } catch (err) {
           for (const job of modelJobs) {
-            const signal = controllers.get(job.id)!.signal;
+            const signal = signalFor(job.id);
             if (signal.aborted) {
               await this.requeueJob(job);
               this.handleJobOutcome(job, "requeued");
@@ -311,7 +316,7 @@ export class EmailAiWorker {
 
         const outcomes = await Promise.all(
           modelJobs.map((job) =>
-            this.executeJob(job, controllers.get(job.id)!.signal, {
+            this.executeJob(job, signalFor(job.id), {
               modelId,
               skipModelLoad: true,
             }),

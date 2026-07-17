@@ -154,6 +154,25 @@ body {
   stroke-width: 1.7;
 }
 
+.settings-content > * {
+  max-width: 760px;
+}
+
+.settings-content h2 {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text);
+}
+
+.settings-content h3,
+.settings-content h4 {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 @layer base {
   button {
     font-family: inherit;

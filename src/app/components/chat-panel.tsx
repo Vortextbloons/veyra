@@ -207,24 +207,6 @@ export function ChatPanel({
 
         {titleAccessory}
 
-        <div className="flex min-w-0 items-center gap-2">
-          <ProviderSelector
-            value={selectedProvider}
-            providers={providers}
-            onChange={onProviderChange}
-            connectionPhase={providerConnectionPhase}
-            onReconnect={(id) => onProviderReconnect?.(id)}
-            onStartServer={(id) => onProviderStartServer?.(id)}
-          />
-
-          <ModelSelector
-            value={selectedModel}
-            models={selectorModels}
-            onChange={onModelChange}
-            onToggleFavorite={onToggleFavorite}
-          />
-        </div>
-
       </header>
 
       <ProviderConnectionBanner
@@ -312,6 +294,24 @@ export function ChatPanel({
           onEnhancedModeChange={setEnhancedModeEnabled}
           mode={mode}
           onModeChange={handleModeChange}
+          selectorControls={
+            <>
+              <ProviderSelector
+                value={selectedProvider}
+                providers={providers}
+                onChange={onProviderChange}
+                connectionPhase={providerConnectionPhase}
+                onReconnect={(id) => onProviderReconnect?.(id)}
+                onStartServer={(id) => onProviderStartServer?.(id)}
+              />
+              <ModelSelector
+                value={selectedModel}
+                models={selectorModels}
+                onChange={onModelChange}
+                onToggleFavorite={onToggleFavorite}
+              />
+            </>
+          }
           onSend={onSend}
           disabled={isStreaming || agentComposerInputDisabled}
           controlsDisabled={agentComposerControlsDisabled}

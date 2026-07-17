@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Drama, Plus, Sparkles, MoreHorizontal, Upload, FileJson, Image as ImageIcon, Copy, X, Users } from "lucide-react";
+import { Drama, Plus, MoreHorizontal, Upload, FileJson, Image as ImageIcon, Copy, X, Users } from "lucide-react";
 import { useCharacterStore } from "../character-store";
 import { useCharacterGroupStore } from "../character-group-store";
 import { CharacterListPanel } from "./CharacterListPanel";
@@ -163,9 +163,6 @@ export function CharacterPage() {
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
         <div className="flex items-center gap-2.5">
-          <div className="grid size-7 place-items-center text-[var(--color-text-dim)]">
-            <Drama className="size-4" />
-          </div>
           <h1 className="text-[14px] font-semibold tracking-tight">Characters</h1>
           <div className="ml-3 flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5 text-[11px]">
             <button
@@ -195,19 +192,16 @@ export function CharacterPage() {
               Groups
             </button>
           </div>
-          <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-panel)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            <Sparkles className="size-2.5" /> roleplay
-          </span>
         </div>
         <div className="flex items-center gap-2">
           {pane === "character" && (
             <button
               type="button"
               onClick={() => setShowNewDialog(true)}
-              className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-2.5 text-[12px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
+              className="flex h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12px] font-medium text-white hover:brightness-110"
             >
               <Plus className="size-3.5" />
-              New Character
+              New character
             </button>
           )}
           <div className="relative">

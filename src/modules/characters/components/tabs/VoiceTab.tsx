@@ -4,7 +4,6 @@ import { useAssistJob, useAssistRunner, useCancelOnUnmount } from "../../ai-assi
 import { useCharacterAssistStore } from "../../ai-assist/ai-assist-store";
 import { FieldRow } from "./SharedUI";
 import { WandField } from "./PersonaTab";
-import { tryParseSuggestionBuffer } from "./suggestion-utils";
 
 export function VoiceTab({
   draft,
@@ -61,11 +60,7 @@ function GreetingsEditor({
     );
   };
 
-  if (job.result && job.result.warnings?.includes("refusal")) {
-    job.clear();
-  }
-
-  if (job.result && !job.result.warnings?.includes("refusal")) {
+  if (job.result) {
     job.clear();
   }
 
@@ -275,7 +270,13 @@ function SuggestionCatcher({
   onAccept: (parsed: unknown) => void;
 }) {
   if (!jobBuffer) return null;
-  const parsed = tryParseSuggestionBuffer(jobBuffer);
+  let parsed: unknown;
+  try {
+    const trimmed = jobBuffer.trim().replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
   if (!parsed) return null;
   return (
     <div className="rounded-md border border-emerald-300/20 bg-emerald-300/[0.04] p-2">

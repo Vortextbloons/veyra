@@ -5,30 +5,16 @@ import { useChatStore } from "@/stores/chat-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { executeToolRound } from "@/modules/chat/chat-tool-rounds";
-import { buildRoundMessages, formatToolResultsMessage, type RoundMessagesContext } from "@/modules/chat/chat-context-builder";
+import {
+  buildRoundMessages,
+  formatToolResultsMessage,
+  stripImageAttachments,
+  type RoundMessagesContext,
+} from "@/modules/chat/chat-context-builder";
 import { buildMessagePerformance } from "@/lib/performance";
 
 export const MAX_TOOL_ROUNDS = 6;
 export const MAX_TOOL_ROUNDS_ENHANCED = 10;
-
-function stripImageAttachments(messages: ChatMessage[]): ChatMessage[] {
-  let changed = false;
-  const result: ChatMessage[] = [];
-  for (const msg of messages) {
-    const hasImages = msg.attachments?.some((a) => a.fileType === "image");
-    if (!hasImages) {
-      result.push(msg);
-      continue;
-    }
-    changed = true;
-    const filtered = msg.attachments!.filter((a) => a.fileType !== "image");
-    result.push({
-      ...msg,
-      attachments: filtered.length > 0 ? filtered : undefined,
-    });
-  }
-  return changed ? result : messages;
-}
 
 export async function rePromptWithTools(params: {
   provider: ProviderAdapter;

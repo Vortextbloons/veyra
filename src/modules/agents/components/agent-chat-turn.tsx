@@ -1,10 +1,9 @@
 import { lazy, Suspense } from "react";
-import { AlertTriangle, Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type { AgentMode } from "@/modules/agents/agent-types";
 import type { AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
 import { AgentActivityCard } from "@/modules/agents/components/agent-output-view";
 import { TypewriterMarkdown } from "@/modules/agents/components/typewriter-markdown";
-import { ModelIcon } from "@/components/model-icon";
 
 const MarkdownRenderer = lazy(() =>
   import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
@@ -41,19 +40,6 @@ export function AgentChatTurn({
 
   return (
     <div className="flex items-start gap-3">
-      <div className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_0_0_2px_var(--color-bg)]">
-        {isError ? (
-          <AlertTriangle className="size-3.5" />
-        ) : modelShortId ? (
-          <ModelIcon
-            modelId={modelShortId}
-            className="size-7"
-            fallback={<Sparkles className="size-3.5" />}
-          />
-        ) : (
-          <Sparkles className="size-3.5" />
-        )}
-      </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
           <span className="truncate font-medium text-white">{assistantLabel}</span>

@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
-  Mail,
   Plus,
-  Inbox,
   AlertCircle,
   RefreshCw,
   KeyRound,
@@ -52,11 +50,8 @@ export function EmailPage() {
       {/* Page header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
         <div className="flex items-center gap-2.5">
-          <div className="grid size-7 place-items-center text-[var(--color-text-dim)]">
-            <Mail className="size-4" />
-          </div>
           <h1 className="text-[14px] font-semibold tracking-tight">Email</h1>
-          <span className="ml-2 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10.5px] font-mono uppercase tracking-wide text-[var(--color-text-dim)]">
+          <span className="text-[12px] text-[var(--color-text-dim)]">
             {accounts.length} account{accounts.length === 1 ? "" : "s"}
           </span>
         </div>
@@ -90,7 +85,7 @@ export function EmailPage() {
           <button
             type="button"
             onClick={() => startCompose()}
-            className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-2.5 text-[12px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
+            className="flex h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12px] font-medium text-white hover:brightness-110"
           >
             <Plus className="size-3.5" />
             Compose
@@ -173,15 +168,12 @@ function WelcomeScreen({
   };
 
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-md text-center">
-        <div className="mx-auto mb-4 grid size-11 place-items-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-dim)]">
-          <Inbox className="size-5" />
-        </div>
-        <h2 className="text-[18px] font-semibold tracking-tight text-white">
-          Sign in with Gmail
+    <div className="flex flex-1 items-center justify-center p-10">
+      <div className="w-full max-w-lg">
+        <h2 className="text-[21px] font-semibold tracking-[-0.015em] text-white">
+          Connect Gmail
         </h2>
-        <p className="mt-2 max-w-sm text-[13px] leading-relaxed text-[var(--color-text-dim)]">
+        <p className="mt-2 max-w-md text-[14px] leading-relaxed text-[var(--color-text-dim)]">
           Connect your Google account to read, search, and send mail from Veyra. Your tokens stay local.
         </p>
 
@@ -189,13 +181,13 @@ function WelcomeScreen({
           type="button"
           onClick={handlePrimaryClick}
           disabled={isLoading}
-          className="mt-6 flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white text-[14px] font-medium text-[#1f1f1f] shadow-sm transition hover:bg-white/95 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-6 flex h-9 items-center justify-center gap-2.5 rounded-md bg-white px-4 text-[13px] font-medium text-[#1f1f1f] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <GoogleGIcon className="size-5" />
           {isLoading ? "Opening Google..." : "Sign in with Google"}
         </button>
 
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
+        <div className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
           <ShieldCheck className="size-3" />
           OAuth 2.0 - tokens stored locally
         </div>
@@ -208,8 +200,8 @@ function WelcomeScreen({
                 First-time setup. Paste the Client ID and Secret from a Google Cloud OAuth 2.0 Desktop app. Saved locally and reused for future sign-ins.
               </span>
             </div>
-            <label className="block text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-              OAuth Client ID
+            <label className="block text-[12px] font-medium text-[var(--color-text-dim)]">
+              OAuth client ID
               <input
                 type="text"
                 required
@@ -219,8 +211,8 @@ function WelcomeScreen({
                 className="mt-1 h-9 w-full rounded-lg border border-[var(--color-border)] bg-black/20 px-3 text-[13px] normal-case tracking-normal text-[var(--color-text)] placeholder:text-[var(--color-text-dim)]/60"
               />
             </label>
-            <label className="block text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-              OAuth Client Secret
+            <label className="block text-[12px] font-medium text-[var(--color-text-dim)]">
+              OAuth client secret
               <input
                 type="password"
                 required
@@ -233,7 +225,7 @@ function WelcomeScreen({
             <button
               type="submit"
               disabled={isLoading}
-              className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-5 text-[13px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-5 text-[13px] font-medium text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Plus className="size-4" />
               {isLoading ? "Connecting..." : "Save & Continue with Google"}

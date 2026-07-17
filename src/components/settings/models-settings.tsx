@@ -11,8 +11,6 @@ import {
   ChevronDown,
   RotateCcw,
 } from "lucide-react";
-import { ProviderIcon } from "@/components/provider-icon";
-import { ModelIcon } from "@/components/model-icon";
 import { SliderControl } from "@/components/ui/slider-control";
 import { CloudProvidersSettings } from "@/components/settings/cloud-providers-settings";
 
@@ -55,17 +53,6 @@ export function ModelsSettings() {
         </h2>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
           <div className="mb-3 flex items-center gap-3">
-            <div
-              className={`grid size-9 place-items-center rounded-lg ${
-                isConnected
-                  ? "bg-emerald-500/15 text-emerald-400"
-                  : isConnecting
-                    ? "bg-amber-500/15 text-amber-400"
-                    : "bg-red-500/15 text-red-400"
-              }`}
-            >
-              <ProviderIcon providerId={currentProvider?.icon ?? ""} className="size-4" />
-            </div>
             <div className="flex-1">
               <div className="text-[13px] font-medium text-white">
                 {currentProvider?.name ?? "Unknown"}
@@ -237,7 +224,6 @@ export function ModelsSettings() {
         </p>
         {models.length === 0 ? (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-8 text-center">
-            <ModelIcon modelId="" className="mx-auto mb-2 size-5 text-[var(--color-text-dim)]" />
             <p className="text-[12px] text-[var(--color-text-dim)]">
               {isConnected
                 ? "No models found. Load a model in your provider."
@@ -316,15 +302,6 @@ function ModelOverrideCard({
           onClick={onSelect}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <div
-            className={`grid size-8 shrink-0 place-items-center rounded-md ${
-              isActive
-                ? "bg-[var(--color-accent)] text-white"
-                : "bg-white/[0.04] text-[var(--color-text-dim)]"
-            }`}
-          >
-            <ModelIcon modelId={model.id} className="size-full" />
-          </div>
           <div className="min-w-0 flex-1">
             <div
               className={`truncate text-[12.5px] font-medium ${

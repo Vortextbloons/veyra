@@ -491,10 +491,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     const { activeAccountId, activeFolder, activeSmartView, searchQuery, accounts } = get();
     if (activeFolder !== "unified" && !activeAccountId) return;
 
-    const accountId =
-      activeFolder === "unified"
-        ? (activeAccountId ?? accounts[0]?.id ?? "")
-        : activeAccountId!;
+    const accountId = activeAccountId ?? accounts[0]?.id ?? "";
 
     const folderId = activeSmartView ? `smart:${activeSmartView}` : activeFolder;
 

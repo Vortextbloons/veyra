@@ -1,19 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 /// Configuration for the embedding endpoint (LM Studio / Ollama).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EmbeddingConfig {
     pub endpoint_url: String,
     pub model: String,
-}
-
-impl Default for EmbeddingConfig {
-    fn default() -> Self {
-        Self {
-            endpoint_url: String::new(),
-            model: String::new(),
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]

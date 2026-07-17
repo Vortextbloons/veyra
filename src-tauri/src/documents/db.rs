@@ -896,23 +896,21 @@ pub fn update_folder(conn: &Connection, input_json: String) -> Result<DocumentFo
     }
 
     // Validate parent if provided and check for circular references
-    if let Some(ref parent_id) = input.parent_id {
-        if let Some(parent_id) = parent_id {
-            // Can't set parent to self
-            if *parent_id == input.id {
-                return Err("folder cannot be its own parent".to_string());
-            }
-            // Validate parent exists
-            conn.query_row(
-                "SELECT id FROM document_folders WHERE id = ?1",
-                [parent_id],
-                |_| Ok(()),
-            )
-            .map_err(|_| format!("parent folder {} does not exist", parent_id))?;
-            // Check for circular reference
-            if is_ancestor(conn, &input.id, parent_id)? {
-                return Err("circular folder reference detected".to_string());
-            }
+    if let Some(Some(parent_id)) = &input.parent_id {
+        // Can't set parent to self
+        if *parent_id == input.id {
+            return Err("folder cannot be its own parent".to_string());
+        }
+        // Validate parent exists
+        conn.query_row(
+            "SELECT id FROM document_folders WHERE id = ?1",
+            [parent_id],
+            |_| Ok(()),
+        )
+        .map_err(|_| format!("parent folder {} does not exist", parent_id))?;
+        // Check for circular reference
+        if is_ancestor(conn, &input.id, parent_id)? {
+            return Err("circular folder reference detected".to_string());
         }
     }
 

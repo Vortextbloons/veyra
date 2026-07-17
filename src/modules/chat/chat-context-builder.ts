@@ -17,6 +17,20 @@ export type RoundMessagesContext = {
   resolvedContextLength: number;
 };
 
+export function stripImageAttachments(messages: ChatMessage[]): ChatMessage[] {
+  let changed = false;
+  const result = messages.map((message) => {
+    const attachments = message.attachments;
+    if (!attachments?.some((attachment) => attachment.fileType === "image")) {
+      return message;
+    }
+    changed = true;
+    const filtered = attachments.filter((attachment) => attachment.fileType !== "image");
+    return { ...message, attachments: filtered.length > 0 ? filtered : undefined };
+  });
+  return changed ? result : messages;
+}
+
 export function buildRoundMessages(
   chainMessages: ChatMessage[],
   webSearchContextBlocks: string[],

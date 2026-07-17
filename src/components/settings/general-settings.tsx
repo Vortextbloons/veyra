@@ -2,7 +2,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { Toggle } from "@/components/toggle";
 import { Star } from "lucide-react";
-import { ModelIcon } from "@/components/model-icon";
 
 import { AboutUpdateSettings } from "./about-update-settings";
 
@@ -48,9 +47,6 @@ export function GeneralSettings() {
                 key={m.id}
                 className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2.5"
               >
-                <div className="grid size-7 shrink-0 place-items-center rounded-md bg-amber-500/15 text-amber-400">
-                  <ModelIcon modelId={m.id} className="size-full" />
-                </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[12.5px] font-medium text-white">
                     {m.name}

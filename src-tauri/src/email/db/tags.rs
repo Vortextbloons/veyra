@@ -164,12 +164,12 @@ pub fn list_message_tags(
     message_id: &str,
 ) -> Result<Vec<EmailTagRow>, String> {
     let mut stmt = conn
-        .prepare(&format!(
+        .prepare(
             "SELECT t.id, t.account_id, t.name, t.slug, t.color, t.source, t.created_at, t.updated_at
              FROM email_tags t
              JOIN email_message_tags mt ON mt.tag_id = t.id
-             WHERE mt.message_id = ?1 ORDER BY t.name"
-        ))
+             WHERE mt.message_id = ?1 ORDER BY t.name",
+        )
         .map_err(|e| e.to_string())?;
     let rows = stmt.query_map(params![message_id], read_tag_row)
         .map_err(|e| e.to_string())?;

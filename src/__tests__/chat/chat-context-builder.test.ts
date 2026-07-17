@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { formatToolResultsMessage, buildRoundMessages } from "@/modules/chat/chat-context-builder";
+import {
+  buildRoundMessages,
+  formatToolResultsMessage,
+  stripImageAttachments,
+} from "@/modules/chat/chat-context-builder";
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { RoundMessagesContext } from "@/modules/chat/chat-context-builder";
 
@@ -51,5 +55,44 @@ describe("buildRoundMessages", () => {
     const result = buildRoundMessages(chain, ["Source: http://example.com"], baseContext);
     const allContent = result.map((m) => m.content).join(" ");
     expect(allContent).toContain("Source: http://example.com");
+  });
+});
+
+describe("stripImageAttachments", () => {
+  const textAttachment = {
+    id: "text",
+    name: "notes.txt",
+    mimeType: "text/plain",
+    dataUrl: "",
+    fileType: "text" as const,
+    size: 10,
+  };
+  const imageAttachment = {
+    id: "image",
+    name: "image.png",
+    mimeType: "image/png",
+    dataUrl: "data:image/png;base64,abc",
+    fileType: "image" as const,
+    size: 20,
+  };
+
+  it("preserves the original array when there are no images", () => {
+    const messages: ChatMessage[] = [
+      { id: "1", role: "user", content: "hi", timestamp: 1, attachments: [textAttachment] },
+    ];
+    expect(stripImageAttachments(messages)).toBe(messages);
+  });
+
+  it("removes images while preserving other attachments", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "1",
+        role: "user",
+        content: "hi",
+        timestamp: 1,
+        attachments: [imageAttachment, textAttachment],
+      },
+    ];
+    expect(stripImageAttachments(messages)[0]?.attachments).toEqual([textAttachment]);
   });
 });

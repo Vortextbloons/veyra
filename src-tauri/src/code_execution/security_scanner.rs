@@ -509,10 +509,7 @@ pub(crate) fn strip_comments_and_strings(code: &str) -> (String, String) {
                 }
 
                 let mut escaped = false;
-                loop {
-                    let Some(next) = chars.next() else {
-                        break;
-                    };
+                while let Some(next) = chars.next() {
                     no_comments.push(next);
                     no_strings.push(if next == '\n' { '\n' } else { ' ' });
 

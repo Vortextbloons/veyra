@@ -2,7 +2,6 @@ import { lazy, memo, Suspense, useRef, useState } from "react";
 import {
   Brain,
   ChevronDown,
-  Sparkles,
 } from "lucide-react";
 import type { ChatMessage, MessagePerformance } from "@/modules/chat/chat-types";
 import { hasWebSearchActivity } from "@/lib/web-search-state";
@@ -12,7 +11,6 @@ import { MessageAttachmentsPreview } from "@/modules/chat/components/composer";
 import { MessageToolbar } from "@/modules/chat/components/message-toolbar";
 import { ToolCallList } from "@/modules/chat/components/tool-call-list";
 import { ThinkingIndicator } from "@/modules/chat/components/thinking-indicator";
-import { ModelIcon } from "@/components/model-icon";
 import { useProviderStore } from "@/stores/provider-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { type MessageAttachment } from "@/lib/message-attachments";
@@ -129,17 +127,6 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
       <div className="group/message flex items-start gap-3">
-      <div className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white ring-2 ring-[var(--color-bg)]">
-        {message.modelId ? (
-          <ModelIcon
-            modelId={message.modelId}
-            className="size-7"
-            fallback={<Sparkles className="size-3.5" />}
-          />
-        ) : (
-          <Sparkles className="size-3.5" />
-        )}
-      </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
           <span className="truncate font-medium text-white">{resolvedModelName}</span>

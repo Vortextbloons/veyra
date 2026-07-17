@@ -34,6 +34,7 @@ mod agents;
 mod characters;
 mod code_execution;
 mod connectivity;
+mod document_extraction;
 mod documents;
 mod email;
 mod file_extraction;

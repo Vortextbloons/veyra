@@ -15,27 +15,13 @@ import { useDocumentStore, selectActiveDocumentMeta } from "@/modules/documents/
 import { useProjectStore } from "@/modules/projects/project-store";
 import { registerStreamingToolCall } from "@/modules/chat/chat-tool-utils";
 import { resolveModelSettings, resolveProviderTooling } from "@/modules/chat/chat-provider-options";
-import { buildRoundMessages, providerChatBase as buildProviderChatBase, formatToolResultsMessage } from "@/modules/chat/chat-context-builder";
+import {
+  buildRoundMessages,
+  providerChatBase as buildProviderChatBase,
+  formatToolResultsMessage,
+  stripImageAttachments,
+} from "@/modules/chat/chat-context-builder";
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
-
-function stripImageAttachments(messages: ChatMessage[]): ChatMessage[] {
-  let changed = false;
-  const result: ChatMessage[] = [];
-  for (const msg of messages) {
-    const hasImages = msg.attachments?.some((a) => a.fileType === "image");
-    if (!hasImages) {
-      result.push(msg);
-      continue;
-    }
-    changed = true;
-    const filtered = msg.attachments!.filter((a) => a.fileType !== "image");
-    result.push({
-      ...msg,
-      attachments: filtered.length > 0 ? filtered : undefined,
-    });
-  }
-  return changed ? result : messages;
-}
 
 export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;

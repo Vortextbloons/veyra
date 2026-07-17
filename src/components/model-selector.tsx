@@ -7,7 +7,6 @@ import {
   Box,
 } from "lucide-react";
 import { useClickOutside } from "@/hooks/use-click-outside";
-import { ModelIcon } from "@/components/model-icon";
 
 export type Model = {
   id: string;
@@ -77,9 +76,6 @@ export function ModelSelector({
             : "border-[var(--color-border)] bg-[var(--color-panel)] text-white hover:border-[var(--color-border-strong)]"
         }`}
       >
-        <div className="grid size-5 place-items-center text-[var(--color-text-dim)]">
-          <ModelIcon modelId={current?.id ?? ""} className="size-full" />
-        </div>
         <span className="max-w-[160px] truncate font-medium">
           {current?.name ?? "Select model"}
         </span>
@@ -202,15 +198,6 @@ function ModelGroup({
                 }
               }}
             >
-              <div
-                className={`grid size-6 shrink-0 place-items-center rounded-md ${
-                  active
-                    ? "text-[var(--color-text)]"
-                    : "text-[var(--color-text-dim)]"
-                }`}
-              >
-                <ModelIcon modelId={m.id} className="size-full" />
-              </div>
               <div className="min-w-0 flex-1">
                 <div
                   className={`truncate text-[12.5px] font-medium ${

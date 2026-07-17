@@ -22,7 +22,6 @@ import type { AiAssistAction, AiAssistMessage, AiAssistParams } from "../documen
 import { AiMessageBubble } from "./ai-message-bubble";
 import { cn } from "@/lib/utils";
 import { useProviderStore } from "@/stores/provider-store";
-import { ModelIcon } from "@/components/model-icon";
 
 const EDIT_ACTIONS: Set<AiAssistAction> = new Set([
   "improve", "expand", "shorten", "rewrite", "translate", "tone", "outline", "research_draft", "custom",
@@ -324,9 +323,6 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
             onClick={() => setShowModelDropdown((v) => !v)}
             className="flex h-7 w-full items-center gap-2 rounded-md border border-[var(--color-border)] bg-white/[0.03] px-2 text-[11px] text-[var(--color-text)] hover:border-[var(--color-border-strong)] transition-colors"
           >
-            <div className="grid size-4 shrink-0 place-items-center rounded bg-indigo-500/20 text-indigo-300">
-              <ModelIcon modelId={currentModel?.id ?? ""} className="size-full" />
-            </div>
             <span className="flex-1 truncate text-left font-medium">
               {currentModel?.name ?? "Select model"}
             </span>
@@ -361,16 +357,6 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
                           : "text-[var(--color-text)] hover:bg-white/[0.04]",
                       )}
                     >
-                      <div
-                        className={cn(
-                          "grid size-4 shrink-0 place-items-center rounded",
-                          active
-                            ? "bg-[var(--color-accent)] text-white"
-                            : "bg-white/[0.04] text-[var(--color-text-dim)]",
-                        )}
-                      >
-                        <ModelIcon modelId={m.id} className="size-full" />
-                      </div>
                       <span className="flex-1 truncate text-left">{m.name}</span>
                       {m.contextWindow && (
                         <span className="font-mono text-[9px] text-[var(--color-text-dim)]">

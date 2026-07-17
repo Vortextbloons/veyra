@@ -83,7 +83,7 @@ export function SettingsPage() {
           ))}
         </nav>
 
-        <div className="flex-1 overflow-y-auto p-6 max-[900px]:p-4">
+        <div className="settings-content flex-1 overflow-y-auto p-6 max-[900px]:p-4">
           {activeTab === "general" && <GeneralSettings />}
           {activeTab === "privacy" && <PrivacyConnectivitySettings />}
           {activeTab === "chat" && <ChatSettings />}

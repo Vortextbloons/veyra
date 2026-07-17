@@ -61,7 +61,7 @@ export type ProviderConnectivityRequirement = "local" | "internet";
 export interface ProviderAdapter {
   id: string;
   name: string;
-  /** Provider identifier — used to render the matching logo in ProviderIcon */
+  /** Stable provider identifier used by selectors and provider-specific behavior. */
   icon: string;
   connectivityRequirement: ProviderConnectivityRequirement;
   /** Optional capability flags. Use these to opt into provider-specific features. */

@@ -229,6 +229,7 @@ type ComposerProps = {
   onEnhancedModeChange: (on: boolean) => void;
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
+  selectorControls?: React.ReactNode;
   onSend?: (
     text: string,
     attachments?: MessageAttachment[],
@@ -255,6 +256,7 @@ export function Composer({
   onEnhancedModeChange,
   mode,
   onModeChange,
+  selectorControls,
   onSend,
   disabled,
   controlsDisabled = false,
@@ -454,6 +456,12 @@ export function Composer({
                 <IconButton aria-label="Mention">
                   <AtSign className="size-3.5" />
                 </IconButton>
+              </>
+            )}
+            {!isEditMode && selectorControls && (
+              <>
+                <div className="mx-1.5 h-4 w-px bg-[var(--color-border)]" />
+                <div className="flex min-w-0 items-center gap-1">{selectorControls}</div>
               </>
             )}
           </div>

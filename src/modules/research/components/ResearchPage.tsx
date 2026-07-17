@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
 import {
-  FlaskConical,
   Plus,
   Activity,
   LayoutList,
@@ -180,12 +179,9 @@ export function ResearchPage() {
       {/* Page header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
         <div className="flex items-center gap-2.5">
-          <div className="grid size-7 place-items-center text-[var(--color-text-dim)]">
-            <FlaskConical className="size-4" />
-          </div>
           <h1 className="text-[14px] font-semibold tracking-tight">Research</h1>
-          <span className="ml-2 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10.5px] font-mono uppercase tracking-wide text-[var(--color-text-dim)]">
-            {runs.length} total
+          <span className="text-[12px] text-[var(--color-text-dim)]">
+            {runs.length} {runs.length === 1 ? "run" : "runs"}
           </span>
         </div>
         {runs.length > 0 && <button

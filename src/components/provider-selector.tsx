@@ -7,7 +7,6 @@ import {
   Loader2,
 } from "lucide-react";
 import type { ProviderInfo } from "@/modules/chat/chat-types";
-import { ProviderIcon } from "@/components/provider-icon";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
@@ -53,9 +52,6 @@ export function ProviderSelector({
             : "border-[var(--color-border)] bg-[var(--color-panel)] text-white hover:border-[var(--color-border-strong)]"
         }`}
       >
-        <div className="grid size-5 place-items-center text-[var(--color-text-dim)]">
-          <ProviderIcon providerId={current?.icon ?? ""} className="size-full" />
-        </div>
         <span className="max-w-[140px] truncate font-medium">
           {current?.name ?? "Provider"}
         </span>
@@ -104,15 +100,6 @@ export function ProviderSelector({
                     setOpen(false);
                   }}
                 >
-                  <div
-                    className={`grid size-6 shrink-0 place-items-center rounded-md ${
-                      active
-                        ? "text-[var(--color-text)]"
-                        : "text-[var(--color-text-dim)]"
-                    }`}
-                  >
-                    <ProviderIcon providerId={p.icon} className="size-full" />
-                  </div>
                   <div className="min-w-0 flex-1">
                     <div
                       className={`truncate text-[12.5px] font-medium ${

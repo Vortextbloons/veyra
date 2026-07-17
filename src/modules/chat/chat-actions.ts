@@ -1,9 +1,13 @@
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { SendChatCompleteContext } from "@/modules/chat/chat-orchestrator";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
-import { getAssistantVisibleText } from "@/lib/assistant-text";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
+
+function getAssistantVisibleText(message: ChatMessage | undefined): string {
+  const content = message?.content?.trim();
+  return content || message?.reasoning?.trim() || "";
+}
 
 type ChatSendParams = {
   conversationId: string;

@@ -65,7 +65,9 @@ export function PrimarySidebar({ activeNav, onNavChange, onNewChat }: PrimarySid
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.025] hover:text-[var(--color-text)]"
               }`}
             >
-              {item.icon}
+              <span className="hidden text-[var(--color-text-dim)] max-[960px]:block">
+                {item.icon}
+              </span>
               <span className="max-[960px]:hidden">{item.label}</span>
             </button>
           );

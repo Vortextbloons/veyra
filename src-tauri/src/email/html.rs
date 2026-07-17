@@ -119,10 +119,9 @@ fn collect_text_nodes(element: &scraper::ElementRef, out: &mut Vec<String>) {
                     tag_name,
                     "p" | "div" | "br" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
                         | "li" | "tr" | "blockquote" | "hr"
-                ) {
-                    if !out.last().map_or(false, |s| s.ends_with('\n')) {
-                        out.push("\n".to_string());
-                    }
+                ) && !out.last().is_some_and(|s| s.ends_with('\n'))
+                {
+                    out.push("\n".to_string());
                 }
                 if let Some(child_ref) = scraper::ElementRef::wrap(child) {
                     collect_text_nodes(&child_ref, out);

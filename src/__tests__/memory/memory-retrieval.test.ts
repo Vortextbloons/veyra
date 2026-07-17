@@ -142,7 +142,7 @@ describe("memory-retrieval", () => {
 
       expect(result.info.status).toBe("used");
       expect(result.pack).not.toBeNull();
-      expect(result.pack!.sourceNodeIds).toContain("n1");
+      expect(result.pack?.sourceNodeIds).toContain("n1");
     });
 
     it("returns empty when no candidates match", async () => {
@@ -381,8 +381,8 @@ describe("memory-retrieval", () => {
         budget: 4000,
       });
 
-      expect(result.pack!.content).toContain("[Preference]");
-      expect(result.pack!.content).toContain("Dark mode preference");
+      expect(result.pack?.content).toContain("[Preference]");
+      expect(result.pack?.content).toContain("Dark mode preference");
     });
 
     it("marks needs_review nodes as unverified", async () => {
@@ -417,7 +417,7 @@ describe("memory-retrieval", () => {
         budget: 4000,
       });
 
-      expect(result.pack!.content).toContain("[unverified]");
+      expect(result.pack?.content).toContain("[unverified]");
     });
   });
 

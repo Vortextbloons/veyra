@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { ModelIcon } from "@/components/model-icon";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
 type ModelDropdownOption = {
@@ -44,9 +43,6 @@ export function ModelDropdown({
         onClick={() => setOpen((v) => !v)}
         className="flex h-8 w-full items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 text-[12px] transition-colors hover:border-[var(--color-border-strong)]"
       >
-        <div className="grid size-5 shrink-0 place-items-center rounded bg-indigo-500/20 text-indigo-300">
-          <ModelIcon modelId={current?.id ?? ""} className="size-full" />
-        </div>
         <span className="min-w-0 flex-1 truncate text-left text-white">
           {current?.name ?? placeholder}
         </span>
@@ -98,9 +94,6 @@ export function ModelDropdown({
                     : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
                 }`}
               >
-                <div className="grid size-5 shrink-0 place-items-center rounded bg-indigo-500/20 text-indigo-300">
-                  <ModelIcon modelId={m.id} className="size-full" />
-                </div>
                 <span className="min-w-0 flex-1 truncate text-left">{m.name}</span>
                 {m.contextWindow && (
                   <span className="shrink-0 font-mono text-[10px] text-[var(--color-text-dim)]">
