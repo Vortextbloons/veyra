@@ -14,12 +14,13 @@ Project overview, tech stack, storage, and privacy notes.
 
 ## Core
 
-Central chat pipeline and memory system.
+Central chat pipeline, memory system, and hooks.
 
 | File | Description |
 |------|-------------|
 | [chat/README.md](chat/README.md) | Chat pipeline, streaming, tools, provider flow |
 | [memory/README.md](memory/README.md) | Memory system, modes, extraction, retrieval |
+| [hooks/README.md](hooks/README.md) | React hooks for chat, scheduling, and UI |
 
 ## Features
 
@@ -34,6 +35,8 @@ Feature modules built around the chat core.
 | [projects/README.md](projects/README.md) | Project containers and scoping |
 | [email/README.md](email/README.md) | Gmail OAuth, IMAP, email AI features |
 | [agents/README.md](agents/README.md) | Pi CLI integration, plan/build modes |
+| [connectivity/README.md](connectivity/README.md) | Online/offline mode, network detection |
+| [code-execution/README.md](code-execution/README.md) | Python code execution sandbox |
 
 ## Architecture
 
@@ -61,4 +64,4 @@ Agent update instructions and generated output (excluded from combined docs).
 
 ## File Count
 
-**11 documentation files** across 11 folders (auto-discovered by combine script).
+**14 documentation folders** with multiple files each (auto-discovered by combine script).

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  AtSign,
   Brain,
   Check,
   Eye,
   Loader2,
   Paperclip,
   Send,
+  SlidersHorizontal,
   Sparkles,
   X,
   Zap,
@@ -140,7 +140,7 @@ export function IconButton({
   );
 }
 
-function ToggleIconButton({
+export function ToggleIconButton({
   icon: Icon,
   label,
   active,
@@ -219,6 +219,47 @@ function ToggleIconButton({
   );
 }
 
+function OptionRow({
+  icon: Icon,
+  label,
+  description,
+  active,
+  onClick,
+  onDoubleClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  description: string;
+  active: boolean;
+  onClick: () => void;
+  onDoubleClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/5"
+    >
+      <Icon className="size-4 shrink-0 text-[var(--color-text-dim)]" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[12px] font-medium text-white">{label}</span>
+        <span className="block text-[10.5px] text-[var(--color-text-dim)]">{description}</span>
+      </span>
+      <span
+        aria-hidden
+        className={`h-4 w-7 rounded-full p-0.5 transition-colors ${
+          active ? "bg-[var(--color-accent)]" : "bg-white/10"
+        }`}
+      >
+        <span className={`block size-3 rounded-full bg-white transition-transform ${active ? "translate-x-3" : ""}`} />
+      </span>
+    </button>
+  );
+}
+
 type ComposerProps = {
   memory: boolean;
   onMemoryChange: (on: boolean) => void;
@@ -230,6 +271,7 @@ type ComposerProps = {
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
   selectorControls?: React.ReactNode;
+  suggestedPrompt?: string;
   onSend?: (
     text: string,
     attachments?: MessageAttachment[],
@@ -257,6 +299,7 @@ export function Composer({
   mode,
   onModeChange,
   selectorControls,
+  suggestedPrompt,
   onSend,
   disabled,
   controlsDisabled = false,
@@ -273,10 +316,25 @@ export function Composer({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [extractingFile, setExtractingFile] = useState<string | null>(null);
   const [previewAttachment, setPreviewAttachment] = useState<MessageAttachment | null>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = Boolean(editMessageId);
+
+  useEffect(() => {
+    if (!suggestedPrompt || isEditMode) return;
+    const timer = window.setTimeout(() => {
+      setValue(suggestedPrompt);
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(suggestedPrompt.length, suggestedPrompt.length);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isEditMode, suggestedPrompt]);
+
+  useEffect(() => {
+    if (!disabled) textareaRef.current?.focus();
+  }, [disabled]);
 
   useEffect(() => {
     if (editMessageId && editInitialValue != null) {
@@ -453,9 +511,6 @@ export function Composer({
                 >
                   <Paperclip className="size-3.5" />
                 </IconButton>
-                <IconButton aria-label="Mention">
-                  <AtSign className="size-3.5" />
-                </IconButton>
               </>
             )}
             {!isEditMode && selectorControls && (
@@ -470,31 +525,45 @@ export function Composer({
             {!isEditMode && (
               <>
                 <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
-                <ToggleIconButton
-                  icon={Brain}
-                  label="Memory"
-                  active={memory}
-                  accent="emerald"
-                  onChange={onMemoryChange}
-                  onLongPress={onTriggerMemoryExtraction}
-                  disabled={isControlsBlocked}
-                />
-                <ToggleIconButton
-                  icon={Sparkles}
-                  label="Reasoning"
-                  active={reasoningEnabled}
-                  accent="violet"
-                  onChange={onReasoningEnabledChange}
-                  disabled={isControlsBlocked}
-                />
-                <ToggleIconButton
-                  icon={Zap}
-                  label="Enhanced"
-                  active={enhancedMode}
-                  accent="amber"
-                  onChange={onEnhancedModeChange}
-                  disabled={isControlsBlocked}
-                />
+                <div className="relative">
+                  <IconButton
+                    aria-label="Chat options"
+                    title="Chat options"
+                    disabled={isControlsBlocked}
+                    onClick={() => setOptionsOpen((open) => !open)}
+                  >
+                    <SlidersHorizontal className="size-3.5" />
+                  </IconButton>
+                  {optionsOpen && (
+                    <div className="absolute bottom-full right-0 z-50 mb-2 w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-1.5 shadow-xl shadow-black/40">
+                      <p className="px-2 pb-1.5 pt-1 text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--color-text-dim)]">
+                        Chat options
+                      </p>
+                      <OptionRow
+                        icon={Brain}
+                        label="Memory"
+                        description="Use saved context"
+                        active={memory}
+                        onClick={() => onMemoryChange(!memory)}
+                        onDoubleClick={onTriggerMemoryExtraction}
+                      />
+                      <OptionRow
+                        icon={Sparkles}
+                        label="Reasoning"
+                        description="Show deeper analysis"
+                        active={reasoningEnabled}
+                        onClick={() => onReasoningEnabledChange(!reasoningEnabled)}
+                      />
+                      <OptionRow
+                        icon={Zap}
+                        label="Enhanced"
+                        description="Use the extended workflow"
+                        active={enhancedMode}
+                        onClick={() => onEnhancedModeChange(!enhancedMode)}
+                      />
+                    </div>
+                  )}
+                </div>
               </>
             )}
             <button

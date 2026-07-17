@@ -91,6 +91,7 @@ export function ChatPanel({
   const setEnhancedModeEnabled = useSettingsStore((s) => s.setEnhancedModeEnabled);
   const streamingBuffer = useChatStore((s) => s.streamingBuffer);
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
+  const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const mode = controlledMode ?? internalMode;
   const agentSessionRunning = mode === "agents" && agentSessions.some((session) => session.status === "running");
   const agentComposerInputDisabled =
@@ -197,17 +198,18 @@ export function ChatPanel({
       after: Math.max(0, (messages.length - last) * ESTIMATED_MESSAGE_HEIGHT),
     };
   }, [messages, scrollState.height, scrollState.top, shouldVirtualizeMessages]);
+  const isEmptyChat = mode !== "agents" && messages.length === 0;
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
+      {!isEmptyChat && <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
         </div>
 
         {titleAccessory}
 
-      </header>
+      </header>}
 
       <ProviderConnectionBanner
         provider={currentProvider ?? null}
@@ -241,7 +243,7 @@ export function ChatPanel({
           <div className="relative z-10 flex flex-1 items-center justify-center px-10">
             <EmptyChat
               disabled={isStreaming || !onSend}
-              onSuggestion={(suggestion) => onSend?.(suggestion, [], { memoryEnabled: memory })}
+              onSuggestion={(suggestion) => setSuggestedPrompt(suggestion)}
             />
           </div>
         ) : (
@@ -294,6 +296,7 @@ export function ChatPanel({
           onEnhancedModeChange={setEnhancedModeEnabled}
           mode={mode}
           onModeChange={handleModeChange}
+          suggestedPrompt={suggestedPrompt}
           selectorControls={
             <>
               <ProviderSelector
