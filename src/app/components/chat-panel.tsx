@@ -5,10 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  Bell,
-  Sparkles,
-} from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import type { ChatMode, ChatPanelProps } from "@/modules/chat/chat-types";
 import { ProviderConnectionBanner } from "@/components/provider-connection-banner";
 import { ProviderSelector } from "@/components/provider-selector";
@@ -103,7 +100,6 @@ export function ChatPanel({
 
   const currentProvider = providers.find((p) => p.id === selectedProvider);
   const providerLabel = currentProvider?.name ?? "LM Studio";
-  const providerStatus = currentProvider?.status ?? "disconnected";
 
   const layout = chatLayoutClasses(sidebarsCollapsed);
 
@@ -205,6 +201,12 @@ export function ChatPanel({
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
+        </div>
+
+        {titleAccessory}
+
         <div className="flex min-w-0 items-center gap-2">
           <ProviderSelector
             value={selectedProvider}
@@ -223,50 +225,6 @@ export function ChatPanel({
           />
         </div>
 
-        <div className="mx-3 h-4 w-px bg-[var(--color-border)]" />
-
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[13px] font-medium tracking-tight">{title}</h1>
-        </div>
-
-        {titleAccessory}
-
-        <div
-          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${
-            providerConnectionPhase === "connecting"
-              ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
-              : providerStatus === "connected"
-                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                : "border-red-500/20 bg-red-500/10 text-red-300"
-          }`}
-        >
-          <span
-            className={`size-1.5 rounded-full ${
-              providerConnectionPhase === "connecting"
-                ? "animate-pulse bg-amber-400"
-                : providerStatus === "connected"
-                  ? "bg-emerald-400"
-                  : "bg-red-400"
-            }`}
-          />
-          {providerConnectionPhase === "connecting"
-            ? "Connecting…"
-            : providerStatus === "connected"
-              ? "Connected"
-              : "Disconnected"}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            aria-label="Notifications"
-            className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-          >
-            <Bell className="size-4" />
-          </button>
-          <div className="grid size-7 place-items-center rounded-full bg-gradient-to-br from-amber-500 to-rose-500 text-[11px] font-semibold text-white">
-            U
-          </div>
-        </div>
       </header>
 
       <ProviderConnectionBanner
@@ -298,8 +256,11 @@ export function ChatPanel({
             onDeleteSession={(id) => onAgentSessionDelete?.(id)}
           />
         ) : messages.length === 0 ? (
-          <div className="relative z-10 flex flex-1 items-center justify-center px-6">
-            <EmptyChat />
+          <div className="relative z-10 flex flex-1 items-center justify-center px-10">
+            <EmptyChat
+              disabled={isStreaming || !onSend}
+              onSuggestion={(suggestion) => onSend?.(suggestion, [], { memoryEnabled: memory })}
+            />
           </div>
         ) : (
           <div
@@ -376,33 +337,42 @@ export function ChatPanel({
   );
 }
 
-function EmptyChat() {
+function EmptyChat({
+  disabled,
+  onSuggestion,
+}: {
+  disabled: boolean;
+  onSuggestion: (suggestion: string) => void;
+}) {
   const suggestions = [
-    "Explain a concept I'm curious about",
-    "Help me draft a message",
-    "Summarize a long document",
-    "Brainstorm ideas for a project",
+    "Summarize the document I am working on",
+    "Help me plan my next project milestone",
+    "Turn my notes into a clear first draft",
+    "Compare options and explain the tradeoffs",
   ];
   return (
-    <div className="grid place-items-center text-center">
+    <div className="w-full max-w-2xl">
       <div>
-        <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500/25 to-violet-500/20 text-indigo-300 ring-1 ring-inset ring-indigo-400/20">
-          <Sparkles className="size-6" />
-        </div>
-        <h2 className="text-[18px] font-semibold tracking-tight text-white">
-          Start a conversation
-        </h2>
-        <p className="mt-1.5 text-[12.5px] text-[var(--color-text-dim)]">
-          Ask anything — the model will respond here.
+        <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-accent)]">
+          Local workspace
         </p>
-        <div className="mt-6 grid w-full max-w-md grid-cols-2 gap-2">
+        <h2 className="max-w-xl text-[30px] font-semibold leading-tight tracking-[-0.035em] text-white">
+          What are we working through?
+        </h2>
+        <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-[var(--color-text-dim)]">
+          Ask directly, bring in a document, or use memory and tools when the work needs more context.
+        </p>
+        <div className="mt-8 grid w-full grid-cols-2 gap-x-6 gap-y-1">
           {suggestions.map((s) => (
             <button
               key={s}
               type="button"
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2.5 text-left text-[12px] leading-snug text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
+              disabled={disabled}
+              onClick={() => onSuggestion(s)}
+              className="group flex min-h-12 items-center justify-between border-b border-[var(--color-border)] px-1 text-left text-[13px] leading-snug text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {s}
+              <span>{s}</span>
+              <ArrowUpRight className="size-3.5 shrink-0 opacity-35 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100" />
             </button>
           ))}
         </div>

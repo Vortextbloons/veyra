@@ -230,6 +230,7 @@ function App() {
   // ── Derived ──────────────────────────────────────────────────────────────
 
   const activeConversation = pipeline.activeConversation;
+  const hasActiveConversation = Boolean(activeConversation);
 
   const recentChats: RecentChatsItem[] = useMemo(() => {
     const scoped = activeProjectId
@@ -304,7 +305,7 @@ function App() {
           onDeleteAll={handleDeleteAllChats}
           collapsed={recentChatsCollapsed}
           onCollapsedChange={setRecentChatsCollapsed}
-          hidden={!isChatMode || activeNav === "projects" || workspaceChatMode === "agents"}
+          hidden={!isChatMode || activeNav === "projects" || workspaceChatMode === "agents" || recentChats.length === 0}
         />
         <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
           <Suspense fallback={null}>
@@ -374,7 +375,7 @@ function App() {
           contextBreakdown={displayContextBreakdown}
           collapsed={rightPanelCollapsed}
           onCollapsedChange={setRightPanelCollapsed}
-          hidden={!isChatMode}
+          hidden={!isChatMode || !hasActiveConversation}
           webSearchEnabled={webSearchEnabled}
           onWebSearchChange={setWebSearchEnabled}
           webSearchDisabled={!webSearchAvailability.available}

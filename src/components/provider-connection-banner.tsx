@@ -2,7 +2,6 @@ import { Loader2, PlugZap, RefreshCw, Play } from "lucide-react";
 import type { ProviderInfo } from "@/modules/chat/chat-types";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
-import { ProviderIcon } from "@/components/provider-icon";
 
 type ProviderConnectionBannerProps = {
   provider: ProviderInfo | null;
@@ -23,12 +22,11 @@ export function ProviderConnectionBanner({
 
   const connecting = phase === "connecting";
   const canStart = providerSupportsStartServer(provider.id);
-  const isLmStudio = provider.id === "lm-studio";
 
   return (
-    <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
-      <div className="mx-auto flex max-w-2xl gap-3 rounded-xl border-l-2 border-amber-500 bg-amber-500/10 p-3.5">
-        <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-amber-500/15 text-amber-300">
+    <div className="shrink-0 border-b border-amber-500/20 bg-amber-500/[0.055] px-5 py-2.5">
+      <div className="flex items-center gap-3">
+        <div className="grid size-7 shrink-0 place-items-center text-amber-300">
           {connecting ? (
             <Loader2 className="size-4 animate-spin" aria-hidden />
           ) : (
@@ -37,65 +35,46 @@ export function ProviderConnectionBanner({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-medium text-white">
-            {connecting
-              ? `Connecting to ${provider.name}…`
-              : `${provider.name} is offline`}
+          <p className="text-[12px] font-medium text-amber-100">
+            {connecting ? `Connecting to ${provider.name}…` : `${provider.name} is offline`}
           </p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--color-text-dim)]">
+          <p className="truncate text-[11px] text-[var(--color-text-dim)]">
             {connecting
-              ? isLmStudio
-                ? "Checking the local server and loading models."
-                : "Checking provider availability."
-              : isLmStudio
-                ? "Start the LM Studio server or retry if it is already running in the background."
-                : "Retry the connection when the provider is ready."}
+              ? "Checking the local server and available models."
+              : "Start the local server or retry when it is ready."}
           </p>
+          {error && !connecting && <span className="sr-only">{error}</span>}
+        </div>
 
-          {error && !connecting && (
-            <p className="mt-2 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11.5px] leading-snug text-red-200/90">
-              {error}
-            </p>
-          )}
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            disabled={connecting}
+            onClick={onReconnect}
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-amber-500/20 bg-black/10 px-2.5 text-[11px] font-medium text-amber-100 transition-colors hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {connecting ? (
+              <Loader2 className="size-3 animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw className="size-3" aria-hidden />
+            )}
+            Retry
+          </button>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          {canStart && (
             <button
               type="button"
               disabled={connecting}
-              onClick={onReconnect}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--color-border-strong)] bg-white/[0.04] px-3 text-[12px] font-medium text-white transition-colors hover:border-white/20 hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={onStartServer}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md bg-amber-200 px-2.5 text-[11px] font-medium text-[#211b0c] transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {connecting ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                <Loader2 className="size-3 animate-spin" aria-hidden />
               ) : (
-                <RefreshCw className="size-3.5" aria-hidden />
+                <Play className="size-3" aria-hidden />
               )}
-              Retry connection
+              Start server
             </button>
-
-            {canStart && (
-              <button
-                type="button"
-                disabled={connecting}
-                onClick={onStartServer}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12px] font-medium text-white transition-colors hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {connecting ? (
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                ) : (
-                  <Play className="size-3.5" aria-hidden />
-                )}
-                Start server
-              </button>
-            )}
-          </div>
-
-          {isLmStudio && !connecting && (
-            <p className="mt-2.5 flex items-center gap-1.5 text-[10.5px] text-[var(--color-text-dim)]">
-              <ProviderIcon providerId="lm-studio" className="size-3 shrink-0 opacity-70" aria-hidden />
-              Uses the <span className="font-mono text-[var(--color-text)]">lms</span> CLI — install
-              LM Studio and add it to your PATH.
-            </p>
           )}
         </div>
       </div>

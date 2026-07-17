@@ -77,7 +77,7 @@ export function ModelSelector({
             : "border-[var(--color-border)] bg-[var(--color-panel)] text-white hover:border-[var(--color-border-strong)]"
         }`}
       >
-        <div className="grid size-5 place-items-center rounded bg-indigo-500/20 text-indigo-300">
+        <div className="grid size-5 place-items-center text-[var(--color-text-dim)]">
           <ModelIcon modelId={current?.id ?? ""} className="size-full" />
         </div>
         <span className="max-w-[160px] truncate font-medium">
@@ -187,6 +187,7 @@ function ModelGroup({
               key={m.id}
               title={m.id}
               role="option"
+              tabIndex={0}
               aria-selected={active}
               className={`group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
                 active
@@ -194,12 +195,18 @@ function ModelGroup({
                   : "hover:bg-white/[0.04]"
               }`}
               onClick={() => onSelect(m.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect(m.id);
+                }
+              }}
             >
               <div
                 className={`grid size-6 shrink-0 place-items-center rounded-md ${
                   active
-                    ? "bg-[var(--color-accent)] text-white"
-                    : "bg-white/[0.04] text-[var(--color-text-dim)]"
+                    ? "text-[var(--color-text)]"
+                    : "text-[var(--color-text-dim)]"
                 }`}
               >
                 <ModelIcon modelId={m.id} className="size-full" />
@@ -246,7 +253,7 @@ function ModelGroup({
                 className={`grid size-6 shrink-0 place-items-center rounded transition-opacity ${
                   m.isFavorite
                     ? "text-amber-400 opacity-100"
-                    : "text-[var(--color-text-dim)] opacity-0 group-hover:opacity-100"
+                    : "text-[var(--color-text-dim)] opacity-40 group-hover:opacity-100 group-focus-within:opacity-100"
                 } hover:bg-white/[0.06]`}
               >
                 <Star

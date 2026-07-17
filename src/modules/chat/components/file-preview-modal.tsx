@@ -1,7 +1,7 @@
-import { useEffect } from "react";
 import { FileCode, FileText, FileSpreadsheet, File, X } from "lucide-react";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { formatFileSize, getFileIcon } from "@/lib/message-attachments";
+import { DialogSurface } from "@/components/dialog-surface";
 
 export function FileTypeIcon({ name, className }: { name: string; className?: string }) {
   const type = getFileIcon(name);
@@ -28,27 +28,16 @@ type FilePreviewModalProps = {
 };
 
 export function FilePreviewModal({ attachment, onClose }: FilePreviewModalProps) {
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+    <DialogSurface
+      onClose={onClose}
+      ariaLabelledBy="file-preview-title"
+      panelClassName="mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-white/10 bg-[var(--color-panel)] shadow-2xl"
     >
-      <div
-        className="mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-white/10 bg-[var(--color-panel)] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
           <div className="flex items-center gap-2">
             <FileTypeIcon name={attachment.name} className="size-4 text-[var(--color-accent)]" />
-            <span className="text-sm font-medium text-white">{attachment.name}</span>
+            <span id="file-preview-title" className="text-sm font-medium text-white">{attachment.name}</span>
             <span className="text-[11px] text-[var(--color-text-dim)]">
               {formatFileSize(attachment.size)}
             </span>
@@ -58,6 +47,7 @@ export function FilePreviewModal({ attachment, onClose }: FilePreviewModalProps)
           </div>
           <button
             type="button"
+            aria-label="Close file preview"
             onClick={onClose}
             className="grid size-6 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
           >
@@ -69,7 +59,6 @@ export function FilePreviewModal({ attachment, onClose }: FilePreviewModalProps)
             {attachment.textContent ?? "(No content)"}
           </pre>
         </div>
-      </div>
-    </div>
+    </DialogSurface>
   );
 }

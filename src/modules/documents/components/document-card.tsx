@@ -88,7 +88,8 @@ export function DocumentCard({ document, isActive, compact }: DocumentCardProps)
             type="button"
             {...attributes}
             {...listeners}
-            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+            aria-label={`Reorder ${document.title}`}
+            className="grid size-7 shrink-0 cursor-grab place-items-center rounded opacity-40 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-white/5 active:cursor-grabbing"
             onClick={(e) => e.stopPropagation()}
           >
             <GripVertical className="size-3 text-[var(--color-text-dim)]" />
@@ -107,13 +108,14 @@ export function DocumentCard({ document, isActive, compact }: DocumentCardProps)
           <div className="relative">
             <button
               type="button"
+              aria-label={`Move ${document.title} to folder`}
               onClick={(e) => {
                 e.stopPropagation();
                 setShowMoveMenu(!showMoveMenu);
               }}
               className={cn(
-                "shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition-colors",
-                "opacity-0 group-hover:opacity-100 hover:text-[var(--color-accent)]",
+                "grid size-7 shrink-0 place-items-center rounded text-[var(--color-text-dim)] transition-colors",
+                "opacity-40 group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-white/5 hover:text-[var(--color-accent)]",
               )}
               title="Move to folder"
             >
@@ -168,12 +170,13 @@ export function DocumentCard({ document, isActive, compact }: DocumentCardProps)
           </div>
           <button
             type="button"
+            aria-label={confirmDelete ? `Confirm delete ${document.title}` : `Delete ${document.title}`}
             onClick={handleDelete}
             className={cn(
-              "shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition-colors",
+              "grid size-7 shrink-0 place-items-center rounded text-[var(--color-text-dim)] transition-colors",
               confirmDelete
                 ? "text-red-400 hover:text-red-300"
-                : "opacity-0 group-hover:opacity-100 hover:text-red-400",
+                : "opacity-40 group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-white/5 hover:text-red-400",
             )}
             title={confirmDelete ? "Click again to delete" : "Delete"}
           >

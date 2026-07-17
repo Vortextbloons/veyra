@@ -36,7 +36,6 @@ import {
 } from "@/lib/source-extraction-ui";
 import { isPdfUrl, isYouTubeUrl, isDocxUrl, isPptxUrl, isXlsxUrl, isEpubUrl } from "@/lib/url-classifiers";
 import { ConfirmDangerModal } from "@/components/confirm-danger-modal";
-import { EmptyState } from "@/components/empty-state";
 
 const TAB_ITEMS = [
   { id: "plan", label: "Plan", icon: <LayoutList className="size-3.5" /> },
@@ -158,7 +157,7 @@ export function ResearchPage() {
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
       {showFirstRunBanner && (
-        <div className="flex items-start gap-3 border-b border-[var(--color-border)] bg-gradient-to-r from-amber-500/10 via-amber-500/[0.04] to-transparent px-5 py-2.5">
+        <div className="flex items-start gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-2.5">
           <Sparkles className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
           <div className="flex-1 text-[11.5px] leading-relaxed text-amber-100/90">
             <span className="font-medium text-amber-100">Research is faster now.</span>{" "}
@@ -181,27 +180,27 @@ export function ResearchPage() {
       {/* Page header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
         <div className="flex items-center gap-2.5">
-          <div className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500/30 to-violet-500/20 ring-1 ring-inset ring-indigo-400/30">
-            <FlaskConical className="size-3.5 text-indigo-300" />
+          <div className="grid size-7 place-items-center text-[var(--color-text-dim)]">
+            <FlaskConical className="size-4" />
           </div>
           <h1 className="text-[14px] font-semibold tracking-tight">Research</h1>
           <span className="ml-2 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10.5px] font-mono uppercase tracking-wide text-[var(--color-text-dim)]">
             {runs.length} total
           </span>
         </div>
-        <button
+        {runs.length > 0 && <button
           type="button"
           onClick={() => setShowNewDialog(true)}
-          className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-2.5 text-[12px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
+          className="flex h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12px] font-medium text-white hover:brightness-110"
         >
           <Plus className="size-3.5" />
           New Research
-        </button>
+        </button>}
       </header>
 
       <div className="flex flex-1 min-h-0">
         {/* Left sidebar: run list */}
-        <aside className="flex w-[300px] min-w-[260px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+        {runs.length > 0 && <aside className="flex w-[300px] min-w-[260px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
           <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-3">
             <LayoutList className="size-3.5 text-[var(--color-text-dim)]" />
             <span className="text-[12px] font-medium text-[var(--color-text)]">
@@ -209,21 +208,6 @@ export function ResearchPage() {
             </span>
           </div>
           <div className="flex-1 overflow-y-auto p-3">
-            {runs.length === 0 ? (
-              <EmptyState
-                icon={<FlaskConical className="size-8 text-[var(--color-text-dim)]/40" />}
-                title="No research runs yet."
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setShowNewDialog(true)}
-                    className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
-                  >
-                    Start your first research
-                  </button>
-                }
-              />
-            ) : (
               <div className="flex flex-col gap-2">
                 {runs.map((r) => (
                   <ResearchRunCard
@@ -235,9 +219,8 @@ export function ResearchPage() {
                   />
                 ))}
               </div>
-            )}
           </div>
-        </aside>
+        </aside>}
 
         {/* Main area: detail view */}
         <section className="flex min-w-0 flex-1 flex-col">
@@ -448,43 +431,26 @@ export function ResearchPage() {
 
 function WelcomeScreen({ onStart }: { onStart: () => void }) {
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <div className="text-center">
-        <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500/25 to-violet-500/20 text-indigo-300 ring-1 ring-inset ring-indigo-400/20">
-          <FlaskConical className="size-7" />
-        </div>
-        <h2 className="text-[18px] font-semibold tracking-tight text-white">
-          Deep Research Workspace
-        </h2>
-        <p className="mt-2 max-w-sm text-[13px] leading-relaxed text-[var(--color-text-dim)]">
-          Ask a question and Veyra will plan, search, read, verify, and synthesize a comprehensive research report with citations.
+    <div className="flex flex-1 items-center justify-center p-10">
+      <div className="w-full max-w-xl">
+        <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-accent)]">
+          Evidence-led research
         </p>
-        <div className="mt-6 flex items-center justify-center gap-3">
+        <h2 className="text-[30px] font-semibold leading-tight tracking-[-0.035em] text-white">
+          Start with a question worth investigating.
+        </h2>
+        <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-[var(--color-text-dim)]">
+          Veyra builds a plan, reads across sources, checks contradictions, and produces a cited report you can inspect.
+        </p>
+        <div className="mt-7">
           <button
             type="button"
             onClick={onStart}
-            className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-[13px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
+            className="flex min-h-9 items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 text-[13px] font-medium text-white hover:brightness-110"
           >
             <Plus className="size-4" />
             New Research
           </button>
-        </div>
-        <div className="mt-6 grid w-full max-w-md grid-cols-2 gap-2">
-          {[
-            "Latest AI model capabilities",
-            "Climate change mitigation strategies",
-            "Quantum computing breakthroughs",
-            "Best practices for TypeScript",
-          ].map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={onStart}
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2.5 text-left text-[12px] leading-snug text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
-            >
-              {s}
-            </button>
-          ))}
         </div>
       </div>
     </div>

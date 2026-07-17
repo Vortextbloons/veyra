@@ -55,13 +55,15 @@ export function SettingsPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-48 shrink-0 border-r border-[var(--color-border)] p-2">
+        <nav aria-label="Settings sections" className="w-48 shrink-0 border-r border-[var(--color-border)] p-2 max-[900px]:w-14">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              aria-label={tab.label}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors ${
+              className={`flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors max-[900px]:justify-center max-[900px]:px-2 ${
                 activeTab === tab.id
                   ? "bg-[var(--color-accent-soft)] font-medium text-white"
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
@@ -76,12 +78,12 @@ export function SettingsPage() {
               >
                 {tab.icon}
               </span>
-              {tab.label}
+              <span className="max-[900px]:hidden">{tab.label}</span>
             </button>
           ))}
         </nav>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 max-[900px]:p-4">
           {activeTab === "general" && <GeneralSettings />}
           {activeTab === "privacy" && <PrivacyConnectivitySettings />}
           {activeTab === "chat" && <ChatSettings />}

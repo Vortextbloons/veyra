@@ -27,8 +27,8 @@ export function ShutdownOverlay() {
     >
       <div className="mx-6 w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6 shadow-xl shadow-black/40">
         <div className="mb-5 flex justify-center">
-          <div className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500/25 to-violet-500/20 ring-1 ring-inset ring-indigo-400/20">
-            <Loader2 className="size-6 animate-spin text-indigo-300" />
+          <div className="grid size-11 place-items-center rounded-lg border border-[var(--color-border)]">
+            <Loader2 className="size-5 animate-spin text-[var(--color-text-dim)]" />
           </div>
         </div>
 

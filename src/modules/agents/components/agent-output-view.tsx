@@ -1,9 +1,8 @@
 import { useEffect, useRef } from "react";
-import { ChevronRight, Bot, Loader2, Sparkles, Square, TerminalSquare } from "lucide-react";
+import { ChevronRight, Bot, Sparkles, Square, TerminalSquare } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { AgentChatTurn } from "@/modules/agents/components/agent-chat-turn";
 import { buildAgentChatTurns, type AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
-import { AGENT_MODES } from "@/modules/agents/agent-mode-options";
 import { StatusDot } from "@/modules/agents/agent-status-dot";
 
 export function AgentOutputView({
@@ -71,9 +70,8 @@ export function AgentOutputView({
           )}
 
           {turns.length === 0 && !isRunning && (
-            <div className="flex items-center gap-2 px-1 text-[12px] text-[var(--color-text-dim)]">
-              <Loader2 className="size-3.5 animate-spin text-[var(--color-accent)]" />
-              Waiting for output...
+            <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[13px] text-[var(--color-text-dim)]">
+              This session ended without producing output.
             </div>
           )}
         </div>
@@ -118,28 +116,14 @@ export function AgentEmptyState() {
   return (
     <div className="flex flex-1 items-center justify-center">
       <div className="max-w-sm px-6 text-center">
-        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/15 to-violet-500/10 ring-1 ring-inset ring-indigo-400/10">
-          <Bot className="size-5 text-indigo-300/70" />
+        <div className="mx-auto mb-4 flex size-10 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <Bot className="size-5 text-[var(--color-text-dim)]" />
         </div>
         <h3 className="text-[14px] font-semibold text-white">Agent workspace</h3>
         <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--color-text-dim)]">
           Agents can research, write, code, manage files, and run commands on your machine.
           Choose a mode above, then send a task from the composer below.
         </p>
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          {AGENT_MODES.map((m) => (
-            <div
-              key={m.id}
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2.5"
-            >
-              <div className="mb-1.5 flex items-center justify-center text-[var(--color-accent)]">
-                {m.icon}
-              </div>
-              <div className="text-[11px] font-semibold text-white">{m.label}</div>
-              <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">{m.detail}</div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

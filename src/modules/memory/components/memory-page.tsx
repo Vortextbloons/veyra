@@ -29,8 +29,8 @@ function MemoryPageInner() {
     <>
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
         <div className="flex items-center gap-2.5">
-          <div className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500/30 to-violet-500/20 ring-1 ring-inset ring-indigo-400/30">
-            <Database className="size-3.5 text-indigo-300" />
+          <div className="grid size-7 place-items-center text-[var(--color-text-dim)]">
+            <Database className="size-4" />
           </div>
           <h1 className="text-[14px] font-semibold tracking-tight">Memory</h1>
           {!showProfile && (

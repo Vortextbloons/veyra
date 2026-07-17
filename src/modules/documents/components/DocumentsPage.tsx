@@ -55,9 +55,15 @@ export function DocumentsPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isCtrl = e.ctrlKey || e.metaKey;
       if (!isCtrl) return;
+      const target = e.target;
+      const isEditing =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
 
       switch (e.key.toLowerCase()) {
         case "n": {
+          if (isEditing) return;
           e.preventDefault();
           handleNewDocument();
           break;
@@ -68,11 +74,13 @@ export function DocumentsPage() {
           break;
         }
         case "w": {
+          if (isEditing) return;
           e.preventDefault();
           void closeDocument();
           break;
         }
         case "e": {
+          if (isEditing) return;
           if (e.shiftKey) {
             e.preventDefault();
             handleExportMarkdown();
@@ -85,6 +93,7 @@ export function DocumentsPage() {
           break;
         }
         case "a": {
+          if (isEditing) return;
           if (e.shiftKey) {
             e.preventDefault();
             setAiPanelOpen((prev) => !prev);
@@ -92,16 +101,19 @@ export function DocumentsPage() {
           break;
         }
         case "1": {
+          if (isEditing) return;
           e.preventDefault();
           setViewMode("source");
           break;
         }
         case "2": {
+          if (isEditing) return;
           e.preventDefault();
           setViewMode("split");
           break;
         }
         case "3": {
+          if (isEditing) return;
           e.preventDefault();
           setViewMode("preview");
           break;
@@ -198,6 +210,14 @@ export function DocumentsPage() {
               <p className="mt-1 text-[13px]">
                 Select a document from the list or create a new one.
               </p>
+              <button
+                type="button"
+                onClick={handleNewDocument}
+                className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 text-[13px] font-medium text-white hover:brightness-110"
+              >
+                <FileText className="size-4" />
+                Create document
+              </button>
             </div>
           </div>
         )}

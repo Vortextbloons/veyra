@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { EmailAccount } from "../email-types";
 import { useEmailStore } from "../email-store";
+import { DialogSurface } from "@/components/dialog-surface";
 
 export function AccountDetails({
   account,
@@ -35,18 +36,12 @@ export function AccountDetails({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
-      onClick={onClose}
-      role="presentation"
+    <DialogSurface
+      onClose={onClose}
+      ariaLabelledBy="account-details-title"
+      overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
+      panelClassName="w-full max-w-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
     >
-      <div
-        className="w-full max-w-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="account-details-title"
-      >
         <div className="flex items-center justify-between">
           <h3
             id="account-details-title"
@@ -56,6 +51,7 @@ export function AccountDetails({
           </h3>
           <button
             type="button"
+            aria-label="Close account details"
             onClick={onClose}
             className="grid size-6 place-items-center rounded text-[var(--color-text-dim)] hover:bg-white/5 hover:text-[var(--color-text)]"
           >
@@ -139,7 +135,6 @@ export function AccountDetails({
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </DialogSurface>
   );
 }

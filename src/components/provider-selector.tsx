@@ -53,7 +53,7 @@ export function ProviderSelector({
             : "border-[var(--color-border)] bg-[var(--color-panel)] text-white hover:border-[var(--color-border-strong)]"
         }`}
       >
-        <div className="grid size-5 place-items-center rounded bg-violet-500/20 text-violet-300">
+        <div className="grid size-5 place-items-center text-[var(--color-text-dim)]">
           <ProviderIcon providerId={current?.icon ?? ""} className="size-full" />
         </div>
         <span className="max-w-[140px] truncate font-medium">
@@ -89,7 +89,8 @@ export function ProviderSelector({
             {providers.map((p) => {
               const active = p.id === value;
               return (
-                <div
+                <button
+                  type="button"
                   key={p.id}
                   role="option"
                   aria-selected={active}
@@ -106,8 +107,8 @@ export function ProviderSelector({
                   <div
                     className={`grid size-6 shrink-0 place-items-center rounded-md ${
                       active
-                        ? "bg-[var(--color-accent)] text-white"
-                        : "bg-white/[0.04] text-[var(--color-text-dim)]"
+                        ? "text-[var(--color-text)]"
+                        : "text-[var(--color-text-dim)]"
                     }`}
                   >
                     <ProviderIcon providerId={p.icon} className="size-full" />
@@ -136,7 +137,7 @@ export function ProviderSelector({
                   {active && (
                     <Check className="size-3.5 shrink-0 text-[var(--color-accent)]" />
                   )}
-                </div>
+                </button>
               );
             })}
           </div>

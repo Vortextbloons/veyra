@@ -4,10 +4,11 @@ type ToggleProps = {
   on: boolean;
   onChange: (on: boolean) => void;
   label?: string;
+  ariaLabel?: string;
   disabled?: boolean;
 };
 
-export function Toggle({ on, onChange, label, disabled }: ToggleProps) {
+export function Toggle({ on, onChange, label, ariaLabel, disabled }: ToggleProps) {
   const [pressed, setPressed] = useState(false);
 
   const track = on ? "bg-emerald-500" : "bg-zinc-700";
@@ -27,7 +28,7 @@ export function Toggle({ on, onChange, label, disabled }: ToggleProps) {
         type="button"
         role="switch"
         aria-checked={on}
-        aria-label={label}
+        aria-label={ariaLabel ?? label ?? "Toggle setting"}
         disabled={disabled}
         onClick={() => !disabled && onChange(!on)}
         onMouseDown={() => setPressed(true)}
@@ -52,7 +53,7 @@ export function Toggle({ on, onChange, label, disabled }: ToggleProps) {
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
       onMouseLeave={() => setPressed(false)}
-      className={`group flex h-7 items-center gap-2 rounded-md px-2 text-[12px] transition-colors ${
+      className={`group flex min-h-8 items-center gap-2 rounded-md px-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] ${
         on
           ? "text-white"
           : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"

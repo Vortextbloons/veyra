@@ -52,8 +52,8 @@ export function EmailPage() {
       {/* Page header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
         <div className="flex items-center gap-2.5">
-          <div className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-sky-500/30 to-blue-500/20 ring-1 ring-inset ring-sky-400/30">
-            <Mail className="size-3.5 text-sky-300" />
+          <div className="grid size-7 place-items-center text-[var(--color-text-dim)]">
+            <Mail className="size-4" />
           </div>
           <h1 className="text-[14px] font-semibold tracking-tight">Email</h1>
           <span className="ml-2 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10.5px] font-mono uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -175,8 +175,8 @@ function WelcomeScreen({
   return (
     <div className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-md text-center">
-        <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-sky-500/25 to-blue-500/20 text-sky-300 ring-1 ring-inset ring-sky-400/20">
-          <Inbox className="size-7" />
+        <div className="mx-auto mb-4 grid size-11 place-items-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-dim)]">
+          <Inbox className="size-5" />
         </div>
         <h2 className="text-[18px] font-semibold tracking-tight text-white">
           Sign in with Gmail

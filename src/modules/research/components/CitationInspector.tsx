@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
 import { X, ExternalLink, BarChart3 } from "lucide-react";
 import type { ResearchSource, ResearchEvidence } from "../research-types";
+import { DialogSurface } from "@/components/dialog-surface";
 
 type Props = {
   citationNumber: string;
@@ -17,48 +17,31 @@ export function CitationInspector({
   evidence,
   onClose,
 }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const source = sourceId ? sources.find((s) => s.id === sourceId) : undefined;
   const relatedEvidence = sourceId
     ? evidence.filter((e) => e.sourceId === sourceId)
     : [];
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div
-        ref={panelRef}
-        className="flex w-full max-w-md flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl"
-      >
+    <DialogSurface
+      onClose={onClose}
+      ariaLabelledBy="citation-inspector-title"
+      overlayClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      panelClassName="flex w-full max-w-md flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl"
+    >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3.5">
           <div className="flex items-center gap-2">
             <span className="grid size-6 place-items-center rounded-md bg-[var(--color-accent-soft)] text-[11px] font-semibold text-[var(--color-accent)]">
               [{citationNumber}]
             </span>
-            <h3 className="text-[13px] font-semibold text-[var(--color-text)]">
+            <h3 id="citation-inspector-title" className="text-[14px] font-semibold text-[var(--color-text)]">
               Citation Details
             </h3>
           </div>
           <button
             type="button"
+            aria-label="Close citation details"
             onClick={onClose}
             className="grid size-7 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
           >
@@ -137,7 +120,6 @@ export function CitationInspector({
             </>
           )}
         </div>
-      </div>
-    </div>
+    </DialogSurface>
   );
 }

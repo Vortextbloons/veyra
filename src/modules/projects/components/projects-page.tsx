@@ -80,7 +80,7 @@ export function ProjectsPage() {
   return (
     <div className="flex h-full w-full min-w-0 flex-1">
       {/* Left: project list sidebar */}
-      <div className="flex w-[260px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+      {projects.length > 0 && <div className="flex w-[260px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <h2 className="text-[13px] font-semibold text-[var(--color-text)]">Projects</h2>
@@ -142,6 +142,16 @@ export function ProjectsPage() {
             </>
           )}
 
+          {search && filteredActive.length === 0 && filteredArchived.length === 0 && (
+            <div className="px-4 py-8 text-center">
+              <Search className="mx-auto mb-2 size-5 text-[var(--color-text-dim)]/60" />
+              <p className="text-[13px] font-medium text-[var(--color-text)]">No matching projects</p>
+              <p className="mt-1 text-[12px] text-[var(--color-text-dim)]">
+                Try a different name or description.
+              </p>
+            </div>
+          )}
+
           {/* Empty state */}
           {activeProjects.length === 0 && !search && (
             <div className="px-2 pt-8 text-center">
@@ -154,18 +164,10 @@ export function ProjectsPage() {
               <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-text-dim)]">
                 Create your first project to group chats, memories, documents, and settings together.
               </p>
-              <button
-                type="button"
-                onClick={() => setShowCreate(true)}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:brightness-110"
-              >
-                <Plus className="size-3.5" />
-                Create Project
-              </button>
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Main: workspace or onboarding */}
       <div className="min-w-0 flex-1 overflow-hidden">
@@ -200,13 +202,16 @@ function ProjectRow({
 
   return (
     <div className="relative">
-      <div
-        onClick={onSelect}
-        className={`flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors ${
+      <div className={`flex w-full items-center rounded-lg transition-colors ${
           active
             ? "bg-[var(--color-accent-soft)]"
             : "hover:bg-white/[0.03]"
-        }`}
+        }`}>
+      <button
+        type="button"
+        aria-current={active ? "true" : undefined}
+        onClick={onSelect}
+        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left"
       >
         <div className={`grid size-8 shrink-0 place-items-center rounded-lg ring-1 ${colorClass}`}>
           {KIND_ICONS[project.kind] ?? KIND_ICONS.general}
@@ -220,13 +225,17 @@ function ProjectRow({
             {project.systemPrompt ? " · has prompt" : ""}
           </div>
         </div>
+      </button>
         <button
           type="button"
+          aria-label={`Project actions for ${project.name}`}
+          aria-haspopup="menu"
+          aria-expanded={showMenu}
           onClick={(e) => {
             e.stopPropagation();
             setShowMenu(!showMenu);
           }}
-          className="grid size-7 shrink-0 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+          className="mr-1 grid size-8 shrink-0 place-items-center rounded-md text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
         >
           <MoreHorizontal className="size-3.5" />
         </button>
@@ -234,9 +243,10 @@ function ProjectRow({
       {showMenu && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-          <div className="absolute right-2 top-full z-20 min-w-[140px] rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] py-1 shadow-xl">
+          <div role="menu" className="absolute right-2 top-full z-20 min-w-[140px] rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] py-1 shadow-xl">
             <button
               type="button"
+              role="menuitem"
               onClick={() => {
                 onArchive();
                 setShowMenu(false);
@@ -255,44 +265,28 @@ function ProjectRow({
 
 function ProjectOnboarding({ onCreateClick }: { onCreateClick: () => void }) {
   return (
-    <div className="flex h-full items-center justify-center">
-      <div className="mx-auto max-w-md px-8 text-center">
-        <div className="mx-auto mb-5 grid size-16 place-items-center rounded-2xl bg-[var(--color-accent-soft)]">
-          <Folder className="size-8 text-[var(--color-accent)]" />
-        </div>
-        <h2 className="text-[18px] font-semibold text-[var(--color-text)]">
-          Select or create a project
-        </h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-text-dim)]">
-          Projects let you group chats, memories, documents, and settings together
-          around a goal, app, codebase, or creative idea.
+    <div className="flex h-full items-center justify-center p-10">
+      <div className="w-full max-w-xl">
+        <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-accent)]">
+          Projects
         </p>
-        <div className="mt-6 flex items-center justify-center gap-3">
+        <h2 className="text-[30px] font-semibold leading-tight tracking-[-0.035em] text-[var(--color-text)]">
+          Keep related work in one place.
+        </h2>
+        <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-[var(--color-text-dim)]">
+          Group conversations, documents, memory, and instructions around a product, client, class, or creative goal.
+        </p>
+        <div className="mt-7">
           <button
             type="button"
             onClick={onCreateClick}
-            className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-[13px] font-medium text-white transition-colors hover:brightness-110"
+            className="flex min-h-9 items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 text-[13px] font-medium text-white transition-colors hover:brightness-110"
           >
             <Plus className="size-4" />
             Create Project
           </button>
         </div>
-        <div className="mt-8 grid grid-cols-3 gap-3 text-left">
-          <FeatureCard icon="💬" title="Chats" desc="Project-scoped conversations" />
-          <FeatureCard icon="📝" title="Documents" desc="Notes, specs, and files" />
-          <FeatureCard icon="🧠" title="Memory" desc="Project-specific knowledge" />
-        </div>
       </div>
-    </div>
-  );
-}
-
-function FeatureCard({ icon, title, desc }: { icon: string; title: string; desc: string }) {
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-3">
-      <div className="mb-1.5 text-[18px]">{icon}</div>
-      <div className="text-[12px] font-medium text-[var(--color-text)]">{title}</div>
-      <div className="text-[10.5px] text-[var(--color-text-dim)]">{desc}</div>
     </div>
   );
 }
