@@ -39,6 +39,7 @@ type ChatStore = {
     assistantMessage: ChatMessage,
     options?: { deferTitle?: boolean },
   ) => void;
+  appendAssistantMessage: (conversationId: string, assistantMessage: ChatMessage) => void;
   appendStreamingContent: (conversationId: string, messageId: string, chunk: string) => void;
   appendStreamingReasoning: (conversationId: string, messageId: string, chunk: string) => void;
   clearStreamingBuffer: () => void;
@@ -232,6 +233,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           updatedAt: Date.now(),
         };
       });
+      void saveConversationSnapshot(conversations);
+      return {
+        conversations,
+        streamingBuffer: {
+          conversationId,
+          messageId: assistantMessage.id,
+          content: "",
+          reasoning: "",
+        },
+      };
+    });
+  },
+  appendAssistantMessage: (conversationId, assistantMessage) => {
+    set((state) => {
+      const conversations = state.conversations.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              messages: [...conversation.messages, assistantMessage],
+              updatedAt: Date.now(),
+            }
+          : conversation,
+      );
       void saveConversationSnapshot(conversations);
       return {
         conversations,

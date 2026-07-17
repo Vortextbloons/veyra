@@ -137,7 +137,13 @@ fn execute_python_code_sync(
         .as_deref()
         .map(str::trim)
         .filter(|v| !v.is_empty())
-        .map(std::path::PathBuf::from);
+        .map(std::path::Path::new)
+        .map(std::fs::canonicalize)
+        .transpose()
+        .map_err(|error| format!("failed to resolve workspace directory: {error}"))?;
+    if ws_root.as_ref().is_some_and(|path| !path.is_dir()) {
+        return Err("workspace path must be an existing directory".into());
+    }
 
     scan_python_code(code, ws_root.as_deref())?;
 
@@ -145,8 +151,11 @@ fn execute_python_code_sync(
         .unwrap_or(DEFAULT_TIMEOUT_SECS)
         .clamp(1, MAX_TIMEOUT_SECS);
 
-    let current_dir = std::env::current_dir()
-        .map_err(|error| format!("failed to resolve working directory: {error}"))?;
+    let current_dir = match ws_root {
+        Some(path) => path,
+        None => std::env::current_dir()
+            .map_err(|error| format!("failed to resolve working directory: {error}"))?,
+    };
     let preferred = python_path
         .as_deref()
         .map(str::trim)

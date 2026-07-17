@@ -229,8 +229,12 @@ pub(crate) fn run_pi_agent_blocking(
         let line = format!("{}\n", prompt_cmd);
         let mut stdin_owned = stdin;
         if let Err(e) = stdin_owned.write_all(line.as_bytes()) {
+            let _ = child.kill();
+            let _ = child.wait();
             unregister_agent_process(session_id);
             RUNNING_AGENT_STDIN.lock().remove(session_id);
+            let _ = stdout_handle.and_then(|handle| handle.join().ok());
+            let _ = stderr_handle.and_then(|handle| handle.join().ok());
             return Err(format!("failed to write prompt to pi stdin: {e}"));
         }
         // Keep stdin alive — Pi must not see EOF before LLM responds

@@ -13,7 +13,7 @@ export type CodeExecutionSliceActions = {
 };
 
 export const DEFAULT_CODE_EXECUTION_STATE: CodeExecutionSliceState = {
-  codeExecutionEnabled: true,
+  codeExecutionEnabled: false,
   customPythonPath: "",
   codeExecutionTimeoutSecs: 30,
 };

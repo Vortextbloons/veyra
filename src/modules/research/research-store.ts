@@ -176,11 +176,11 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
   },
 
   setActiveRunId: (id) => {
-    set({ activeRunId: id, activeRun: null });
+    set({ activeRunId: id, activeRun: null, isLoading: false });
   },
 
   clearActiveRun: () => {
-    set({ activeRunId: null, activeRun: null });
+    set({ activeRunId: null, activeRun: null, isLoading: false });
   },
 
   createRun: async (input) => {
@@ -232,9 +232,17 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const run = await apiGetRun(id);
-      set({ activeRun: run, isLoading: false });
+      set((state) =>
+        state.activeRunId === id
+          ? { activeRun: run, isLoading: false }
+          : state,
+      );
     } catch (error) {
-      set({ error: String(error), isLoading: false });
+      set((state) =>
+        state.activeRunId === id
+          ? { error: String(error), isLoading: false }
+          : state,
+      );
     }
   },
 

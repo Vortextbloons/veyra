@@ -66,14 +66,12 @@ export function useChatRegeneration({
         deferTitle: useSettingsStore.getState().autoNameEnabled,
       });
 
-      const previousResponseId = liveConversation.lmResponseId;
-
       runChatJob({
         conversationId: activeConversationId,
         userMessage: userMsg,
         assistantMessage,
         trimmed,
-        previousResponseId,
+        previousResponseId: undefined,
         selectedProvider,
         selectedModel,
         memoryEnabled: defaultMemoryEnabled,

@@ -72,6 +72,13 @@ export async function runPiAgent(
 ): Promise<PiRunResult> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_AGENT_EVENT_TIMEOUT_MS;
   const signal = options?.signal;
+  if (signal?.aborted) {
+    return {
+      stdout: "",
+      stderr: "Agent run aborted",
+      exitCode: 1,
+    };
+  }
 
   let settled = false;
   let cleanedUp = false;
@@ -117,17 +124,26 @@ export async function runPiAgent(
     });
   };
 
-  unlisten = await listen<PiRunFinishedEvent>("agent://run-finished", (event) => {
-    if (event.payload.sessionId !== input.sessionId) return;
+  try {
+    unlisten = await listen<PiRunFinishedEvent>("agent://run-finished", (event) => {
+      if (event.payload.sessionId !== input.sessionId) return;
+      cleanup();
+      finish(event.payload.result);
+    });
+    unlistenEvent = await listen<PiRunEvent>("agent://run-event", (event) => {
+      if (event.payload.sessionId !== input.sessionId) return;
+      onEvent?.(event.payload);
+    });
+  } catch (error) {
     cleanup();
-    finish(event.payload.result);
-  });
-  unlistenEvent = await listen<PiRunEvent>("agent://run-event", (event) => {
-    if (event.payload.sessionId !== input.sessionId) return;
-    onEvent?.(event.payload);
-  });
+    throw error;
+  }
 
   signal?.addEventListener("abort", onAbort, { once: true });
+  if (signal?.aborted) {
+    onAbort();
+    return eventPromise;
+  }
 
   timeoutTimer.id = setTimeout(() => {
     cleanup();

@@ -1,10 +1,9 @@
-use parking_lot::Mutex;
 use rusqlite::Connection;
 use std::fs;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Manager};
 
-pub type DbSlot<D> = Arc<Mutex<Option<Result<Arc<D>, String>>>>;
+pub type DbSlot<D> = Arc<OnceLock<Result<Arc<D>, String>>>;
 
 pub fn parse_json_array(s: &str) -> Vec<String> {
     serde_json::from_str::<Vec<String>>(s).unwrap_or_default()
@@ -56,10 +55,9 @@ where
     I: FnOnce(&AppHandle) -> Result<D, String> + Send + 'static,
 {
     std::thread::spawn(move || {
-        let result = init(&app).map(Arc::new);
+        let result = db_slot.get_or_init(|| init(&app).map(Arc::new));
         if let Err(error) = &result {
             log::error!("{db_label} background init failed: {error}");
         }
-        *db_slot.lock() = Some(result);
     });
 }

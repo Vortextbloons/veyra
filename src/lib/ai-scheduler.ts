@@ -320,8 +320,8 @@ class AiScheduler {
     }
   }
 
-  /** Cancel all queued and active jobs (app exit). */
-  shutdown(): void {
+  /** Cancel all queued jobs and wait for the active job to observe its abort signal. */
+  async shutdown(): Promise<void> {
     const now = Date.now();
     for (const job of this.queue) {
       job.status = "cancelled";
@@ -334,14 +334,11 @@ class AiScheduler {
     if (this.activeJob) {
       this.activeJob.status = "aborted";
       this.activeJob.finishedAt = now;
-      this.recentJobs.unshift(snapshotOf(this.activeJob));
-      this.trimRecent();
       this.activeController?.abort();
-      this.activeJob = null;
-      this.activeController = null;
     }
 
     this.notify();
+    await this.drainTail.catch(() => undefined);
   }
 
   /** Abort the active background job (priority > 0). */

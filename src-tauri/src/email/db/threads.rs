@@ -786,9 +786,11 @@ pub fn send_message(conn: &Connection, draft: EmailDraftInput) -> Result<EmailSe
         .map_err(|e| e.to_string())?;
     if account.2 == "gmail" {
         let sent_id = send_gmail_message(conn, &draft.account_id, &account.1, &draft)?;
-        super::gmail::sync_gmail_account(conn, draft.account_id.clone())?;
         if let Some(id) = draft.id {
             let _ = conn.execute("DELETE FROM email_drafts WHERE id = ?1", params![id]);
+        }
+        if let Err(error) = super::gmail::sync_gmail_account(conn, draft.account_id.clone()) {
+            log::warn!("message sent, but Gmail sync failed: {error}");
         }
         return Ok(EmailSendResult {
             sent: true,

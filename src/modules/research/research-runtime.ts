@@ -73,10 +73,9 @@ export function enqueueResearchRunJob(
 }
 
 export async function enqueueResearchResume(runId: string): Promise<void> {
-  const store = useResearchStore.getState();
-  await store.loadRun(runId);
-  const run = store.activeRun?.run;
-  if (!run) return;
+  await useResearchStore.getState().loadRun(runId);
+  const run = useResearchStore.getState().activeRun?.run;
+  if (!run || run.id !== runId) return;
   enqueueResearchRunJob(run, "resume", perRunOverrideByRunId.get(run.id));
 }
 
@@ -154,7 +153,7 @@ export async function executeResearchRun(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const isPaused = store.isPausing;
+    const isPaused = useResearchStore.getState().isPausing;
     const status = isPaused ? "paused" : "failed";
 
     if (isPaused) {

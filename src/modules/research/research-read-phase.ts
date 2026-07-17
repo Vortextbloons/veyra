@@ -22,7 +22,7 @@ export async function fetchAndReadSources(ctx: ResearchRuntimeContext, sourceBat
     for (const source of discoveredSources) {
       const cached = evidenceCache.get(source.url);
       if (cached) {
-        cachedPages.push(...cached as FetchedPage[]);
+        cachedPages.push(...cached);
       } else {
         uncachedUrls.push(source.url);
       }

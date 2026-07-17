@@ -1,3 +1,5 @@
+import type { FetchedPage } from "@/modules/web-search/tauri-commands";
+
 /**
  * Evidence-level caching for research sources.
  *
@@ -5,11 +7,8 @@
  * is used across multiple research runs. Cache is in-memory with TTL.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CachedPage = Record<string, any>;
-
 interface CacheEntry {
-  pages: CachedPage[];
+  pages: FetchedPage[];
   extractedAt: number;
 }
 
@@ -25,7 +24,13 @@ class EvidenceCache {
   }
 
   private normalizeUrl(url: string): string {
-    return url.toLowerCase().replace(/\/+$/, "").replace(/#.*$/, "");
+    try {
+      const parsed = new URL(url);
+      parsed.hash = "";
+      return parsed.toString();
+    } catch {
+      return url.replace(/#.*$/, "");
+    }
   }
 
   private isExpired(entry: CacheEntry): boolean {
@@ -71,8 +76,8 @@ class EvidenceCache {
    */
   set(url: string, pages: CacheEntry["pages"]): void {
     const key = this.normalizeUrl(url);
-    this.evictOldest();
     this.cache.set(key, { pages, extractedAt: Date.now() });
+    this.evictOldest();
   }
 
   /**
@@ -81,16 +86,19 @@ class EvidenceCache {
   has(url: string): boolean {
     const key = this.normalizeUrl(url);
     const entry = this.cache.get(key);
-    if (!entry || this.isExpired(entry)) return false;
+    if (!entry || this.isExpired(entry)) {
+      if (entry) this.cache.delete(key);
+      return false;
+    }
     return true;
   }
 
   /**
    * Get cache stats.
    */
-  stats(): { size: number; hitRate: number } {
+  stats(): { size: number } {
     this.evictExpired();
-    return { size: this.cache.size, hitRate: 0 };
+    return { size: this.cache.size };
   }
 
   /**

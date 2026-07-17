@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft,
   Archive,
@@ -36,24 +36,41 @@ export default function ThreadReader() {
   const thread = threads.find((t) => t.id === activeThreadId);
   const emailAiEnabled = useSettingsStore((s) => s.emailAiEnabled);
   const activeAccountId = useEmailStore((s) => s.activeAccountId);
-  const [aiOutputs, setAiOutputs] = useState<EmailAiOutput[]>([]);
-
-  const stableLoadAttachments = useCallback(loadAttachments, [loadAttachments]);
+  const [aiOutputState, setAiOutputState] = useState<{
+    threadId: string;
+    outputs: EmailAiOutput[];
+  } | null>(null);
+  const threadId = thread?.id;
+  const threadMessages = thread?.messages;
 
   useEffect(() => {
-    if (thread) {
-      for (const msg of thread.messages) {
-        if (msg.attachments && msg.attachments.length > 0) {
-          void stableLoadAttachments(msg.id);
-        }
-      }
-      if (emailAiEnabled) {
-        void emailListAiOutputs(thread.id).then(setAiOutputs).catch(() => setAiOutputs([]));
-      } else {
-        setAiOutputs([]);
+    if (!threadMessages) return;
+    for (const message of threadMessages) {
+      if (message.attachments?.length) {
+        void loadAttachments(message.id);
       }
     }
-  }, [thread?.id, stableLoadAttachments, emailAiEnabled]);
+  }, [threadMessages, loadAttachments]);
+
+  useEffect(() => {
+    if (!threadId || !emailAiEnabled) return;
+    let cancelled = false;
+    void emailListAiOutputs(threadId)
+      .then((outputs) => {
+        if (!cancelled) setAiOutputState({ threadId, outputs });
+      })
+      .catch(() => {
+        if (!cancelled) setAiOutputState({ threadId, outputs: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId, emailAiEnabled]);
+
+  const aiOutputs =
+    emailAiEnabled && aiOutputState?.threadId === threadId
+      ? (aiOutputState?.outputs ?? [])
+      : [];
 
   if (!thread) {
     if (activeAccountId) {

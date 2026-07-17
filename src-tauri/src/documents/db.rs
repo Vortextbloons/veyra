@@ -335,7 +335,7 @@ impl DocumentDbState {
     pub fn new(app: tauri::AppHandle) -> Self {
         Self {
             app,
-            db: Arc::new(Mutex::new(None)),
+            db: Arc::default(),
         }
     }
 
@@ -352,15 +352,12 @@ impl DocumentDbState {
     where
         F: FnOnce(&Connection) -> Result<T, String>,
     {
-        let db = {
-            let mut slot = self.db.lock();
-            if slot.is_none() {
-                *slot = Some(DocumentDb::init(&self.app).map(Arc::new));
-            }
-            match slot.as_ref().unwrap() {
-                Ok(db) => Arc::clone(db),
-                Err(error) => return Err(error.clone()),
-            }
+        let db = match self
+            .db
+            .get_or_init(|| DocumentDb::init(&self.app).map(Arc::new))
+        {
+            Ok(db) => Arc::clone(db),
+            Err(error) => return Err(error.clone()),
         };
         let guard = db.0.lock();
         f(&guard)

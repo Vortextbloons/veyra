@@ -178,33 +178,43 @@ pub fn sync_gmail_account(
     )
     .map_err(|e| e.to_string())?;
 
-    let token = refresh_gmail_token(conn, &account_id)?;
-    let client = reqwest::blocking::Client::new();
-    sync_gmail_labels(conn, &account_id, &token, &client)?;
-    let list: Value = google_api_request_json(
-        &token,
-        client
-            .get("https://gmail.googleapis.com/gmail/v1/users/me/messages")
-            .query(&[("maxResults", "25"), ("q", "newer_than:90d")]),
-    )?;
-    let Some(messages) = list.get("messages").and_then(Value::as_array) else {
-        return Ok(());
-    };
-    for item in messages {
-        let Some(message_id) = item.get("id").and_then(Value::as_str) else {
-            continue;
-        };
-        let message = google_api_request_json(
+    let result = (|| {
+        let token = refresh_gmail_token(conn, &account_id)?;
+        let client = reqwest::blocking::Client::new();
+        sync_gmail_labels(conn, &account_id, &token, &client)?;
+        let list: Value = google_api_request_json(
             &token,
             client
-                .get(format!(
-                    "https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
-                ))
-                .query(&[("format", "full")]),
+                .get("https://gmail.googleapis.com/gmail/v1/users/me/messages")
+                .query(&[("maxResults", "25"), ("q", "newer_than:90d")]),
         )?;
-        upsert_gmail_message(conn, &account_id, &message)?;
+        if let Some(messages) = list.get("messages").and_then(Value::as_array) {
+            for item in messages {
+                let Some(message_id) = item.get("id").and_then(Value::as_str) else {
+                    continue;
+                };
+                let message = google_api_request_json(
+                    &token,
+                    client
+                        .get(format!(
+                            "https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+                        ))
+                        .query(&[("format", "full")]),
+                )?;
+                upsert_gmail_message(conn, &account_id, &message)?;
+            }
+        }
+        rebuild_thread_labels_and_folders_for_account(conn, &account_id)
+    })();
+
+    if let Err(error) = result {
+        let _ = conn.execute(
+            "UPDATE email_accounts SET sync_status = 'error' WHERE id = ?1",
+            params![account_id],
+        );
+        return Err(error);
     }
-    rebuild_thread_labels_and_folders_for_account(conn, &account_id)?;
+
     conn.execute(
         "UPDATE email_accounts SET sync_status = 'idle', last_sync_at = ?1 WHERE id = ?2",
         params![now_ms(), account_id],

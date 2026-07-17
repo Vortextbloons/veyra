@@ -151,14 +151,14 @@ export async function runAppShutdown(): Promise<void> {
 
   setShutdownStep("preparing");
   await withTimeout(useResearchStore.getState().interruptActiveResearchOnShutdown(), "Pause active research");
-  aiScheduler.shutdown();
+  await withTimeout(aiScheduler.shutdown(), "Stop AI jobs");
   const { clearAllDelayedMemoryTimers } = await import("@/lib/post-chat-jobs");
   clearAllDelayedMemoryTimers();
-  terminateDecryptWorker();
-  terminateEncryptWorker();
 
   setShutdownStep("saving");
   await withTimeout(persistConversations(), "Save conversations");
+  terminateDecryptWorker();
+  terminateEncryptWorker();
 
   setShutdownStep("unloading_models");
   await withTimeout(

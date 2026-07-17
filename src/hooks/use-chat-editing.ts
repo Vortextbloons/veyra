@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import type { ChatMessage, RequestStatus } from "@/modules/chat/chat-types";
 import { useChatStore } from "@/stores/chat-store";
-import { useSettingsStore } from "@/stores/settings-store";
 import { runChatJob } from "@/hooks/run-chat-job";
 
 interface UseChatEditingOptions {
@@ -35,7 +34,7 @@ export function useChatEditing({
 }: UseChatEditingOptions) {
   const updateMessage = useChatStore((state) => state.updateMessage);
   const truncateAfterMessage = useChatStore((state) => state.truncateAfterMessage);
-  const addMessagePair = useChatStore((state) => state.addMessagePair);
+  const appendAssistantMessage = useChatStore((state) => state.appendAssistantMessage);
 
   const handleEditMessage = useCallback(
     (messageId: string) => {
@@ -75,20 +74,14 @@ export function useChatEditing({
         modelId: selectedModel,
       };
 
-      addMessagePair(activeConversationId, lastMsg, assistantMessage, {
-        deferTitle: useSettingsStore.getState().autoNameEnabled,
-      });
-
-      const previousResponseId = useChatStore
-        .getState()
-        .conversations.find((c) => c.id === activeConversationId)?.lmResponseId;
+      appendAssistantMessage(activeConversationId, assistantMessage);
 
       runChatJob({
         conversationId: activeConversationId,
         userMessage: lastMsg,
         assistantMessage,
         trimmed,
-        previousResponseId,
+        previousResponseId: undefined,
         selectedProvider,
         selectedModel,
         memoryEnabled: defaultMemoryEnabled,
@@ -104,7 +97,7 @@ export function useChatEditing({
     [
       activeConversationId,
       activeChatJobIdRef,
-      addMessagePair,
+      appendAssistantMessage,
       defaultMemoryEnabled,
       effectiveWebSearchEnabled,
       effectiveCodeExecutionEnabled,

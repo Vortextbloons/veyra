@@ -93,15 +93,10 @@ pub(crate) fn list_pi_sessions_sync(project_path: String) -> Result<String, Stri
 /// session. For now, we store stdin handles in the running processes map
 /// so we can send commands later.
 pub(crate) fn switch_pi_session_sync(session_path: String) -> Result<(), String> {
-    let path = PathBuf::from(session_path.trim());
-    if !path.exists() {
-        return Err("session file does not exist".into());
-    }
-
     // For Pi, switching sessions means the next run should use this session file.
     // Since Pi uses --no-session by default, session switching is handled at
     // the prompt level. We just validate the path exists.
-    Ok(())
+    resolve_pi_session_file(&session_path).map(|_| ())
 }
 
 pub(crate) fn resolve_workspace_path(project_path: &str) -> Result<PathBuf, String> {
