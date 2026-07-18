@@ -1,5 +1,5 @@
 /** Core assistant identity and behavior for main chat. */
-export const VEYRA_CORE_SYSTEM = `You are Veyra, a local AI assistant running on the user's machine.
+export const VEYRA_CORE_SYSTEM = `You are Veyra, a local-first desktop AI assistant. Depending on the selected provider, model inference may run locally or through a configured cloud service.
 
 Be clear, direct, and helpful. Match the user's level of detail. Use markdown and code blocks when they help. Avoid filler, hedging, and fake enthusiasm.
 
@@ -61,9 +61,6 @@ export function composeMainSystemPrompt(options: {
   userPrompt?: string;
   projectPromptBlock?: string;
   characterBlock?: string;
-  memoryBlock?: string;
-  summaryBlock?: string;
-  toolsBlock?: string;
   contextAnchoringBlock?: string;
   documentInstructionsBlock?: string;
   modelName?: string;
@@ -78,10 +75,23 @@ export function composeMainSystemPrompt(options: {
   if (options.characterBlock?.trim()) parts.push(options.characterBlock.trim());
   if (options.contextAnchoringBlock?.trim()) parts.push(options.contextAnchoringBlock.trim());
   if (options.documentInstructionsBlock?.trim()) parts.push(options.documentInstructionsBlock.trim());
-  if (options.memoryBlock?.trim()) parts.push(options.memoryBlock.trim());
-  if (options.summaryBlock?.trim()) parts.push(options.summaryBlock.trim());
-  if (options.toolsBlock?.trim()) parts.push(options.toolsBlock.trim());
   return parts.join("\n\n");
+}
+
+/**
+ * Compose retrieved or generated reference material separately from the
+ * authoritative system instructions. Send this as normal context, never as a
+ * system message.
+ */
+export function composeReferenceContext(options: {
+  memoryBlock?: string;
+  summaryBlock?: string;
+  toolsBlock?: string;
+}): string {
+  return [options.memoryBlock, options.summaryBlock, options.toolsBlock]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join("\n\n");
 }
 
 /**
@@ -144,18 +154,18 @@ When updating the active document, use this exact documentId: ${activeDocument.i
     : "";
 
   return `<veyra_documents>
-You have access to document tools. You MUST use them instead of writing document content in chat.
+You have access to document tools. Use them when the user explicitly asks to create content in Veyra's document editor or to read or edit an existing document. If the user asks for content in chat, provide it in chat.
 
 Available tools:
-- doc_create: Create a new document. Use when the user wants a new document, spec, README, proposal, essay, report, notes, or other long-form content.
+- doc_create: Create a new document in Veyra's editor when the user explicitly requests a document or asks to save long-form content there.
 - doc_read: Read an existing document. Use before editing if you need to see the current content.
-- inline_edit: Edit an existing document. ALWAYS use this when the user asks to change, update, fix, rewrite, edit, modify, or improve a document. Modes:
+- inline_edit: Edit an existing Veyra document when the user asks to change, update, fix, rewrite, edit, modify, or improve it. Modes:
   - replace_text: Replace specific text (provide target for the exact text to find)
   - replace_section: Replace an entire section by heading name
   - insert_after_section: Add content after a section heading
   - replace_all: Rewrite the entire document
 
-NEVER write full document content in chat when a tool exists for it. Never respond with "here's the updated content" — call inline_edit instead.
+Do not silently redirect a chat-only drafting request into the document editor. When editing an existing Veyra document, call inline_edit instead of merely describing an update in chat.
 After a document tool reports success, do not repeat the same mutation. Briefly confirm completion unless another distinct tool action is needed.
 ${activeDocumentBlock}
 

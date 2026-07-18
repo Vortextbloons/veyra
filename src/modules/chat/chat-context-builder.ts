@@ -13,6 +13,7 @@ export type RoundMessagesContext = {
   activeModelName?: string;
   activeProviderName?: string;
   documentInstructionsBlock?: string;
+  contextAnchoringBlock?: string;
   projectPromptBlock?: string;
   resolvedContextLength: number;
 };
@@ -47,6 +48,7 @@ export function buildRoundMessages(
           ? webSearchContextBlocks.join("\n\n")
           : undefined,
       documentInstructionsBlock: context.documentInstructionsBlock,
+      contextAnchoringBlock: context.contextAnchoringBlock,
       projectPromptBlock: context.projectPromptBlock,
       userPrompt: context.resolvedUserPrompt,
       reservedOutputTokens: context.resolvedReservedOutputTokens,

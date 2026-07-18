@@ -94,7 +94,7 @@ export async function sendChatRequest({
   const projectRecord = projectId
     ? useProjectStore.getState().projects.find((p) => p.id === projectId)
     : undefined;
-  const projectPromptBlock = projectRecord?.systemPrompt?.trim()
+  const projectPromptBlock = projectRecord
     ? buildProjectContextBlock({
         name: projectRecord.name,
         kind: projectRecord.kind,
@@ -136,6 +136,7 @@ export async function sendChatRequest({
     activeModelName,
     activeProviderName,
     documentInstructionsBlock,
+    contextAnchoringBlock,
     projectPromptBlock,
     resolvedContextLength: resolved.contextLength,
   };

@@ -20,7 +20,7 @@ import { DEFAULT_CHARACTER_CHAT_DEFAULTS } from "./character-types";
 import type { CharacterGroupRecord } from "./character-group-types";
 import { evaluateLorebook } from "./lorebook";
 import { buildCharacterContextBlock } from "./character-context";
-import { escapeXml } from "./character-text";
+import { escapeXml, fitXmlPromptBlocks } from "./character-text";
 
 export interface BuildGroupContextOptions {
   chatDefaults?: Partial<CharacterChatDefaults>;
@@ -138,7 +138,7 @@ ${groupDescription ? `\nGroup description:\n${escapeXml(groupDescription)}` : ""
   const maxChars = options.maxChars ?? 16_000;
   let rendered = parts.join("\n\n");
   if (maxChars > 0 && rendered.length > maxChars) {
-    rendered = `${rendered.slice(0, Math.max(0, maxChars - 32))}\n\n[…truncated to fit budget…]`;
+    rendered = fitXmlPromptBlocks(parts, maxChars);
   }
   return rendered;
 }

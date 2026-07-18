@@ -4,7 +4,7 @@ import type {
   CharacterRecord,
 } from "./character-types";
 import { DEFAULT_CHARACTER_CHAT_DEFAULTS } from "./character-types";
-import { escapeXml } from "./character-text";
+import { escapeXml, fitXmlPromptBlocks } from "./character-text";
 
 export interface BuildCharacterContextOptions {
   /** Matched lorebook entries. */
@@ -134,7 +134,7 @@ ${escapeXml(trim(character.postHistoryInstructions))}
         maxChars,
       });
     }
-    rendered = `${rendered.slice(0, Math.max(0, maxChars - 32))}\n\n[…truncated to fit budget…]`;
+    rendered = fitXmlPromptBlocks(parts, maxChars);
   }
 
   return rendered;

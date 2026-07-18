@@ -4,6 +4,7 @@ import {
   buildMemoryContextBlock,
   buildSummaryContextBlock,
   composeMainSystemPrompt,
+  composeReferenceContext,
   VEYRA_CORE_SYSTEM,
 } from "@/lib/prompts";
 
@@ -15,18 +16,15 @@ const TOKENS_PER_IMAGE = 512; // rough vision patch budget
  * Options for buildChatContext.
  */
 export interface BuildChatContextOptions {
-  /**
-   * Optional memory pack to inject into the composed system prompt. When
-   * undefined or null, no memory block is added.
-   */
+  /** Optional memory pack to inject as non-system reference context. */
   memoryPack?: MemoryPack | null;
   /** Rolling summary of older messages (auto-summarize). */
   conversationSummary?: string | null;
   /** How many leading messages are represented by the summary. */
   summaryCoversMessageCount?: number;
-  /** Tools block injected into the system prompt. */
+  /** Tool reference block injected as non-system context. */
   toolsBlock?: string | null;
-  /** Web search results injected when re-prompting after a search. */
+  /** Web search evidence injected as non-system context after a search. */
   webSearchContextBlock?: string | null;
   /** Context anchoring block for first message (date/time, platform). */
   contextAnchoringBlock?: string | null;
@@ -67,7 +65,10 @@ function estimateMessageTokens(message: ChatMessage): number {
   return textTokens + imageCount * TOKENS_PER_IMAGE + fileTextTokens;
 }
 
-function buildSystemContent(options: BuildChatContextOptions): string {
+function buildContextContents(options: BuildChatContextOptions): {
+  systemContent: string;
+  referenceContent: string;
+} {
   const memoryBlock =
     options.memoryPack && options.memoryPack.content.trim().length > 0
       ? buildMemoryContextBlock(options.memoryPack.content)
@@ -91,18 +92,21 @@ function buildSystemContent(options: BuildChatContextOptions): string {
 
   const characterBlock = options.characterBlock?.trim() || undefined;
 
-  return composeMainSystemPrompt({
+  const systemContent = composeMainSystemPrompt({
     userPrompt,
     projectPromptBlock,
     characterBlock,
-    memoryBlock,
-    summaryBlock,
-    toolsBlock: webSearchBlock,
     contextAnchoringBlock,
     documentInstructionsBlock,
     modelName: options.modelName ?? undefined,
     providerName: options.providerName ?? undefined,
   });
+  const referenceContent = composeReferenceContext({
+    memoryBlock,
+    summaryBlock,
+    toolsBlock: webSearchBlock,
+  });
+  return { systemContent, referenceContent };
 }
 
 /**
@@ -111,16 +115,16 @@ function buildSystemContent(options: BuildChatContextOptions): string {
  * recent messages as fit within the token budget (context limit minus reserved
  * output tokens).
  *
- * Memory and conversation summary are embedded in the system prompt (memory
- * before summary). The memory pack body is always included when supplied —
- * retrieval is responsible for keeping it under `maxMemoryTokens`.
+ * Memory, conversation summaries, and web evidence are sent as non-system
+ * reference context when they fit after the authoritative instructions and
+ * active conversation. The latest conversation turn is always preserved.
  */
 export function buildChatContext(
   messages: ChatMessage[],
   options: BuildChatContextOptions = {},
   contextLimit?: number,
 ): ChatMessage[] {
-  const systemContent = buildSystemContent(options);
+  const { systemContent, referenceContent } = buildContextContents(options);
   const systemMessage: ChatMessage = {
     id: "system",
     role: "system",
@@ -148,15 +152,29 @@ export function buildChatContext(
     const msg = activeMessages[i];
     const tokens = estimateMessageTokens(msg);
 
-    if (tokens <= remaining) {
+    if (i === activeMessages.length - 1 || tokens <= remaining) {
       included.push(msg);
       remaining -= tokens;
+    } else {
+      break;
     }
   }
 
   included.reverse();
 
-  return [systemMessage, ...included];
+  const referenceMessage: ChatMessage | undefined =
+    referenceContent && estimateTokens(referenceContent) <= remaining
+      ? {
+          id: "veyra-reference-context",
+          role: "user",
+          content: referenceContent,
+          timestamp: 0,
+        }
+      : undefined;
+
+  return referenceMessage
+    ? [systemMessage, referenceMessage, ...included]
+    : [systemMessage, ...included];
 }
 
 /**

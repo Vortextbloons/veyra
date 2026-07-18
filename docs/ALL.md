@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-18T02:47:14.506Z
+> Generated: 2026-07-18T03:04:13.598Z
 > Total files: 79
 
 ## Table of Contents
@@ -3316,25 +3316,31 @@ Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority
 
 # Prompt Construction
 
-The system prompt is assembled from ~10 XML-tagged blocks. Each block is conditionally included based on the current state.
+Veyra assembles authoritative system instructions separately from retrieved or generated reference context. Each block is conditionally included based on the current state.
 
 ```
-<veyra_core>        — Base AI identity and behavior
+System message:
+Veyra core          — Base AI identity and behavior
 <veyra_project>     — Active project context
 <veyra_character>   — Character persona
 <veyra_context>     — Date, time, platform
 <veyra_documents>   — Document tool instructions
+
+Non-system reference message:
 <veyra_memory>      — Retrieved memory nodes
 <veyra_conversation_summary>  — Summary of older turns
-<veyra_tools>       — Available tool definitions
+<veyra_web_search>  — Untrusted web evidence from tool calls
 ```
+
+Reference material is admitted only when it fits after the system instructions and active conversation. The newest conversation turn is always retained, and older history is included as a contiguous suffix.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/lib/prompts.ts` | Prompt construction and assembly |
-| `src/modules/chat/chat-context-builder.ts` | Context block assembly |
+| `src/lib/context.ts` | Context budgeting and message assembly |
+| `src/modules/chat/chat-context-builder.ts` | Tool-round context assembly |
 
 ---
 

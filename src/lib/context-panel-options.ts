@@ -32,7 +32,7 @@ export function buildContextPanelOptions(input: {
   const projectRecord = input.conversation.projectId
     ? useProjectStore.getState().projects.find((p) => p.id === input.conversation.projectId)
     : undefined;
-  const projectPromptBlock = projectRecord?.systemPrompt?.trim()
+  const projectPromptBlock = projectRecord
     ? buildProjectContextBlock({
         name: projectRecord.name,
         kind: projectRecord.kind,

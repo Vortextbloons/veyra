@@ -132,7 +132,8 @@ export function getContextBreakdown(
   if (messages.length === 0) return undefined;
 
   const built = buildChatContext(messages, options, contextLimit);
-  const includedMessages = built.slice(1);
+  const sourceMessageIds = new Set(messages.map((message) => message.id));
+  const includedMessages = built.filter((message) => sourceMessageIds.has(message.id));
   const includedIds = new Set(includedMessages.map((m) => m.id));
   const droppedMessages = messages.filter((m) => !includedIds.has(m.id));
   const limit = contextLimit ?? 8192;
