@@ -46,6 +46,31 @@ export function buildProviderTools(options: {
               type: "string",
               description: "A focused search query.",
             },
+            intent: {
+              type: "string",
+              enum: ["general", "news", "academic", "code", "documentation", "local", "discussion"],
+              description: "Search intent used to route to suitable SearXNG categories and engines.",
+            },
+            timeRange: {
+              type: "string",
+              enum: ["day", "week", "month", "year"],
+              description: "Optional freshness window. Use only when recency matters.",
+            },
+            language: {
+              type: "string",
+              description: "Optional SearXNG locale such as en-US.",
+            },
+            safeSearch: {
+              type: "integer",
+              enum: [0, 1, 2],
+              description: "SafeSearch level: 0 off, 1 moderate, 2 strict.",
+            },
+            page: {
+              type: "integer",
+              minimum: 1,
+              maximum: 20,
+              description: "Results page, normally 1.",
+            },
           },
           required: ["query"],
           additionalProperties: false,

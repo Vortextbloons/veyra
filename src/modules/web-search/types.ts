@@ -11,10 +11,37 @@ export interface SearchProvider {
 export type SearchInput = {
   query: string;
   limit?: number;
+  intent?: SearchIntent;
   language?: string;
   categories?: string;
-  timeRange?: string;
-  safeSearch?: number;
+  engines?: string;
+  timeRange?: SearchTimeRange;
+  safeSearch?: 0 | 1 | 2;
+  page?: number;
+};
+
+export type SearchIntent =
+  | "general"
+  | "news"
+  | "academic"
+  | "code"
+  | "documentation"
+  | "local"
+  | "discussion";
+
+export type SearchTimeRange = "day" | "week" | "month" | "year";
+
+export type SearxCapabilities = {
+  engines: Array<{
+    name: string;
+    shortcut: string;
+    categories: string[];
+    enabled: boolean;
+  }>;
+  categories: string[];
+  locales: string[];
+  safeSearch: 0 | 1 | 2;
+  fetchedAt: number;
 };
 
 export type SearXNGProviderConfig = {
@@ -69,6 +96,7 @@ export type SearchSource = {
   rankScore?: number;
   rankReason?: string;
   queryLane?: string;
+  passages?: SearchPassage[];
   fetch?: {
     status: FetchStatus | string;
     error_reason?: string;
@@ -92,5 +120,18 @@ export type SearchContextBundle = {
     fallbackUsed: boolean;
     freshnessBoosted?: boolean;
     qualityFiltered?: boolean;
+    capabilitiesAvailable?: boolean;
+    routedCategories?: string[];
+    routedEngines?: string[];
   };
+};
+
+export type SearchPassage = {
+  sourceId: string;
+  heading?: string;
+  text: string;
+  startOffset?: number;
+  endOffset?: number;
+  lexicalScore: number;
+  finalScore: number;
 };

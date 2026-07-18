@@ -111,8 +111,6 @@ Some values in source are **intentional local-dev defaults**, not credentials fo
 
 Do not put production passwords or API keys in the repository.
 
-## Third-party assets
-
-Logo files under `public/logos/` and root `*.jpg` brand images are for UI display. Ensure you have rights to redistribute them before publishing forks.
+.
 
 #

@@ -134,6 +134,8 @@ export class SearXNGProvider implements SearchProvider {
         categories: input.categories,
         safeSearch: input.safeSearch,
         language: input.language,
+        engines: input.engines,
+        page: input.page,
       },
     );
 

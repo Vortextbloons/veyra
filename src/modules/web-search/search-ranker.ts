@@ -12,6 +12,15 @@ export type SearchRankingOptions = {
   qualityFilter?: boolean;
 };
 
+const RRF_RANK_CONSTANT = 60;
+const LANE_WEIGHTS: Record<SearchLane, number> = {
+  general: 1,
+  primary: 1.1,
+  recent: 1.05,
+  academic: 1.1,
+  opposing: 0.7,
+};
+
 const AUTHORITY_HOST_PATTERNS = [
   ".gov", ".edu", "who.int", "nih.gov", "ncbi.nlm.nih.gov", "pubmed.ncbi.nlm.nih.gov",
   "worldbank.org", "oecd.org", "un.org", "europa.eu", "arxiv.org", "wikipedia.org",
@@ -21,12 +30,12 @@ const LOW_VALUE_HOST_PATTERNS = [
   "pinterest.", "quora.com", "medium.com", "substack.com", "slideshare.net",
 ];
 
-function normalizeUrl(urlString: string): string {
+export function normalizeSearchUrl(urlString: string): string {
   try {
     const url = new URL(urlString);
     url.hash = "";
     for (const key of [...url.searchParams.keys()]) {
-      if (key.startsWith("utm_") || key === "fbclid" || key === "gclid") {
+      if (key.startsWith("utm_") || ["fbclid", "gclid", "msclkid", "ref", "ref_src", "source"].includes(key)) {
         url.searchParams.delete(key);
       }
     }
@@ -34,6 +43,24 @@ function normalizeUrl(urlString: string): string {
   } catch {
     return urlString.trim().toLowerCase();
   }
+}
+
+function normalizedContent(page?: FetchedPageSummary): string {
+  return (page?.content ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .trim()
+    .slice(0, 8_000);
+}
+
+function titleSimilarity(a: string, b: string): number {
+  const left = tokenize(a);
+  const right = tokenize(b);
+  if (left.size === 0 || right.size === 0) return 0;
+  let intersection = 0;
+  for (const token of left) if (right.has(token)) intersection++;
+  return intersection / (left.size + right.size - intersection);
 }
 
 function hostname(urlString: string): string {
@@ -105,7 +132,18 @@ export function dedupeAndRankSearchResults(
 ): RankedSearchResult[] {
   const byUrl = new Map<string, Array<{ result: SearchResult; query: string; lane?: SearchLane; providerOrder: number }>>();
   for (const entry of entries) {
-    const key = normalizeUrl(entry.result.url);
+    let key = normalizeSearchUrl(entry.result.url);
+    const content = normalizedContent(fetchedByUrl.get(entry.result.url));
+    if (content.length >= 300) {
+      const duplicate = [...byUrl.entries()].find(([, group]) =>
+        normalizedContent(fetchedByUrl.get(group[0].result.url)) === content);
+      if (duplicate) key = duplicate[0];
+    } else {
+      const duplicate = [...byUrl.entries()].find(([, group]) =>
+        hostname(group[0].result.url) !== hostname(entry.result.url) &&
+        titleSimilarity(group[0].result.title, entry.result.title) >= 0.92);
+      if (duplicate) key = duplicate[0];
+    }
     const list = byUrl.get(key) || [];
     list.push(entry);
     byUrl.set(key, list);
@@ -119,7 +157,10 @@ export function dedupeAndRankSearchResults(
     const fetch = fetchedByUrl.get(result.url);
     const providerCount = new Set(group.map((item) => item.result.providerId || item.result.engine || "unknown")).size;
     const laneCount = new Set(group.map((item) => item.lane || "general")).size;
-    const reciprocalRank = group.reduce((sum, item) => sum + 1 / Math.max(1, item.result.rank ?? item.providerOrder + 1), 0);
+    const reciprocalRank = group.reduce((sum, item) => {
+      const rank = Math.max(1, item.result.rank ?? item.providerOrder + 1);
+      return sum + (LANE_WEIGHTS[item.lane ?? "general"] / (RRF_RANK_CONSTANT + rank));
+    }, 0) * 20;
     const coverage = Math.max(...group.map((item) => queryCoverage(item.result, item.query)));
     const extractionBoost = fetch?.status === "ok" ? 0.15 : fetch ? -0.08 : 0;
     const freshnessBoost = freshnessScore(result, options.freshnessBoost !== false);
@@ -130,8 +171,7 @@ export function dedupeAndRankSearchResults(
       authorityScore(host) +
       freshnessBoost +
       extractionBoost +
-      Math.max(...group.map((item) => laneScore(item.result, item.lane))) +
-      (typeof result.score === "number" ? Math.min(0.2, result.score / 10) : 0);
+      Math.max(...group.map((item) => laneScore(item.result, item.lane)));
     const reasons = [
       providerCount > 1 ? `${providerCount} providers` : result.engine || result.providerId,
       laneCount > 1 ? `${laneCount} query lanes` : best.lane || "general",

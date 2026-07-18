@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import type { FetchStatus as BaseFetchStatus } from "@/lib/fetch-status";
+import type { SearxCapabilities } from "./types";
 
 const inflightDirectSearches = new Map<string, Promise<unknown>>();
 
@@ -40,6 +41,8 @@ export async function invokeSearchSearxng(
     categories?: string;
     safeSearch?: number;
     language?: string;
+    engines?: string;
+    page?: number;
   },
 ): Promise<TauriSearchResponse> {
   return invoke<TauriSearchResponse>("web_search_searxng", {
@@ -51,7 +54,15 @@ export async function invokeSearchSearxng(
     categories: options?.categories || null,
     safeSearch: options?.safeSearch ?? null,
     language: options?.language || null,
+    engines: options?.engines || null,
+    page: options?.page ?? null,
   });
+}
+
+export async function invokeGetSearxngCapabilities(
+  baseUrl: string,
+): Promise<SearxCapabilities> {
+  return invoke<SearxCapabilities>("get_searxng_capabilities", { baseUrl });
 }
 
 export async function invokeTestSearxngConnection(

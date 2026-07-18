@@ -79,6 +79,29 @@ describe("dedupeAndRankSearchResults", () => {
     expect(ranked).toHaveLength(5);
     expect(ranked.some((result) => result.url.includes("medium.com"))).toBe(false);
   });
+
+  it("does not let incomparable provider raw scores dominate reciprocal-rank fusion", () => {
+    const ranked = dedupeAndRankSearchResults([
+      makeEntry("https://first.example/a", "Exact target", "first", 0),
+      {
+        ...makeEntry("https://second.example/b", "Unrelated result", "second", 1),
+        result: {
+          ...makeEntry("https://second.example/b", "Unrelated result", "second", 1).result,
+          score: 1_000_000,
+          rank: 2,
+        },
+      },
+    ], new Map(), 2);
+    expect(ranked[0]?.url).toBe("https://first.example/a");
+  });
+
+  it("collapses near-identical syndicated titles across hosts", () => {
+    const ranked = dedupeAndRankSearchResults([
+      makeEntry("https://original.example/a", "Agency releases annual climate report", "original", 0),
+      makeEntry("https://mirror.example/b", "Agency releases annual climate report", "mirror", 1),
+    ], new Map(), 10);
+    expect(ranked).toHaveLength(1);
+  });
 });
 
 function makeEntry(url: string, title: string, id: string, providerOrder: number) {

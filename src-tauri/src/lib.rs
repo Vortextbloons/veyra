@@ -351,6 +351,7 @@ pub fn run() {
             memory::commands::find_duplicate_memory_nodes,
             connectivity::commands::probe_internet_connectivity,
             web_search::commands::web_search_searxng,
+            web_search::commands::get_searxng_capabilities,
             web_search::commands::test_searxng_connection,
             web_search::commands::search_arxiv,
             web_search::commands::search_wikipedia,

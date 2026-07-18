@@ -179,6 +179,25 @@ pub struct TauriSearchResponse {
     pub searxng_url: String,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearxEngineCapability {
+    pub name: String,
+    pub shortcut: String,
+    pub categories: Vec<String>,
+    pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearxCapabilities {
+    pub engines: Vec<SearxEngineCapability>,
+    pub categories: Vec<String>,
+    pub locales: Vec<String>,
+    pub safe_search: u8,
+    pub fetched_at: u64,
+}
+
 /// Validate a user-configured SearXNG base URL.
 ///
 /// Veyra's configured SearXNG instance is local-only. Enforce that at the
@@ -224,6 +243,8 @@ pub async fn web_search_searxng(
     categories: Option<String>,
     safe_search: Option<u8>,
     language: Option<String>,
+    engines: Option<String>,
+    page: Option<usize>,
 ) -> Result<TauriSearchResponse, String> {
     if allow_external == Some(false) {
         return Err("Web search is unavailable in Offline mode.".into());
@@ -234,9 +255,10 @@ pub async fn web_search_searxng(
     let effective_limit = limit.clamp(1, MAX_SEARCH_RESULTS);
 
     let mut url = format!(
-        "{}/search?q={}&format=json&pageno=1",
+        "{}/search?q={}&format=json&pageno={}",
         base_url.trim_end_matches('/'),
-        urlencoding::encode(&query)
+        urlencoding::encode(&query),
+        page.unwrap_or(1).clamp(1, 20),
     );
 
     if let Some(ref tr) = time_range {
@@ -255,6 +277,14 @@ pub async fn web_search_searxng(
     if let Some(ref lang) = language {
         if !lang.is_empty() {
             url.push_str(&format!("&language={}", urlencoding::encode(lang)));
+        }
+    }
+    if let Some(ref selected_engines) = engines {
+        if !selected_engines.is_empty() {
+            url.push_str(&format!(
+                "&engines={}",
+                urlencoding::encode(selected_engines)
+            ));
         }
     }
 
@@ -323,6 +353,105 @@ pub async fn web_search_searxng(
         result_count,
         searxng_url: base_url,
         results,
+    })
+}
+
+#[tauri::command]
+pub async fn get_searxng_capabilities(base_url: String) -> Result<SearxCapabilities, String> {
+    validate_searxng_url(&base_url)?;
+    let url = format!("{}/config", base_url.trim_end_matches('/'));
+    let client = HTTP_CLIENT_SHORT.as_ref().map_err(Clone::clone)?;
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("SearXNG capability request failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "SearXNG /config returned HTTP {}.",
+            response.status().as_u16()
+        ));
+    }
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse SearXNG /config response: {e}"))?;
+
+    let engines = body
+        .get("engines")
+        .and_then(|value| value.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let name = item.get("name")?.as_str()?.to_string();
+                    let shortcut = item
+                        .get("shortcut")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let categories = item
+                        .get("categories")
+                        .and_then(|value| value.as_array())
+                        .map(|values| {
+                            values
+                                .iter()
+                                .filter_map(|value| value.as_str().map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let enabled = !item
+                        .get("disabled")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(false);
+                    Some(SearxEngineCapability {
+                        name,
+                        shortcut,
+                        categories,
+                        enabled,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let categories = body
+        .get("categories")
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let locales = body
+        .get("locales")
+        .map(|value| match value {
+            serde_json::Value::Array(values) => values
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect(),
+            serde_json::Value::Object(values) => values.keys().cloned().collect(),
+            _ => Vec::new(),
+        })
+        .unwrap_or_default();
+    let safe_search = body
+        .get("safe_search")
+        .or_else(|| body.get("safesearch"))
+        .and_then(|value| value.as_u64())
+        .unwrap_or(0)
+        .clamp(0, 2) as u8;
+    let fetched_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    Ok(SearxCapabilities {
+        engines,
+        categories,
+        locales,
+        safe_search,
+        fetched_at,
     })
 }
 

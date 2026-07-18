@@ -7,13 +7,16 @@ import { estimateTokens } from "@/lib/context";
 import { SearXNGProvider } from "../providers/SearXNGProvider";
 import { ArXivProvider } from "../providers/ArXivProvider";
 import { WikipediaProvider } from "../providers/WikipediaProvider";
-import type { SearchContextBundle, SearchSource, SearXNGProviderConfig, FetchedPageSummary, SearchResult } from "../types";
+import type { SearchContextBundle, SearchSource, SearXNGProviderConfig, FetchedPageSummary, SearchResult, SearchInput, SearxCapabilities } from "../types";
 import { planSearchQueries, type PlannedSearchQuery } from "../search-planner";
 import { dedupeAndRankSearchResults } from "../search-ranker";
 import {
   invokeFetchAndExtractPages,
   type FetchedPage,
 } from "../tauri-commands";
+import { getSearxCapabilities } from "../searx-capabilities-service";
+import { resolveSearchRouting } from "../search-routing";
+import { rankSearchPassages } from "../passage-ranker";
 
 const ALLOWED_SEARCH_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const SEARCH_QUERY_CONCURRENCY = 3;
@@ -53,6 +56,7 @@ export type RunSearchOptions = {
   directArxivSearch?: boolean;
   directWikipediaSearch?: boolean;
   multiQuery?: boolean;
+  request?: SearchInput;
 };
 
 export async function runSearch(
@@ -64,6 +68,7 @@ export async function runSearch(
       ? { signal: options as AbortSignal }
       : (options as RunSearchOptions) ?? {};
   const { signal, projectId, onFetchProgress, skipFetch, directArxivSearch, directWikipediaSearch, multiQuery } = opts;
+  const request = opts.request ?? { query };
 
   if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
@@ -143,6 +148,19 @@ export async function runSearch(
     };
 
     const provider = new SearXNGProvider(config);
+    let capabilities: SearxCapabilities | undefined;
+    try {
+      capabilities = await getSearxCapabilities(baseUrl.trim());
+    } catch (error) {
+      console.warn("[web-search] SearXNG capability discovery failed; using category fallbacks:", error);
+    }
+    const routing = resolveSearchRouting({
+      query,
+      intent: request.intent,
+      categories: request.categories || settings.webSearchCategories || undefined,
+      engines: request.engines,
+      timeRange: request.timeRange || settings.webSearchTimeRange || undefined,
+    }, capabilities);
     const directLimit = Math.min(3, maxResults);
     const fusedSearchEnabled = !isFast && settings.advancedSearchBundleEnabled && settings.advancedSearchFusionEnabled !== false;
     const multiQueryEnabled = !isFast && settings.advancedSearchBundleEnabled && settings.advancedSearchMultiQueryEnabled !== false && multiQuery !== false;
@@ -170,10 +188,14 @@ export async function runSearch(
       const [searxngResults, arxivResults, wikipediaResults] = await Promise.all([
         provider.search({
           query: planned.query,
-          limit: maxResults,
-          timeRange: settings.webSearchTimeRange || undefined,
-          categories: settings.webSearchCategories || undefined,
-          safeSearch: settings.webSearchSafeSearch,
+          limit: request.limit ?? maxResults,
+          intent: routing.intent,
+          timeRange: routing.timeRange,
+          categories: routing.categories,
+          engines: routing.engines,
+          safeSearch: request.safeSearch ?? settings.webSearchSafeSearch,
+          language: request.language,
+          page: request.page,
         }),
         direct.arxiv
           ? new ArXivProvider({
@@ -216,9 +238,13 @@ export async function runSearch(
           const searxngResults = await provider.search({
             query: planned.query,
             limit: maxResults,
-            timeRange: settings.webSearchTimeRange || undefined,
-            categories: settings.webSearchCategories || undefined,
-            safeSearch: settings.webSearchSafeSearch,
+            intent: routing.intent,
+            timeRange: routing.timeRange,
+            categories: routing.categories,
+            engines: routing.engines,
+            safeSearch: request.safeSearch ?? settings.webSearchSafeSearch,
+            language: request.language,
+            page: request.page,
           });
           providerResultCounts.searxng = (providerResultCounts.searxng ?? 0) + searxngResults.length;
           return searxngResults.map((result, providerOrder) => ({ result, query: planned.query, lane: planned.lane, providerOrder }));
@@ -283,6 +309,9 @@ export async function runSearch(
 
     const sources: SearchSource[] = results.map((r) => {
       const page = fetchedByUrl.get(r.url);
+      const passages = page?.status === "ok" && page.content
+        ? rankSearchPassages(r.id, page.content, query)
+        : [];
       const fetchInfo = page
         ? {
             status: page.status,
@@ -307,6 +336,7 @@ export async function runSearch(
         ...("rankScore" in r && typeof r.rankScore === "number" ? { rankScore: r.rankScore } : {}),
         ...("rankReason" in r && typeof r.rankReason === "string" ? { rankReason: r.rankReason } : {}),
         ...("queryLane" in r && typeof r.queryLane === "string" ? { queryLane: r.queryLane } : {}),
+        ...(passages.length > 0 ? { passages } : {}),
         ...(fetchInfo ? { fetch: fetchInfo } : {}),
       };
     });
@@ -329,6 +359,9 @@ export async function runSearch(
         fallbackUsed,
         freshnessBoosted: rankingOptions.freshnessBoost,
         qualityFiltered: rankingOptions.qualityFilter,
+        capabilitiesAvailable: capabilities != null,
+        routedCategories: routing.categories?.split(",").filter(Boolean),
+        routedEngines: routing.engines?.split(",").filter(Boolean),
       },
     };
   };
@@ -356,7 +389,12 @@ function buildContextBlock(
     const page = fetchedByUrl.get(source.url);
     let body: string;
     if (page && page.status === "ok" && page.content) {
-      body = page.content;
+      const passages = source.passages ?? rankSearchPassages(source.id, page.content, query);
+      body = passages.length > 0
+        ? passages.map((passage) =>
+            `${passage.heading ? `Heading: ${passage.heading}\n` : ""}Passage offsets: ${passage.startOffset ?? "?"}-${passage.endOffset ?? "?"}\n${passage.text}`)
+            .join("\n\n")
+        : page.content;
     } else {
       const reason = page?.error_reason ?? "content not fetched";
       const prefix = page ? `[content unavailable: ${reason}]\n` : "";
