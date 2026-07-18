@@ -12,6 +12,12 @@ const PLANNING_LINE =
 const PLANNING_INLINE =
   /(\*Self-Correction|\*Word Count Check|\*Citations Check|Re-mapping Citations|Let's re-read the instructions)/i;
 
+const PLANNING_SECTION_START =
+  /^\s*(?:#{1,6}\s*)?(?:Thinking Process|Analyze the Request|Drafting Strategy|Citation Strategy|Reasoning|Step-by-Step Analysis|Planning Notes)\s*:?\s*(?:.*)?$/i;
+
+const READER_SECTION_START =
+  /^\s*(?:#{1,6}\s*)?(?:Final Answer|Final Response|Final Section|Report Section|Polished Section)\s*:?\s*(.*)$/i;
+
 /** Remove leaked planning / chain-of-thought from a report section. */
 export function sanitizeReportSection(text: string): string {
   let out = stripReportThinking(text);
@@ -19,6 +25,23 @@ export function sanitizeReportSection(text: string): string {
   // Common UI / export artifacts.
   out = out.replace(/^\s*code\s*$/gim, "");
   out = out.replace(/^\s*Copy\s*$/gim, "");
+
+  const visibleLines: string[] = [];
+  let inPlanningSection = false;
+  for (const line of out.split("\n")) {
+    if (PLANNING_SECTION_START.test(line)) {
+      inPlanningSection = true;
+      continue;
+    }
+    const readerStart = line.match(READER_SECTION_START);
+    if (readerStart) {
+      inPlanningSection = false;
+      if (readerStart[1]?.trim()) visibleLines.push(readerStart[1].trim());
+      continue;
+    }
+    if (!inPlanningSection) visibleLines.push(line);
+  }
+  out = visibleLines.join("\n");
 
   const paragraphs = out.split(/\n{2,}/);
   const kept: string[] = [];

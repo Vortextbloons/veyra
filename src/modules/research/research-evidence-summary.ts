@@ -1,7 +1,38 @@
 import type { ResearchSource, ResearchEvidence } from "./research-types";
 import { sourceTypeLabel } from "./research-source-utils";
-import { getSourceNumber } from "./research-citation-utils";
+import { getSourceNumber, sourceSynthesisPriority } from "./research-citation-utils";
 import { getCredibilityScore } from "./source-credibility";
+
+export function selectSnippetGroundingSources(
+  sources: ResearchSource[],
+  maxSources: number,
+): ResearchSource[] {
+  return sources
+    .filter(
+      (source) =>
+        source.status !== "failed" &&
+        source.status !== "skipped" &&
+        Boolean(source.snippet?.trim()),
+    )
+    .sort((a, b) => {
+      const priorityDelta = sourceSynthesisPriority(b) - sourceSynthesisPriority(a);
+      if (priorityDelta !== 0) return priorityDelta;
+      const scoreDelta = (b.score ?? 0) - (a.score ?? 0);
+      if (scoreDelta !== 0) return scoreDelta;
+      return (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER);
+    })
+    .slice(0, Math.max(0, maxSources));
+}
+
+export function buildSnippetCitationSummary(shownSources: ResearchSource[]): string {
+  return shownSources
+    .map(
+      (source, index) =>
+        `Citation [${index + 1}] — ${source.title} (${source.url}) [search snippet; unverified]
+Snippet: ${source.snippet?.trim()}`,
+    )
+    .join("\n\n");
+}
 
 export function buildEvidenceSummary(opts: {
   weightedEvidence: ResearchEvidence[];

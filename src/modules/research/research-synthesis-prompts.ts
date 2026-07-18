@@ -63,6 +63,17 @@ export function buildSectionPrompt(opts: {
   wordCount: number;
   sectionMaxWords: number;
 }): string {
+  const citationRequirements = opts.maxCitationNumber > 0
+    ? `- Cite claims using only citation numbers [1] through [${opts.maxCitationNumber}] from the grounding packets and source list below
+- Do not cite a source unless its listed packet supports the sentence
+- Do not invent citation numbers outside that range`
+    : `- No citable sources are available for this section; state evidence limitations clearly
+- Do not invent citations or discuss citation-formatting rules`;
+  const sourceList = opts.maxCitationNumber > 0
+    ? `Sources (citation numbers [1]–[${opts.maxCitationNumber}] only):
+${opts.sourceQualitySummary}`
+    : "Sources: No citable sources available.";
+
   return `Write section "${opts.heading}" for a research report.
 
 Research Question: ${opts.clarifiedQuestion || opts.question}
@@ -72,7 +83,7 @@ ${opts.keyPoints.map((p) => `- ${p}`).join("\n")}
 
 ${opts.sectionEvidence ? `Supporting Evidence:\n${opts.sectionEvidence}\n\n` : ""}
 ${opts.sectionClaims ? `Related Claims:\n${opts.sectionClaims}\n\n` : ""}
-Evidence Packets Available for Citation:
+Grounding Packets Available for Citation:
 ${opts.citationEvidenceSummary.slice(0, opts.sectionChars) || "No extracted evidence available."}
 
 
@@ -80,15 +91,12 @@ ${opts.hasContradictions ? `Known Contradictions and Resolutions:\n${opts.contra
 
 Requirements:
 - Write in formal, objective academic tone
-- Cite claims using only citation numbers [1] through [${opts.maxCitationNumber}] from the evidence packets and source list below
-- Do not cite a source unless a listed evidence packet supports the sentence
-- Do not invent citation numbers outside that range
+${citationRequirements}
 - Address uncertainties and conflicting evidence honestly
 - Include specific statistics and quotes where available
 - Target: ${opts.wordCount} words (do not exceed ${opts.sectionMaxWords})
 
-Sources (citation numbers [1]–[${opts.maxCitationNumber}] only):
-${opts.sourceQualitySummary}
+${sourceList}
 
 Output rules:
 - Return ONLY polished report prose for this section
@@ -139,6 +147,15 @@ export function buildRewritePrompt(opts: {
   wordCount: number;
   sectionMaxWords: number;
 }): string {
+  const citationRequirement = opts.maxCitationNumber > 0
+    ? `- Cite claims using citation numbers [1] through [${opts.maxCitationNumber}]
+
+Sources:
+${opts.sourceQualitySummary}`
+    : `- No citable sources are available; do not invent citations
+
+Sources: No citable sources available.`;
+
   return `Rewrite section "${opts.heading}" for this research report, addressing these issues:
 
 ${opts.sectionIssues || "Improve clarity, add more specific evidence, and strengthen argumentation."}
@@ -150,11 +167,8 @@ ${opts.keyPoints.map((p) => `- ${p}`).join("\n")}
 
 Requirements:
 - Write in formal, objective academic tone
-- Cite claims using citation numbers [1] through [${opts.maxCitationNumber}]
+${citationRequirement}
 - Target: ${opts.wordCount} words (do not exceed ${opts.sectionMaxWords})
-
-Sources:
-${opts.sourceQualitySummary}
 
 Output: Return ONLY polished report prose. No headings, no meta-commentary.`;
 }

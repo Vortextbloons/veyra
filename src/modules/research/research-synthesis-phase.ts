@@ -7,7 +7,15 @@ import { synthesisBudget, nowIso } from "./research-source-utils";
 import { roundRobinSampleBySourceScore, sourceSynthesisPriority, getSourceNumber, extractCitationContext } from "./research-citation-utils";
 import { prepareReportSection } from "./report-sanitize";
 import { buildOutlinePrompt, buildSectionPrompt, buildSelfCritiquePrompt, buildRewritePrompt, buildCitationAuditPrompt } from "./research-synthesis-prompts";
-import { buildEvidenceSummary, buildClaimsSummary, buildContradictionsSummary, buildCitationEvidenceSummary, buildSourceQualitySummary } from "./research-evidence-summary";
+import {
+  buildEvidenceSummary,
+  buildClaimsSummary,
+  buildContradictionsSummary,
+  buildCitationEvidenceSummary,
+  buildSourceQualitySummary,
+  buildSnippetCitationSummary,
+  selectSnippetGroundingSources,
+} from "./research-evidence-summary";
 import { missingSourceResult, buildSourceContradictionsText, markUnsupportedCitations, buildAuditAppendix } from "./research-citation-audit";
 
 export async function synthesisPhase(
@@ -61,7 +69,7 @@ export async function synthesisPhase(
     return scoreB - scoreA;
   });
 
-  const evidenceSummary = buildEvidenceSummary({ weightedEvidence, sources, claimByEvidenceId });
+  let evidenceSummary = buildEvidenceSummary({ weightedEvidence, sources, claimByEvidenceId });
 
   const claimsSummary = buildClaimsSummary({ claims, evidenceList, sources });
 
@@ -89,13 +97,24 @@ export async function synthesisPhase(
       shownSourceIds.push(e.sourceId);
     }
   }
-  const shownSources: ResearchSource[] = shownSourceIds
+  let shownSources: ResearchSource[] = shownSourceIds
     .map((id) => sources.find((s) => s.id === id))
     .filter((s): s is ResearchSource => Boolean(s));
 
+  const snippetGrounding =
+    !config.perSourceRead && shownSources.length === 0
+      ? selectSnippetGroundingSources(sources, budget.evidenceItems)
+      : [];
+  if (snippetGrounding.length > 0) {
+    shownSources = snippetGrounding;
+    evidenceSummary = buildSnippetCitationSummary(shownSources);
+  }
+
   const maxCitationNumber = shownSources.length;
 
-  const citationEvidenceSummary = buildCitationEvidenceSummary({ shownEvidence, sources, shownSources, claimByEvidenceId });
+  const citationEvidenceSummary = snippetGrounding.length > 0
+    ? buildSnippetCitationSummary(shownSources)
+    : buildCitationEvidenceSummary({ shownEvidence, sources, shownSources, claimByEvidenceId });
 
   const sourceQualitySummary = buildSourceQualitySummary({ shownSources });
 
@@ -413,7 +432,10 @@ export async function synthesisPhase(
   const report = await store.createReport(reportInput);
 
   // Complete synthesize step NOW, before audit
-  await ctx.completeStep(synthesizeStep, `Report: ${finalWordCount} words, ${sections.length} sections, ${evidenceList.length} evidence items cited`);
+  const groundingDetail = evidenceList.length > 0
+    ? `${evidenceList.length} evidence items`
+    : `${shownSources.length} snippet sources`;
+  await ctx.completeStep(synthesizeStep, `Report: ${finalWordCount} words, ${sections.length} sections, ${groundingDetail} available for citation`);
   onEvent({ type: "phase_complete", phase: "synthesize", stepId: synthesizeStep.id });
 
   // ── Phase 8.5: Citation Audit ───────────────────────────────────────────
@@ -470,7 +492,7 @@ export async function synthesisPhase(
     const evidenceText = sourceEvidence
       .map((e) => e.content)
       .join("\n")
-      .slice(0, 3000);
+      .slice(0, 3000) || source.snippet?.trim().slice(0, 3000) || "";
 
     const auditPrompt = buildCitationAuditPrompt({
       citationNumber: num,
