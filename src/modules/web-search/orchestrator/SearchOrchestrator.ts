@@ -149,10 +149,12 @@ export async function runSearch(
 
     const provider = new SearXNGProvider(config);
     let capabilities: SearxCapabilities | undefined;
-    try {
-      capabilities = await getSearxCapabilities(baseUrl.trim());
-    } catch (error) {
-      console.warn("[web-search] SearXNG capability discovery failed; using category fallbacks:", error);
+    if (!isFast) {
+      try {
+        capabilities = await getSearxCapabilities(baseUrl.trim());
+      } catch (error) {
+        console.warn("[web-search] SearXNG capability discovery failed; using category fallbacks:", error);
+      }
     }
     const routing = resolveSearchRouting({
       query,

@@ -46,21 +46,13 @@ export function normalizeSearchUrl(urlString: string): string {
 }
 
 function normalizedContent(page?: FetchedPageSummary): string {
-  return (page?.content ?? "")
+  const raw = page?.content ?? "";
+  return raw
+    .slice(0, 8_000)
     .toLowerCase()
     .replace(/\s+/g, " ")
-    .replace(/[^\p{L}\p{N}\s]/gu, "")
-    .trim()
-    .slice(0, 8_000);
-}
-
-function titleSimilarity(a: string, b: string): number {
-  const left = tokenize(a);
-  const right = tokenize(b);
-  if (left.size === 0 || right.size === 0) return 0;
-  let intersection = 0;
-  for (const token of left) if (right.has(token)) intersection++;
-  return intersection / (left.size + right.size - intersection);
+    .replace(/[^a-z0-9\s]/gi, "")
+    .trim();
 }
 
 function hostname(urlString: string): string {
@@ -130,30 +122,69 @@ export function dedupeAndRankSearchResults(
   maxResults = 10,
   options: SearchRankingOptions = {},
 ): RankedSearchResult[] {
-  const byUrl = new Map<string, Array<{ result: SearchResult; query: string; lane?: SearchLane; providerOrder: number }>>();
-  for (const entry of entries) {
-    let key = normalizeSearchUrl(entry.result.url);
-    const content = normalizedContent(fetchedByUrl.get(entry.result.url));
-    if (content.length >= 300) {
-      const duplicate = [...byUrl.entries()].find(([, group]) =>
-        normalizedContent(fetchedByUrl.get(group[0].result.url)) === content);
-      if (duplicate) key = duplicate[0];
+  const hostCache = new Map<string, string>();
+  const getHost = (url: string): string => {
+    let h = hostCache.get(url);
+    if (h === undefined) { h = hostname(url); hostCache.set(url, h); }
+    return h;
+  };
+  const normContentCache = new Map<string, string>();
+  const getNormContent = (url: string): string => {
+    let nc = normContentCache.get(url);
+    if (nc === undefined) { nc = normalizedContent(fetchedByUrl.get(url)); normContentCache.set(url, nc); }
+    return nc;
+  };
+  const tokenCache = new Map<string, Set<string>>();
+  const getTokens = (text: string): Set<string> => {
+    let t = tokenCache.get(text);
+    if (t === undefined) { t = tokenize(text); tokenCache.set(text, t); }
+    return t;
+  };
+
+  const prep = entries.map((entry) => ({
+    entry,
+    normUrl: normalizeSearchUrl(entry.result.url),
+    normContent: getNormContent(entry.result.url),
+    host: getHost(entry.result.url),
+    titleTokens: getTokens(entry.result.title),
+  }));
+
+  const byUrl = new Map<string, Array<typeof entries[0]>>();
+  const contentToKey = new Map<string, string>();
+  const groupMetas: Array<{ key: string; host: string; tokens: Set<string> }> = [];
+
+  for (const p of prep) {
+    let key = p.normUrl;
+
+    if (p.normContent.length >= 300) {
+      const existing = contentToKey.get(p.normContent);
+      if (existing) { key = existing; } else { contentToKey.set(p.normContent, key); }
     } else {
-      const duplicate = [...byUrl.entries()].find(([, group]) =>
-        hostname(group[0].result.url) !== hostname(entry.result.url) &&
-        titleSimilarity(group[0].result.title, entry.result.title) >= 0.92);
-      if (duplicate) key = duplicate[0];
+      for (const g of groupMetas) {
+        if (g.host === p.host) continue;
+        let intersection = 0;
+        for (const t of p.titleTokens) if (g.tokens.has(t)) intersection++;
+        if (intersection / (p.titleTokens.size + g.tokens.size - intersection) >= 0.92) {
+          key = g.key;
+          break;
+        }
+      }
     }
+
     const list = byUrl.get(key) || [];
-    list.push(entry);
+    list.push(p.entry);
     byUrl.set(key, list);
+
+    if (!groupMetas.some((g) => g.key === key)) {
+      groupMetas.push({ key, host: p.host, tokens: p.titleTokens });
+    }
   }
 
   const domainCounts = new Map<string, number>();
   const ranked = [...byUrl.values()].map((group) => {
     const best = group[0];
     const result = best.result;
-    const host = hostname(result.url);
+    const host = getHost(result.url);
     const fetch = fetchedByUrl.get(result.url);
     const providerCount = new Set(group.map((item) => item.result.providerId || item.result.engine || "unknown")).size;
     const laneCount = new Set(group.map((item) => item.lane || "general")).size;
@@ -190,12 +221,12 @@ export function dedupeAndRankSearchResults(
 
   ranked.sort((a, b) => b.rankScore - a.rankScore);
   const qualityFiltered = options.qualityFilter !== false && ranked.length > maxResults
-    ? ranked.filter((result) => !isLowValueHost(hostname(result.url)))
+    ? ranked.filter((result) => !isLowValueHost(getHost(result.url)))
     : ranked;
   const candidates = qualityFiltered.length >= Math.max(3, Math.ceil(maxResults * 0.75)) ? qualityFiltered : ranked;
   const diversified: RankedSearchResult[] = [];
   for (const result of candidates) {
-    const host = hostname(result.url);
+    const host = getHost(result.url);
     const count = domainCounts.get(host) ?? 0;
     if (count >= 2 && diversified.length >= Math.ceil(maxResults / 2)) continue;
     domainCounts.set(host, count + 1);
