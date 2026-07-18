@@ -45,6 +45,8 @@ export type RunSearchOptions = {
   projectId?: string;
   signal?: AbortSignal;
   onFetchProgress?: (completed: number, total: number) => void;
+  /** Override the user's search-speed preset for workflows that require full-quality results. */
+  speedPreset?: "fast" | "normal";
   /**
    * When true, skip the page-fetch/extract step that normally runs after search.
    * The research pipeline fetches the same URLs again with larger limits, so the
@@ -94,7 +96,7 @@ export async function runSearch(
     : undefined;
   const projectSettings = projectRecord?.settings;
 
-  const isFast = settings.webSearchSpeedPreset === "fast";
+  const isFast = (opts.speedPreset ?? settings.webSearchSpeedPreset) === "fast";
 
   const fetchEnabled = isFast
     ? false

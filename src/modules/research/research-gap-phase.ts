@@ -100,6 +100,7 @@ Return ONLY a JSON object:
       const bundle = await runSearch(query, {
         signal,
         skipFetch: true,
+        speedPreset: "normal",
         ...directSearchSources,
       });
       for (const src of bundle.sources) {

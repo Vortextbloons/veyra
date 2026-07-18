@@ -33,6 +33,7 @@ export async function backgroundPhase(
         const bundle = await runSearch(query, {
           signal,
           skipFetch: true,
+          speedPreset: "normal",
         });
 
         for (const src of bundle.sources) {

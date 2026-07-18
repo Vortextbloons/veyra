@@ -28,6 +28,7 @@ async function runResearchSearchesInParallel(
       const bundle = await runSearch(query, {
         signal,
         skipFetch: true,
+        speedPreset: "normal",
         directArxivSearch: directSources.directArxivSearch,
         directWikipediaSearch: directSources.directWikipediaSearch,
       });
@@ -150,6 +151,7 @@ export async function searchPhase(
         const bundle = await runSearch(broadQuery, {
           signal,
           skipFetch: true,
+          speedPreset: "normal",
           ...directSearchSources,
         });
         let added = 0;
