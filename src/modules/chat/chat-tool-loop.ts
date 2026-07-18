@@ -162,6 +162,10 @@ export function createExecuteToolRoundLocal(params: {
 }) {
   const settings = useSettingsStore.getState();
   let preferredDocumentId: string | undefined;
+  const completedDocumentCreations = new Map<
+    string,
+    { documentId: string; title: string }
+  >();
   return async (toolCalls: ProviderToolCall[]) => {
     const buffer = useChatStore.getState().streamingBuffer;
     const activeProject = useProjectStore.getState().activeProject();
@@ -181,6 +185,7 @@ export function createExecuteToolRoundLocal(params: {
         workspaceRoot,
       },
       preferredDocumentId,
+      completedDocumentCreations,
     });
     preferredDocumentId = result.lastCreatedDocumentId ?? preferredDocumentId;
     return result;

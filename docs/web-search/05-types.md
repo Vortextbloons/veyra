@@ -3,6 +3,42 @@
 From `src/modules/web-search/types.ts`:
 
 ```typescript
+type SearchInput = {
+  query: string;
+  limit?: number;
+  intent?: SearchIntent;
+  language?: string;
+  categories?: string;
+  engines?: string;
+  timeRange?: SearchTimeRange;
+  safeSearch?: 0 | 1 | 2;
+  page?: number;
+};
+
+type SearchIntent =
+  | "general"
+  | "news"
+  | "academic"
+  | "code"
+  | "documentation"
+  | "local"
+  | "discussion";
+
+type SearchTimeRange = "day" | "week" | "month" | "year";
+
+type SearxCapabilities = {
+  engines: Array<{
+    name: string;
+    shortcut: string;
+    categories: string[];
+    enabled: boolean;
+  }>;
+  categories: string[];
+  locales: string[];
+  safeSearch: 0 | 1 | 2;
+  fetchedAt: number;
+};
+
 interface SearchProvider {
   id: string;
   name: string;
@@ -10,15 +46,6 @@ interface SearchProvider {
   search(input: SearchInput): Promise<SearchResult[]>;
   testConnection?(): Promise<boolean>;
 }
-
-type SearchInput = {
-  query: string;
-  limit?: number;
-  language?: string;
-  categories?: string;
-  timeRange?: string;
-  safeSearch?: number;
-};
 
 type SearchResult = {
   id: string;
@@ -52,6 +79,7 @@ type SearchSource = {
   rankScore?: number;
   rankReason?: string;
   queryLane?: string;
+  passages?: SearchPassage[];
   fetch?: {
     status: FetchStatus | string;
     error_reason?: string;
@@ -60,6 +88,16 @@ type SearchSource = {
     char_count?: number;
     source_type?: string;
   };
+};
+
+type SearchPassage = {
+  sourceId: string;
+  heading?: string;
+  text: string;
+  startOffset?: number;
+  endOffset?: number;
+  lexicalScore: number;
+  finalScore: number;
 };
 
 type SearchContextBundle = {
@@ -75,6 +113,9 @@ type SearchContextBundle = {
     fallbackUsed: boolean;
     freshnessBoosted?: boolean;
     qualityFiltered?: boolean;
+    capabilitiesAvailable?: boolean;
+    routedCategories?: string[];
+    routedEngines?: string[];
   };
 };
 
@@ -100,3 +141,15 @@ type FetchedPageSummary = {
 | `academic` | Scholarly sources |
 | `primary` | Government/data sources |
 | `opposing` | Criticism/limitations |
+
+## Search Intents
+
+| Intent | Categories | Engine Hints |
+|--------|-----------|--------------|
+| `general` | general | wikipedia |
+| `news` | news | — |
+| `academic` | science | arxiv, pubmed, semantic scholar, openalex |
+| `code` | it | github, stackoverflow |
+| `documentation` | it | github, stackoverflow |
+| `local` | map | openstreetmap |
+| `discussion` | general, social media | reddit |

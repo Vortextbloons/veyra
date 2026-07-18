@@ -32,11 +32,13 @@ vi.mock("@/modules/chat/tools/document-tool", () => ({
 import { executeToolRound } from "@/modules/chat/chat-tool-rounds";
 import {
   executeDocReadCall,
+  executeDocMutationCalls,
   executeInlineEditCall,
 } from "@/modules/chat/tools/document-tool";
 
 describe("executeToolRound document dependencies", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     executionOrder.length = 0;
   });
 
@@ -89,5 +91,41 @@ describe("executeToolRound document dependencies", () => {
       expect.objectContaining({ id: "read-1" }),
       "doc-created",
     );
+  });
+
+  it("does not create the same document again in a later tool round", async () => {
+    const completedDocumentCreations = new Map();
+    const context = {
+      webSearchEnabled: false,
+      webSearchAvailability: { available: false },
+      retryDocMutationWithLLM: vi.fn(async () => []),
+      codeExecution: {
+        timeoutSecs: 30,
+        pythonPath: null,
+        workspaceRoot: null,
+      },
+      completedDocumentCreations,
+    };
+    const call = {
+      id: "create-1",
+      name: "doc_create",
+      arguments: {
+        title: "The Last Ember",
+        documentType: "document",
+        contentMarkdown: "Once upon a time",
+      },
+    };
+
+    await executeToolRound([call], context);
+    const duplicateResult = await executeToolRound(
+      [{ ...call, id: "create-2" }],
+      context,
+    );
+
+    expect(executeDocMutationCalls).toHaveBeenCalledTimes(1);
+    expect(duplicateResult.toolResultSections[0]).toContain(
+      "skipped the duplicate create request",
+    );
+    expect(duplicateResult.lastCreatedDocumentId).toBe("doc-created");
   });
 });

@@ -48,7 +48,16 @@ type ToolRoundContext = {
   docMutationConversationId?: string;
   codeExecution: CodeExecutionSettings;
   preferredDocumentId?: string;
+  completedDocumentCreations?: Map<string, { documentId: string; title: string }>;
 };
+
+function documentCreationKey(call: ProviderToolCall): string {
+  return JSON.stringify({
+    title: stringArg(call.arguments, "title"),
+    documentType: stringArg(call.arguments, "documentType"),
+    contentMarkdown: stringArg(call.arguments, "contentMarkdown"),
+  });
+}
 
 export async function executeToolRound(
   toolCalls: ProviderToolCall[],
@@ -133,6 +142,18 @@ export async function executeToolRound(
       continue;
     }
 
+    if (call.name === DOC_CREATE_TOOL_NAME) {
+      const creationKey = documentCreationKey(call);
+      const completedCreation = ctx.completedDocumentCreations?.get(creationKey);
+      if (completedCreation) {
+        toolResultSections.push(
+          `Tool result for ${DOC_CREATE_TOOL_NAME}(${JSON.stringify({ title: completedCreation.title })}):\n\nDocument "${completedCreation.title}" was already created in this tool run; skipped the duplicate create request.\nDocument id: ${completedCreation.documentId}`,
+        );
+        preferredDocumentId = completedCreation.documentId;
+        continue;
+      }
+    }
+
     const mutationResult = await executeDocMutationCalls([call], {
       retryWithLLM: ctx.retryDocMutationWithLLM,
       conversationId: ctx.docMutationConversationId,
@@ -141,6 +162,16 @@ export async function executeToolRound(
     toolResultSections.push(...mutationResult.sections);
     streamedChunks.push(...mutationResult.streamedChunks);
     preferredDocumentId = mutationResult.lastCreatedDocumentId ?? preferredDocumentId;
+    if (
+      call.name === DOC_CREATE_TOOL_NAME &&
+      mutationResult.lastCreatedDocumentId &&
+      ctx.completedDocumentCreations
+    ) {
+      ctx.completedDocumentCreations.set(documentCreationKey(call), {
+        documentId: mutationResult.lastCreatedDocumentId,
+        title: stringArg(call.arguments, "title"),
+      });
+    }
   }
 
   for (const call of codeExecutionCalls) {

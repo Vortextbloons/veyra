@@ -6,7 +6,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
-| `web_search` | `webSearchEnabled` | Search the web via SearXNG |
+| `web_search` | `webSearchEnabled` | Search the web via SearXNG with intent routing, time range, language, safe search, and pagination parameters |
 | `code_execution` | Disabled | Reserved for a future OS-enforced sandbox |
 | `doc_create` | `documentToolsEnabled` | Create a new document |
 | `doc_read` | `documentToolsEnabled` | Read a document |
@@ -34,6 +34,7 @@ When enhanced mode is enabled (`enhancedModeEnabled` setting):
 
 - Web searches retry up to 2 times on failure (`TOOL_RETRY_LIMIT = 2`)
 - Document mutations retry up to 2 times with LLM-based re-prompting for corrections
+- `doc_create` calls are deduplicated within a single tool round — repeated create requests with identical arguments are skipped
 - `doc_update` is a legacy constant kept for backward-compatible runtime handling; it has been replaced by `inline_edit`
 
 ## Tool Registry

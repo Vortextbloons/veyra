@@ -156,6 +156,7 @@ Available tools:
   - replace_all: Rewrite the entire document
 
 NEVER write full document content in chat when a tool exists for it. Never respond with "here's the updated content" — call inline_edit instead.
+After a document tool reports success, do not repeat the same mutation. Briefly confirm completion unless another distinct tool action is needed.
 ${activeDocumentBlock}
 
 Document types: document, technical_spec, essay, report, proposal, readme, notes, prompt, project_plan, meeting_notes, research_brief, agent_instruction

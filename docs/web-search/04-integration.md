@@ -2,14 +2,20 @@
 
 ## Chat Tool Integration
 
-In chat, the `web_search` tool triggers search:
+In chat, the `web_search` tool triggers search with additional optional parameters:
 
 ```json
 {
   "query": "string",
-  "numResults": 5
+  "intent": "general | news | academic | code | documentation | local | discussion",
+  "timeRange": "day | week | month | year",
+  "language": "en-US",
+  "safeSearch": 0,
+  "page": 1
 }
 ```
+
+Parameters beyond `query` are optional. When omitted, the intent is inferred from the query text and routing is handled by `search-routing.ts`.
 
 The tool has retry logic (up to 2 retries) and real-time UI updates showing:
 - **Search phase**: querying sources

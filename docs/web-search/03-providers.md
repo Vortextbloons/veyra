@@ -16,9 +16,13 @@ Each provider implements a common interface in `src/modules/web-search/providers
 ## SearXNG Provider
 
 The primary provider. Requires a running Docker container on localhost. Handles:
-- General web search queries
-- Date-filtered searches for recency
+- General web search queries with intent-based category/engine routing
+- Date-filtered searches for recency (`timeRange` parameter)
+- Paginated results (`page` parameter)
+- Language/locale filtering
+- Safe search levels (0 off, 1 moderate, 2 strict)
 - Result parsing and normalization
+- Capability discovery via `get_searxng_capabilities` Tauri command (fetches `/config`)
 
 ## ArXiv Provider
 

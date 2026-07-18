@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-17T19:48:06.550Z
+> Generated: 2026-07-18T02:47:14.506Z
 > Total files: 79
 
 ## Table of Contents
@@ -335,7 +335,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
-| `web_search` | `webSearchEnabled` | Search the web via SearXNG |
+| `web_search` | `webSearchEnabled` | Search the web via SearXNG with intent routing, time range, language, safe search, and pagination parameters |
 | `code_execution` | Disabled | Reserved for a future OS-enforced sandbox |
 | `doc_create` | `documentToolsEnabled` | Create a new document |
 | `doc_read` | `documentToolsEnabled` | Read a document |
@@ -363,6 +363,7 @@ When enhanced mode is enabled (`enhancedModeEnabled` setting):
 
 - Web searches retry up to 2 times on failure (`TOOL_RETRY_LIMIT = 2`)
 - Document mutations retry up to 2 times with LLM-based re-prompting for corrections
+- `doc_create` calls are deduplicated within a single tool round — repeated create requests with identical arguments are skipped
 - `doc_update` is a legacy constant kept for backward-compatible runtime handling; it has been replaced by `inline_edit`
 
 ## Tool Registry
@@ -1990,10 +1991,14 @@ Optional web search capability via SearXNG (Docker) with direct ArXiv and Wikipe
 | `src/modules/web-search/types.ts` | Type definitions |
 | `src/modules/web-search/orchestrator/SearchOrchestrator.ts` | Main search orchestrator |
 | `src/modules/web-search/search-planner.ts` | Multi-query generation |
-| `src/modules/web-search/search-ranker.ts` | Result deduplication and ranking |
+| `src/modules/web-search/search-ranker.ts` | Result deduplication and ranking (RRF, content/title dedup) |
+| `src/modules/web-search/search-routing.ts` | Intent-based category/engine routing |
+| `src/modules/web-search/passage-ranker.ts` | Lexical passage ranking from fetched pages |
+| `src/modules/web-search/search-evaluation.ts` | Retrieval quality metrics (recall, MRR, nDCG) |
+| `src/modules/web-search/searx-capabilities-service.ts` | SearXNG `/config` capabilities with caching |
 | `src/modules/web-search/searxng-setup.ts` | Docker setup for SearXNG |
 | `src/modules/web-search/providers/` | Provider implementations |
-| `src/modules/web-search/tauri-commands.ts` | Tauri IPC for page fetching |
+| `src/modules/web-search/tauri-commands.ts` | Tauri IPC for page fetching and capabilities |
 
 ## SearXNG Setup
 
@@ -2019,6 +2024,25 @@ Optional web search capability via SearXNG (Docker) with direct ArXiv and Wikipe
 
 # Web Search Flow
 
+## Intent Routing
+
+`search-routing.ts` resolves search intent before query execution. The model can supply an explicit `intent`, or it's inferred from the query text:
+
+| Intent | Trigger Keywords |
+|--------|-----------------|
+| news | latest, today, breaking, current events |
+| academic | study, paper, research, journal, arxiv, pubmed |
+| code | error, stack trace, typescript, python, rust, github |
+| documentation | docs, documentation, reference, manual |
+| local | near me, directions, map |
+| discussion | reddit, forum, opinions |
+
+The router maps each intent to SearXNG categories and engine hints, filtered against the instance's live capabilities from `SearxCapabilities`.
+
+## Capability Discovery
+
+On each search, `searx-capabilities-service.ts` fetches the SearXNG `/config` endpoint to discover available engines, categories, and locales. Results are cached for 10 minutes with request deduplication. This enables adapter-free routing: Veyra automatically adapts to any SearXNG instance's installed engines.
+
 ## Query Planning
 
 `search-planner.ts` generates multiple search queries from a single user query across different lanes:
@@ -2034,28 +2058,35 @@ Optional web search capability via SearXNG (Docker) with direct ArXiv and Wikipe
 ## Concurrent Execution
 
 - Queries are executed concurrently (max 3 at a time)
-- Each query hits the SearXNG API
-- Results are collected and merged
+- Each query hits the SearXNG API with routing parameters (categories, engines, page, language, safe search)
+- ArXiv and Wikipedia direct searches run in parallel when applicable
 
 ## Deduplication and Ranking
 
 `search-ranker.ts` handles:
-- URL-based deduplication
-- Relevance ranking against the original query
-- Source diversity encouragement
+
+- **URL normalization** — strips tracking params (`utm_*`, `fbclid`, `gclid`, etc.)
+- **Content-based dedup** — when fetched content exceeds 300 chars, identical normalized content across hosts is collapsed
+- **Title similarity dedup** — syndicated articles with ≥92% title token overlap across different hosts are collapsed
+- **Reciprocal-rank fusion** — RRF with lane weights (`primary` 1.1, `recent` 1.05, `opposing` 0.7) and a rank constant of 60
+- **Domain diversity** — max 2 results per domain before the results are diversified
+
+## Passage Ranking
+
+After pages are fetched, `passage-ranker.ts` splits each page into blocks, scores them against the query via lexical overlap, and returns the top passages (default 3, max 1600 chars each). Passages include heading context and character offsets for provenance. The context bundle uses passages instead of raw page content when available.
 
 ## Page Fetching
 
 - Top results are fetched via Tauri IPC
-- Content is extracted from HTML
+- Content is extracted from HTML, with Wayback Machine fallback
 - Fetch status is tracked per result
 
 ## Context Bundle
 
 Returns a `SearchContextBundle` containing:
-- `sources` — Array of search results with metadata
+- `sources` — Array of search results with metadata and ranked passages
 - `summaries` — Page content summaries
-- `diagnostics` — Timing and error info
+- `diagnostics` — Timing, routing decisions, capability availability
 
 ---
 
@@ -2081,9 +2112,13 @@ Each provider implements a common interface in `src/modules/web-search/providers
 ## SearXNG Provider
 
 The primary provider. Requires a running Docker container on localhost. Handles:
-- General web search queries
-- Date-filtered searches for recency
+- General web search queries with intent-based category/engine routing
+- Date-filtered searches for recency (`timeRange` parameter)
+- Paginated results (`page` parameter)
+- Language/locale filtering
+- Safe search levels (0 off, 1 moderate, 2 strict)
 - Result parsing and normalization
+- Capability discovery via `get_searxng_capabilities` Tauri command (fetches `/config`)
 
 ## ArXiv Provider
 
@@ -2103,14 +2138,20 @@ Direct API access for encyclopedia searches. Returns article summaries and links
 
 ## Chat Tool Integration
 
-In chat, the `web_search` tool triggers search:
+In chat, the `web_search` tool triggers search with additional optional parameters:
 
 ```json
 {
   "query": "string",
-  "numResults": 5
+  "intent": "general | news | academic | code | documentation | local | discussion",
+  "timeRange": "day | week | month | year",
+  "language": "en-US",
+  "safeSearch": 0,
+  "page": 1
 }
 ```
+
+Parameters beyond `query` are optional. When omitted, the intent is inferred from the query text and routing is handled by `search-routing.ts`.
 
 The tool has retry logic (up to 2 retries) and real-time UI updates showing:
 - **Search phase**: querying sources
@@ -2140,6 +2181,42 @@ The research module uses the search orchestrator with:
 From `src/modules/web-search/types.ts`:
 
 ```typescript
+type SearchInput = {
+  query: string;
+  limit?: number;
+  intent?: SearchIntent;
+  language?: string;
+  categories?: string;
+  engines?: string;
+  timeRange?: SearchTimeRange;
+  safeSearch?: 0 | 1 | 2;
+  page?: number;
+};
+
+type SearchIntent =
+  | "general"
+  | "news"
+  | "academic"
+  | "code"
+  | "documentation"
+  | "local"
+  | "discussion";
+
+type SearchTimeRange = "day" | "week" | "month" | "year";
+
+type SearxCapabilities = {
+  engines: Array<{
+    name: string;
+    shortcut: string;
+    categories: string[];
+    enabled: boolean;
+  }>;
+  categories: string[];
+  locales: string[];
+  safeSearch: 0 | 1 | 2;
+  fetchedAt: number;
+};
+
 interface SearchProvider {
   id: string;
   name: string;
@@ -2147,15 +2224,6 @@ interface SearchProvider {
   search(input: SearchInput): Promise<SearchResult[]>;
   testConnection?(): Promise<boolean>;
 }
-
-type SearchInput = {
-  query: string;
-  limit?: number;
-  language?: string;
-  categories?: string;
-  timeRange?: string;
-  safeSearch?: number;
-};
 
 type SearchResult = {
   id: string;
@@ -2189,6 +2257,7 @@ type SearchSource = {
   rankScore?: number;
   rankReason?: string;
   queryLane?: string;
+  passages?: SearchPassage[];
   fetch?: {
     status: FetchStatus | string;
     error_reason?: string;
@@ -2197,6 +2266,16 @@ type SearchSource = {
     char_count?: number;
     source_type?: string;
   };
+};
+
+type SearchPassage = {
+  sourceId: string;
+  heading?: string;
+  text: string;
+  startOffset?: number;
+  endOffset?: number;
+  lexicalScore: number;
+  finalScore: number;
 };
 
 type SearchContextBundle = {
@@ -2212,6 +2291,9 @@ type SearchContextBundle = {
     fallbackUsed: boolean;
     freshnessBoosted?: boolean;
     qualityFiltered?: boolean;
+    capabilitiesAvailable?: boolean;
+    routedCategories?: string[];
+    routedEngines?: string[];
   };
 };
 
@@ -2237,6 +2319,18 @@ type FetchedPageSummary = {
 | `academic` | Scholarly sources |
 | `primary` | Government/data sources |
 | `opposing` | Criticism/limitations |
+
+## Search Intents
+
+| Intent | Categories | Engine Hints |
+|--------|-----------|--------------|
+| `general` | general | wikipedia |
+| `news` | news | — |
+| `academic` | science | arxiv, pubmed, semantic scholar, openalex |
+| `code` | it | github, stackoverflow |
+| `documentation` | it | github, stackoverflow |
+| `local` | map | openstreetmap |
+| `discussion` | general, social media | reddit |
 
 ---
 
