@@ -25,7 +25,7 @@ import {
 } from "@/modules/chat/tools/code-execution-tool";
 import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
 import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
-import { findCapabilityGrant, useExtensionsStore } from "@/modules/extensions/extensions-store";
+import { disabledMcpServersForChat, findCapabilityGrant, isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
 
 export type ToolRoundResult = {
@@ -198,7 +198,7 @@ export async function executeToolRound(
     if (!resolved) { completeMcpTool(call, "error", "MCP capability is unavailable."); toolResultSections.push(`Tool result for ${call.name}: MCP capability is unavailable.`); continue; }
     const provenance = `${resolved.server.name} · ${resolved.toolName}`;
     useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: `MCP · ${resolved.toolName}`, phase: "running", input: provenance });
-    if ((ctx.conversationId && extensionState.chatDisabledMcpServerIds[ctx.conversationId]?.includes(resolved.server.id)) || !resolved.server.enabled || resolved.server.health !== "ready" || (ctx.projectId && resolved.server.projectIds.length > 0 && !resolved.server.projectIds.includes(ctx.projectId))) {
+    if (!isMcpEnabledForChat(resolved.server, disabledMcpServersForChat(extensionState.mcpServers, ctx.conversationId ? extensionState.chatDisabledMcpServerIds[ctx.conversationId] : undefined), ctx.conversationId ? extensionState.chatEnabledMcpServerIds[ctx.conversationId] : undefined) || resolved.server.health !== "ready" || (ctx.projectId && resolved.server.projectIds.length > 0 && !resolved.server.projectIds.includes(ctx.projectId))) {
       const message = "This MCP capability is disabled, disconnected, or unavailable in the active project.";
       completeMcpTool(call, "error", message); toolResultSections.push(`Tool result for ${call.name}: ${message}`); continue;
     }

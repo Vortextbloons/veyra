@@ -1,7 +1,7 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-22T19:49:01.188Z
-> Total files: 74
+> Generated: 2026-07-22T22:03:40.852Z
+> Total files: 79
 
 ## Table of Contents
 
@@ -31,6 +31,12 @@
 - [hooks](#hooks)
   - [01-overview](#hooks-01-overview)
   - [README](#hooks-readme)
+- [extensions](#extensions)
+  - [01-mcp-servers](#extensions-01-mcp-servers)
+  - [02-skills](#extensions-02-skills)
+  - [03-chat-integration](#extensions-03-chat-integration)
+  - [04-types](#extensions-04-types)
+  - [README](#extensions-readme)
 - [documents](#documents)
   - [01-overview](#documents-01-overview)
   - [02-editor](#documents-02-editor)
@@ -302,7 +308,11 @@ User types a message in the composer component and hits send.
 - **Streaming**: Provider adapter streams tokens with callbacks for content, reasoning, and tool calls
 - **Enhanced mode**: When enabled, adds `scratchpad_write` and `ask_question` tools, increases max tool rounds from 6 to 10
 
-### 4. Post-Chat Jobs
+### 4. Stop / Cancel
+
+During streaming, pressing **Escape** or calling `handleStopStreaming` (returned by `useChatPipeline`) cancels the active AI job via `aiScheduler.cancelAiJob`, resets request status to `idle`, and clears the streaming buffer.
+
+### 5. Post-Chat Jobs
 After the response completes:
 - **Memory handoff**: Explicit memory saves
 - **Auto-summarization**: If context usage > 55%, older turns are folded into a summary
@@ -430,6 +440,10 @@ The UI supports real-time streaming of multiple content types during AI response
 - Reasoning tokens are accumulated separately for display in expandable sections
 - Tool call updates are merged into the message's tool call state
 - Web search progress updates the search state indicator
+
+## Stop / Cancel
+
+While streaming, pressing **Escape** stops the active generation. The `Composer` component listens for `Escape` when `busy` and calls `onStop`, which cancels the AI job via `aiScheduler.cancelAiJob` and resets streaming state.
 
 ## Provider Compatibility
 
@@ -611,6 +625,39 @@ interface ModelInfo {
   contextWindow?: number;
   size?: string;
   supportsImages?: boolean;
+}
+```
+
+## ChatPanelProps
+
+```typescript
+interface ChatPanelProps {
+  messages?: ChatMessage[];
+  onSend?: (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => void;
+  onStop?: () => void;
+  onEditMessage?: (messageId: string) => void;
+  onEditCancel?: () => void;
+  onEditSave?: (messageId: string, newContent: string) => void;
+  onRegenerate?: (messageId: string) => void;
+  onRetry?: (messageId: string) => void;
+  onCopyMessage?: (messageId: string) => void;
+  onForkMessage?: (messageId: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
+  onTriggerMemoryExtraction?: () => void;
+  isStreaming?: boolean;
+  streamingMessageId?: string | null;
+  editingMessageId?: string | null;
+  editInitialValue?: string;
+  supportsImages?: boolean;
+  defaultMemoryEnabled?: boolean;
+  providers?: ProviderInfo[];
+  models?: ModelInfo[];
+  mode?: ChatMode;
+  /** 0 = both open, 1 = one collapsed, 2 = both collapsed */
+  sidebarsCollapsed?: number;
+  title?: string;
+  titleAccessory?: ReactNode;
+  headerActions?: ReactNode;
 }
 ```
 
@@ -1059,7 +1106,7 @@ React hooks used across Veyra's frontend for chat, scheduling, and UI interactio
 | Hook | File | Purpose |
 |------|------|---------|
 | `useChatSend` | `src/hooks/use-chat-send.ts` | Message send logic |
-| `useChatPipeline` | `src/hooks/use-chat-pipeline.ts` | Pipeline lifecycle |
+| `useChatPipeline` | `src/hooks/use-chat-pipeline.ts` | Pipeline lifecycle — returns `handleSend`, `handleStopStreaming`, `handleEdit*`, `handleRegenerate`, `handleCopyMessage`, `handleForkMessage`, `handleDeleteMessage`, `handleTriggerMemoryExtraction`, streaming state, and provider info |
 | `useChatAttachments` | `src/hooks/use-chat-attachments.ts` | File attachment management |
 | `useChatEditing` | `src/hooks/use-chat-editing.ts` | Message editing |
 | `useChatRegeneration` | `src/hooks/use-chat-regeneration.ts` | Response regeneration |
@@ -1100,6 +1147,424 @@ React hooks used across Veyra's frontend for chat, scheduling, and UI interactio
 ## Contents
 
 - [01-overview.md](01-overview.md) — Complete list of hooks and their purposes
+
+---
+
+# extensions > 01-mcp-servers
+
+> Source: `docs/extensions/01-mcp-servers.md`
+
+# MCP Servers
+
+Veyra integrates MCP servers via the `rmcp` Rust SDK. Two transports are supported:
+
+- **Streamable HTTP** — Remote MCP servers over HTTP. Non-localhost endpoints require HTTPS.
+- **stdio** — Local child processes spawned by Veyra. Never invoked through a shell.
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src-tauri/src/extensions/commands.rs` | All Tauri MCP commands (discovery, tool call, resource read, prompt fetch) |
+| `src/modules/extensions/mcp-tool-adapter.ts` | Frontend adapter: tool name resolution, invocation routing |
+| `src/modules/extensions/extension-types.ts` | `McpServerRecord`, `McpTransport`, `CapabilityGrant`, `PermissionCategory` |
+| `src/modules/extensions/extensions-store.ts` | Zustand store with persistence for servers, grants, diagnostics |
+| `src/modules/extensions/capability-catalog.ts` | Classifies MCP tool side effects, builds unified capability catalog |
+| `src/modules/extensions/components/mcp-server-settings.tsx` | Settings UI: add, connect, inspect, grant permissions |
+| `src/modules/extensions/components/mcp-chat-toggle.tsx` | Per-chat MCP server enable/disable toggle in composer |
+
+## Tauri Commands
+
+| Command | Purpose |
+|---------|---------|
+| `discover_streamable_http_mcp` | Connects to an HTTP MCP endpoint and discovers tools/resources/prompts |
+| `discover_stdio_mcp` | Starts a stdio MCP process and discovers capabilities |
+| `call_streamable_http_mcp` | Calls a tool on a remote MCP server |
+| `call_stdio_mcp` | Calls a tool on a local stdio MCP server |
+| `read_streamable_http_mcp_resource` | Reads a resource from a remote MCP server |
+| `read_stdio_mcp_resource` | Reads a resource from a local stdio MCP server |
+| `get_streamable_http_mcp_prompt` | Retrieves a prompt template from a remote MCP server |
+| `get_stdio_mcp_prompt` | Retrieves a prompt template from a local stdio MCP server |
+
+All connections are one-shot: the SDK client connects, performs the operation, and closes. Persistent sessions are not managed by Veyra.
+
+## Capability Discovery
+
+When a server is saved and enabled, `connect()` runs the appropriate discovery command. The result is stored in the `McpServerRecord.capabilities` field as a fingerprint. A changed fingerprint invalidates prior capability grants.
+
+## Permission Model
+
+MCP tool calls require explicit approval before execution. Grants are stored in the extensions store with the following scopes:
+
+| Scope | Behavior |
+|-------|----------|
+| `once` | Single-use, expires after 5 minutes |
+| `chat` | Allowed for the duration of the current chat |
+| `project` | Allowed for the current project |
+| `all` | Allows all non-destructive tools from the server |
+
+Destructive tools (delete, destroy, drop, remove, terminate, reset, wipe) always require a fresh one-time approval. Approvals are tied to the server's capability fingerprint and are revoked automatically when the fingerprint changes.
+
+## Safety Controls
+
+The extensions settings page exposes four feature flags that can disable entire categories:
+
+| Flag | Effect |
+|------|--------|
+| `skills` | Disables all skill context injection |
+| `mcp` | Disables all MCP execution |
+| `stdio` | Disables local stdio-based MCP servers |
+| `streamableHttp` | Disables remote Streamable HTTP MCP servers |
+
+MCP servers are off by default for each chat. The user must explicitly enable a server in the `McpChatToggle` component before the model can call its tools.
+
+---
+
+# extensions > 02-skills
+
+> Source: `docs/extensions/02-skills.md`
+
+# Skills
+
+Skills are local, reviewed Markdown instruction packages (SKILL.md) that guide the AI chat behavior. They are declarative only — they cannot execute code, modify permissions, or self-activate.
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/modules/extensions/skill-runtime.ts` | Validation, `draftToSkill` conversion, context block builder |
+| `src/modules/extensions/skill-generator.ts` | AI-powered skill draft generation via the provider |
+| `src/modules/extensions/extension-types.ts` | `SkillRecord`, `SkillDraft`, `SkillValidation`, `SkillWorkflow` |
+| `src/modules/extensions/capability-catalog.ts` | Lists `WorkflowCapability` entries from installed skills |
+| `src/modules/extensions/components/skill-selector.tsx` | Composer dropdown to pick a skill/workflow |
+| `src/modules/extensions/components/project-skills-settings.tsx` | Project-scoped skill and MCP server enable/disable |
+| `src/components/settings/extensions-settings.tsx` | Settings page for importing, generating, and managing skills |
+
+## SKILL.md Format
+
+A skill package is a directory (or ZIP archive) containing at minimum a `SKILL.md` at its root:
+
+```markdown
+# Skill Name
+
+Declarative instructions for the AI model.
+```
+
+Optional files:
+
+- `veyra.json` — Manifest with `id`, `version`, `description`, `requiredCapabilities`, and `workflows`.
+- Any relative-path assets (SVG, text, etc.) referenced from the manifest.
+
+### SKILL.md Frontmatter
+
+Skills can include YAML frontmatter between `---` delimiters:
+
+```markdown
+---
+name: Release Notes
+description: Writes concise release notes
+version: 2.0.0
+---
+
+Write release notes in a brief, scoped format.
+```
+
+### veyra.json
+
+```json
+{
+  "id": "skill.release-notes",
+  "version": "2.0.0",
+  "description": "Release notes generator",
+  "requiredCapabilities": ["mcp.github.create_issue"],
+  "workflows": [
+    {
+      "id": "brief",
+      "name": "Brief",
+      "instructions": "Use three bullets only."
+    }
+  ],
+  "prompts": ["prompts/template.md"],
+  "resources": ["assets/example.txt"]
+}
+```
+
+## Validation Rules
+
+- SKILL.md must not exceed 60,000 characters.
+- No executable activation hooks (`onInstall`, `onActivate`, `postinstall`, `preinstall`) are permitted.
+- Code blocks are retained as instruction text only and will never execute.
+- Package imports reject symbolic links, path traversal, and files over 512 KB.
+- SVG assets are scanned for active content (`<script>`, `onload=`, etc.).
+- Total package limit: 5 MB, 200 files.
+
+## Import Methods
+
+| Method | Tauri Command | Source |
+|--------|--------------|--------|
+| Folder import | `snapshot_skill_directory` | User-selected directory |
+| ZIP import | `snapshot_skill_zip` | User-selected ZIP archive |
+| AI generation | `generateSkillDraft` | Provider generates a draft from a description |
+
+## Skill Context Injection
+
+When a skill is active for a chat, the orchestrator injects a `<veyra_active_skill>` context block into the system prompt containing the skill instructions and optional workflow instructions.
+
+## Skill Snapshots
+
+Each user message records its active skill as a `skillSnapshot` (`{ id, version, workflowId? }`). The orchestrator resolves the snapshot against the installed skills at response time, ensuring skill versions stay consistent across a conversation.
+
+---
+
+# extensions > 03-chat-integration
+
+> Source: `docs/extensions/03-chat-integration.md`
+
+# Chat Integration
+
+Extensions integrate into the chat pipeline at three points: tool registration, tool execution, and context injection.
+
+## Tool Registration
+
+In `src/modules/chat/chat-provider-options.ts`, `resolveProviderTooling()` appends MCP tools to the provider's tool list:
+
+```typescript
+buildMcpProviderTools(extensions.mcpServers, projectId, featureFlags, disabledServerIds)
+```
+
+Each MCP tool is namespaced as `mcp_<serverId>_<toolName>` to avoid collisions. The tool description is prefixed with `[MCP: <server name>]`.
+
+## Tool Execution
+
+In `src/modules/chat/chat-tool-rounds.ts`, `executeToolRound()` routes any tool call starting with `mcp_` through the MCP adapter:
+
+1. **Resolve** — Match the tool name to an `McpServerRecord` and tool name.
+2. **Gate** — Check chat-level enable, server health, project scope, and transport feature flags.
+3. **Permission** — Require a `CapabilityGrant` via `findCapabilityGrant`. Destructive tools always need a fresh one-time approval.
+4. **Invoke** — Call `invokeMcpTool` which dispatches to the appropriate Tauri command.
+5. **Format** — Cap output at 60 KB to prevent context flooding.
+
+Tool call results are rendered in the chat UI's tool call indicators, with `mcpApproval` metadata for permission requests.
+
+## Skill Context Injection
+
+In `src/modules/chat/chat-orchestrator.ts`, `sendChatRequest()` resolves the active skill:
+
+```typescript
+const activeSkill = extensionState.resolveActiveSkillSelection(conversationId, projectId);
+const skillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
+```
+
+The resulting `<veyra_active_skill>` XML block is added to the system prompt alongside other context blocks.
+
+## UI Components
+
+| Component | Location | Role |
+|-----------|----------|------|
+| `SkillSelector` | Composer toolbar | Select an active skill or workflow per chat |
+| `McpChatToggle` | Composer toolbar | Enable/disable MCP servers for the current chat |
+| `ProjectSkillsSettings` | Project settings | Restrict skills and MCP servers per project |
+| `ExtensionsSettings` | Settings → Extensions | Full skill and MCP server management |
+| `McpServerSettings` | Settings → Extensions | Add, inspect, connect, and grant MCP permissions |
+
+## Data Flow
+
+```
+Settings page
+  ├─ Import / generate skill → extensions-store (persisted)
+  ├─ Add MCP server → Tauri discovery command → extensions-store
+  └─ Grant permissions → extensions-store
+
+Composer toolbar
+  ├─ SkillSelector → activeSkillId → extensions-store
+  └─ McpChatToggle → chatDisabledMcpServerIds → extensions-store
+
+Send message
+  └─ useChatSend → attaches skillSnapshot to user message
+
+Chat orchestrator
+  ├─ resolveActiveSkillSelection → buildSkillContext → system prompt
+  └─ resolveProviderTooling → buildMcpProviderTools → tool definitions
+
+Tool execution
+  └─ executeToolRound → mcpCalls → resolveMcpTool → grant check → invokeMcpTool
+```
+
+---
+
+# extensions > 04-types
+
+> Source: `docs/extensions/04-types.md`
+
+# Extension Key Types
+
+Accurate as of the current source code (`src/modules/extensions/extension-types.ts`).
+
+## Core Types
+
+```typescript
+type ExtensionType = "skill" | "mcp_server";
+type ExtensionHealth = "ready" | "disabled" | "degraded" | "failed";
+
+type ExtensionRecord = {
+  id: string;
+  type: ExtensionType;
+  name: string;
+  description: string;
+  version: string;
+  enabled: boolean;
+  provenance: "local" | "generated" | "manual";
+  installedAt: string;
+  updatedAt: string;
+  health: ExtensionHealth;
+};
+```
+
+## Skill Types
+
+```typescript
+type SkillWorkflow = { id: string; name: string; instructions: string };
+
+type SkillRecord = ExtensionRecord & {
+  type: "skill";
+  instructions: string;
+  workflows: SkillWorkflow[];
+  contentHash: string;
+  snapshotId?: string;
+  requestedCapabilities: string[];
+};
+
+type SkillDraft = {
+  name: string;
+  description: string;
+  source: string;
+  provenance: "local" | "generated";
+  packageManifest?: string;
+  packageFiles?: string[];
+};
+
+type SkillValidation = {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  name?: string;
+  description?: string;
+  version?: string;
+  instructions?: string;
+};
+```
+
+## MCP Server Types
+
+```typescript
+type McpTransport = "stdio" | "streamable_http";
+
+type McpServerRecord = ExtensionRecord & {
+  type: "mcp_server";
+  transport: McpTransport;
+  endpoint?: string;
+  executable?: string;
+  arguments?: string[];
+  workingDirectory?: string;
+  timeoutMs: number;
+  projectIds: string[];
+  capabilityCount: { tools: number; resources: number; prompts: number };
+  capabilityFingerprint?: string;
+  lastError?: string;
+  lastConnectedAt?: string;
+  capabilities?: { tools: unknown[]; resources: unknown[]; prompts: unknown[] };
+};
+```
+
+## Permission Types
+
+```typescript
+type PermissionCategory =
+  | "read_local_files" | "write_local_files"
+  | "execute_external_processes" | "access_internet"
+  | "read_documents" | "modify_documents"
+  | "read_memory" | "modify_memory"
+  | "access_credentials" | "external_mutation"
+  | "destructive";
+
+type CapabilityGrant = {
+  id: string;
+  serverId: string;
+  capabilityId: string;
+  projectId?: string;
+  chatId?: string;
+  category: PermissionCategory;
+  decision: "allow" | "deny";
+  expiresAt?: string;
+  usesRemaining?: number;
+  createdAt: string;
+  revokedAt?: string;
+  capabilityFingerprint?: string;
+};
+```
+
+## Capability Catalog
+
+```typescript
+type SideEffectLevel = "read" | "local_write" | "external_write" | "destructive";
+
+type ToolCapability = {
+  kind: "tool";
+  id: string;
+  serverId: string;
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  sideEffect: SideEffectLevel;
+};
+```
+
+## Store State
+
+```typescript
+type ExtensionsStore = {
+  featureFlags: { skills: boolean; mcp: boolean; stdio: boolean; streamableHttp: boolean };
+  skills: SkillRecord[];
+  mcpServers: McpServerRecord[];
+  grants: CapabilityGrant[];
+  diagnostics: ExtensionDiagnostic[];
+  policies: Record<string, ProjectExtensionPolicy>;
+  activeSkillIds: Record<string, string | null>;
+  activeSkillWorkflowIds: Record<string, string | undefined>;
+  chatDisabledMcpServerIds: Record<string, string[]>;
+};
+```
+
+## ToolCallState Extension
+
+In `src/modules/chat/chat-types.ts`, the `ToolCallState` type includes an optional MCP approval field:
+
+```typescript
+mcpApproval?: {
+  serverId: string;
+  toolName: string;
+  projectId?: string;
+  chatId?: string;
+  capabilityFingerprint?: string;
+};
+```
+
+---
+
+# extensions > README
+
+> Source: `docs/extensions/README.md`
+
+# Extensions Module
+
+MCP (Model Context Protocol) server integration and local SKILL.md instruction packages for the chat pipeline.
+
+## Contents
+
+- [01-mcp-servers.md](01-mcp-servers.md) — MCP server discovery, transport, capability inspection
+- [02-skills.md](02-skills.md) — Skill runtime, validation, AI generation
+- [03-chat-integration.md](03-chat-integration.md) — MCP tools and skill context in chat
+- [04-types.md](04-types.md) — Key type definitions
 
 ---
 

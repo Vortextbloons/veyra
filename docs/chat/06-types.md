@@ -138,6 +138,39 @@ interface ModelInfo {
 }
 ```
 
+## ChatPanelProps
+
+```typescript
+interface ChatPanelProps {
+  messages?: ChatMessage[];
+  onSend?: (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => void;
+  onStop?: () => void;
+  onEditMessage?: (messageId: string) => void;
+  onEditCancel?: () => void;
+  onEditSave?: (messageId: string, newContent: string) => void;
+  onRegenerate?: (messageId: string) => void;
+  onRetry?: (messageId: string) => void;
+  onCopyMessage?: (messageId: string) => void;
+  onForkMessage?: (messageId: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
+  onTriggerMemoryExtraction?: () => void;
+  isStreaming?: boolean;
+  streamingMessageId?: string | null;
+  editingMessageId?: string | null;
+  editInitialValue?: string;
+  supportsImages?: boolean;
+  defaultMemoryEnabled?: boolean;
+  providers?: ProviderInfo[];
+  models?: ModelInfo[];
+  mode?: ChatMode;
+  /** 0 = both open, 1 = one collapsed, 2 = both collapsed */
+  sidebarsCollapsed?: number;
+  title?: string;
+  titleAccessory?: ReactNode;
+  headerActions?: ReactNode;
+}
+```
+
 ## Performance
 
 ```typescript

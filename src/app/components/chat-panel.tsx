@@ -82,6 +82,7 @@ export function ChatPanel({
   editInitialValue,
   onEditCancel,
   onEditSave,
+  onStop,
 }: ChatPanelProps) {
   const [memory, setMemory] = useState(defaultMemoryEnabled);
   const reasoningEnabled = useSettingsStore((s) => s.reasoningEnabled);
@@ -315,6 +316,7 @@ export function ChatPanel({
             </>
           }
           onSend={onSend}
+          onStop={onStop}
           disabled={isStreaming || agentComposerInputDisabled}
           controlsDisabled={agentComposerControlsDisabled}
           busy={isStreaming}

@@ -273,6 +273,7 @@ type ComposerProps = {
     attachments?: MessageAttachment[],
     options?: { memoryEnabled: boolean },
   ) => void;
+  onStop?: () => void;
   disabled?: boolean;
   controlsDisabled?: boolean;
   busy?: boolean;
@@ -297,6 +298,7 @@ export function Composer({
   selectorControls,
   suggestedPrompt,
   onSend,
+  onStop,
   disabled,
   controlsDisabled = false,
   busy = false,
@@ -317,6 +319,18 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = Boolean(editMessageId);
+
+  useEffect(() => {
+    if (!busy || !onStop) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onStop();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [busy, onStop]);
 
   useEffect(() => {
     if (!suggestedPrompt || isEditMode) return;
@@ -503,7 +517,6 @@ export function Composer({
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={isEditMode ? "Edit your message..." : mode === "agents" ? "Describe a task for the agent..." : "Ask anything..."}
-          disabled={isInputBlocked}
           className={`block w-full resize-none rounded-md bg-transparent px-2 py-1.5 font-medium leading-snug tracking-[-0.005em] text-white transition-[font-size] duration-200 ease-out placeholder:font-normal placeholder:tracking-normal placeholder:text-[var(--color-text-dim)]/70 focus:outline-none disabled:opacity-50 ${composerTextClass}`}
         />
         <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)]/50 pt-1.5">

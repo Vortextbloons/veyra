@@ -50,7 +50,11 @@ User types a message in the composer component and hits send.
 - **Streaming**: Provider adapter streams tokens with callbacks for content, reasoning, and tool calls
 - **Enhanced mode**: When enabled, adds `scratchpad_write` and `ask_question` tools, increases max tool rounds from 6 to 10
 
-### 4. Post-Chat Jobs
+### 4. Stop / Cancel
+
+During streaming, pressing **Escape** or calling `handleStopStreaming` (returned by `useChatPipeline`) cancels the active AI job via `aiScheduler.cancelAiJob`, resets request status to `idle`, and clears the streaming buffer.
+
+### 5. Post-Chat Jobs
 After the response completes:
 - **Memory handoff**: Explicit memory saves
 - **Auto-summarization**: If context usage > 55%, older turns are folded into a summary

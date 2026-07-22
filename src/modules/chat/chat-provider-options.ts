@@ -5,7 +5,7 @@ import { useDocumentStore } from "@/modules/documents/document-store";
 import { buildProviderTools } from "@/lib/tool-registry";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 import { useConnectivityStore } from "@/stores/connectivity-store";
-import { useExtensionsStore } from "@/modules/extensions/extensions-store";
+import { disabledMcpServersForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildMcpProviderTools } from "@/modules/extensions/mcp-tool-adapter";
 
 export type ResolvedModelSettings = {
@@ -97,7 +97,7 @@ export function resolveProviderTooling({
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
     activeDocumentId: docState.activeDocumentId ?? undefined,
     enhancedMode,
-  }), ...buildMcpProviderTools(extensions.mcpServers, projectId, extensions.featureFlags, conversationId ? extensions.chatDisabledMcpServerIds[conversationId] ?? [] : [])];
+  }), ...buildMcpProviderTools(extensions.mcpServers, projectId, extensions.featureFlags, disabledMcpServersForChat(extensions.mcpServers, conversationId ? extensions.chatDisabledMcpServerIds[conversationId] : undefined), conversationId ? extensions.chatEnabledMcpServerIds[conversationId] ?? [] : [])];
 
   return {
     providerTools,

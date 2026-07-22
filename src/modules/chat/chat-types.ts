@@ -307,6 +307,7 @@ export interface ChatPanelProps {
   onToggleFavorite?: (id: string) => void;
   /** 0 = both side panels open, 1 = one collapsed, 2 = both collapsed */
   sidebarsCollapsed?: number;
+  onStop?: () => void;
   onTriggerMemoryExtraction?: () => void;
   modelLoadProgress?: ModelLoadProgress;
   mode?: ChatMode;

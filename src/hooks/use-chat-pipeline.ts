@@ -173,6 +173,15 @@ export function useChatPipeline({
 
   const { handleRegenerate, handleRetry } = useChatRegeneration(sharedPipelineProps);
 
+  const handleStopStreaming = useCallback(() => {
+    if (activeChatJobIdRef.current) {
+      aiScheduler.cancelAiJob(activeChatJobIdRef.current);
+    }
+    setRequestStatus("idle");
+    setStreamingMessageId(null);
+    clearStreamingBuffer();
+  }, [clearStreamingBuffer]);
+
   const handleCopyMessage = useCallback(
     (messageId: string) => {
       if (!activeConversationId) return;
@@ -255,6 +264,7 @@ export function useChatPipeline({
     handleForkMessage,
     handleDeleteMessage,
     handleTriggerMemoryExtraction,
+    handleStopStreaming,
     editingMessageId,
     editInitialValue,
     handleNewChat,

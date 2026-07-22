@@ -16,10 +16,10 @@ function toolsFor(server: McpServerRecord): CatalogTool[] {
   return Array.isArray(server.capabilities?.tools) ? server.capabilities.tools as CatalogTool[] : [];
 }
 
-export function buildMcpProviderTools(servers: McpServerRecord[], projectId?: string, flags: { mcp: boolean; stdio: boolean; streamableHttp: boolean } = { mcp: true, stdio: true, streamableHttp: true }, disabledServerIds: string[] = []): ProviderToolDefinition[] {
+export function buildMcpProviderTools(servers: McpServerRecord[], projectId?: string, flags: { mcp: boolean; stdio: boolean; streamableHttp: boolean } = { mcp: true, stdio: true, streamableHttp: true }, disabledServerIds: string[] = [], enabledServerIds: string[] = []): ProviderToolDefinition[] {
   if (!flags.mcp) return [];
   return servers
-    .filter((server) => !disabledServerIds.includes(server.id) && server.enabled && server.health === "ready" && (server.transport === "stdio" ? flags.stdio : flags.streamableHttp) && (!projectId || server.projectIds.length === 0 || server.projectIds.includes(projectId)))
+    .filter((server) => !disabledServerIds.includes(server.id) && (server.enabled || enabledServerIds.includes(server.id)) && server.health === "ready" && (server.transport === "stdio" ? flags.stdio : flags.streamableHttp) && (!projectId || server.projectIds.length === 0 || server.projectIds.includes(projectId)))
     .flatMap((server) => toolsFor(server).flatMap((tool) => {
       if (typeof tool.name !== "string" || !tool.name) return [];
       return [{

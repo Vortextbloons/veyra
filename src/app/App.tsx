@@ -257,6 +257,7 @@ function App() {
     handleNewChat: pipelineHandleNewChat,
     handleDeleteChat: pipelineHandleDeleteChat,
     handleSend: pipelineHandleSend,
+    handleStopStreaming: pipelineHandleStopStreaming,
     ...pipelineRest
   } = pipeline;
 
@@ -339,6 +340,7 @@ function App() {
             onToggleFavorite={(id) => useSettingsStore.getState().toggleFavoriteModel(id)}
             supportsImages={supportsImages}
             defaultMemoryEnabled={defaultMemoryEnabled}
+            onStop={pipelineHandleStopStreaming}
             onTriggerMemoryExtraction={pipelineRest.handleTriggerMemoryExtraction}
             sidebarsCollapsed={sidebarsCollapsed}
             modelLoadProgress={pipelineRest.modelLoadProgress}

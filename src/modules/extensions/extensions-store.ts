@@ -13,6 +13,7 @@ type ExtensionsStore = {
   activeSkillIds: Record<string, string | null>;
   activeSkillWorkflowIds: Record<string, string | undefined>;
   chatDisabledMcpServerIds: Record<string, string[]>;
+  chatEnabledMcpServerIds: Record<string, string[]>;
   installSkill: (input: { name: string; description: string; source: string; provenance: "local" | "generated"; snapshotId?: string; contentHash?: string; packageManifest?: string; packageFiles?: string[] }) => Promise<SkillRecord>;
   removeSkill: (id: string) => void;
   setSkillEnabled: (id: string, enabled: boolean) => void;
@@ -60,9 +61,19 @@ export function hasCapabilityGrant(grants: CapabilityGrant[], input: { serverId:
   return Boolean(findCapabilityGrant(grants, input));
 }
 
+/** Enabled MCP servers are active in new chats unless a chat explicitly turns one off. */
+export function disabledMcpServersForChat(_servers: McpServerRecord[], storedDisabledIds: string[] | undefined): string[] {
+  return storedDisabledIds ?? [];
+}
+
+export function isMcpEnabledForChat(server: McpServerRecord, disabledIds: string[] | undefined, enabledIds: string[] | undefined): boolean {
+  if (disabledIds?.includes(server.id)) return false;
+  return server.enabled || Boolean(enabledIds?.includes(server.id));
+}
+
 export const useExtensionsStore = create<ExtensionsStore>()(persist((set, get) => ({
   featureFlags: { skills: true, mcp: true, stdio: true, streamableHttp: true },
-  skills: [], mcpServers: [], grants: [], diagnostics: [], policies: {}, activeSkillIds: {}, activeSkillWorkflowIds: {}, chatDisabledMcpServerIds: {},
+  skills: [], mcpServers: [], grants: [], diagnostics: [], policies: {}, activeSkillIds: {}, activeSkillWorkflowIds: {}, chatDisabledMcpServerIds: {}, chatEnabledMcpServerIds: {},
   installSkill: async (draft) => {
     const skill = await draftToSkill(draft);
     if (get().skills.some((item) => item.id === skill.id)) {
@@ -99,9 +110,14 @@ export const useExtensionsStore = create<ExtensionsStore>()(persist((set, get) =
   setActiveSkill: (scopeId, skillId, workflowId) => set((state) => ({ activeSkillIds: { ...state.activeSkillIds, [scopeId]: skillId }, activeSkillWorkflowIds: { ...state.activeSkillWorkflowIds, [scopeId]: skillId ? workflowId : undefined } })),
   setFeatureFlag: (flag, enabled) => set((state) => ({ featureFlags: { ...state.featureFlags, [flag]: enabled } })),
   setChatMcpEnabled: (chatId, serverId, enabled) => set((state) => {
-    const disabled = state.chatDisabledMcpServerIds[chatId] ?? [];
+    const disabled = disabledMcpServersForChat(state.mcpServers, state.chatDisabledMcpServerIds[chatId]);
+    const explicitlyEnabled = state.chatEnabledMcpServerIds[chatId] ?? [];
     const next = enabled ? disabled.filter((id) => id !== serverId) : [...new Set([...disabled, serverId])];
-    return { chatDisabledMcpServerIds: { ...state.chatDisabledMcpServerIds, [chatId]: next } };
+    const nextEnabled = enabled ? [...new Set([...explicitlyEnabled, serverId])] : explicitlyEnabled.filter((id) => id !== serverId);
+    return {
+      chatDisabledMcpServerIds: { ...state.chatDisabledMcpServerIds, [chatId]: next },
+      chatEnabledMcpServerIds: { ...state.chatEnabledMcpServerIds, [chatId]: nextEnabled },
+    };
   }),
   resolveActiveSkill: (scopeId, projectId) => {
     const explicitId = get().activeSkillIds[scopeId];

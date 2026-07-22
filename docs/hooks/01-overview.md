@@ -7,7 +7,7 @@ React hooks used across Veyra's frontend for chat, scheduling, and UI interactio
 | Hook | File | Purpose |
 |------|------|---------|
 | `useChatSend` | `src/hooks/use-chat-send.ts` | Message send logic |
-| `useChatPipeline` | `src/hooks/use-chat-pipeline.ts` | Pipeline lifecycle |
+| `useChatPipeline` | `src/hooks/use-chat-pipeline.ts` | Pipeline lifecycle — returns `handleSend`, `handleStopStreaming`, `handleEdit*`, `handleRegenerate`, `handleCopyMessage`, `handleForkMessage`, `handleDeleteMessage`, `handleTriggerMemoryExtraction`, streaming state, and provider info |
 | `useChatAttachments` | `src/hooks/use-chat-attachments.ts` | File attachment management |
 | `useChatEditing` | `src/hooks/use-chat-editing.ts` | Message editing |
 | `useChatRegeneration` | `src/hooks/use-chat-regeneration.ts` | Response regeneration |
