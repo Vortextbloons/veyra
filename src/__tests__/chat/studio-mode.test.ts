@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseStudioArguments, STUDIO_RENDER_TOOL_NAME } from "@/modules/chat/studio/studio-tool";
-import { validateStudioArtifact } from "@/modules/chat/studio/studio-validator";
+import { validateStudioRender } from "@/modules/chat/studio/studio-validator";
 import { buildStudioDocument } from "@/modules/chat/studio/studio-document-builder";
 import {
-  copyStudioArtifactForFork,
-  normalizeStudioArtifact,
-  STUDIO_MAX_REVISIONS,
-  trimStudioRevisions,
+  copyStudioResponseForFork,
+  normalizeStudioResponse,
+  STUDIO_MAX_RESPONSE_REVISIONS,
+  trimStudioResponseRevisions,
 } from "@/modules/chat/studio/studio-normalize";
 import { executeStudioCall, resetStudioRepairGuard } from "@/modules/chat/studio/studio-runtime";
 import { buildProviderTools } from "@/lib/tool-registry";
@@ -24,8 +24,6 @@ const mocks = vi.hoisted(() => ({
   conversations: [] as Array<{
     id: string;
     experience?: "standard" | "studio";
-    presentationMode?: "standard" | "studio";
-    studioArtifact?: unknown;
     messages: Array<{ id: string; role: "assistant" | "user"; studioResponse?: { currentRevision: number } }>;
   }>,
 }));
@@ -50,7 +48,6 @@ describe("Studio Mode containment", () => {
     mocks.conversations = [{
       id: "conversation-1",
       experience: "studio",
-      presentationMode: "studio",
       messages: [{ id: "assistant-1", role: "assistant" }],
     }];
     resetStudioRepairGuard("conversation-1", "assistant-1");
@@ -68,7 +65,7 @@ describe("Studio Mode containment", () => {
   });
 
   it.runIf(typeof DOMParser !== "undefined")("accepts safe layout primitives", () => {
-    const result = validateStudioArtifact({ html: "<main><details><summary>Plan</summary><table><tbody><tr><td>A</td></tr></tbody></table></details></main>", css: "main{display:grid;background:linear-gradient(#111,#222)}" });
+    const result = validateStudioRender({ html: "<main><details><summary>Plan</summary><table><tbody><tr><td>A</td></tr></tbody></table></details></main>", css: "main{display:grid;background:linear-gradient(#111,#222)}" });
     expect(result.ok).toBe(true);
   });
 
@@ -94,7 +91,7 @@ describe("Studio Mode containment", () => {
     ["css url", "<main>x</main>", "main{background:url(https://example.com/a)}"],
     ["style escape", "<main>x</main>", "</style><script>x</script>"],
   ])("rejects %s", (_name, html, css) => {
-    expect(validateStudioArtifact({ html, css }).ok).toBe(false);
+    expect(validateStudioRender({ html, css }).ok).toBe(false);
   });
 
   it("builds a sandbox document with CSP and escaped metadata", () => {
@@ -104,32 +101,32 @@ describe("Studio Mode containment", () => {
     expect(document).toContain("<body><main>Safe</main></body>");
   });
 
-  it("trims revisions while preserving the current pointer", () => {
-    const revisions = Array.from({ length: STUDIO_MAX_REVISIONS + 2 }, (_, index) => ({
+  it("trims response revisions while preserving the current pointer", () => {
+    const revisions = Array.from({ length: STUDIO_MAX_RESPONSE_REVISIONS + 2 }, (_, index) => ({
       revision: index + 1,
       title: `r${index + 1}`,
       html: "<main>x</main>",
       css: "",
       createdAt: index + 1,
-      assistantMessageId: `assistant-${index + 1}`,
     }));
-    const trimmed = trimStudioRevisions(revisions, 3);
-    expect(trimmed).toHaveLength(STUDIO_MAX_REVISIONS);
+    const trimmed = trimStudioResponseRevisions(revisions, 3);
+    expect(trimmed).toHaveLength(STUDIO_MAX_RESPONSE_REVISIONS);
     expect(trimmed.some((revision) => revision.revision === 3)).toBe(true);
   });
 
-  it("normalizes malformed artifact data", () => {
-    const normalized = normalizeStudioArtifact({
-      id: "artifact-1",
+  it("normalizes malformed response data", () => {
+    const normalized = normalizeStudioResponse({
+      id: "response-1",
       title: "Board",
       currentRevision: 99,
       latestRevision: 2,
       revisions: [
-        { revision: 2, title: "Two", html: "<main>2</main>", css: "", createdAt: 2, assistantMessageId: "a-2" },
-        { revision: 1, title: "One", html: "<main>1</main>", css: "", createdAt: 1, assistantMessageId: "a-1" },
-        { revision: 2, title: "Duplicate", html: "<main>dup</main>", css: "", createdAt: 3, assistantMessageId: "a-2" },
+        { revision: 2, title: "Two", html: "<main>2</main>", css: "", createdAt: 2 },
+        { revision: 1, title: "One", html: "<main>1</main>", css: "", createdAt: 1 },
+        { revision: 2, title: "Duplicate", html: "<main>dup</main>", css: "", createdAt: 3 },
         "bad",
       ],
+      status: "ready",
       createdAt: 1,
       updatedAt: 2,
     });
@@ -137,25 +134,23 @@ describe("Studio Mode containment", () => {
     expect(normalized?.revisions.map((revision) => revision.title)).toEqual(["One", "Duplicate"]);
   });
 
-  it("copies forked artifact revisions with remapped assistant ids", () => {
-    const artifact = normalizeStudioArtifact({
-      id: "artifact-1",
+  it("copies forked response revisions with new identity", () => {
+    const response = normalizeStudioResponse({
+      id: "response-1",
       title: "Board",
       currentRevision: 2,
       latestRevision: 2,
       revisions: [
-        { revision: 1, title: "One", html: "<main>1</main>", css: "", createdAt: 1, assistantMessageId: "old-a-1" },
-        { revision: 2, title: "Two", html: "<main>2</main>", css: "", createdAt: 2, assistantMessageId: "old-a-2" },
+        { revision: 1, title: "One", html: "<main>1</main>", css: "", createdAt: 1 },
+        { revision: 2, title: "Two", html: "<main>2</main>", css: "", createdAt: 2 },
       ],
+      status: "ready",
       createdAt: 1,
       updatedAt: 2,
     });
-    const copied = copyStudioArtifactForFork(artifact, new Map([
-      ["old-a-1", "new-a-1"],
-      ["old-a-2", "new-a-2"],
-    ]));
-    expect(copied?.id).not.toBe("artifact-1");
-    expect(copied?.revisions.map((revision) => revision.assistantMessageId)).toEqual(["new-a-1", "new-a-2"]);
+    const copied = copyStudioResponseForFork(response);
+    expect(copied?.id).not.toBe("response-1");
+    expect(copied?.revisions).toHaveLength(2);
   });
 
   it("permits one repair attempt per chat job", () => {

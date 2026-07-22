@@ -1,7 +1,7 @@
-import type { StudioArtifact } from "./studio-types";
+import type { StudioResponse } from "./studio-types";
 
-/** Spec migration trigger: reconsider separate artifact storage past this size. */
-export const STUDIO_ARTIFACT_SNAPSHOT_THRESHOLD_BYTES = 5 * 1024 * 1024;
+/** Spec migration trigger: reconsider separate storage past this size. */
+export const STUDIO_RESPONSE_SNAPSHOT_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
 type StudioDiagnosticsSnapshot = {
   renderAttempts: number;
@@ -13,8 +13,8 @@ type StudioDiagnosticsSnapshot = {
   htmlBytesTotal: number;
   cssBytesTotal: number;
   elementCountTotal: number;
-  artifactSnapshotBytesMax: number;
-  artifactSnapshotThresholdBreaches: number;
+  responseSnapshotBytesMax: number;
+  responseSnapshotThresholdBreaches: number;
   revisionCountMax: number;
 };
 
@@ -28,8 +28,8 @@ const diagnostics: StudioDiagnosticsSnapshot = {
   htmlBytesTotal: 0,
   cssBytesTotal: 0,
   elementCountTotal: 0,
-  artifactSnapshotBytesMax: 0,
-  artifactSnapshotThresholdBreaches: 0,
+  responseSnapshotBytesMax: 0,
+  responseSnapshotThresholdBreaches: 0,
   revisionCountMax: 0,
 };
 
@@ -38,8 +38,8 @@ function logDev(message: string, payload?: Record<string, unknown>): void {
   console.info(`[studio] ${message}`, payload ?? {});
 }
 
-export function measureStudioArtifactBytes(artifact: StudioArtifact): number {
-  return new TextEncoder().encode(JSON.stringify(artifact)).byteLength;
+export function measureStudioResponseBytes(response: StudioResponse): number {
+  return new TextEncoder().encode(JSON.stringify(response)).byteLength;
 }
 
 export function recordStudioRenderAttempt(): void {
@@ -83,20 +83,20 @@ export function recordStudioValidationIssues(codes: string[]): void {
   }
 }
 
-export function recordStudioArtifactSnapshotSize(input: {
+export function recordStudioSnapshotSize(input: {
   bytes: number;
   revisionCount: number;
 }): void {
-  diagnostics.artifactSnapshotBytesMax = Math.max(diagnostics.artifactSnapshotBytesMax, input.bytes);
+  diagnostics.responseSnapshotBytesMax = Math.max(diagnostics.responseSnapshotBytesMax, input.bytes);
   diagnostics.revisionCountMax = Math.max(diagnostics.revisionCountMax, input.revisionCount);
-  const exceeded = input.bytes >= STUDIO_ARTIFACT_SNAPSHOT_THRESHOLD_BYTES;
+  const exceeded = input.bytes >= STUDIO_RESPONSE_SNAPSHOT_THRESHOLD_BYTES;
   if (exceeded) {
-    diagnostics.artifactSnapshotThresholdBreaches += 1;
+    diagnostics.responseSnapshotThresholdBreaches += 1;
   }
-  logDev("artifact snapshot size", {
+  logDev("response snapshot size", {
     bytes: input.bytes,
     revisionCount: input.revisionCount,
-    thresholdBytes: STUDIO_ARTIFACT_SNAPSHOT_THRESHOLD_BYTES,
+    thresholdBytes: STUDIO_RESPONSE_SNAPSHOT_THRESHOLD_BYTES,
     exceededThreshold: exceeded,
   });
 }
@@ -105,7 +105,7 @@ export function getStudioDiagnosticsSnapshot(): Readonly<StudioDiagnosticsSnapsh
   return { ...diagnostics, issueCodes: { ...diagnostics.issueCodes } };
 }
 
-/** Redacted local summary suitable for optional user feedback (no artifact source). */
+/** Redacted local summary suitable for optional user feedback (no response source). */
 export function formatStudioDiagnosticsForFeedback(): string {
   const snapshot = getStudioDiagnosticsSnapshot();
   const topIssues = Object.entries(snapshot.issueCodes)
@@ -114,12 +114,12 @@ export function formatStudioDiagnosticsForFeedback(): string {
     .map(([code, count]) => `${code}:${count}`)
     .join(", ");
   return [
-    "Veyra Studio diagnostics (no artifact source included)",
+    "Veyra Studio diagnostics (no response source included)",
     `renders=${snapshot.successfulRenders}/${snapshot.renderAttempts}`,
     `repairs=${snapshot.repairAttempts}`,
     `finalFailures=${snapshot.finalFailures}`,
-    `artifactBytesMax=${snapshot.artifactSnapshotBytesMax}`,
-    `thresholdBreaches=${snapshot.artifactSnapshotThresholdBreaches}`,
+    `responseBytesMax=${snapshot.responseSnapshotBytesMax}`,
+    `thresholdBreaches=${snapshot.responseSnapshotThresholdBreaches}`,
     `revisionCountMax=${snapshot.revisionCountMax}`,
     `issueCodes=${topIssues || "none"}`,
   ].join("\n");

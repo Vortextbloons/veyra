@@ -8,8 +8,9 @@ import {
   recordStudioValidationIssues,
 } from "./studio-diagnostics";
 import { parseStudioArguments, STUDIO_RENDER_TOOL_NAME } from "./studio-tool";
-import { validateStudioArtifact } from "./studio-validator";
+import { validateStudioRender } from "./studio-validator";
 import { resolveConversationExperience } from "./studio-normalize";
+import type { StudioContextMode } from "./studio-types";
 
 const studioRepairAttempts = new Map<string, number>();
 
@@ -21,7 +22,7 @@ export function resetStudioRepairGuard(conversationId: string, assistantMessageI
   studioRepairAttempts.delete(studioRepairKey(conversationId, assistantMessageId));
 }
 
-export function executeStudioCall(call: ProviderToolCall, context: { conversationId?: string; assistantMessageId?: string; mode?: import("./studio-types").StudioContextMode }): string {
+export function executeStudioCall(call: ProviderToolCall, context: { conversationId?: string; assistantMessageId?: string; mode?: StudioContextMode }): string {
   const label = "Studio Render";
   const fail = (issues: Array<{ code: string; message: string }>, finalFailure = false) => {
     const message = issues.map((issue) => `${issue.code}: ${issue.message}`).join("; ");
@@ -55,7 +56,7 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
     return fail([{ code: "missing_context", message: "The originating conversation is unavailable." }]);
   }
   if (
-    resolveConversationExperience(conversation) !== "studio" ||
+    resolveConversationExperience({ experience: conversation.experience }) !== "studio" ||
     conversation.characterId ||
     conversation.groupId
   ) {
@@ -90,7 +91,7 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
   }
 
   const startedAt = performance.now();
-  const validated = validateStudioArtifact(parsed.value);
+  const validated = validateStudioRender(parsed.value);
   const validationMs = performance.now() - startedAt;
   if (!validated.ok) {
     const nextFailures = priorFailures + 1;

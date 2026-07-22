@@ -1,5 +1,5 @@
 import type { ChatMessage } from "@/modules/chat/chat-types";
-import type { StudioArtifact, StudioContextMode, StudioResponse } from "./studio-types";
+import type { StudioContextMode, StudioResponse } from "./studio-types";
 
 /** Returns a domain-specific Studio system instruction. */
 export function getStudioSystemInstruction(mode: StudioContextMode = "chat"): string {
@@ -15,13 +15,12 @@ export function getStudioSystemInstruction(mode: StudioContextMode = "chat"): st
   return modeHints[mode] ?? base;
 }
 
-/** Legacy constant kept for backward compatibility — delegates to chat mode. */
 export const STUDIO_SYSTEM_INSTRUCTION = getStudioSystemInstruction("chat");
 
 const REVISION_HINT =
   /\b(studio|artifact|canvas|dashboard|timeline|visual|layout|restyle|redesign|revise|update the (view|ui|interface|artifact)|regenerate|make it (look|feel)|change the (colors|design|style))\b/i;
 
-export function shouldIncludeStudioArtifactContext(userPrompt: string): boolean {
+export function shouldIncludeStudioResponseContext(userPrompt: string): boolean {
   return REVISION_HINT.test(userPrompt.trim());
 }
 
@@ -48,7 +47,7 @@ export function inferStudioContextMode(conversation?: {
   return "chat";
 }
 
-/** Builds mode-specific context data to include alongside the artifact. */
+/** Builds mode-specific context data to include alongside the response. */
 export function buildModeContextBlock(
   mode: StudioContextMode,
   domainData?: { persona?: string; scenario?: string; loreEntries?: string; projectName?: string; projectKind?: string; projectDescription?: string; documentTitle?: string; documentType?: string },
@@ -96,21 +95,6 @@ function buildStudioSourceContextBlock(input: {
     return `${header}\n\nThe current response is too large to include in full. Regenerate from the user's request and this summary only.`;
   }
   return block;
-}
-
-export function buildStudioArtifactContextBlock(
-  artifact: StudioArtifact,
-  maxBytes = 12_000,
-): string | undefined {
-  const revision = artifact.revisions.find((item) => item.revision === artifact.currentRevision);
-  if (!revision) return undefined;
-  return buildStudioSourceContextBlock({
-    title: revision.title,
-    revision: revision.revision,
-    html: revision.html,
-    css: revision.css,
-    label: "Studio artifact",
-  }, maxBytes);
 }
 
 export function buildStudioResponseContextBlock(

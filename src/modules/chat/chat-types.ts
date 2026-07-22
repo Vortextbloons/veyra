@@ -8,8 +8,6 @@ import type { SearchResult } from "@/modules/web-search/types";
 import type { FetchStatus } from "@/lib/fetch-status";
 import type {
   ConversationExperience,
-  PresentationMode,
-  StudioArtifact,
   StudioResponse,
 } from "@/modules/chat/studio/studio-types";
 
@@ -124,10 +122,6 @@ export interface Conversation {
   updatedAt: number;
   /** Presentation/response expectations within normal chat (`standard` | `studio`). */
   experience?: ConversationExperience;
-  /** Legacy live presentation field retained for migration compatibility. */
-  presentationMode?: PresentationMode;
-  /** Legacy conversation-level artifact retained for migration recovery. */
-  studioArtifact?: StudioArtifact;
   /** Project this conversation belongs to. undefined = no project (global chat). */
   projectId?: string;
   /** Character this conversation is bound to. undefined = plain (non-character) chat. */

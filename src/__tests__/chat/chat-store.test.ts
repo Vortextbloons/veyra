@@ -100,7 +100,6 @@ describe("chat store message-owned studio responses", () => {
     const forkedId = useChatStore.getState().forkConversation("conversation-1", "assistant-1");
     const forked = useChatStore.getState().conversations.find((item) => item.id === forkedId);
     expect(forked?.experience).toBe("studio");
-    expect(forked?.studioArtifact).toBeUndefined();
     expect(forked?.messages[0]?.studioResponse?.id).not.toBe("response-1");
     expect(forked?.messages[0]?.studioResponse?.title).toBe("Board");
   });
@@ -125,7 +124,6 @@ describe("chat store message-owned studio responses", () => {
       latestRevision: 1,
       status: "ready",
     });
-    expect(stored?.studioArtifact).toBeUndefined();
   });
 
   it("rejects standard, missing, user, character, and cross-conversation targets", () => {

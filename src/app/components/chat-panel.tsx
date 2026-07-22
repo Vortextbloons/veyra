@@ -103,7 +103,6 @@ export function ChatPanel({
   );
   const experience = resolveConversationExperience({
     experience: experienceProp ?? activeConversation?.experience,
-    presentationMode: activeConversation?.presentationMode,
   });
   const studioToolAvailable = useMemo(
     () =>

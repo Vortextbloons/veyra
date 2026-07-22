@@ -6,7 +6,7 @@ const MAX_ELEMENTS = 5_000;
 const MAX_DEPTH = 64;
 const MAX_ATTRIBUTES = 20_000;
 
-export function validateStudioArtifact(input: { html: string; css: string }):
+export function validateStudioRender(input: { html: string; css: string }):
   | { ok: true; html: string; css: string; elementCount: number }
   | { ok: false; issues: StudioValidationIssue[] } {
   const cssIssue = validateCss(input.css);

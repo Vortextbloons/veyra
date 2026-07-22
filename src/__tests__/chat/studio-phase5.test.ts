@@ -3,10 +3,9 @@ import {
   getStudioSystemInstruction,
   buildModeContextBlock,
   inferStudioContextMode,
-  shouldIncludeStudioArtifactContext,
+  shouldIncludeStudioResponseContext,
 } from "@/modules/chat/studio/studio-context";
-import { copyStudioArtifactForFork, normalizeStudioArtifact, reconcileStudioArtifactWithMessages, trimStudioRevisions } from "@/modules/chat/studio/studio-normalize";
-import type { StudioArtifact, StudioContextMode } from "@/modules/chat/studio/studio-types";
+import type { StudioContextMode } from "@/modules/chat/studio/studio-types";
 
 describe("Studio Phase 5 — specialized integrations", () => {
   describe("mode-aware system instructions", () => {
@@ -120,65 +119,11 @@ describe("Studio Phase 5 — specialized integrations", () => {
     });
   });
 
-  describe("mode propagation through normalization", () => {
-    const artifact: StudioArtifact = {
-      id: "artifact-1",
-      title: "Board",
-      mode: "character",
-      currentRevision: 1,
-      latestRevision: 1,
-      revisions: [{
-        revision: 1,
-        title: "Board",
-        html: "<main>x</main>",
-        css: "",
-        createdAt: 1,
-        assistantMessageId: "a-1",
-      }],
-      createdAt: 1,
-      updatedAt: 1,
-    };
-
-    it("preserves mode through normalization", () => {
-      const raw = { ...artifact, mode: "character" };
-      const normalized = normalizeStudioArtifact(raw);
-      expect(normalized?.mode).toBe("character");
-    });
-
-    it("normalizes artifacts without mode", () => {
-      const { mode: _, ...withoutMode } = artifact;
-      const normalized = normalizeStudioArtifact(withoutMode);
-      expect(normalized?.mode).toBeUndefined();
-    });
-
-    it("preserves mode through reconciliation", () => {
-      const reconciled = reconcileStudioArtifactWithMessages(artifact, new Set(["a-1"]));
-      expect(reconciled?.mode).toBe("character");
-    });
-
-    it("preserves mode through fork copy", () => {
-      const copied = copyStudioArtifactForFork(artifact, new Map([["a-1", "new-a-1"]]));
-      expect(copied?.mode).toBe("character");
-      expect(copied?.id).not.toBe("artifact-1");
-    });
-
-    it("preserves mode through revision trimming", () => {
-      const revisions = [
-        { revision: 1, title: "A", html: "<main>x</main>", css: "", createdAt: 1, assistantMessageId: "a-1" },
-        { revision: 2, title: "B", html: "<main>x</main>", css: "", createdAt: 2, assistantMessageId: "a-2" },
-      ];
-      const trimmed = trimStudioRevisions(revisions, 1);
-      const normalized = normalizeStudioArtifact({
-        id: "artifact-1",
-        title: "A",
-        mode: "character",
-        currentRevision: 1,
-        latestRevision: 2,
-        revisions: trimmed,
-        createdAt: 1,
-        updatedAt: 2,
-      });
-      expect(normalized?.mode).toBe("character");
+  describe("revision prompt detection", () => {
+    it("detects revision-related prompts", () => {
+      expect(shouldIncludeStudioResponseContext("Can you restyle the dashboard?")).toBe(true);
+      expect(shouldIncludeStudioResponseContext("Update the view")).toBe(true);
+      expect(shouldIncludeStudioResponseContext("What is the weather?")).toBe(false);
     });
   });
 });

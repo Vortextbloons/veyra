@@ -3,7 +3,7 @@ import type { ChatMessage } from "@/modules/chat/chat-types";
 import { resolveStudioToolAvailability } from "@/modules/chat/chat-provider-options";
 import {
   findLatestReadyStudioResponse,
-  shouldIncludeStudioArtifactContext,
+  shouldIncludeStudioResponseContext,
 } from "@/modules/chat/studio/studio-context";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
@@ -211,6 +211,6 @@ describe("Studio Stage 4 creation-time experience", () => {
     ];
 
     expect(findLatestReadyStudioResponse(messages)?.id).toBe("response-2");
-    expect(shouldIncludeStudioArtifactContext("Can you restyle the dashboard?")).toBe(true);
+    expect(shouldIncludeStudioResponseContext("Can you restyle the dashboard?")).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import type { ChatMessage, Conversation } from "@/modules/chat/chat-types";
-import type { StudioArtifact, StudioResponse } from "./studio-types";
+import type { StudioResponse } from "./studio-types";
 
 function message(
   id: string,
@@ -13,22 +13,6 @@ function message(
     content,
     timestamp: 1,
     ...extras,
-  };
-}
-
-function revision(
-  revisionNumber: number,
-  assistantMessageId: string,
-  title: string,
-  createdAt = revisionNumber,
-) {
-  return {
-    revision: revisionNumber,
-    title,
-    html: `<main>${title}</main>`,
-    css: "main{display:grid}",
-    createdAt,
-    assistantMessageId,
   };
 }
 
@@ -46,35 +30,7 @@ function baseConversation(
   };
 }
 
-/** Legacy Studio snapshot: presentationMode + conversation artifact only. */
-export function legacyStudioConversationFixture(): Conversation {
-  const artifact: StudioArtifact = {
-    id: "artifact-legacy",
-    title: "Two",
-    currentRevision: 2,
-    latestRevision: 2,
-    revisions: [
-      revision(1, "assistant-1", "One"),
-      revision(2, "assistant-2", "Two"),
-    ],
-    createdAt: 1,
-    updatedAt: 2,
-  };
-  return baseConversation(
-    [
-      message("user-1", "user", "Build a board"),
-      message("assistant-1", "assistant", "Here is a board"),
-      message("user-2", "user", "Make a second view"),
-      message("assistant-2", "assistant", "Updated"),
-    ],
-    {
-      presentationMode: "studio",
-      studioArtifact: artifact,
-    },
-  );
-}
-
-/** Native experience + message-owned responses; no legacy presentation fields required. */
+/** Native experience + message-owned responses. */
 export function nativeStudioConversationFixture(): Conversation {
   const response: StudioResponse = {
     id: "response-native-1",
@@ -97,67 +53,19 @@ export function nativeStudioConversationFixture(): Conversation {
       message("user-1", "user", "Show a dashboard"),
       message("assistant-1", "assistant", "Ready", { studioResponse: response }),
     ],
-    {
-      experience: "studio",
-    },
+    { experience: "studio" },
   );
 }
 
-/** Mixed snapshot: native experience/response plus leftover legacy artifact. */
-export function mixedStudioConversationFixture(): Conversation {
-  const native: StudioResponse = {
-    id: "response-native-keep",
-    title: "Native",
-    currentRevision: 2,
-    latestRevision: 2,
-    revisions: [
-      {
-        revision: 1,
-        title: "Native v1",
-        html: "<main>v1</main>",
-        css: "",
-        createdAt: 1,
-      },
-      {
-        revision: 2,
-        title: "Native",
-        html: "<main>v2</main>",
-        css: "",
-        createdAt: 2,
-      },
-    ],
-    status: "ready",
-    createdAt: 1,
-    updatedAt: 2,
-  };
-  const artifact: StudioArtifact = {
-    id: "artifact-mixed",
-    title: "Legacy",
-    currentRevision: 1,
-    latestRevision: 1,
-    revisions: [
-      revision(1, "assistant-1", "ShouldNotOverwrite"),
-      revision(2, "assistant-2", "LegacySecond"),
-    ],
-    createdAt: 1,
-    updatedAt: 2,
-  };
-  return baseConversation(
-    [
-      message("user-1", "user", "First"),
-      message("assistant-1", "assistant", "Native wins", { studioResponse: native }),
-      message("user-2", "user", "Second"),
-      message("assistant-2", "assistant", "Needs migration"),
-    ],
-    {
-      experience: "studio",
-      presentationMode: "studio",
-      studioArtifact: artifact,
-    },
-  );
+/** Standard conversation with no Studio fields. */
+export function standardConversationFixture(): Conversation {
+  return baseConversation([
+    message("user-1", "user", "Hello"),
+    message("assistant-1", "assistant", "Hi"),
+  ]);
 }
 
-/** Malformed revisions, pointers, and statuses mixed with valid data. */
+/** Malformed message-owned response data mixed with valid data. */
 export function malformedStudioConversationFixture(): Conversation {
   return baseConversation(
     [
@@ -193,89 +101,51 @@ export function malformedStudioConversationFixture(): Conversation {
         },
       }),
     ],
-    {
-      experience: "studio",
-      studioArtifact: {
-        id: "artifact-malformed",
-        title: "Legacy",
-        currentRevision: 1,
-        latestRevision: 1,
-        revisions: [
-          revision(1, "assistant-1", "Legacy"),
-          { revision: 2, title: "Bad" } as never,
-        ],
-        createdAt: 1,
-        updatedAt: 1,
-      },
-    },
+    { experience: "studio" },
   );
 }
 
-/** Legacy revisions whose producers are missing; assistant history still exists. */
-export function unmatchedProducerStudioConversationFixture(): Conversation {
+/** Conversation with multiple independent native responses. */
+export function multiResponseStudioConversationFixture(): Conversation {
+  const first: StudioResponse = {
+    id: "response-first",
+    title: "First",
+    currentRevision: 1,
+    latestRevision: 1,
+    revisions: [{
+      revision: 1,
+      title: "First",
+      html: "<main>First</main>",
+      css: "",
+      createdAt: 1,
+    }],
+    status: "ready",
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const second: StudioResponse = {
+    id: "response-second",
+    title: "Second",
+    currentRevision: 1,
+    latestRevision: 1,
+    revisions: [{
+      revision: 1,
+      title: "Second",
+      html: "<main>Second</main>",
+      css: "",
+      createdAt: 2,
+    }],
+    status: "ready",
+    createdAt: 2,
+    updatedAt: 2,
+  };
   return baseConversation(
     [
-      message("user-1", "user", "Hello"),
-      message("assistant-1", "assistant", "Hi"),
+      message("user-1", "user", "First"),
+      message("assistant-1", "assistant", "First response", { studioResponse: first }),
+      message("user-2", "user", "Second"),
+      message("assistant-2", "assistant", "Second response", { studioResponse: second }),
     ],
-    {
-      presentationMode: "studio",
-      studioArtifact: {
-        id: "artifact-unmatched",
-        title: "Orphan",
-        currentRevision: 1,
-        latestRevision: 1,
-        revisions: [revision(1, "deleted-assistant", "Orphan")],
-        createdAt: 1,
-        updatedAt: 1,
-      },
-    },
-  );
-}
-
-/** Legacy Studio artifact with no assistant messages. */
-export function noAssistantStudioConversationFixture(): Conversation {
-  return baseConversation(
-    [message("user-1", "user", "Hello")],
-    {
-      presentationMode: "studio",
-      studioArtifact: {
-        id: "artifact-no-assistant",
-        title: "Orphan",
-        currentRevision: 1,
-        latestRevision: 1,
-        revisions: [revision(1, "assistant-missing", "Orphan")],
-        createdAt: 1,
-        updatedAt: 1,
-      },
-    },
-  );
-}
-
-/** Standard conversation with no Studio fields. */
-export function standardConversationFixture(): Conversation {
-  return baseConversation([
-    message("user-1", "user", "Hello"),
-    message("assistant-1", "assistant", "Hi"),
-  ]);
-}
-
-/** Native experience standard wins over legacy studio presentation. */
-export function mixedExperienceWinsFixture(): Conversation {
-  return baseConversation(
-    [message("user-1", "user", "Hello"), message("assistant-1", "assistant", "Hi")],
-    {
-      experience: "standard",
-      presentationMode: "studio",
-      studioArtifact: {
-        id: "artifact-ignored-for-experience",
-        title: "Board",
-        currentRevision: 1,
-        latestRevision: 1,
-        revisions: [revision(1, "assistant-1", "Board")],
-        createdAt: 1,
-        updatedAt: 1,
-      },
-    },
+    { experience: "studio" },
   );
 }

@@ -24,7 +24,7 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { getStudioSystemInstruction, buildStudioResponseContextBlock, buildModeContextBlock, findLatestReadyStudioResponse, inferStudioContextMode, shouldIncludeStudioArtifactContext } from "@/modules/chat/studio/studio-context";
+import { getStudioSystemInstruction, buildStudioResponseContextBlock, buildModeContextBlock, findLatestReadyStudioResponse, inferStudioContextMode, shouldIncludeStudioResponseContext } from "@/modules/chat/studio/studio-context";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 export interface SendChatCompleteContext {
@@ -119,7 +119,7 @@ export async function sendChatRequest({
       })()
     : extensionState.resolveActiveSkillSelection(conversationId ?? "new-chat", projectId);
   const baseSkillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
-  const experience = resolveConversationExperience(conversation ?? {});
+  const experience = resolveConversationExperience({ experience: conversation?.experience });
   const studioEligible =
     settings.studioModeEnabled &&
     experience === "studio" &&
@@ -137,7 +137,7 @@ export async function sendChatRequest({
     studioEnabled &&
     studioContextMode &&
     lastUserMessage?.content &&
-    shouldIncludeStudioArtifactContext(lastUserMessage.content) &&
+    shouldIncludeStudioResponseContext(lastUserMessage.content) &&
     latestStudioResponse
       ? buildStudioResponseContextBlock(latestStudioResponse)
       : undefined;
