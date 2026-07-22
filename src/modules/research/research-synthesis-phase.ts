@@ -17,6 +17,7 @@ import {
   selectSnippetGroundingSources,
 } from "./research-evidence-summary";
 import { missingSourceResult, buildSourceContradictionsText, markUnsupportedCitations, buildAuditAppendix } from "./research-citation-audit";
+import { RESEARCH_OUTPUT_TOKENS, reportSectionOutputTokens } from "./research-output-budgets";
 
 export async function synthesisPhase(
   ctx: ResearchRuntimeContext,
@@ -150,7 +151,7 @@ export async function synthesisPhase(
       ],
       signal,
       undefined,
-      12000,
+      RESEARCH_OUTPUT_TOKENS.reportOutline,
       { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true, temperature: 0.4, ...ctx.researchAiOptions("main") },
     );
     if (outlineResult.tokens?.totalTokens) ctx.tokenUsage.input += outlineResult.tokens.totalTokens;
@@ -235,7 +236,7 @@ export async function synthesisPhase(
         ],
         signal,
         undefined,
-        Math.max(1000, (section.wordCount || 300) * 2),
+        reportSectionOutputTokens(section.wordCount || 300),
         { reasoningEnabled: config.synthesisReasoning, temperature: 0.4, ...ctx.researchAiOptions("main") },
       );
       if (sectionResult.tokens?.totalTokens) ctx.tokenUsage.input += sectionResult.tokens.totalTokens;
@@ -285,7 +286,7 @@ export async function synthesisPhase(
         ],
         signal,
         undefined,
-        2000,
+        RESEARCH_OUTPUT_TOKENS.selfCritique,
         { reasoningEnabled: config.synthesisReasoning, temperature: 0.3, ...ctx.researchAiOptions("main") },
       );
 
@@ -333,7 +334,7 @@ export async function synthesisPhase(
                 ],
                 signal,
                 undefined,
-                Math.max(1000, (section.wordCount || 300) * 2),
+                reportSectionOutputTokens(section.wordCount || 300),
                 { reasoningEnabled: config.synthesisReasoning, temperature: 0.4, ...ctx.researchAiOptions("main") },
               );
               if (rewriteResult.tokens?.totalTokens) ctx.tokenUsage.input += rewriteResult.tokens.totalTokens;
@@ -516,7 +517,7 @@ export async function synthesisPhase(
             ],
             signal,
             undefined,
-            2000,
+            RESEARCH_OUTPUT_TOKENS.citationAudit,
             ctx.researchAiOptions("lite", {
               reasoningEnabled: config.auditReasoning,
               jsonModeHint: true,

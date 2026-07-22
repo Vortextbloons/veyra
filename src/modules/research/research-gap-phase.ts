@@ -7,6 +7,7 @@ import { guessSourceType } from "./research-source-utils";
 import { fetchAndReadSources } from "./research-read-phase";
 import { validateSources, runClaimVerificationPass } from "./research-verify-phase";
 import { extractFromSourcesBatch } from "./research-extract-phase";
+import { RESEARCH_OUTPUT_TOKENS } from "./research-output-budgets";
 
 export async function gapPhase(
   ctx: ResearchRuntimeContext,
@@ -70,7 +71,7 @@ Return ONLY a JSON object:
         ],
         signal,
         undefined,
-        3000,
+        RESEARCH_OUTPUT_TOKENS.gapAnalysis,
         { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true, temperature: 0.5, ...ctx.researchAiOptions("main") },
       ),
     (v) => `${v.length} chars analyzed`,

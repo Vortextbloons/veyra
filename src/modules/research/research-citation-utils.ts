@@ -160,9 +160,3 @@ export function buildAdaptiveExtractBatches(
   if (current.length > 0) batches.push(current);
   return batches;
 }
-
-export function maxOutputTokensForExtractBatch(sourceCount: number, followUp: boolean): number {
-  const base = followUp ? 6000 : 12_000;
-  const scaled = 1500 + Math.max(1, sourceCount) * 2200;
-  return Math.min(base, scaled);
-}

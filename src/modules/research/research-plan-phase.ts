@@ -3,6 +3,7 @@ import type { ResearchRuntimeContext } from "./research-runtime-context";
 import { callResearchAi, getTemporalContext } from "./research-ai";
 import { safeJsonParse } from "./research-json-utils";
 import { nowIso, fallbackSearchQueries, buildFallbackPlan } from "./research-source-utils";
+import { RESEARCH_OUTPUT_TOKENS } from "./research-output-budgets";
 
 export type PhaseResult = { continue: true } | { continue: false; reason: "paused" | "failed" | "completed" };
 
@@ -65,7 +66,7 @@ Question: ${run.question}${backgroundSection}`;
     ],
     signal,
     undefined,
-    12000,
+    RESEARCH_OUTPUT_TOKENS.plan,
     { reasoningEnabled: config.synthesisReasoning, jsonModeHint: true, temperature: 0.6, ...ctx.researchAiOptions("main") },
   );
   if (planResult.tokens?.totalTokens) ctx.tokenUsage.input += planResult.tokens.totalTokens;

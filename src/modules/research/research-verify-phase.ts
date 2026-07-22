@@ -1,6 +1,7 @@
 import type { ResearchSource, ResearchClaim, ResearchClaimStatus, ResearchSourceStatus, CreateResearchContradictionInput } from "./research-types";
 import type { ResearchRuntimeContext } from "./research-runtime-context";
 import { callResearchAi, getTemporalContext } from "./research-ai";
+import { RESEARCH_OUTPUT_TOKENS, validationBatchOutputTokens } from "./research-output-budgets";
 import { safeJsonParse, normalizeBatchVerifyArray, normalizeClaimStatus } from "./research-json-utils";
 import { pickContradictionWinner } from "./research-citation-utils";
 import { buildSingleSourceValidationPrompt, buildBatchSourceValidationPrompt, buildClaimVerificationPrompt, buildContradictionCheckPrompt, VALIDATION_SYSTEM_PROMPT, BATCH_VALIDATION_SYSTEM_PROMPT, VERIFICATION_SYSTEM_PROMPT, CONTRADICTION_SYSTEM_PROMPT } from "./research-validation-prompts";
@@ -33,7 +34,7 @@ async function validateSource(ctx: ResearchRuntimeContext, source: ResearchSourc
           ],
           signal,
           undefined,
-          2000,
+          RESEARCH_OUTPUT_TOKENS.sourceValidation,
           ctx.researchAiOptions("lite", { reasoningEnabled: config.validateReasoning }),
         ),
       (v) => `${v.length} chars evaluated`,
@@ -113,7 +114,7 @@ async function validateSourceBatch(ctx: ResearchRuntimeContext, batch: ResearchS
           ],
           signal,
           undefined,
-          2000 * batch.length,
+          validationBatchOutputTokens(batch.length),
           ctx.researchAiOptions("lite", { reasoningEnabled: config.validateReasoning }),
         ),
       (v) => `${v.length} chars evaluated`,
@@ -293,7 +294,7 @@ export async function runClaimVerificationPass(ctx: ResearchRuntimeContext, clai
             ],
             signal,
             undefined,
-            3000,
+            RESEARCH_OUTPUT_TOKENS.claimVerification,
             { reasoningEnabled: config.verifyReasoning, jsonModeHint: true, ...ctx.researchAiOptions("main") },
           ),
         (v) => `${v.length} chars assessed`,
@@ -395,7 +396,7 @@ async function checkContradictionPair(
           ],
           signal,
           undefined,
-          1500,
+          RESEARCH_OUTPUT_TOKENS.contradictionCheck,
           ctx.researchAiOptions("lite", {
             reasoningEnabled: config.validateReasoning,
             jsonModeHint: true,

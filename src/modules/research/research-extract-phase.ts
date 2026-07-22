@@ -2,7 +2,8 @@ import type { ResearchSource } from "./research-types";
 import type { ResearchRuntimeContext } from "./research-runtime-context";
 import { callResearchAi } from "./research-ai";
 import { sourceTypeLabel, untrustedSourceBlock } from "./research-source-utils";
-import { maxOutputTokensForExtractBatch, buildAdaptiveExtractBatches } from "./research-citation-utils";
+import { buildAdaptiveExtractBatches } from "./research-citation-utils";
+import { extractionOutputTokens } from "./research-output-budgets";
 import { parseResearchEvidenceArray } from "./extraction-json";
 import { EXTRACT_JSON_SYSTEM, EXTRACT_BATCH_JSON_SYSTEM, EXTRACT_BATCH_JSON_SYSTEM_STRICT, EXTRACT_JSON_RESPONSE_FORMAT, buildBatchPrompt, type ExtractionWorkItem } from "./research-extraction-prompts";
 import { persistOneEvidenceItem } from "./research-extraction-per-source";
@@ -179,7 +180,7 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
                   ],
                   signal,
                   undefined,
-                  followUp ? 6000 : 12000,
+                  extractionOutputTokens(1, followUp),
                   { ...extractAiOptions(temperature) },
                 ),
               (v) => `${v.length} chars parsed`,
@@ -198,7 +199,7 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
       systemMessage: string,
       temperature = 0,
     ): Promise<string> => {
-      const batchMaxTokens = maxOutputTokensForExtractBatch(batchSourceCount, followUp);
+      const batchMaxTokens = extractionOutputTokens(batchSourceCount, followUp);
       const { value } = await ctx.runAiStep(
         "extract",
         `Extract batch of ${batchSourceCount} source${batchSourceCount === 1 ? "" : "s"}: ${(sourceBatch[0]?.title ?? "").length > 40 ? `${sourceBatch[0]?.title?.slice(0, 37) ?? ""}…` : sourceBatch[0]?.title ?? ""}${batchSourceCount > 1 ? ` +${batchSourceCount - 1}` : ""}`,
@@ -350,7 +351,7 @@ Return ONLY this JSON object: {"evidence":[{"type":"fact","content":"...","confi
                   ],
                   signal,
                   undefined,
-                  followUp ? 6000 : 12000,
+                  extractionOutputTokens(1, followUp),
                   { ...extractAiOptions(0) },
                 ),
               (v) => `${v.length} chars parsed`,
