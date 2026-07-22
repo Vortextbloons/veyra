@@ -7,7 +7,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG with intent routing, time range, language, safe search, and pagination parameters |
-| `code_execution` | Disabled | Reserved for a future OS-enforced sandbox |
+| `code_execution` | `codeExecutionEnabled` | Execute Python code via the host interpreter with timeout kill |
 | `doc_create` | `documentToolsEnabled` | Create a new document |
 | `doc_read` | `documentToolsEnabled` | Read a document |
 | `inline_edit` | `documentToolsEnabled` | Edit a document with section/heading targeting |

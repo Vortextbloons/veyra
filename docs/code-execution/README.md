@@ -1,8 +1,7 @@
 # Code Execution
 
-Native Python execution is currently disabled. The previous textual scanner did
-not isolate Python from the host operating system and therefore was not a
-security boundary.
+Native Python execution via `python`, `python3`, or `py` on the system PATH (or
+a custom path configured in Settings → Tools → Code Execution).
 
 ## Contents
 

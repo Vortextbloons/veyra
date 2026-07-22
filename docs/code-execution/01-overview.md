@@ -1,13 +1,13 @@
 # Code Execution
 
-Native Python execution is disabled until Veyra has an OS-enforced sandbox.
+Executes Python code locally by spawning the host interpreter as a subprocess.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/lib/code-execution.ts` | Frontend types and Tauri invoke wrappers |
-| `src-tauri/src/code_execution/` | Rust backend: disabled-state enforcement |
+| `src-tauri/src/code_execution/commands.rs` | Rust backend: interpreter discovery and subprocess management |
 
 ## Python Availability Check
 
@@ -21,8 +21,16 @@ type PythonAvailabilityResult = {
 };
 ```
 
-The availability command always reports the feature as unavailable with the
-security-boundary explanation. Interpreter detection and selection were removed.
+On start (or when the user provides a custom path), `check_python_available`
+probes the system:
+- If a custom Python path is configured, it checks that path directly
+- Otherwise it tries `python`, `python3`, and `py` in order
+- Runs `python --version` to confirm the interpreter works and capture the
+  version string
+
+Returns `available: true` with the resolved path, source (`"custom"` or
+`"probe"`), and version. Returns `available: false` with a help message if no
+Python interpreter is found.
 
 ## Execution
 
@@ -38,12 +46,19 @@ type PythonExecutionResult = {
 };
 ```
 
-The backend rejects execution even if a stale frontend or persisted setting
-attempts to invoke the command.
+`execute_python_code` spawns the Python interpreter as a `tokio::process`:
+
+- Code is passed via `-c` to avoid writing temporary files
+- stdout and stderr are captured as strings
+- A configurable timeout (1–300s, default 30) kills the process if exceeded
+- If the process times out, `timedOut` is `true` and the process is killed
+- The exit code, wall-clock duration, working directory, and Python path are
+  returned alongside the output
 
 ## Safety
 
-- No host Python process is started
-- Persisted enablement from older releases is migrated to `false`
-- The chat tool is excluded from provider tool definitions
-- Re-enabling requires an OS-enforced filesystem, process, credential, and network boundary
+- Code runs as a child process with the same user privileges as Veyra
+- No filesystem, network, or credential isolation is enforced at the OS level
+- The timeout kill prevents runaway processes
+- The chat tool exposes `code_execution` to the AI model only when the feature
+  is enabled

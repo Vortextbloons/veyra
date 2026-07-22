@@ -5,7 +5,7 @@
 | Tool | Condition | Description |
 |------|-----------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG. Parallel execution with up to 2 retries. |
-| `code_execution` | Disabled | Reserved for a future OS-enforced sandbox; native host Python is rejected. |
+| `code_execution` | `codeExecutionEnabled` | Execute Python code via the host interpreter. Timeout-kill and workspace-root confinement. |
 | `doc_create` | `documentToolsEnabled` | Create a new document. |
 | `doc_read` | `documentToolsEnabled` | Read a document by ID. |
 | `inline_edit` | `documentToolsEnabled` | Edit a document (replace_all, replace_section, insert_after_section, replace_text). Retries up to 2 times with LLM re-prompt. |

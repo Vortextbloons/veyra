@@ -230,7 +230,6 @@ function App() {
   // ── Derived ──────────────────────────────────────────────────────────────
 
   const activeConversation = pipeline.activeConversation;
-  const hasActiveConversation = Boolean(activeConversation);
 
   const recentChats: RecentChatsItem[] = useMemo(() => {
     const scoped = activeProjectId
@@ -375,7 +374,7 @@ function App() {
           contextBreakdown={displayContextBreakdown}
           collapsed={rightPanelCollapsed}
           onCollapsedChange={setRightPanelCollapsed}
-          hidden={!isChatMode || !hasActiveConversation}
+          hidden={!isChatMode}
           webSearchEnabled={webSearchEnabled}
           onWebSearchChange={setWebSearchEnabled}
           webSearchDisabled={!webSearchAvailability.available}

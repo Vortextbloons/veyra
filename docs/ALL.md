@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-22T19:09:38.173Z
+> Generated: 2026-07-22T19:49:01.188Z
 > Total files: 74
 
 ## Table of Contents
@@ -328,7 +328,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG with intent routing, time range, language, safe search, and pagination parameters |
-| `code_execution` | Disabled | Reserved for a future OS-enforced sandbox |
+| `code_execution` | `codeExecutionEnabled` | Execute Python code via the host interpreter with timeout kill |
 | `doc_create` | `documentToolsEnabled` | Create a new document |
 | `doc_read` | `documentToolsEnabled` | Read a document |
 | `inline_edit` | `documentToolsEnabled` | Edit a document with section/heading targeting |
@@ -1984,7 +1984,7 @@ Optional web search capability via SearXNG (Docker) with direct ArXiv and Wikipe
 | `src/modules/web-search/types.ts` | Type definitions |
 | `src/modules/web-search/orchestrator/SearchOrchestrator.ts` | Main search orchestrator |
 | `src/modules/web-search/search-planner.ts` | Multi-query generation |
-| `src/modules/web-search/search-ranker.ts` | Result deduplication and ranking (RRF, content/title dedup) |
+| `src/modules/web-search/search-ranker.ts` | URL canonicalization, deduplication, RRF fusion, composite ranking, and domain diversification |
 | `src/modules/web-search/search-routing.ts` | Intent-based category/engine routing |
 | `src/modules/web-search/passage-ranker.ts` | Lexical passage ranking from fetched pages |
 | `src/modules/web-search/search-evaluation.ts` | Retrieval quality metrics (recall, MRR, nDCG) |
@@ -2056,13 +2056,63 @@ On each search, `searx-capabilities-service.ts` fetches the SearXNG `/config` en
 
 ## Deduplication and Ranking
 
-`search-ranker.ts` handles:
+`search-ranker.ts` applies a multi-stage pipeline: URL canonicalization, deduplication, Reciprocal Rank Fusion (RRF), scoring, and domain diversification.
 
-- **URL canonicalization** — strips tracking params (`utm_*`, `fbclid`, `gclid`, `msclkid`, `ref`, `ref_src`, `source`), removes fragments, normalizes trailing slashes and host casing
-- **Deduplication** — three passes: canonical URL key, identical fetched content (≥300 chars), title token similarity (≥92% Jaccard)
-- **Reciprocal-rank fusion** — `score = Σ(weight / (60 + rank)) × 20` with lane weights (primary 1.1, academic 1.1, recent 1.05, general 1.0, opposing 0.7)
-- **Composite scoring** — RRF + multi-provider/lane bonuses + query term coverage + authority boost + freshness + extraction status + lane relevance
-- **Domain diversity** — max 2 results per domain, applied after half the result limit is filled; low-value domains filtered when surplus candidates exist
+### URL Canonicalization
+
+`normalizeSearchUrl()` maps variant URLs to a canonical key before deduplication:
+
+- Strips tracking parameters: `utm_*`, `fbclid`, `gclid`, `msclkid`, `ref`, `ref_src`, `source`
+- Removes URL fragments (`#section`)
+- Normalizes trailing slashes (strips `/` suffix)
+- Lowercases the entire URL
+- Note: remaining query parameters are not sorted, so `?a=1&b=2` and `?b=2&a=1` produce different keys
+
+The `hostname()` helper separately strips `www.` and lowercases the host. Redirects are not followed (disabled in the fetch client for SSRF safety); the Wayback Machine fallback recovers content when the original URL fails.
+
+### Deduplication
+
+Three strategies collapse duplicates, applied in priority order:
+
+1. **Canonical URL key** — normalized URLs map to the same group
+2. **Content-based** — when fetched content exceeds 300 characters, identical normalized content across different hosts is collapsed
+3. **Title similarity** — syndicated articles with ≥92% Jaccard token overlap across different hosts are collapsed
+
+### Reciprocal Rank Fusion (RRF)
+
+Each deduplicated group receives an RRF score:
+
+```
+score = Σ(weight / (K + rank)) × 20
+```
+
+Where `K = 60` and per-lane weights:
+
+| Lane | Weight |
+|------|--------|
+| primary | 1.1 |
+| academic | 1.1 |
+| recent | 1.05 |
+| general | 1.0 |
+| opposing | 0.7 |
+
+A result appearing across multiple queries and lanes accumulates a higher RRF score. Because RRF operates on rank position rather than raw provider scores, it is resistant to incomparable or unscaled scores from different search engines.
+
+### Composite Score
+
+Final ranking combines RRF with additional signals:
+
+- **Multi-provider bonus** (+0.12 per provider)
+- **Multi-lane bonus** (+0.08 per lane)
+- **Query term coverage** (×0.3, ratio of query tokens matched in title/snippet)
+- **Authority boost** (+0.25 for `.gov`, `.edu`, WHO, NIH, World Bank, UN, etc.; –0.15 for Pinterest, Quora, Medium, Substack, SlideShare)
+- **Freshness boost** (+0.18 ≤30 days, +0.12 ≤180 days, +0.06 ≤2 years)
+- **Extraction boost** (+0.15 if content was successfully fetched; –0.08 if fetch failed)
+- **Lane relevance score** (up to +0.2 for domain/content matching the query lane)
+
+### Domain Diversity
+
+After scoring, results are diversified by domain. A domain may contribute at most 2 results, and this cap only applies once half the desired result count (`ceil(maxResults / 2)`) is already placed — so top-ranked results are never excluded. Low-value domains (Medium, Quora, etc.) are filtered earlier if there are enough candidates.
 
 ## Passage Ranking
 
@@ -2874,14 +2924,14 @@ Controls online/offline behavior and determines which features are available bas
 
 # Code Execution
 
-Native Python execution is disabled until Veyra has an OS-enforced sandbox.
+Executes Python code locally by spawning the host interpreter as a subprocess.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/lib/code-execution.ts` | Frontend types and Tauri invoke wrappers |
-| `src-tauri/src/code_execution/` | Rust backend: disabled-state enforcement |
+| `src-tauri/src/code_execution/commands.rs` | Rust backend: interpreter discovery and subprocess management |
 
 ## Python Availability Check
 
@@ -2895,8 +2945,16 @@ type PythonAvailabilityResult = {
 };
 ```
 
-The availability command always reports the feature as unavailable with the
-security-boundary explanation. Interpreter detection and selection were removed.
+On start (or when the user provides a custom path), `check_python_available`
+probes the system:
+- If a custom Python path is configured, it checks that path directly
+- Otherwise it tries `python`, `python3`, and `py` in order
+- Runs `python --version` to confirm the interpreter works and capture the
+  version string
+
+Returns `available: true` with the resolved path, source (`"custom"` or
+`"probe"`), and version. Returns `available: false` with a help message if no
+Python interpreter is found.
 
 ## Execution
 
@@ -2912,15 +2970,22 @@ type PythonExecutionResult = {
 };
 ```
 
-The backend rejects execution even if a stale frontend or persisted setting
-attempts to invoke the command.
+`execute_python_code` spawns the Python interpreter as a `tokio::process`:
+
+- Code is passed via `-c` to avoid writing temporary files
+- stdout and stderr are captured as strings
+- A configurable timeout (1–300s, default 30) kills the process if exceeded
+- If the process times out, `timedOut` is `true` and the process is killed
+- The exit code, wall-clock duration, working directory, and Python path are
+  returned alongside the output
 
 ## Safety
 
-- No host Python process is started
-- Persisted enablement from older releases is migrated to `false`
-- The chat tool is excluded from provider tool definitions
-- Re-enabling requires an OS-enforced filesystem, process, credential, and network boundary
+- Code runs as a child process with the same user privileges as Veyra
+- No filesystem, network, or credential isolation is enforced at the OS level
+- The timeout kill prevents runaway processes
+- The chat tool exposes `code_execution` to the AI model only when the feature
+  is enabled
 
 ---
 
@@ -2930,9 +2995,8 @@ attempts to invoke the command.
 
 # Code Execution
 
-Native Python execution is currently disabled. The previous textual scanner did
-not isolate Python from the host operating system and therefore was not a
-security boundary.
+Native Python execution via `python`, `python3`, or `py` on the system PATH (or
+a custom path configured in Settings → Tools → Code Execution).
 
 ## Contents
 
@@ -3154,7 +3218,7 @@ under `veyra.provider.v1`.
 | Tool | Condition | Description |
 |------|-----------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG. Parallel execution with up to 2 retries. |
-| `code_execution` | Disabled | Reserved for a future OS-enforced sandbox; native host Python is rejected. |
+| `code_execution` | `codeExecutionEnabled` | Execute Python code via the host interpreter. Timeout-kill and workspace-root confinement. |
 | `doc_create` | `documentToolsEnabled` | Create a new document. |
 | `doc_read` | `documentToolsEnabled` | Read a document by ID. |
 | `inline_edit` | `documentToolsEnabled` | Edit a document (replace_all, replace_section, insert_after_section, replace_text). Retries up to 2 times with LLM re-prompt. |
