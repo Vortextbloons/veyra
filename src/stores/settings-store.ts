@@ -228,9 +228,7 @@ export const useSettingsStore = create<SettingsStore>()(
           depthOverrides: parsed.research?.depthOverrides ?? {},
           customProfiles: parsed.research?.customProfiles ?? [],
         };
-        // Native host-Python execution remains off until an OS-enforced
-        // sandbox replaces the removed textual scanner.
-        migrated.codeExecutionEnabled = false;
+
         return { ...current, ...DEFAULT_STATE, ...migrated };
       },
     },

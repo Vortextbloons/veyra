@@ -292,7 +292,7 @@ function App() {
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
       />
-      <div className="flex min-h-0 min-w-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <PrimarySidebar
           activeNav={activeNav}
           onNavChange={setActiveNav}
@@ -306,7 +306,7 @@ function App() {
           onDeleteAll={handleDeleteAllChats}
           collapsed={recentChatsCollapsed}
           onCollapsedChange={setRecentChatsCollapsed}
-          hidden={!isChatMode || activeNav === "projects" || workspaceChatMode === "agents" || recentChats.length === 0}
+          hidden={!isChatMode || activeNav === "projects" || workspaceChatMode === "agents"}
         />
         <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
           <Suspense fallback={null}>

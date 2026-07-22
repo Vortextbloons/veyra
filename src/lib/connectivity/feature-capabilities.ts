@@ -7,12 +7,7 @@ export const FEATURE_CAPABILITIES = {
   chat: { requirement: "local_service" as const, label: "Chat" },
   memory: { requirement: "none" as const, label: "Memory" },
   documents: { requirement: "none" as const, label: "Documents" },
-  codeExecution: {
-    requirement: "none" as const,
-    label: "Code Execution",
-    disabledReason:
-      "Native code execution is disabled until Veyra has an OS-enforced sandbox.",
-  },
+  codeExecution: { requirement: "none" as const, label: "Code Execution" },
   webSearch: { requirement: "internet" as const, label: "Web Search" },
   backgroundJobs: { requirement: "local_service" as const, label: "Background AI" },
   agents: { requirement: "local_service" as const, label: "Agents" },

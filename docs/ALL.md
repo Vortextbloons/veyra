@@ -2058,11 +2058,11 @@ On each search, `searx-capabilities-service.ts` fetches the SearXNG `/config` en
 
 `search-ranker.ts` handles:
 
-- **URL normalization** — strips tracking params (`utm_*`, `fbclid`, `gclid`, etc.)
-- **Content-based dedup** — when fetched content exceeds 300 chars, identical normalized content across hosts is collapsed
-- **Title similarity dedup** — syndicated articles with ≥92% title token overlap across different hosts are collapsed
-- **Reciprocal-rank fusion** — RRF with lane weights (`primary` 1.1, `recent` 1.05, `opposing` 0.7) and a rank constant of 60
-- **Domain diversity** — max 2 results per domain before the results are diversified
+- **URL canonicalization** — strips tracking params (`utm_*`, `fbclid`, `gclid`, `msclkid`, `ref`, `ref_src`, `source`), removes fragments, normalizes trailing slashes and host casing
+- **Deduplication** — three passes: canonical URL key, identical fetched content (≥300 chars), title token similarity (≥92% Jaccard)
+- **Reciprocal-rank fusion** — `score = Σ(weight / (60 + rank)) × 20` with lane weights (primary 1.1, academic 1.1, recent 1.05, general 1.0, opposing 0.7)
+- **Composite scoring** — RRF + multi-provider/lane bonuses + query term coverage + authority boost + freshness + extraction status + lane relevance
+- **Domain diversity** — max 2 results per domain, applied after half the result limit is filled; low-value domains filtered when surplus candidates exist
 
 ## Passage Ranking
 

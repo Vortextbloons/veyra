@@ -39,13 +39,63 @@ On each search, `searx-capabilities-service.ts` fetches the SearXNG `/config` en
 
 ## Deduplication and Ranking
 
-`search-ranker.ts` handles:
+`search-ranker.ts` applies a multi-stage pipeline: URL canonicalization, deduplication, Reciprocal Rank Fusion (RRF), scoring, and domain diversification.
 
-- **URL normalization** — strips tracking params (`utm_*`, `fbclid`, `gclid`, etc.)
-- **Content-based dedup** — when fetched content exceeds 300 chars, identical normalized content across hosts is collapsed
-- **Title similarity dedup** — syndicated articles with ≥92% title token overlap across different hosts are collapsed
-- **Reciprocal-rank fusion** — RRF with lane weights (`primary` 1.1, `recent` 1.05, `opposing` 0.7) and a rank constant of 60
-- **Domain diversity** — max 2 results per domain before the results are diversified
+### URL Canonicalization
+
+`normalizeSearchUrl()` maps variant URLs to a canonical key before deduplication:
+
+- Strips tracking parameters: `utm_*`, `fbclid`, `gclid`, `msclkid`, `ref`, `ref_src`, `source`
+- Removes URL fragments (`#section`)
+- Normalizes trailing slashes (strips `/` suffix)
+- Lowercases the entire URL
+- Note: remaining query parameters are not sorted, so `?a=1&b=2` and `?b=2&a=1` produce different keys
+
+The `hostname()` helper separately strips `www.` and lowercases the host. Redirects are not followed (disabled in the fetch client for SSRF safety); the Wayback Machine fallback recovers content when the original URL fails.
+
+### Deduplication
+
+Three strategies collapse duplicates, applied in priority order:
+
+1. **Canonical URL key** — normalized URLs map to the same group
+2. **Content-based** — when fetched content exceeds 300 characters, identical normalized content across different hosts is collapsed
+3. **Title similarity** — syndicated articles with ≥92% Jaccard token overlap across different hosts are collapsed
+
+### Reciprocal Rank Fusion (RRF)
+
+Each deduplicated group receives an RRF score:
+
+```
+score = Σ(weight / (K + rank)) × 20
+```
+
+Where `K = 60` and per-lane weights:
+
+| Lane | Weight |
+|------|--------|
+| primary | 1.1 |
+| academic | 1.1 |
+| recent | 1.05 |
+| general | 1.0 |
+| opposing | 0.7 |
+
+A result appearing across multiple queries and lanes accumulates a higher RRF score. Because RRF operates on rank position rather than raw provider scores, it is resistant to incomparable or unscaled scores from different search engines.
+
+### Composite Score
+
+Final ranking combines RRF with additional signals:
+
+- **Multi-provider bonus** (+0.12 per provider)
+- **Multi-lane bonus** (+0.08 per lane)
+- **Query term coverage** (×0.3, ratio of query tokens matched in title/snippet)
+- **Authority boost** (+0.25 for `.gov`, `.edu`, WHO, NIH, World Bank, UN, etc.; –0.15 for Pinterest, Quora, Medium, Substack, SlideShare)
+- **Freshness boost** (+0.18 ≤30 days, +0.12 ≤180 days, +0.06 ≤2 years)
+- **Extraction boost** (+0.15 if content was successfully fetched; –0.08 if fetch failed)
+- **Lane relevance score** (up to +0.2 for domain/content matching the query lane)
+
+### Domain Diversity
+
+After scoring, results are diversified by domain. A domain may contribute at most 2 results, and this cap only applies once half the desired result count (`ceil(maxResults / 2)`) is already placed — so top-ranked results are never excluded. Low-value domains (Medium, Quora, etc.) are filtered earlier if there are enough candidates.
 
 ## Passage Ranking
 

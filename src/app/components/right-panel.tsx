@@ -82,7 +82,7 @@ export function RightPanel({
         hidden
           ? "w-0 overflow-hidden opacity-0 pointer-events-none"
           : collapsed
-            ? "w-11 overflow-visible"
+            ? "w-11 overflow-hidden"
             : "w-[300px] min-w-0"
       }`}
       aria-hidden={hidden}
