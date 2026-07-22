@@ -53,6 +53,7 @@ export function startGroupChat(
     ],
     createdAt: now,
     updatedAt: now,
+    experience: "standard" as const,
     groupId: group.id,
     // Reuse `characterId` to carry the active speaker.
     characterId: speaker.id,

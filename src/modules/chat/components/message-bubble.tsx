@@ -15,6 +15,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { type MessageAttachment } from "@/lib/message-attachments";
 import { FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
+import { StudioResponseView } from "@/modules/chat/studio/components/studio-response";
 
 const MarkdownRenderer = lazy(() =>
   import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
@@ -30,6 +31,7 @@ type ChatMessageLayout = {
 
 type MessageBubbleProps = {
   message: ChatMessage;
+  conversationId?: string;
   isStreaming: boolean;
   layout: ChatMessageLayout;
   isLastAssistant?: boolean;
@@ -49,6 +51,7 @@ type MessageBubbleProps = {
 
 export const MessageBubble = memo(function MessageBubble({
   message,
+  conversationId,
   isStreaming,
   layout,
   isLastAssistant = false,
@@ -124,10 +127,12 @@ export const MessageBubble = memo(function MessageBubble({
   const showReplyBubble = Boolean(body) || (isStreaming && !reasoningOnlyStreaming && !hasToolActivity);
   const showThinking = isStreaming && !body && !reasoningOnlyStreaming;
   const showPulseInReply = isStreaming && !reasoningOnlyStreaming && Boolean(body);
+  const studioResponse = message.studioResponse;
 
   return (
       <div className="group/message flex items-start gap-3">
       <div className="min-w-0 flex-1">
+        <div className="max-w-3xl">
         <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
           <span className="truncate font-medium text-white">{resolvedModelName}</span>
           <span className="size-1 rounded-full bg-[var(--color-text-dim)]/50" />
@@ -174,6 +179,14 @@ export const MessageBubble = memo(function MessageBubble({
             <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
           )}
         </div>
+        )}
+        </div>
+        {studioResponse && conversationId && (
+          <StudioResponseView
+            conversationId={conversationId}
+            assistantMessageId={message.id}
+            response={studioResponse}
+          />
         )}
         {!isStreaming && message.performance && (
           <MessagePerformanceBar performance={message.performance} />

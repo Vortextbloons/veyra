@@ -22,8 +22,9 @@ export function StudioSettingsSection() {
     <div className="space-y-3">
       <Toggle label="Enable Studio Mode" on={studioModeEnabled} onChange={setStudioModeEnabled} />
       <p className="text-[11px] text-[var(--color-text-dim)]">
-        Available for chat and character conversations. Use the Studio presentation toggle in the composer
-        to render isolated HTML and CSS visual artifacts beside the conversation.
+        Available for plain chat conversations. Choose Studio Chat when creating a conversation to render
+        isolated HTML and CSS visual responses inline in the transcript. Character and group chats stay on
+        Standard for now.
       </p>
       <div className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-2.5">
         <div className="flex items-start justify-between gap-3">

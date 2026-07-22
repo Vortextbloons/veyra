@@ -18,8 +18,12 @@ import { useChatStore } from "@/stores/chat-store";
 import { resolvePendingQuestion } from "@/modules/chat/tools/ask-question-tool";
 import { StudioShell } from "@/modules/chat/studio/components/studio-shell";
 import { StudioSplitLayout } from "@/modules/chat/studio/studio-split-layout";
+import { StudioExperienceChoice } from "@/modules/chat/studio/components/studio-experience-choice";
 import { resolveStudioToolAvailability } from "@/modules/chat/chat-provider-options";
-import { STUDIO_RENDER_TOOL_NAME } from "@/modules/chat/studio/studio-tool";
+import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
+import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
+
+const SHOW_LEGACY_STUDIO_PANEL = import.meta.env.DEV && import.meta.env.VITE_SHOW_LEGACY_STUDIO_PANEL === "true";
 
 const VIRTUALIZE_AFTER_MESSAGES = 80;
 const ESTIMATED_MESSAGE_HEIGHT = 180;
@@ -64,7 +68,9 @@ export function ChatPanel({
   mode: controlledMode,
   defaultMode = "chat",
   onModeChange,
-  presentationMode = "standard",
+  experience: experienceProp,
+  onExperienceChange,
+  presentationMode,
   onPresentationModeChange,
   agentSessions = [],
   activeAgentSessionId = null,
@@ -101,22 +107,29 @@ export function ChatPanel({
   const activeConversation = useChatStore((s) =>
     s.conversations.find((item) => item.id === s.activeConversationId),
   );
+  const experience = resolveConversationExperience({
+    experience: experienceProp ?? activeConversation?.experience,
+    presentationMode: presentationMode ?? activeConversation?.presentationMode,
+  });
   const activeStudioArtifact = activeConversation?.studioArtifact;
   const studioToolAvailable = useMemo(
     () =>
       resolveStudioToolAvailability({
-        presentationMode: studioModeEnabled ? presentationMode : "standard",
+        experience: studioModeEnabled ? experience : "standard",
         conversationId: activeConversationId,
         projectId: activeConversation?.projectId,
+        characterId: activeConversation?.characterId,
+        groupId: activeConversation?.groupId,
       }),
-    [studioModeEnabled, presentationMode, activeConversationId, activeConversation?.projectId],
+    [
+      studioModeEnabled,
+      experience,
+      activeConversationId,
+      activeConversation?.projectId,
+      activeConversation?.characterId,
+      activeConversation?.groupId,
+    ],
   );
-  const studioValidationError = useMemo(() => {
-    const studioTool = streamingBuffer?.toolStates?.find(
-      (tool) => tool.name === STUDIO_RENDER_TOOL_NAME && tool.phase === "error",
-    );
-    return studioTool?.error ?? null;
-  }, [streamingBuffer?.toolStates]);
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const mode = controlledMode ?? internalMode;
@@ -226,6 +239,18 @@ export function ChatPanel({
     };
   }, [messages, scrollState.height, scrollState.top, shouldVirtualizeMessages]);
   const isEmptyChat = mode !== "agents" && messages.length === 0;
+  const canChangeExperience =
+    isEmptyChat &&
+    mode === "chat" &&
+    !activeConversation?.characterId &&
+    !activeConversation?.groupId;
+
+  const handleExperienceChange = useCallback(
+    (next: ConversationExperience) => {
+      onExperienceChange?.(next);
+    },
+    [onExperienceChange],
+  );
 
   const chatContent = (
     <main className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--color-bg)]">
@@ -233,8 +258,11 @@ export function ChatPanel({
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
         </div>
-        {studioModeEnabled && presentationMode === "studio" && mode !== "agents" && (
-          <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-violet-200">
+        {studioModeEnabled && experience === "studio" && mode !== "agents" && (
+          <span
+            className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-violet-200"
+            aria-label="Studio conversation"
+          >
             Studio
           </span>
         )}
@@ -274,6 +302,9 @@ export function ChatPanel({
             <EmptyChat
               disabled={isStreaming || !onSend}
               onSuggestion={(suggestion) => setSuggestedPrompt(suggestion)}
+              experience={experience}
+              onExperienceChange={canChangeExperience ? handleExperienceChange : undefined}
+              studioAvailable={studioModeEnabled && canChangeExperience}
             />
           </div>
         ) : (
@@ -287,6 +318,7 @@ export function ChatPanel({
               <div key={m.id} style={{ contentVisibility: "auto", containIntrinsicSize: "0 180px" }}>
                 <MessageBubble
                   message={m}
+                  conversationId={activeConversationId ?? undefined}
                   isStreaming={m.id === streamingMessageId}
                   layout={layout}
                   isLastAssistant={m.id === lastAssistantId}
@@ -326,8 +358,7 @@ export function ChatPanel({
           onEnhancedModeChange={setEnhancedModeEnabled}
           mode={mode}
           onModeChange={handleModeChange}
-          presentationMode={studioModeEnabled ? presentationMode : "standard"}
-          onPresentationModeChange={onPresentationModeChange}
+          experience={studioModeEnabled ? experience : "standard"}
           studioToolAvailable={studioToolAvailable}
           suggestedPrompt={suggestedPrompt}
           selectorControls={
@@ -372,7 +403,13 @@ export function ChatPanel({
       </div>
     </main>
   );
-  if (!studioModeEnabled || presentationMode !== "studio" || mode === "agents") return chatContent;
+  if (
+    !SHOW_LEGACY_STUDIO_PANEL ||
+    !studioModeEnabled ||
+    experience !== "studio" ||
+    mode === "agents"
+  ) return chatContent;
+
   return (
     <StudioSplitLayout
       chat={chatContent}
@@ -382,12 +419,9 @@ export function ChatPanel({
           artifactId={activeStudioArtifact?.id}
           mode={activeStudioArtifact?.mode}
           generating={isStreaming}
-          validationError={studioValidationError}
           onClose={() => onPresentationModeChange?.("standard")}
           onUndo={() => activeConversationId && useChatStore.getState().undoStudioRevision(activeConversationId)}
-          onSelectRevision={(revision) =>
-            activeConversationId && useChatStore.getState().selectStudioRevision(activeConversationId, revision)
-          }
+          onSelectRevision={(revision) => activeConversationId && useChatStore.getState().selectStudioRevision(activeConversationId, revision)}
           onRegenerate={onRegenerate}
         />
       }
@@ -398,9 +432,15 @@ export function ChatPanel({
 function EmptyChat({
   disabled,
   onSuggestion,
+  experience = "standard",
+  onExperienceChange,
+  studioAvailable = false,
 }: {
   disabled: boolean;
   onSuggestion: (suggestion: string) => void;
+  experience?: ConversationExperience;
+  onExperienceChange?: (experience: ConversationExperience) => void;
+  studioAvailable?: boolean;
 }) {
   const suggestions = [
     "Summarize the document I am working on",
@@ -420,6 +460,16 @@ function EmptyChat({
         <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-[var(--color-text-dim)]">
           Ask directly, bring in a document, or use memory and tools when the work needs more context.
         </p>
+        {onExperienceChange && (
+          <div className="mt-6 max-w-lg">
+            <StudioExperienceChoice
+              value={experience}
+              onChange={onExperienceChange}
+              disabled={disabled}
+              studioAvailable={studioAvailable}
+            />
+          </div>
+        )}
         <div className="mt-8 grid w-full grid-cols-2 gap-x-6 gap-y-1">
           {suggestions.map((s) => (
             <button

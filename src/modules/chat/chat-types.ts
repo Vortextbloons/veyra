@@ -327,6 +327,9 @@ export interface ChatPanelProps {
   mode?: ChatMode;
   defaultMode?: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
+  experience?: ConversationExperience;
+  onExperienceChange?: (experience: ConversationExperience) => void;
+  /** @deprecated Prefer `experience`. Kept for legacy Studio panel wiring. */
   presentationMode?: PresentationMode;
   onPresentationModeChange?: (mode: PresentationMode) => void;
   agentSessions?: AgentSession[];
@@ -377,6 +380,7 @@ export interface RecentChatsItem {
   id: string;
   title: string;
   meta: string;
+  experience?: ConversationExperience;
 }
 
 export interface RecentChatsProps {

@@ -1,8 +1,10 @@
-import type { StudioArtifact, StudioContextMode } from "./studio-types";
+import type { ChatMessage } from "@/modules/chat/chat-types";
+import type { StudioArtifact, StudioContextMode, StudioResponse } from "./studio-types";
 
 /** Returns a domain-specific Studio system instruction. */
 export function getStudioSystemInstruction(mode: StudioContextMode = "chat"): string {
-  const base = "Studio presentation is enabled. Use studio_render when a visual interface would improve the response. Return a complete HTML body fragment and CSS. Do not access Veyra, Tauri, the filesystem, credentials, scripts, or remote resources.";
+  const base =
+    "This is a Studio conversation. Prefer studio_render for substantive answers. Return one complete HTML body fragment and stylesheet designed for full conversation width. Ordinary text is allowed for acknowledgements, clarifications, errors, and clearly inappropriate visual cases. Do not access Veyra, Tauri, the filesystem, credentials, scripts, or remote resources.";
   const modeHints: Record<StudioContextMode, string> = {
     chat: base,
     character: `${base}\nBuild character-appropriate visual scenes such as settings, character displays, mood boards, or interactive dialogues that reflect the character's persona and world.`,
@@ -73,24 +75,68 @@ export function buildModeContextBlock(
   return parts.length > 0 ? `<veyra_context mode="${mode}">\n${parts.join("\n")}\n</veyra_context>` : undefined;
 }
 
+function buildStudioSourceContextBlock(input: {
+  title: string;
+  revision: number;
+  html: string;
+  css: string;
+  label?: string;
+}, maxBytes = 12_000): string | undefined {
+  const label = input.label ?? "Studio response";
+  const header = `Current ${label} "${input.title}" (revision ${input.revision}). Return a complete replacement via studio_render.`;
+  const encoder = new TextEncoder();
+  const headerBytes = encoder.encode(header).byteLength;
+  const remaining = Math.max(512, maxBytes - headerBytes - 32);
+  const htmlBudget = Math.floor(remaining * 0.65);
+  const cssBudget = remaining - htmlBudget;
+  const html = truncateUtf8(input.html, htmlBudget);
+  const css = truncateUtf8(input.css, cssBudget);
+  const block = `${header}\n\nHTML:\n${html}\n\nCSS:\n${css}`;
+  if (encoder.encode(block).byteLength > maxBytes) {
+    return `${header}\n\nThe current response is too large to include in full. Regenerate from the user's request and this summary only.`;
+  }
+  return block;
+}
+
 export function buildStudioArtifactContextBlock(
   artifact: StudioArtifact,
   maxBytes = 12_000,
 ): string | undefined {
   const revision = artifact.revisions.find((item) => item.revision === artifact.currentRevision);
   if (!revision) return undefined;
+  return buildStudioSourceContextBlock({
+    title: revision.title,
+    revision: revision.revision,
+    html: revision.html,
+    css: revision.css,
+    label: "Studio artifact",
+  }, maxBytes);
+}
 
-  const header = `Current Studio artifact "${revision.title}" (revision ${revision.revision}). Return a complete replacement via studio_render.`;
-  const encoder = new TextEncoder();
-  const headerBytes = encoder.encode(header).byteLength;
-  const remaining = Math.max(512, maxBytes - headerBytes - 32);
-  const htmlBudget = Math.floor(remaining * 0.65);
-  const cssBudget = remaining - htmlBudget;
-  const html = truncateUtf8(revision.html, htmlBudget);
-  const css = truncateUtf8(revision.css, cssBudget);
-  const block = `${header}\n\nHTML:\n${html}\n\nCSS:\n${css}`;
-  if (encoder.encode(block).byteLength > maxBytes) {
-    return `${header}\n\nThe current artifact is too large to include in full. Regenerate from the user's request and this summary only.`;
+export function buildStudioResponseContextBlock(
+  response: StudioResponse,
+  maxBytes = 12_000,
+): string | undefined {
+  const revision = response.revisions.find((item) => item.revision === response.currentRevision);
+  if (!revision) return undefined;
+  return buildStudioSourceContextBlock({
+    title: revision.title,
+    revision: revision.revision,
+    html: revision.html,
+    css: revision.css,
+    label: "Studio response",
+  }, maxBytes);
+}
+
+/** Most recent ready Studio assistant response in transcript order. */
+export function findLatestReadyStudioResponse(messages: ChatMessage[]): StudioResponse | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "assistant") continue;
+    const response = message.studioResponse;
+    if (response?.status === "ready" && response.revisions.length > 0) {
+      return response;
+    }
   }
-  return block;
+  return undefined;
 }

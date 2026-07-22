@@ -1,13 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { StudioRevision } from "./studio-types";
+import type { StudioResponseRevision, StudioRevision } from "./studio-types";
 import { buildStudioDocument } from "./studio-document-builder";
 
 function sanitizeFileName(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 80) || "studio-artifact";
 }
 
-export async function exportStudioRevisionToFile(revision: StudioRevision): Promise<string | null> {
+export async function exportStudioRevisionToFile(revision: StudioRevision | StudioResponseRevision): Promise<string | null> {
   const document = buildStudioDocument({ ...revision, reducedMotion: true });
   const path = await save({
     defaultPath: `${sanitizeFileName(revision.title)}.html`,

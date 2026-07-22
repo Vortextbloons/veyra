@@ -24,7 +24,8 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { getStudioSystemInstruction, buildStudioArtifactContextBlock, buildModeContextBlock, inferStudioContextMode, shouldIncludeStudioArtifactContext } from "@/modules/chat/studio/studio-context";
+import { getStudioSystemInstruction, buildStudioArtifactContextBlock, buildStudioResponseContextBlock, buildModeContextBlock, findLatestReadyStudioResponse, inferStudioContextMode, shouldIncludeStudioArtifactContext } from "@/modules/chat/studio/studio-context";
+import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;
@@ -118,20 +119,30 @@ export async function sendChatRequest({
       })()
     : extensionState.resolveActiveSkillSelection(conversationId ?? "new-chat", projectId);
   const baseSkillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
-  const studioEnabled = conversation?.presentationMode === "studio" && settings.studioModeEnabled;
+  const experience = resolveConversationExperience(conversation ?? {});
+  const studioEligible =
+    settings.studioModeEnabled &&
+    experience === "studio" &&
+    !conversation?.characterId &&
+    !conversation?.groupId;
+  const studioEnabled = studioEligible;
   const studioContextMode = studioEnabled ? inferStudioContextMode({
     characterId: conversation?.characterId,
     groupId: conversation?.groupId,
     projectId: conversation?.projectId,
   }) : undefined;
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
+  const latestStudioResponse = studioEnabled ? findLatestReadyStudioResponse(messages) : undefined;
   const studioArtifactBlock =
     studioEnabled &&
     studioContextMode &&
-    conversation?.studioArtifact &&
     lastUserMessage?.content &&
     shouldIncludeStudioArtifactContext(lastUserMessage.content)
-      ? buildStudioArtifactContextBlock(conversation.studioArtifact)
+      ? (latestStudioResponse
+        ? buildStudioResponseContextBlock(latestStudioResponse)
+        : conversation?.studioArtifact
+          ? buildStudioArtifactContextBlock(conversation.studioArtifact)
+          : undefined)
       : undefined;
   const modeContextBlock = studioContextMode
     ? buildModeContextBlock(studioContextMode, {

@@ -154,8 +154,6 @@ export function CharacterChatView({
         modelLoadProgress={pipeline.modelLoadProgress}
         mode="characters"
         onModeChange={handleModeChange}
-        presentationMode={activeConversation?.presentationMode ?? "standard"}
-        onPresentationModeChange={(presentationMode) => activeConversation && useChatStore.getState().setConversationPresentation(activeConversation.id, presentationMode)}
         onEditMessage={pipeline.handleEditMessage}
         onRegenerate={pipeline.handleRegenerate}
         onRetry={pipeline.handleRetry}

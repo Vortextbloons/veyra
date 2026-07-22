@@ -2,6 +2,26 @@ import { useState } from "react";
 import { MessageSquare, PanelLeftClose, PanelLeftOpen, Search, Trash2 } from "lucide-react";
 import type { RecentChatsProps } from "@/modules/chat/chat-types";
 
+function StudioChatBadge({ compact = false }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <span
+        className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-violet-400"
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <span
+      className="shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-violet-200"
+      aria-label="Studio conversation"
+      title="Studio chat"
+    >
+      Studio
+    </span>
+  );
+}
+
 export function RecentChats({
   chats = [],
   activeId,
@@ -48,20 +68,22 @@ export function RecentChats({
           >
             {chats.map((chat) => {
               const active = chat.id === activeId;
+              const isStudio = chat.experience === "studio";
               return (
                 <button
                   key={chat.id}
                   type="button"
-                  aria-label={chat.title}
+                  aria-label={isStudio ? `${chat.title} (Studio)` : chat.title}
                   aria-current={active ? "true" : undefined}
                   onClick={() => onSelect?.(chat.id)}
-                  className={`grid size-8 place-items-center rounded-md transition-colors ${
+                  className={`relative grid size-8 place-items-center rounded-md transition-colors ${
                     active
                       ? "bg-[var(--color-accent-soft)] text-white"
                       : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
                   }`}
                 >
                   <MessageSquare className="size-3.5" />
+                  {isStudio && <StudioChatBadge compact />}
                 </button>
               );
             })}
@@ -99,6 +121,7 @@ export function RecentChats({
           <ul className="space-y-0.5">
             {chats.map((chat) => {
               const active = chat.id === activeId;
+              const isStudio = chat.experience === "studio";
               return (
                 <li key={chat.id} className="group">
                   <div
@@ -112,14 +135,17 @@ export function RecentChats({
                       onClick={() => onSelect?.(chat.id)}
                       className="flex min-w-0 flex-1 items-start justify-between gap-2 px-3 py-2 text-left"
                     >
-                      <span
-                        className={`line-clamp-2 text-[12.5px] leading-snug ${
-                          active
-                            ? "text-white"
-                            : "text-[var(--color-text-dim)]"
-                        }`}
-                      >
-                        {chat.title}
+                      <span className="flex min-w-0 items-start gap-1.5">
+                        <span
+                          className={`line-clamp-2 text-[12.5px] leading-snug ${
+                            active
+                              ? "text-white"
+                              : "text-[var(--color-text-dim)]"
+                          }`}
+                        >
+                          {chat.title}
+                        </span>
+                        {isStudio && <StudioChatBadge />}
                       </span>
                       <span className="shrink-0 pt-0.5 text-[10.5px] text-[var(--color-text-dim)] transition-opacity group-hover:opacity-0">
                         {chat.meta}

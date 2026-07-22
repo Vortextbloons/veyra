@@ -7,10 +7,9 @@ import {
   Send,
   SlidersHorizontal,
   X,
-  PanelsTopLeft,
 } from "lucide-react";
 import type { ChatMode } from "@/modules/chat/chat-types";
-import type { PresentationMode } from "@/modules/chat/studio/studio-types";
+import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
 import {
   fileToAttachment,
   formatFileSize,
@@ -268,8 +267,7 @@ type ComposerProps = {
   onEnhancedModeChange: (on: boolean) => void;
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
-  presentationMode?: PresentationMode;
-  onPresentationModeChange?: (mode: PresentationMode) => void;
+  experience?: ConversationExperience;
   studioToolAvailable?: boolean;
   selectorControls?: React.ReactNode;
   suggestedPrompt?: string;
@@ -300,8 +298,7 @@ export function Composer({
   onEnhancedModeChange,
   mode,
   onModeChange,
-  presentationMode = "standard",
-  onPresentationModeChange,
+  experience = "standard",
   studioToolAvailable = true,
   selectorControls,
   suggestedPrompt,
@@ -509,9 +506,9 @@ export function Composer({
             onPreview={(att) => setPreviewAttachment(att)}
           />
         )}
-        {!isEditMode && presentationMode === "studio" && !studioToolAvailable && (
+        {!isEditMode && experience === "studio" && !studioToolAvailable && (
           <p className="rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-2 text-[11px] leading-relaxed text-amber-100/90">
-            Studio is enabled, but the active provider or model cannot render visual artifacts. You can still chat normally.
+            Studio is enabled for this chat, but the active provider or model cannot render visual responses. You can still chat normally.
           </p>
         )}
         {extractingFile && (
@@ -560,16 +557,6 @@ export function Composer({
             {!isEditMode && (
               <>
                 <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
-                {(mode === "chat" || mode === "characters" || mode === "research") && studioToolAvailable !== false && (
-                  <ToggleIconButton
-                    icon={PanelsTopLeft}
-                    label="Studio presentation"
-                    active={presentationMode === "studio"}
-                    accent="violet"
-                    disabled={isControlsBlocked}
-                    onChange={(enabled) => onPresentationModeChange?.(enabled ? "studio" : "standard")}
-                  />
-                )}
                 <div className="relative">
                   <IconButton
                     aria-label="Chat options"

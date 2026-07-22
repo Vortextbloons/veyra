@@ -38,6 +38,8 @@ import {
 import { useAppZoom } from "@/hooks/use-app-zoom";
 import { useChatContextPanel } from "@/hooks/use-chat-context-panel";
 import { useChatPipeline } from "@/hooks/use-chat-pipeline";
+import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
+import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
 import { useAgentDispatch } from "@/hooks/use-agent-dispatch";
 
 const MemoryPage = lazy(() => import("@/modules/memory/components/memory-page").then(m => ({ default: m.MemoryPage })));
@@ -240,6 +242,7 @@ function App() {
       id: conversation.id,
       title: conversation.title,
       meta: new Date(conversation.updatedAt).toLocaleDateString(),
+      experience: resolveConversationExperience(conversation),
     }));
   }, [activeProjectId, conversations]);
 
@@ -277,6 +280,16 @@ function App() {
     }
     deleteAllConversations();
   }, [pipelineHandleNewChat, deleteAllConversations]);
+
+  const handleExperienceChange = useCallback((experience: ConversationExperience) => {
+    const store = useChatStore.getState();
+    let conversationId = store.activeConversationId;
+    if (!conversationId) {
+      store.createConversation(activeProjectId ?? undefined, { experience });
+      return;
+    }
+    store.setConversationExperience(conversationId, experience);
+  }, [activeProjectId]);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -346,12 +359,8 @@ function App() {
             modelLoadProgress={pipelineRest.modelLoadProgress}
             mode={workspaceChatMode}
             onModeChange={handleModeChange}
-            presentationMode={activeConversation?.presentationMode ?? "standard"}
-            onPresentationModeChange={(presentationMode) => {
-              let conversationId = useChatStore.getState().activeConversationId;
-              if (!conversationId) conversationId = useChatStore.getState().createConversation();
-              useChatStore.getState().setConversationPresentation(conversationId, presentationMode);
-            }}
+            experience={resolveConversationExperience(activeConversation ?? {})}
+            onExperienceChange={handleExperienceChange}
             agentSessions={agent.visibleAgentSessions}
             activeAgentSessionId={agent.activeAgentSession?.id ?? null}
             agentRuntimeAvailable={agent.agentRuntimeAvailable}

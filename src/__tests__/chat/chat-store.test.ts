@@ -198,7 +198,7 @@ describe("chat store studio revisions", () => {
 
     const forkedId = useChatStore.getState().forkConversation("conversation-1", "assistant-1");
     const forked = useChatStore.getState().conversations.find((item) => item.id === forkedId);
-    expect(forked?.presentationMode).toBe("studio");
+    expect(forked?.experience).toBe("studio");
     expect(forked?.studioArtifact?.id).not.toBe("artifact-1");
     expect(forked?.studioArtifact?.revisions[0]?.assistantMessageId).toBe(forked?.messages[0]?.id);
   });

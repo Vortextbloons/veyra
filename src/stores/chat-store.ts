@@ -4,6 +4,7 @@ import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conver
 import { normalizeAttachment } from "@/lib/message-attachments";
 import { abortPendingQuestion } from "@/modules/chat/pending-question-registry";
 import type {
+  ConversationExperience,
   PresentationMode,
   StudioArtifact,
   StudioContextMode,
@@ -14,6 +15,7 @@ import type {
 } from "@/modules/chat/studio/studio-types";
 import {
   copyStudioArtifactForFork,
+  copyStudioResponseForFork,
   normalizeConversationStudio,
   previousStudioResponseRevision,
   reconcileStudioArtifactWithMessages,
@@ -52,7 +54,9 @@ type ChatStore = {
   _skipNextClear: boolean;
   hydrateConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
-  createConversation: (projectId?: string) => string;
+  createConversation: (projectId?: string, options?: { experience?: ConversationExperience }) => string;
+  setConversationExperience: (id: string, experience: ConversationExperience) => boolean;
+  /** @deprecated Stage 4 — use setConversationExperience. Kept for legacy callers/tests. */
   setConversationPresentation: (id: string, mode: PresentationMode) => void;
   commitStudioRevision: (id: string, revision: Omit<StudioRevision, "revision" | "createdAt">, options?: { pointerRevisionAtStart?: number; mode?: StudioContextMode }) => StudioRevision | null;
   selectStudioRevision: (id: string, revision: number) => boolean;
@@ -177,7 +181,10 @@ function queueStreamingChunk(
   }
 }
 
-function newConversation(projectId?: string): Conversation {
+function newConversation(
+  projectId?: string,
+  experience: ConversationExperience = "standard",
+): Conversation {
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
@@ -186,6 +193,7 @@ function newConversation(projectId?: string): Conversation {
     createdAt: now,
     updatedAt: now,
     projectId,
+    experience,
   };
 }
 
@@ -237,8 +245,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     await hydratePromise;
   },
   setActiveConversationId: (id) => set({ activeConversationId: id }),
-  createConversation: (projectId?: string) => {
-    const conversation = newConversation(projectId);
+  createConversation: (projectId?: string, options?: { experience?: ConversationExperience }) => {
+    const conversation = newConversation(projectId, options?.experience ?? "standard");
     set((state) => {
       const conversations = [conversation, ...state.conversations];
       void saveConversationSnapshot(conversations);
@@ -246,14 +254,25 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
     return conversation.id;
   },
-  setConversationPresentation: (id, presentationMode) => {
+  setConversationExperience: (id, experience) => {
+    let changed = false;
     set((state) => {
-      const conversations = state.conversations.map((conversation) => conversation.id === id
-        ? { ...conversation, presentationMode, updatedAt: Date.now() }
-        : conversation);
-      void saveConversationSnapshot(conversations);
-      return { conversations };
+      let nextConversations = state.conversations;
+      nextConversations = state.conversations.map((conversation) => {
+        if (conversation.id !== id) return conversation;
+        if (conversation.messages.length > 0) return conversation;
+        if (resolveConversationExperience(conversation) === experience) return conversation;
+        changed = true;
+        return { ...conversation, experience, updatedAt: Date.now() };
+      });
+      if (!changed) return {};
+      void saveConversationSnapshot(nextConversations);
+      return { conversations: nextConversations };
     });
+    return changed;
+  },
+  setConversationPresentation: (id, presentationMode) => {
+    get().setConversationExperience(id, presentationMode === "studio" ? "studio" : "standard");
   },
   commitStudioRevision: (id, input, options) => {
     let committed: StudioRevision | null = null;
@@ -817,7 +836,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const remappedMessages = forkedMessages.map((message) => {
         const nextId = crypto.randomUUID();
         messageIdMap.set(message.id, nextId);
-        return { ...message, id: nextId, timestamp: now };
+        return {
+          ...message,
+          id: nextId,
+          timestamp: now,
+          studioResponse: copyStudioResponseForFork(message.studioResponse),
+        };
       });
       const forked: Conversation = {
         id: crypto.randomUUID(),
@@ -826,7 +850,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         createdAt: now,
         updatedAt: now,
         projectId: source.projectId,
-        presentationMode: source.presentationMode,
+        experience: resolveConversationExperience(source),
         studioArtifact: copyStudioArtifactForFork(source.studioArtifact, messageIdMap),
       };
       newId = forked.id;
