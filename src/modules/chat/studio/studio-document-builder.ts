@@ -7,5 +7,6 @@ function escapeHtml(value: string): string {
 
 export function buildStudioDocument(input: { title: string; html: string; css: string; reducedMotion?: boolean }): string {
   const reducedMotion = input.reducedMotion ? "@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}}" : "";
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(input.title)}</title><style>html{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;overflow:auto}${input.css}\n${reducedMotion}</style></head><body>${input.html}</body></html>`;
+  const base = "html,body{min-height:100%;background:#0b0c10;color:#f4f4f5}*{box-sizing:border-box}body{margin:0;overflow:auto}";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(input.title)}</title><style>${base}${input.css}\n${reducedMotion}</style></head><body>${input.html}</body></html>`;
 }

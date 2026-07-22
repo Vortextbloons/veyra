@@ -2,6 +2,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { Toggle } from "@/components/toggle";
 import { ModelDropdown } from "@/components/settings/model-dropdown";
 import { useProviderStore } from "@/stores/provider-store";
+import { StudioSettingsSection } from "@/components/settings/studio-settings-section";
 
 export function ChatSettings() {
   const defaultSystemPrompt = useSettingsStore((s) => s.defaultSystemPrompt);
@@ -18,8 +19,6 @@ export function ChatSettings() {
   const setSummaryModel = useSettingsStore((s) => s.setSummaryModel);
   const contextAnchoringEnabled = useSettingsStore((s) => s.contextAnchoringEnabled);
   const setContextAnchoringEnabled = useSettingsStore((s) => s.setContextAnchoringEnabled);
-  const studioModeEnabled = useSettingsStore((s) => s.studioModeEnabled);
-  const setStudioModeEnabled = useSettingsStore((s) => s.setStudioModeEnabled);
 
   const models = useProviderStore((s) => s.models);
 
@@ -27,10 +26,7 @@ export function ChatSettings() {
     <div className="space-y-8">
       <section>
         <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">Studio Mode</h2>
-        <div className="space-y-3">
-          <Toggle label="Enable Studio Mode" on={studioModeEnabled} onChange={setStudioModeEnabled} />
-          <p className="text-[11px] text-[var(--color-text-dim)]">Allows chat and character conversations to render isolated HTML and CSS visual artifacts. Scripts and remote resources remain blocked.</p>
-        </div>
+        <StudioSettingsSection />
       </section>
       <section>
         <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">

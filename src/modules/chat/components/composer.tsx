@@ -270,6 +270,7 @@ type ComposerProps = {
   onModeChange?: (mode: ChatMode) => void;
   presentationMode?: PresentationMode;
   onPresentationModeChange?: (mode: PresentationMode) => void;
+  studioToolAvailable?: boolean;
   selectorControls?: React.ReactNode;
   suggestedPrompt?: string;
   onSend?: (
@@ -301,6 +302,7 @@ export function Composer({
   onModeChange,
   presentationMode = "standard",
   onPresentationModeChange,
+  studioToolAvailable = true,
   selectorControls,
   suggestedPrompt,
   onSend,
@@ -507,6 +509,11 @@ export function Composer({
             onPreview={(att) => setPreviewAttachment(att)}
           />
         )}
+        {!isEditMode && presentationMode === "studio" && !studioToolAvailable && (
+          <p className="rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-2 text-[11px] leading-relaxed text-amber-100/90">
+            Studio is enabled, but the active provider or model cannot render visual artifacts. You can still chat normally.
+          </p>
+        )}
         {extractingFile && (
           <div className="flex items-center gap-2 px-2 text-[11.5px] text-[var(--color-text-dim)]">
             <Loader2 className="size-3 animate-spin" />
@@ -553,7 +560,16 @@ export function Composer({
             {!isEditMode && (
               <>
                 <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
-                {(mode === "chat" || mode === "characters") && <ToggleIconButton icon={PanelsTopLeft} label="Studio presentation" active={presentationMode === "studio"} accent="violet" disabled={isControlsBlocked} onChange={(enabled) => onPresentationModeChange?.(enabled ? "studio" : "standard")} />}
+                {(mode === "chat" || mode === "characters") && studioToolAvailable !== false && (
+                  <ToggleIconButton
+                    icon={PanelsTopLeft}
+                    label="Studio presentation"
+                    active={presentationMode === "studio"}
+                    accent="violet"
+                    disabled={isControlsBlocked}
+                    onChange={(enabled) => onPresentationModeChange?.(enabled ? "studio" : "standard")}
+                  />
+                )}
                 <div className="relative">
                   <IconButton
                     aria-label="Chat options"

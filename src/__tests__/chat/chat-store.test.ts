@@ -103,6 +103,70 @@ describe("chat store studio revisions", () => {
     expect(artifact?.currentRevision).toBe(1);
   });
 
+  it("keeps a restored pointer when a newer revision commits", () => {
+    useChatStore.setState({
+      conversations: [conversation([], { presentationMode: "studio" })],
+    });
+    useChatStore.getState().commitStudioRevision("conversation-1", {
+      title: "One",
+      html: "<main>1</main>",
+      css: "",
+      assistantMessageId: "assistant-1",
+    });
+    useChatStore.getState().commitStudioRevision("conversation-1", {
+      title: "Two",
+      html: "<main>2</main>",
+      css: "",
+      assistantMessageId: "assistant-2",
+    });
+    useChatStore.getState().selectStudioRevision("conversation-1", 1);
+    useChatStore.getState().commitStudioRevision(
+      "conversation-1",
+      {
+        title: "Three",
+        html: "<main>3</main>",
+        css: "",
+        assistantMessageId: "assistant-3",
+      },
+      { pointerRevisionAtStart: 2 },
+    );
+    const artifact = useChatStore.getState().conversations[0]?.studioArtifact;
+    expect(artifact?.currentRevision).toBe(1);
+    expect(artifact?.latestRevision).toBe(3);
+  });
+
+  it("reconciles studio revisions after message deletion", () => {
+    const assistant: ChatMessage = {
+      id: "assistant-1",
+      role: "assistant",
+      content: "Done",
+      timestamp: 2,
+    };
+    useChatStore.setState({
+      conversations: [conversation([assistant], {
+        presentationMode: "studio",
+        studioArtifact: {
+          id: "artifact-1",
+          title: "Board",
+          currentRevision: 1,
+          latestRevision: 1,
+          revisions: [{
+            revision: 1,
+            title: "Board",
+            html: "<main>Board</main>",
+            css: "",
+            createdAt: 1,
+            assistantMessageId: "assistant-1",
+          }],
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      })],
+    });
+    useChatStore.getState().deleteMessage("conversation-1", "assistant-1");
+    expect(useChatStore.getState().conversations[0]?.studioArtifact).toBeUndefined();
+  });
+
   it("forks studio artifacts with remapped assistant ids", () => {
     const assistant: ChatMessage = {
       id: "assistant-1",

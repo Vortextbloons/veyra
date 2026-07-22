@@ -3,6 +3,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import { buildProviderTools } from "@/lib/tool-registry";
+import { STUDIO_RENDER_TOOL_NAME } from "@/modules/chat/studio/studio-tool";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { disabledMcpServersForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
@@ -25,6 +26,7 @@ export type ProviderTooling = {
   webSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
   codeExecutionEnabled: boolean;
+  studioToolAvailable: boolean;
 };
 
 export function resolveModelSettings(
@@ -50,6 +52,27 @@ export function resolveModelSettings(
     temperature: modelSettings.temperature,
     reasoningEnabled: settings.reasoningEnabled,
   };
+}
+
+export function resolveStudioToolAvailability({
+  presentationMode,
+  conversationId,
+  projectId,
+}: {
+  presentationMode?: "standard" | "studio";
+  conversationId?: string | null;
+  projectId?: string;
+}): boolean {
+  const settings = useSettingsStore.getState();
+  if (!settings.studioModeEnabled || presentationMode !== "studio") return true;
+  return resolveProviderTooling({
+    webSearchEnabled: false,
+    codeExecutionEnabled: false,
+    enhancedMode: settings.enhancedModeEnabled,
+    projectId,
+    conversationId: conversationId ?? undefined,
+    studioEnabled: true,
+  }).studioToolAvailable;
 }
 
 export function resolveProviderTooling({
@@ -107,5 +130,6 @@ export function resolveProviderTooling({
     webSearchEnabled: effectiveWebSearchEnabled,
     webSearchAvailability,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
+    studioToolAvailable: providerTools.some((tool) => tool.function.name === STUDIO_RENDER_TOOL_NAME),
   };
 }

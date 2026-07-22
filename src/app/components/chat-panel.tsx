@@ -17,6 +17,9 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { resolvePendingQuestion } from "@/modules/chat/tools/ask-question-tool";
 import { StudioShell } from "@/modules/chat/studio/components/studio-shell";
+import { StudioSplitLayout } from "@/modules/chat/studio/studio-split-layout";
+import { resolveStudioToolAvailability } from "@/modules/chat/chat-provider-options";
+import { STUDIO_RENDER_TOOL_NAME } from "@/modules/chat/studio/studio-tool";
 
 const VIRTUALIZE_AFTER_MESSAGES = 80;
 const ESTIMATED_MESSAGE_HEIGHT = 180;
@@ -95,9 +98,25 @@ export function ChatPanel({
   const studioModeEnabled = useSettingsStore((s) => s.studioModeEnabled);
   const streamingBuffer = useChatStore((s) => s.streamingBuffer);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
-  const activeStudioArtifact = useChatStore((s) =>
-    s.conversations.find((item) => item.id === s.activeConversationId)?.studioArtifact,
+  const activeConversation = useChatStore((s) =>
+    s.conversations.find((item) => item.id === s.activeConversationId),
   );
+  const activeStudioArtifact = activeConversation?.studioArtifact;
+  const studioToolAvailable = useMemo(
+    () =>
+      resolveStudioToolAvailability({
+        presentationMode: studioModeEnabled ? presentationMode : "standard",
+        conversationId: activeConversationId,
+        projectId: activeConversation?.projectId,
+      }),
+    [studioModeEnabled, presentationMode, activeConversationId, activeConversation?.projectId],
+  );
+  const studioValidationError = useMemo(() => {
+    const studioTool = streamingBuffer?.toolStates?.find(
+      (tool) => tool.name === STUDIO_RENDER_TOOL_NAME && tool.phase === "error",
+    );
+    return studioTool?.error ?? null;
+  }, [streamingBuffer?.toolStates]);
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const mode = controlledMode ?? internalMode;
@@ -209,14 +228,17 @@ export function ChatPanel({
   const isEmptyChat = mode !== "agents" && messages.length === 0;
 
   const chatContent = (
-    <main className="flex h-full min-w-[320px] flex-1 flex-col bg-[var(--color-bg)]">
+    <main className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--color-bg)]">
       {!isEmptyChat && <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
         </div>
-
+        {studioModeEnabled && presentationMode === "studio" && mode !== "agents" && mode !== "research" && (
+          <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-violet-200">
+            Studio
+          </span>
+        )}
         {titleAccessory}
-
       </header>}
 
       <ProviderConnectionBanner
@@ -306,6 +328,7 @@ export function ChatPanel({
           onModeChange={handleModeChange}
           presentationMode={studioModeEnabled ? presentationMode : "standard"}
           onPresentationModeChange={onPresentationModeChange}
+          studioToolAvailable={studioToolAvailable}
           suggestedPrompt={suggestedPrompt}
           selectorControls={
             <>
@@ -350,14 +373,25 @@ export function ChatPanel({
     </main>
   );
   if (!studioModeEnabled || presentationMode !== "studio" || mode === "agents" || mode === "research") return chatContent;
-  return <div className="relative flex h-full min-w-0 flex-1 overflow-hidden">{chatContent}<StudioShell
-    artifact={activeStudioArtifact}
-    generating={isStreaming}
-    onClose={() => onPresentationModeChange?.("standard")}
-    onUndo={() => activeConversationId && useChatStore.getState().undoStudioRevision(activeConversationId)}
-    onSelectRevision={(revision) => activeConversationId && useChatStore.getState().selectStudioRevision(activeConversationId, revision)}
-    onRegenerate={onRegenerate}
-  /></div>;
+  return (
+    <StudioSplitLayout
+      chat={chatContent}
+      studio={
+        <StudioShell
+          artifact={activeStudioArtifact}
+          artifactId={activeStudioArtifact?.id}
+          generating={isStreaming}
+          validationError={studioValidationError}
+          onClose={() => onPresentationModeChange?.("standard")}
+          onUndo={() => activeConversationId && useChatStore.getState().undoStudioRevision(activeConversationId)}
+          onSelectRevision={(revision) =>
+            activeConversationId && useChatStore.getState().selectStudioRevision(activeConversationId, revision)
+          }
+          onRegenerate={onRegenerate}
+        />
+      }
+    />
+  );
 }
 
 function EmptyChat({

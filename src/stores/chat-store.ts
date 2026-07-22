@@ -39,7 +39,7 @@ type ChatStore = {
   setActiveConversationId: (id: string | null) => void;
   createConversation: (projectId?: string) => string;
   setConversationPresentation: (id: string, mode: PresentationMode) => void;
-  commitStudioRevision: (id: string, revision: Omit<StudioRevision, "revision" | "createdAt">) => StudioRevision | null;
+  commitStudioRevision: (id: string, revision: Omit<StudioRevision, "revision" | "createdAt">, options?: { pointerRevisionAtStart?: number }) => StudioRevision | null;
   selectStudioRevision: (id: string, revision: number) => boolean;
   undoStudioRevision: (id: string) => boolean;
   deleteConversation: (id: string) => void;
@@ -236,7 +236,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       return { conversations };
     });
   },
-  commitStudioRevision: (id, input) => {
+  commitStudioRevision: (id, input, options) => {
     let committed: StudioRevision | null = null;
     set((state) => {
       const conversations = state.conversations.map((conversation) => {
@@ -248,13 +248,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           [...(conversation.studioArtifact?.revisions ?? []), committed],
           nextNumber,
         );
+        const pointerRevisionAtStart = options?.pointerRevisionAtStart ?? conversation.studioArtifact?.currentRevision ?? 0;
+        const currentPointer = conversation.studioArtifact?.currentRevision ?? 0;
+        const shouldAdvancePointer = currentPointer === pointerRevisionAtStart;
+        const currentRevision = shouldAdvancePointer ? nextNumber : currentPointer;
+        const current = revisions.find((item) => item.revision === currentRevision) ?? committed;
         return {
           ...conversation,
           updatedAt: now,
           studioArtifact: {
             id: conversation.studioArtifact?.id ?? crypto.randomUUID(),
-            title: input.title,
-            currentRevision: nextNumber,
+            title: current.title,
+            currentRevision,
             latestRevision: nextNumber,
             revisions,
             createdAt: conversation.studioArtifact?.createdAt ?? now,
