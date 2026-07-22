@@ -48,7 +48,6 @@ describe("Studio Stage 1 migration fixtures", () => {
   it("migrates legacy revisions onto matching assistant messages", () => {
     const normalized = normalizeConversationStudio(legacyStudioConversationFixture());
     expect(normalized.experience).toBe("studio");
-    expect(normalized.presentationMode).toBe("studio");
     expect(normalized.studioArtifact?.id).toBe("artifact-legacy");
 
     const first = normalized.messages.find((message) => message.id === "assistant-1");
@@ -63,7 +62,6 @@ describe("Studio Stage 1 migration fixtures", () => {
   it("keeps native studio responses without requiring legacy fields", () => {
     const normalized = normalizeConversationStudio(nativeStudioConversationFixture());
     expect(normalized.experience).toBe("studio");
-    expect(normalized.presentationMode).toBe("studio");
     expect(normalized.studioArtifact).toBeUndefined();
     expect(normalized.messages[1]?.studioResponse?.id).toBe("response-native-1");
   });
@@ -115,7 +113,6 @@ describe("Studio Stage 1 migration fixtures", () => {
   it("normalizes standard conversations without inventing studio data", () => {
     const normalized = normalizeConversationStudio(standardConversationFixture());
     expect(normalized.experience).toBe("standard");
-    expect(normalized.presentationMode).toBe("standard");
     expect(normalized.studioArtifact).toBeUndefined();
     expect(normalized.messages.every((message) => !message.studioResponse)).toBe(true);
   });
@@ -123,7 +120,6 @@ describe("Studio Stage 1 migration fixtures", () => {
   it("lets native experience win in mixed experience snapshots", () => {
     const normalized = normalizeConversationStudio(mixedExperienceWinsFixture());
     expect(normalized.experience).toBe("standard");
-    expect(normalized.presentationMode).toBe("standard");
     // Legacy recovery retained; do not convert into a Standard conversation.
     expect(normalized.studioArtifact?.id).toBe("artifact-ignored-for-experience");
     expect(normalized.messages.every((message) => !message.studioResponse)).toBe(true);

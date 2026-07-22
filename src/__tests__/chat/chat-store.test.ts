@@ -61,160 +61,48 @@ describe("chat store assistant append", () => {
   });
 });
 
-describe("chat store studio revisions", () => {
-  beforeEach(() => {
-    mocks.saveConversationSnapshot.mockClear();
-    useChatStore.setState({
-      conversations: [],
-      activeConversationId: null,
-      streamingBuffer: null,
-    });
-  });
-
-  it("commits, restores, and undoes studio revisions", () => {
-    useChatStore.setState({
-      conversations: [conversation([], { presentationMode: "studio" })],
-    });
-    const first = useChatStore.getState().commitStudioRevision("conversation-1", {
-      title: "One",
-      html: "<main>1</main>",
-      css: "",
-      assistantMessageId: "assistant-1",
-    });
-    const second = useChatStore.getState().commitStudioRevision("conversation-1", {
-      title: "Two",
-      html: "<main>2</main>",
-      css: "",
-      assistantMessageId: "assistant-2",
-    });
-    expect(first?.revision).toBe(1);
-    expect(second?.revision).toBe(2);
-
-    useChatStore.getState().selectStudioRevision("conversation-1", 1);
-    let artifact = useChatStore.getState().conversations[0]?.studioArtifact;
-    expect(artifact?.currentRevision).toBe(1);
-    expect(artifact?.title).toBe("One");
-
-    expect(useChatStore.getState().undoStudioRevision("conversation-1")).toBe(false);
-
-    useChatStore.getState().selectStudioRevision("conversation-1", 2);
-    expect(useChatStore.getState().undoStudioRevision("conversation-1")).toBe(true);
-    artifact = useChatStore.getState().conversations[0]?.studioArtifact;
-    expect(artifact?.currentRevision).toBe(1);
-  });
-
-  it("keeps a restored pointer when a newer revision commits", () => {
-    useChatStore.setState({
-      conversations: [conversation([], { presentationMode: "studio" })],
-    });
-    useChatStore.getState().commitStudioRevision("conversation-1", {
-      title: "One",
-      html: "<main>1</main>",
-      css: "",
-      assistantMessageId: "assistant-1",
-    });
-    useChatStore.getState().commitStudioRevision("conversation-1", {
-      title: "Two",
-      html: "<main>2</main>",
-      css: "",
-      assistantMessageId: "assistant-2",
-    });
-    useChatStore.getState().selectStudioRevision("conversation-1", 1);
-    useChatStore.getState().commitStudioRevision(
-      "conversation-1",
-      {
-        title: "Three",
-        html: "<main>3</main>",
-        css: "",
-        assistantMessageId: "assistant-3",
-      },
-      { pointerRevisionAtStart: 2 },
-    );
-    const artifact = useChatStore.getState().conversations[0]?.studioArtifact;
-    expect(artifact?.currentRevision).toBe(1);
-    expect(artifact?.latestRevision).toBe(3);
-  });
-
-  it("reconciles studio revisions after message deletion", () => {
-    const assistant: ChatMessage = {
-      id: "assistant-1",
-      role: "assistant",
-      content: "Done",
-      timestamp: 2,
-    };
-    useChatStore.setState({
-      conversations: [conversation([assistant], {
-        presentationMode: "studio",
-        studioArtifact: {
-          id: "artifact-1",
-          title: "Board",
-          currentRevision: 1,
-          latestRevision: 1,
-          revisions: [{
-            revision: 1,
-            title: "Board",
-            html: "<main>Board</main>",
-            css: "",
-            createdAt: 1,
-            assistantMessageId: "assistant-1",
-          }],
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      })],
-    });
-    useChatStore.getState().deleteMessage("conversation-1", "assistant-1");
-    expect(useChatStore.getState().conversations[0]?.studioArtifact).toBeUndefined();
-  });
-
-  it("forks studio artifacts with remapped assistant ids", () => {
-    const assistant: ChatMessage = {
-      id: "assistant-1",
-      role: "assistant",
-      content: "Done",
-      timestamp: 2,
-    };
-    useChatStore.setState({
-      conversations: [conversation([assistant], {
-        presentationMode: "studio",
-        studioArtifact: {
-          id: "artifact-1",
-          title: "Board",
-          currentRevision: 1,
-          latestRevision: 1,
-          revisions: [{
-            revision: 1,
-            title: "Board",
-            html: "<main>Board</main>",
-            css: "",
-            createdAt: 1,
-            assistantMessageId: "assistant-1",
-          }],
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      })],
-    });
-
-    const forkedId = useChatStore.getState().forkConversation("conversation-1", "assistant-1");
-    const forked = useChatStore.getState().conversations.find((item) => item.id === forkedId);
-    expect(forked?.experience).toBe("studio");
-    expect(forked?.studioArtifact?.id).not.toBe("artifact-1");
-    expect(forked?.studioArtifact?.revisions[0]?.assistantMessageId).toBe(forked?.messages[0]?.id);
-  });
-});
-
 describe("chat store message-owned studio responses", () => {
-  const assistant = (id: string): ChatMessage => ({
+  const assistant = (id: string, extras?: Partial<ChatMessage>): ChatMessage => ({
     id,
     role: "assistant",
     content: "",
     timestamp: 1,
+    ...extras,
   });
 
   beforeEach(() => {
     mocks.saveConversationSnapshot.mockClear();
     useChatStore.setState({ conversations: [], activeConversationId: null, streamingBuffer: null });
+  });
+
+  it("forks message-owned studio responses with new response identity", () => {
+    useChatStore.setState({
+      conversations: [conversation([assistant("assistant-1", {
+        studioResponse: {
+          id: "response-1",
+          title: "Board",
+          currentRevision: 1,
+          latestRevision: 1,
+          revisions: [{
+            revision: 1,
+            title: "Board",
+            html: "<main>Board</main>",
+            css: "",
+            createdAt: 1,
+          }],
+          status: "ready",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      })], { experience: "studio" })],
+    });
+
+    const forkedId = useChatStore.getState().forkConversation("conversation-1", "assistant-1");
+    const forked = useChatStore.getState().conversations.find((item) => item.id === forkedId);
+    expect(forked?.experience).toBe("studio");
+    expect(forked?.studioArtifact).toBeUndefined();
+    expect(forked?.messages[0]?.studioResponse?.id).not.toBe("response-1");
+    expect(forked?.messages[0]?.studioResponse?.title).toBe("Board");
   });
 
   it("commits only to the named assistant and never writes the legacy artifact", () => {

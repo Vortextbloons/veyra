@@ -329,9 +329,6 @@ export interface ChatPanelProps {
   onModeChange?: (mode: ChatMode) => void;
   experience?: ConversationExperience;
   onExperienceChange?: (experience: ConversationExperience) => void;
-  /** @deprecated Prefer `experience`. Kept for legacy Studio panel wiring. */
-  presentationMode?: PresentationMode;
-  onPresentationModeChange?: (mode: PresentationMode) => void;
   agentSessions?: AgentSession[];
   activeAgentSessionId?: string | null;
   agentRuntimeAvailable?: boolean | null;

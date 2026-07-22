@@ -56,28 +56,19 @@ export function resolveModelSettings(
 
 export function resolveStudioToolAvailability({
   experience,
-  presentationMode,
   conversationId,
   projectId,
   characterId,
   groupId,
 }: {
   experience?: "standard" | "studio";
-  /** @deprecated Prefer `experience`. */
-  presentationMode?: "standard" | "studio";
   conversationId?: string | null;
   projectId?: string;
   characterId?: string;
   groupId?: string;
 }): boolean {
   const settings = useSettingsStore.getState();
-  const resolved =
-    experience === "studio" || experience === "standard"
-      ? experience
-      : presentationMode === "studio"
-        ? "studio"
-        : "standard";
-  if (!settings.studioModeEnabled || resolved !== "studio") return true;
+  if (!settings.studioModeEnabled || experience !== "studio") return true;
   if (characterId || groupId) return false;
   return resolveProviderTooling({
     webSearchEnabled: false,

@@ -122,9 +122,9 @@ describe("Studio Stage 4 creation-time experience", () => {
     expect(useChatStore.getState().conversations[0]?.experience).toBe("studio");
   });
 
-  it("routes legacy presentation setters through immutable experience changes", () => {
+  it("keeps experience immutable after the first message", () => {
     const id = useChatStore.getState().createConversation();
-    useChatStore.getState().setConversationPresentation(id, "studio");
+    expect(useChatStore.getState().setConversationExperience(id, "studio")).toBe(true);
     expect(useChatStore.getState().conversations[0]?.experience).toBe("studio");
 
     const user: ChatMessage = {
@@ -140,7 +140,7 @@ describe("Studio Stage 4 creation-time experience", () => {
       timestamp: 2,
     };
     useChatStore.getState().addMessagePair(id, user, assistant);
-    useChatStore.getState().setConversationPresentation(id, "standard");
+    expect(useChatStore.getState().setConversationExperience(id, "standard")).toBe(false);
     expect(resolveConversationExperience(useChatStore.getState().conversations[0]!)).toBe("studio");
   });
 

@@ -16,14 +16,10 @@ import { MessageBubble } from "@/modules/chat/components/message-bubble";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { resolvePendingQuestion } from "@/modules/chat/tools/ask-question-tool";
-import { StudioShell } from "@/modules/chat/studio/components/studio-shell";
-import { StudioSplitLayout } from "@/modules/chat/studio/studio-split-layout";
 import { StudioExperienceChoice } from "@/modules/chat/studio/components/studio-experience-choice";
 import { resolveStudioToolAvailability } from "@/modules/chat/chat-provider-options";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
-
-const SHOW_LEGACY_STUDIO_PANEL = import.meta.env.DEV && import.meta.env.VITE_SHOW_LEGACY_STUDIO_PANEL === "true";
 
 const VIRTUALIZE_AFTER_MESSAGES = 80;
 const ESTIMATED_MESSAGE_HEIGHT = 180;
@@ -70,8 +66,6 @@ export function ChatPanel({
   onModeChange,
   experience: experienceProp,
   onExperienceChange,
-  presentationMode,
-  onPresentationModeChange,
   agentSessions = [],
   activeAgentSessionId = null,
   agentRuntimeAvailable = null,
@@ -109,9 +103,8 @@ export function ChatPanel({
   );
   const experience = resolveConversationExperience({
     experience: experienceProp ?? activeConversation?.experience,
-    presentationMode: presentationMode ?? activeConversation?.presentationMode,
+    presentationMode: activeConversation?.presentationMode,
   });
-  const activeStudioArtifact = activeConversation?.studioArtifact;
   const studioToolAvailable = useMemo(
     () =>
       resolveStudioToolAvailability({
@@ -252,8 +245,8 @@ export function ChatPanel({
     [onExperienceChange],
   );
 
-  const chatContent = (
-    <main className="flex h-full min-h-0 min-w-0 flex-col bg-[var(--color-bg)]">
+  return (
+    <main className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
       {!isEmptyChat && <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
@@ -402,30 +395,6 @@ export function ChatPanel({
         </div>
       </div>
     </main>
-  );
-  if (
-    !SHOW_LEGACY_STUDIO_PANEL ||
-    !studioModeEnabled ||
-    experience !== "studio" ||
-    mode === "agents"
-  ) return chatContent;
-
-  return (
-    <StudioSplitLayout
-      chat={chatContent}
-      studio={
-        <StudioShell
-          artifact={activeStudioArtifact}
-          artifactId={activeStudioArtifact?.id}
-          mode={activeStudioArtifact?.mode}
-          generating={isStreaming}
-          onClose={() => onPresentationModeChange?.("standard")}
-          onUndo={() => activeConversationId && useChatStore.getState().undoStudioRevision(activeConversationId)}
-          onSelectRevision={(revision) => activeConversationId && useChatStore.getState().selectStudioRevision(activeConversationId, revision)}
-          onRegenerate={onRegenerate}
-        />
-      }
-    />
   );
 }
 

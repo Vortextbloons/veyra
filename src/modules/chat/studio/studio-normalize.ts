@@ -433,10 +433,7 @@ export function migrateLegacyStudioArtifactToMessages(
 
 export function normalizeConversationStudio(conversation: Conversation): Conversation {
   const experience = resolveConversationExperience(conversation);
-  // Keep presentationMode aligned for existing Stage 1 UI paths; do not clear legacy recovery fields.
-  const presentationMode = experience === "studio" ? "studio" : "standard";
-  // Normalize the legacy artifact fully and retain it for recovery. Message migration
-  // reads this copy before any live reconcile path strips orphan revisions.
+  // Retain legacy studioArtifact for Stage 6 recovery cutover. Do not write presentationMode.
   const studioArtifact = normalizeStudioArtifact(conversation.studioArtifact);
 
   const messages =
@@ -455,16 +452,9 @@ export function normalizeConversationStudio(conversation: Conversation): Convers
   return {
     ...conversation,
     experience,
-    presentationMode,
     studioArtifact,
     messages,
   };
-}
-
-export function previousStudioRevision(artifact: StudioArtifact): StudioRevision | null {
-  const sorted = [...artifact.revisions].sort((a, b) => a.revision - b.revision);
-  const index = sorted.findIndex((revision) => revision.revision === artifact.currentRevision);
-  return index > 0 ? sorted[index - 1]! : null;
 }
 
 export function previousStudioResponseRevision(response: StudioResponse): StudioResponseRevision | null {

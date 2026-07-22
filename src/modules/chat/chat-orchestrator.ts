@@ -24,7 +24,7 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { getStudioSystemInstruction, buildStudioArtifactContextBlock, buildStudioResponseContextBlock, buildModeContextBlock, findLatestReadyStudioResponse, inferStudioContextMode, shouldIncludeStudioArtifactContext } from "@/modules/chat/studio/studio-context";
+import { getStudioSystemInstruction, buildStudioResponseContextBlock, buildModeContextBlock, findLatestReadyStudioResponse, inferStudioContextMode, shouldIncludeStudioArtifactContext } from "@/modules/chat/studio/studio-context";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 export interface SendChatCompleteContext {
@@ -133,16 +133,13 @@ export async function sendChatRequest({
   }) : undefined;
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
   const latestStudioResponse = studioEnabled ? findLatestReadyStudioResponse(messages) : undefined;
-  const studioArtifactBlock =
+  const studioResponseBlock =
     studioEnabled &&
     studioContextMode &&
     lastUserMessage?.content &&
-    shouldIncludeStudioArtifactContext(lastUserMessage.content)
-      ? (latestStudioResponse
-        ? buildStudioResponseContextBlock(latestStudioResponse)
-        : conversation?.studioArtifact
-          ? buildStudioArtifactContextBlock(conversation.studioArtifact)
-          : undefined)
+    shouldIncludeStudioArtifactContext(lastUserMessage.content) &&
+    latestStudioResponse
+      ? buildStudioResponseContextBlock(latestStudioResponse)
       : undefined;
   const modeContextBlock = studioContextMode
     ? buildModeContextBlock(studioContextMode, {
@@ -155,7 +152,7 @@ export async function sendChatRequest({
       })
     : undefined;
   const studioInstruction = studioContextMode ? getStudioSystemInstruction(studioContextMode) : undefined;
-  const skillContextBlock = [baseSkillContextBlock, studioInstruction, modeContextBlock, studioArtifactBlock]
+  const skillContextBlock = [baseSkillContextBlock, studioInstruction, modeContextBlock, studioResponseBlock]
     .filter(Boolean).join("\n\n") || undefined;
 
   const contextAnchoringBlock = settings.contextAnchoringEnabled
