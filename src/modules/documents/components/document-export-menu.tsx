@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Download, FileText, FileType, Clipboard, Printer } from "lucide-react";
+import { Download } from "lucide-react";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useDocumentStore, selectActiveDocumentContent } from "../document-store";
 
@@ -68,7 +68,6 @@ export function DocumentExportMenu() {
             onClick={() => handleExport("md")}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text)] hover:bg-white/5"
           >
-            <FileText className="size-3.5 text-[var(--color-text-dim)]" />
             <span>Markdown (.md)</span>
           </button>
           <button
@@ -76,7 +75,6 @@ export function DocumentExportMenu() {
             onClick={() => handleExport("txt")}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text)] hover:bg-white/5"
           >
-            <FileType className="size-3.5 text-[var(--color-text-dim)]" />
             <span>Plain Text (.txt)</span>
           </button>
           <div className="my-1 border-t border-[var(--color-border)]" />
@@ -85,7 +83,6 @@ export function DocumentExportMenu() {
             onClick={handleCopyToClipboard}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text)] hover:bg-white/5"
           >
-            <Clipboard className="size-3.5 text-[var(--color-text-dim)]" />
             <span>Copy to Clipboard</span>
           </button>
           <button
@@ -93,7 +90,6 @@ export function DocumentExportMenu() {
             onClick={handlePrint}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text)] hover:bg-white/5"
           >
-            <Printer className="size-3.5 text-[var(--color-text-dim)]" />
             <span>Print</span>
           </button>
         </div>

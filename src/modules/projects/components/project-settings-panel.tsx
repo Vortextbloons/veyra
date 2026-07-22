@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Save } from "lucide-react";
 import type { ProjectRecord, ProjectSettings } from "@/modules/projects/project-types";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -190,7 +189,6 @@ export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
           disabled={saving}
           className="flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-4 py-1.5 text-[12px] font-medium text-white hover:brightness-110 disabled:opacity-40"
         >
-          <Save className="size-3.5" />
           {saving ? "Saving..." : "Save Settings"}
         </button>
       </div>

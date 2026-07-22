@@ -1,4 +1,4 @@
-import { CheckCircle, XCircle, Loader2, Shield } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Toggle } from "@/components/toggle";
 import { useConnectivity } from "@/lib/connectivity/useConnectivity";
 import { useWebSearchSettings } from "./hooks/use-web-search-settings";
@@ -17,7 +17,6 @@ export function WebSearchSettings() {
     <div className="space-y-8">
       {isConnectivityOffline && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3">
-          <Shield className="mt-0.5 size-4 shrink-0 text-amber-300" />
           <div>
             <p className="text-[12.5px] font-medium text-amber-100">Offline mode is active</p>
             <p className="mt-1 text-[11.5px] leading-relaxed text-amber-100/80">
@@ -100,13 +99,11 @@ export function WebSearchSettings() {
           )}
           {settings.testStatus === "success" && (
             <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-              <CheckCircle className="size-3.5" />
               Connected
             </span>
           )}
           {settings.testStatus === "error" && (
             <span className="flex items-center gap-1 text-[11px] text-red-400">
-              <XCircle className="size-3.5" />
               {settings.testError}
             </span>
           )}

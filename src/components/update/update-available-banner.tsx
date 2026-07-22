@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { open } from "@tauri-apps/plugin-shell";
-import { ArrowUpCircle, Download, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
+import { ArrowUpCircle, Loader2, RefreshCw, X } from "lucide-react";
 import { formatReleaseDate } from "@/lib/app-update";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUpdateStore } from "@/stores/update-store";
@@ -67,7 +67,6 @@ export function UpdateAvailableBanner() {
           onClick={() => void handleDownload()}
           className="inline-flex h-7 items-center gap-1.5 rounded-md bg-sky-500/20 px-2.5 text-[11.5px] font-medium text-sky-100 transition-colors hover:bg-sky-500/30"
         >
-          <Download className="size-3.5" />
           Download
         </button>
         <button
@@ -75,7 +74,6 @@ export function UpdateAvailableBanner() {
           onClick={() => void handleViewRelease()}
           className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.05] hover:text-white"
         >
-          <ExternalLink className="size-3.5" />
           Release notes
         </button>
         <button

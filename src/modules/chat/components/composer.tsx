@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Brain,
   Check,
   Eye,
   Loader2,
   Paperclip,
   Send,
   SlidersHorizontal,
-  Sparkles,
   X,
-  Zap,
 } from "lucide-react";
 import type { ChatMode } from "@/modules/chat/chat-types";
 import {
@@ -220,14 +217,12 @@ export function ToggleIconButton({
 }
 
 function OptionRow({
-  icon: Icon,
   label,
   description,
   active,
   onClick,
   onDoubleClick,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
   label: string;
   description: string;
   active: boolean;
@@ -243,7 +238,6 @@ function OptionRow({
       onDoubleClick={onDoubleClick}
       className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/5"
     >
-      <Icon className="size-4 shrink-0 text-[var(--color-text-dim)]" />
       <span className="min-w-0 flex-1">
         <span className="block text-[12px] font-medium text-white">{label}</span>
         <span className="block text-[10.5px] text-[var(--color-text-dim)]">{description}</span>
@@ -540,7 +534,6 @@ export function Composer({
                         Chat options
                       </p>
                       <OptionRow
-                        icon={Brain}
                         label="Memory"
                         description="Use saved context"
                         active={memory}
@@ -548,14 +541,12 @@ export function Composer({
                         onDoubleClick={onTriggerMemoryExtraction}
                       />
                       <OptionRow
-                        icon={Sparkles}
                         label="Reasoning"
                         description="Show deeper analysis"
                         active={reasoningEnabled}
                         onClick={() => onReasoningEnabledChange(!reasoningEnabled)}
                       />
                       <OptionRow
-                        icon={Zap}
                         label="Enhanced"
                         description="Use the extended workflow"
                         active={enhancedMode}

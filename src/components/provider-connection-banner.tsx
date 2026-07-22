@@ -1,4 +1,4 @@
-import { Loader2, PlugZap, RefreshCw, Play } from "lucide-react";
+import { Loader2, PlugZap } from "lucide-react";
 import type { ProviderInfo } from "@/modules/chat/chat-types";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
@@ -53,11 +53,7 @@ export function ProviderConnectionBanner({
             onClick={onReconnect}
             className="inline-flex h-7 items-center gap-1.5 rounded-md border border-amber-500/20 bg-black/10 px-2.5 text-[11px] font-medium text-amber-100 transition-colors hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {connecting ? (
-              <Loader2 className="size-3 animate-spin" aria-hidden />
-            ) : (
-              <RefreshCw className="size-3" aria-hidden />
-            )}
+            {connecting && <Loader2 className="size-3 animate-spin" aria-hidden />}
             Retry
           </button>
 
@@ -68,11 +64,7 @@ export function ProviderConnectionBanner({
               onClick={onStartServer}
               className="inline-flex h-7 items-center gap-1.5 rounded-md bg-amber-200 px-2.5 text-[11px] font-medium text-[#211b0c] transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {connecting ? (
-                <Loader2 className="size-3 animate-spin" aria-hidden />
-              ) : (
-                <Play className="size-3" aria-hidden />
-              )}
+              {connecting && <Loader2 className="size-3 animate-spin" aria-hidden />}
               Start server
             </button>
           )}

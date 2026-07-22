@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Bookmark, FileText, Globe, Trash2 } from "lucide-react";
+import { Bookmark, Globe, Trash2 } from "lucide-react";
 import { PanelShell } from "@/app/components/right-panel";
 import { useDocumentStore } from "@/modules/documents/document-store";
 import { formatDocumentType } from "@/modules/documents/document-export";
@@ -91,7 +91,6 @@ export function DocumentsPanel() {
                   isActive ? "text-indigo-300" : "text-[var(--color-text)]"
                 }`}
               >
-                <FileText className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-1">
                     <p className="truncate font-medium">{doc.title}</p>

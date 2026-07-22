@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { FileText, BookOpen, Download, Brain } from "lucide-react";
+import { FileText, BookOpen } from "lucide-react";
 import { MARKDOWN_COMPONENTS } from "@/components/markdown-components";
 import type { Components } from "react-markdown";
 import type { ResearchReport, ResearchSource, ResearchEvidence } from "../research-types";
@@ -195,7 +195,6 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
             onClick={handleExportToDocument}
             className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] text-[var(--color-text)] transition-colors hover:bg-white/[0.03]"
           >
-            <Download className="size-3.5" />
             Export to Document
           </button>
           <button
@@ -203,7 +202,6 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
             onClick={handleExportToMemory}
             className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] text-[var(--color-text)] transition-colors hover:bg-white/[0.03]"
           >
-            <Brain className="size-3.5" />
             Export to Memory
           </button>
         </div>

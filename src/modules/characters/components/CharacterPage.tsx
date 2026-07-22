@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Drama, Plus, MoreHorizontal, Upload, FileJson, Image as ImageIcon, Copy, X, Users } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
 import { useCharacterStore } from "../character-store";
 import { useCharacterGroupStore } from "../character-group-store";
 import { CharacterListPanel } from "./CharacterListPanel";
@@ -175,7 +175,6 @@ export function CharacterPage() {
               }`}
               title="Single-character cards"
             >
-              <Drama className="size-3" />
               Characters
             </button>
             <button
@@ -188,7 +187,6 @@ export function CharacterPage() {
               }`}
               title="Multi-character groups"
             >
-              <Users className="size-3" />
               Groups
             </button>
           </div>
@@ -200,7 +198,6 @@ export function CharacterPage() {
               onClick={() => setShowNewDialog(true)}
               className="flex h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12px] font-medium text-white hover:brightness-110"
             >
-              <Plus className="size-3.5" />
               New character
             </button>
           )}
@@ -226,7 +223,6 @@ export function CharacterPage() {
                     onClick={() => handleImport("json")}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-white hover:bg-white/5"
                   >
-                    <FileJson className="size-3.5" />
                     Import CCv3 JSON…
                   </button>
                   <button
@@ -234,7 +230,6 @@ export function CharacterPage() {
                     onClick={() => handleImport("png")}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-white hover:bg-white/5"
                   >
-                    <ImageIcon className="size-3.5" />
                     Import CCv3 PNG…
                   </button>
                 </div>
@@ -336,7 +331,6 @@ export function CharacterPage() {
               }}
               className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-left text-[12.5px] text-white hover:bg-white/5"
             >
-              <FileJson className="size-3.5" />
               Copy Veyra JSON
             </button>
             <button
@@ -347,7 +341,6 @@ export function CharacterPage() {
               }}
               className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-left text-[12.5px] text-white hover:bg-white/5"
             >
-              <Copy className="size-3.5" />
               Copy CCv3 JSON
             </button>
             <button
@@ -358,7 +351,6 @@ export function CharacterPage() {
               }}
               className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-left text-[12.5px] text-white hover:bg-white/5"
             >
-              <Upload className="size-3.5" />
               Download PNG with CCv3
             </button>
           </div>

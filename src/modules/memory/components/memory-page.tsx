@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Database } from "lucide-react";
+import { Database } from "lucide-react";
 import { useMemoryStore } from "@/modules/memory/memory-store";
 import type { CreateMemoryNode, MemoryNode } from "@/modules/memory/memory-types";
 import { MemorySidebar } from "./memory-sidebar";
@@ -45,7 +45,6 @@ function MemoryPageInner() {
             onClick={() => setEditing({ mode: "create" })}
             className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-2.5 text-[12px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
           >
-            <Plus className="size-3.5" />
             New Memory
           </button>
         )}

@@ -1,4 +1,4 @@
-import { Scale, AlertTriangle } from "lucide-react";
+import { Scale } from "lucide-react";
 import type {
   ResearchContradiction,
   ResearchClaim,
@@ -23,7 +23,6 @@ export function ContradictionsPanel({ contradictions, claims, sources }: Props) 
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex items-center gap-2">
-        <AlertTriangle className="size-4 text-amber-400" />
         <h2 className="text-[14px] font-semibold text-[var(--color-text)]">
           Contradictions ({contradictions.length})
         </h2>

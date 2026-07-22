@@ -1,12 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  ArrowLeft,
-  Users,
-  RefreshCw,
-  Trash2,
-  ChevronDown,
-  UserCheck,
-} from "lucide-react";
+import { Users, ChevronDown, UserCheck } from "lucide-react";
 import { ChatPanel } from "@/app/components/chat-panel";
 import { useCharacterStore } from "../character-store";
 import { useCharacterGroupStore } from "../character-group-store";
@@ -109,7 +102,6 @@ export function GroupChatView({ group, onBack }: GroupChatViewProps) {
         className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
         title="Regenerate greeting"
       >
-        <RefreshCw className="size-3" />
         New greeting
       </button>
       <button
@@ -118,7 +110,6 @@ export function GroupChatView({ group, onBack }: GroupChatViewProps) {
         className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
         title="Unbind from group"
       >
-        <Trash2 className="size-3" />
         Unbind
       </button>
       <button
@@ -127,7 +118,6 @@ export function GroupChatView({ group, onBack }: GroupChatViewProps) {
         className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
         title="Back to group"
       >
-        <ArrowLeft className="size-3" />
         Back
       </button>
     </>

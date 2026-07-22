@@ -1,4 +1,3 @@
-import { RotateCcw } from "lucide-react";
 import { Toggle } from "@/components/toggle";
 import type { ResearchProfileOverride } from "../research-config";
 import type { ResearchDepth } from "../research-types";
@@ -143,7 +142,6 @@ export function ResearchProfileKnobsEditor({
               onClick={onClear}
               className="flex items-center gap-1 rounded px-2 py-1 text-[10.5px] font-medium text-[var(--color-text-dim)] transition-colors hover:bg-white/5 hover:text-white"
             >
-              <RotateCcw className="size-3" />
               Clear overrides
             </button>
           )}

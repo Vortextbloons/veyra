@@ -1,4 +1,3 @@
-import { Trash2 } from "lucide-react";
 import { Toggle } from "@/components/toggle";
 import { CollapsibleSettingsSection } from "../collapsible-settings-section";
 import type { WebFetchCacheStats } from "@/modules/web-search/tauri-commands";
@@ -171,7 +170,6 @@ export function ContentExtractionSection({
                 disabled={clearingCache || !cacheStats || cacheStats.entries === 0}
                 className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[11.5px] font-medium text-white transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Trash2 className="size-3" />
                 {clearingCache ? "Clearing…" : "Clear cache"}
               </button>
               {clearError && (

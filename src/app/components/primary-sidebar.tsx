@@ -1,29 +1,13 @@
-import type { ReactNode } from "react";
-import {
-  Database,
-  Drama,
-  FileText,
-  FlaskConical,
-  Folder,
-  MessageSquare,
-  Settings,
-} from "lucide-react";
 import type { PrimarySidebarProps } from "@/modules/chat/chat-types";
 
-type NavItem = {
-  id: string;
-  label: string;
-  icon: ReactNode;
-};
-
-const NAV: NavItem[] = [
-  { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" /> },
-  { id: "characters", label: "Characters", icon: <Drama className="size-4" /> },
-  { id: "projects", label: "Projects", icon: <Folder className="size-4" /> },
-  { id: "documents", label: "Documents", icon: <FileText className="size-4" /> },
-  { id: "research", label: "Research", icon: <FlaskConical className="size-4" /> },
-  { id: "memory", label: "Memory", icon: <Database className="size-4" /> },
-  { id: "settings", label: "Settings", icon: <Settings className="size-4" /> },
+const NAV: { id: string; label: string }[] = [
+  { id: "chat", label: "Chat" },
+  { id: "characters", label: "Characters" },
+  { id: "projects", label: "Projects" },
+  { id: "documents", label: "Documents" },
+  { id: "research", label: "Research" },
+  { id: "memory", label: "Memory" },
+  { id: "settings", label: "Settings" },
 ];
 
 export function PrimarySidebar({ activeNav, onNavChange, onNewChat }: PrimarySidebarProps) {
@@ -63,9 +47,6 @@ export function PrimarySidebar({ activeNav, onNavChange, onNewChat }: PrimarySid
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.025] hover:text-[var(--color-text)]"
               }`}
             >
-              <span className="hidden text-[var(--color-text-dim)] max-[960px]:block">
-                {item.icon}
-              </span>
               <span className="max-[960px]:hidden">{item.label}</span>
             </button>
           );

@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowUpRight } from "lucide-react";
 import type { ChatMode, ChatPanelProps } from "@/modules/chat/chat-types";
 import { ProviderConnectionBanner } from "@/components/provider-connection-banner";
 import { ProviderSelector } from "@/components/provider-selector";
@@ -375,7 +374,7 @@ function EmptyChat({
               className="group flex min-h-12 items-center justify-between border-b border-[var(--color-border)] px-1 text-left text-[13px] leading-snug text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
             >
               <span>{s}</span>
-              <ArrowUpRight className="size-3.5 shrink-0 opacity-35 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100" />
+
             </button>
           ))}
         </div>

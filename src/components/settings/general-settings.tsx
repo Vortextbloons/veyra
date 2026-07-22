@@ -35,7 +35,6 @@ export function GeneralSettings() {
         </p>
         {favoriteModelsList.length === 0 ? (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-6 text-center">
-            <Star className="mx-auto mb-2 size-5 text-[var(--color-text-dim)]" />
             <p className="text-[12px] text-[var(--color-text-dim)]">
               No favorites yet. Star models in the chat header or models page.
             </p>

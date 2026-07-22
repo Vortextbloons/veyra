@@ -1,5 +1,5 @@
-import { useCallback, type ReactNode } from "react";
-import { CheckCircle, Loader2, Shield, Wifi, WifiOff } from "lucide-react";
+import { useCallback } from "react";
+import { Loader2, Shield, Wifi, WifiOff } from "lucide-react";
 import type { ConnectivityPreference } from "@/lib/connectivity/connectivity-types";
 import { useConnectivity } from "@/lib/connectivity/useConnectivity";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -8,25 +8,21 @@ const PREFERENCE_OPTIONS: {
   id: ConnectivityPreference;
   label: string;
   description: string;
-  icon: ReactNode;
 }[] = [
   {
     id: "auto",
     label: "Auto",
     description: "Follow your network connection. Web search turns off when offline.",
-    icon: <Wifi className="size-4" />,
   },
   {
     id: "online",
     label: "Online",
     description: "Keep internet features enabled even if the probe cannot verify connectivity.",
-    icon: <Wifi className="size-4" />,
   },
   {
     id: "offline",
     label: "Offline",
     description: "Privacy mode — block web search and cloud models. Nothing leaves your machine.",
-    icon: <Shield className="size-4" />,
   },
 ];
 
@@ -126,19 +122,9 @@ export function PrivacyConnectivitySettings() {
                     : "border-[var(--color-border)] bg-[var(--color-panel)] hover:border-white/15"
                 }`}
               >
-                <span
-                  className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-md ${
-                    selected
-                      ? "bg-[var(--color-accent)]/20 text-[var(--color-accent)]"
-                      : "bg-white/5 text-[var(--color-text-dim)]"
-                  }`}
-                >
-                  {option.icon}
-                </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2 text-[12.5px] font-medium text-white">
                     {option.label}
-                    {selected && <CheckCircle className="size-3.5 text-[var(--color-accent)]" />}
                   </span>
                   <span className="mt-0.5 block text-[11.5px] leading-relaxed text-[var(--color-text-dim)]">
                     {option.description}

@@ -1,4 +1,4 @@
-import { Search, Plus, ChevronDown, ChevronRight, X } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { DndContext, DragOverlay, useSensor, useSensors, PointerSensor, type DragEndEvent } from "@dnd-kit/core";
 import { useDocumentStore, filterDocuments } from "../document-store";
@@ -138,7 +138,6 @@ export function DocumentListPanel() {
               onClick={() => setShowNewMenu(!showNewMenu)}
               className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2 py-1 text-[12px] font-medium text-white hover:brightness-110"
             >
-              <Plus className="size-3" />
               New
             </button>
             {showNewMenu && (

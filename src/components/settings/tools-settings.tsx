@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Wrench } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { ToolSectionPicker } from "./tool-section-picker";
 import { ToolsSettingsSearchProvider } from "./tools-settings-search-provider";
@@ -53,9 +52,6 @@ export function ToolsSettings() {
   return (
     <div className="space-y-8">
       <div className="flex items-start gap-3">
-        <div className="grid size-9 place-items-center rounded-lg bg-white/[0.04] text-[var(--color-text-dim)]">
-          <Wrench className="size-4" />
-        </div>
         <div>
           <h1 className="text-[15px] font-semibold text-white">Tools</h1>
           <p className="mt-1 max-w-2xl text-[12px] text-[var(--color-text-dim)]">

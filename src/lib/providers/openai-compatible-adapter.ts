@@ -85,7 +85,6 @@ export function createOpenAiCompatibleAdapter(config: CloudProviderConfig): Prov
   return {
     id: config.id,
     name: config.name,
-    icon: config.preset,
     connectivityRequirement: "internet",
     capabilities: { jsonMode: true },
     isAvailable: async () => {

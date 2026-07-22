@@ -1,15 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
-  Plus,
   Activity,
   LayoutList,
-  BookOpen,
-  ScanLine,
-  ShieldAlert,
-  FileText,
-  History,
-  Pause,
-  Play,
   Loader2,
   Sparkles,
   X,
@@ -37,12 +29,12 @@ import { isPdfUrl, isYouTubeUrl, isDocxUrl, isPptxUrl, isXlsxUrl, isEpubUrl } fr
 import { ConfirmDangerModal } from "@/components/confirm-danger-modal";
 
 const TAB_ITEMS = [
-  { id: "plan", label: "Plan", icon: <LayoutList className="size-3.5" /> },
-  { id: "timeline", label: "Timeline", icon: <History className="size-3.5" /> },
-  { id: "sources", label: "Sources", icon: <BookOpen className="size-3.5" /> },
-  { id: "evidence", label: "Evidence", icon: <ScanLine className="size-3.5" /> },
-  { id: "contradictions", label: "Contradictions", icon: <ShieldAlert className="size-3.5" /> },
-  { id: "report", label: "Report", icon: <FileText className="size-3.5" /> },
+  { id: "plan", label: "Plan" },
+  { id: "timeline", label: "Timeline" },
+  { id: "sources", label: "Sources" },
+  { id: "evidence", label: "Evidence" },
+  { id: "contradictions", label: "Contradictions" },
+  { id: "report", label: "Report" },
 ] as const;
 
 type TabId = (typeof TAB_ITEMS)[number]["id"];
@@ -189,7 +181,6 @@ export function ResearchPage() {
           onClick={() => setShowNewDialog(true)}
           className="flex h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12px] font-medium text-white hover:brightness-110"
         >
-          <Plus className="size-3.5" />
           New Research
         </button>}
       </header>
@@ -255,9 +246,7 @@ export function ResearchPage() {
                       >
                         {isPausing ? (
                           <Loader2 className="size-3 animate-spin" />
-                        ) : (
-                          <Pause className="size-3" />
-                        )}
+                        ) : null}
                         {isPausing ? "Pausing…" : "Pause"}
                       </button>
                     )}
@@ -268,7 +257,6 @@ export function ResearchPage() {
                         className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
                         title="Resume research"
                       >
-                        <Play className="size-3" />
                         Resume
                       </button>
                     )}
@@ -327,7 +315,6 @@ export function ResearchPage() {
                           : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
                       }`}
                     >
-                      {tab.icon}
                       {tab.label}
                       {count > 0 && (
                         <span className="ml-0.5 rounded-full bg-white/[0.06] px-1.5 py-px text-[10px] text-[var(--color-text-dim)]">
@@ -444,7 +431,6 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
             onClick={onStart}
             className="flex min-h-9 items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 text-[13px] font-medium text-white hover:brightness-110"
           >
-            <Plus className="size-4" />
             New Research
           </button>
         </div>

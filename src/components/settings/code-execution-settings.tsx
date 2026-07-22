@@ -1,4 +1,3 @@
-import { ShieldAlert } from "lucide-react";
 import { CollapsibleSettingsSection } from "./collapsible-settings-section";
 
 export function CodeExecutionSettings() {
@@ -6,7 +5,6 @@ export function CodeExecutionSettings() {
     <div className="space-y-8">
       <section className="rounded-lg border border-amber-500/25 bg-amber-500/[0.08] px-4 py-3">
         <div className="flex items-start gap-3">
-          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-300" />
           <div>
             <p className="text-[12.5px] font-medium text-white">
               Native code execution is disabled

@@ -391,7 +391,6 @@ export function NewResearchDialog({ onClose }: Props) {
               </>
             ) : (
               <>
-                <FlaskConical className="size-4" />
                 Start Research
               </>
             )}

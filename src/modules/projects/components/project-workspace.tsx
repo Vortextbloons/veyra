@@ -3,13 +3,8 @@ import {
   Folder,
   MessageSquare,
   FileText,
-  Database,
-  Settings2,
   BookOpen,
-  Plus,
   Clock,
-  Pencil,
-  Save,
 } from "lucide-react";
 import type { ProjectRecord } from "@/modules/projects/project-types";
 import { PROJECT_KIND_LABELS } from "@/modules/projects/project-types";
@@ -22,13 +17,13 @@ import { ProjectExportPanel } from "./project-export-panel";
 
 type Tab = "overview" | "chats" | "documents" | "memory" | "instructions" | "settings";
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "overview", label: "Overview", icon: <Folder className="size-3.5" /> },
-  { id: "chats", label: "Chats", icon: <MessageSquare className="size-3.5" /> },
-  { id: "documents", label: "Documents", icon: <FileText className="size-3.5" /> },
-  { id: "memory", label: "Memory", icon: <Database className="size-3.5" /> },
-  { id: "instructions", label: "Instructions", icon: <BookOpen className="size-3.5" /> },
-  { id: "settings", label: "Settings", icon: <Settings2 className="size-3.5" /> },
+const TABS: { id: Tab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "chats", label: "Chats" },
+  { id: "documents", label: "Documents" },
+  { id: "memory", label: "Memory" },
+  { id: "instructions", label: "Instructions" },
+  { id: "settings", label: "Settings" },
 ];
 
 export function ProjectWorkspace({ project }: { project: ProjectRecord }) {
@@ -66,7 +61,6 @@ export function ProjectWorkspace({ project }: { project: ProjectRecord }) {
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]"
               }`}
             >
-              {tab.icon}
               {tab.label}
             </button>
           ))}
@@ -138,7 +132,6 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
           <div className="w-full flex-1 space-y-1">
             {projectChats.map((chat) => (
               <div key={chat.id} className="flex items-center gap-2 rounded-md px-2 py-1.5">
-                <MessageSquare className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
                 <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text)]">
                   {chat.title}
                 </span>
@@ -186,7 +179,6 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
           onClick={handleNewChat}
           className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
         >
-          <Plus className="size-3.5" />
           New Chat
         </button>
       </div>
@@ -207,7 +199,6 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
               onClick={() => handleChatSelect(chat.id)}
               className="flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-left transition-colors hover:border-white/20"
             >
-              <MessageSquare className="size-4 shrink-0 text-[var(--color-text-dim)]" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-medium text-[var(--color-text)]">
                   {chat.title}
@@ -256,7 +247,6 @@ function DocumentsTab({ project }: { project: ProjectRecord }) {
               key={doc.id}
               className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3"
             >
-              <FileText className="size-4 shrink-0 text-[var(--color-text-dim)]" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-medium text-[var(--color-text)]">
                   {doc.title}
@@ -340,7 +330,6 @@ function InstructionsTab({ project }: { project: ProjectRecord }) {
             }}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] text-[var(--color-text-dim)] transition-colors hover:bg-white/5 hover:text-white"
           >
-            <Pencil className="size-3.5" />
             Edit
           </button>
         )}
@@ -367,8 +356,7 @@ function InstructionsTab({ project }: { project: ProjectRecord }) {
               disabled={saving}
               className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-[12px] font-medium text-white hover:brightness-110 disabled:opacity-40"
             >
-              <Save className="size-3.5" />
-              {saving ? "Saving..." : "Save"}
+            {saving ? "Saving..." : "Save"}
             </button>
             <button
               type="button"

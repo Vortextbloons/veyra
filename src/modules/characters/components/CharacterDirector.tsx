@@ -6,16 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import {
-  X,
-  Send,
-  Loader2,
-  WandSparkles,
-  Check,
-  X as XIcon,
-  ArrowLeft,
-  Sparkles,
-} from "lucide-react";
+import { X, Loader2, WandSparkles, ArrowLeft, Sparkles } from "lucide-react";
 import type { CharacterRecord } from "../character-types";
 import { useCharacterAssistStore, selectDirectorSessionFor } from "../ai-assist/ai-assist-store";
 import { useAssistJob, useAssistRunner, useCancelOnUnmount } from "../ai-assist/use-assist-job";
@@ -283,7 +274,7 @@ export function CharacterDirector({ character, onClose, onApplied }: CharacterDi
               disabled={job.running || !input.trim()}
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-emerald-500/85 px-3 text-[12px] font-medium text-white shadow-[0_0_0_1px_rgba(16,185,129,0.4)] hover:brightness-110 disabled:opacity-50"
             >
-              {job.running ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
+              {job.running && <Loader2 className="size-3 animate-spin" />}
               Send
             </button>
             {job.running && (
@@ -373,7 +364,6 @@ export function CharacterDirector({ character, onClose, onApplied }: CharacterDi
                         }}
                         className="inline-flex items-center gap-1 rounded-md bg-emerald-500/85 px-2.5 py-1 text-[11.5px] font-medium text-white"
                       >
-                        <Check className="size-3" />
                         Apply
                       </button>
                       <button
@@ -381,7 +371,6 @@ export function CharacterDirector({ character, onClose, onApplied }: CharacterDi
                         onClick={() => discardPendingChange(change.id)}
                         className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[11.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
                       >
-                        <XIcon className="size-3" />
                         Discard
                       </button>
                     </div>

@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  User,
-  MessageSquare,
-  GraduationCap,
-  Heart,
-  Briefcase,
-  BookOpen,
-  Sliders,
   ChevronDown,
   ChevronRight,
   Check,
@@ -24,15 +17,7 @@ import {
   buildProfileNodePayload,
 } from "@/modules/memory/profile-helpers";
 
-const ICON_MAP: Record<string, typeof User> = {
-  User,
-  MessageSquare,
-  GraduationCap,
-  Heart,
-  Briefcase,
-  BookOpen,
-  Sliders,
-};
+
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -104,8 +89,6 @@ function CategorySection({
   archiveNode: (id: string) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const Icon = ICON_MAP[category.icon] ?? User;
-
   const answeredCount = category.questions.filter((_, i) =>
     profileNodeForQuestion(nodes, category.id, i),
   ).length;
@@ -117,9 +100,6 @@ function CategorySection({
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-3 px-4 py-3 text-left"
       >
-        <div className="grid size-7 place-items-center rounded-lg bg-white/[0.04] ring-1 ring-inset ring-white/[0.06]">
-          <Icon className="size-3.5 text-[var(--color-text-dim)]" />
-        </div>
         <div className="flex-1 min-w-0">
           <div className="text-[12.5px] font-medium text-white">
             {category.label}

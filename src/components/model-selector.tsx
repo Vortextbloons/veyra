@@ -4,7 +4,6 @@ import {
   Search,
   Star,
   Check,
-  Box,
 } from "lucide-react";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
@@ -112,7 +111,6 @@ export function ModelSelector({
           <div className="max-h-80 overflow-y-auto p-1">
             {filtered.length === 0 ? (
               <div className="grid place-items-center px-4 py-8 text-center">
-                <Box className="mb-1.5 size-5 text-[var(--color-text-dim)]" />
                 <p className="text-[11.5px] text-[var(--color-text-dim)]">
                   No models match "{query}"
                 </p>

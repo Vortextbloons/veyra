@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { WandSparkles, Send, X, Loader2 } from "lucide-react";
+import { Send, X, Loader2 } from "lucide-react";
 import { selectActiveDocumentContent, useDocumentStore } from "../document-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { countWords, countCharacters } from "../document-markdown";
@@ -308,7 +308,6 @@ export function SplitEditor({ onOpenAiPanel }: { onOpenAiPanel?: () => void }) {
               onClick={onOpenAiPanel}
               className="flex items-center gap-1 rounded-md bg-[var(--color-accent)]/15 px-2 py-0.5 text-[11px] font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25 transition-colors"
             >
-              <WandSparkles className="size-3" />
               AI Assist
             </button>
           </div>

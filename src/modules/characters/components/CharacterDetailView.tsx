@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Drama, Edit3, Eye, MessageSquare, Play, Sparkles, Tag, User, Pencil } from "lucide-react";
+import { Drama, Edit3, MessageSquare, Tag } from "lucide-react";
 import { useCharacterStore } from "../character-store";
 import { useChatStore } from "@/stores/chat-store";
 import type { CharacterRecord } from "../character-types";
@@ -337,7 +337,6 @@ function CharacterHeader({
               onClick={onDirector}
               className="flex h-9 items-center gap-1.5 rounded-md border border-emerald-300/30 bg-emerald-300/[0.06] px-3 text-[12.5px] font-medium text-emerald-200 hover:bg-emerald-300/10"
             >
-              <Sparkles className="size-3.5" />
               Develop with AI
             </button>
           )}
@@ -347,7 +346,6 @@ function CharacterHeader({
               onClick={onEdit}
               className="flex h-9 items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/40 px-3 text-[12.5px] font-medium text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
             >
-              <Pencil className="size-3.5" />
               Edit
             </button>
           )}
@@ -356,7 +354,6 @@ function CharacterHeader({
             onClick={onStartChat}
             className="flex h-9 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-[12.5px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110"
           >
-            <Play className="size-3.5" />
             Chat with {character.name}
           </button>
         </div>
@@ -424,9 +421,6 @@ function CharacterTabs({
                 : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
             }`}
           >
-            {tab.id === "preview" && <Eye className="size-3.5" />}
-            {tab.id === "persona" && <User className="size-3.5" />}
-            {tab.id === "greeting" && <MessageSquare className="size-3.5" />}
             {tab.label}
           </button>
         ))}

@@ -9,7 +9,6 @@ import type { ProviderAdapter } from "@/lib/providers/types";
 export const lmStudioAdapter: ProviderAdapter = {
   id: "lm-studio",
   name: "LM Studio",
-  icon: "lm-studio",
   connectivityRequirement: "local",
   capabilities: { jsonMode: true },
   isAvailable: () => isServerRunning(),

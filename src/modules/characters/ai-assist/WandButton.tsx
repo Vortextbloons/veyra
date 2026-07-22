@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { WandSparkles, Loader2, RefreshCw, X, Check, StopCircle } from "lucide-react";
+import { WandSparkles, Loader2 } from "lucide-react";
 
 export interface WandAction {
   id: string;
@@ -147,7 +147,6 @@ export function StreamingPreview({ buffer, busy, onCancel, hint }: StreamingPrev
             onClick={onCancel}
             className="inline-flex items-center gap-1 text-emerald-200/80 hover:text-emerald-100"
           >
-            <StopCircle className="size-3" />
             Stop
           </button>
         )}
@@ -175,7 +174,6 @@ export function SuggestionActions({ onApply, onReroll, onDiscard, busy }: Sugges
         disabled={busy}
         className="inline-flex items-center gap-1 rounded-md bg-emerald-500/85 px-2 py-1 text-[11.5px] font-medium text-white shadow-[0_0_0_1px_rgba(16,185,129,0.4)] hover:brightness-110 disabled:opacity-50"
       >
-        <Check className="size-3" />
         Apply
       </button>
       <button
@@ -184,7 +182,6 @@ export function SuggestionActions({ onApply, onReroll, onDiscard, busy }: Sugges
         disabled={busy}
         className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/60 px-2 py-1 text-[11.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white disabled:opacity-50"
       >
-        <RefreshCw className="size-3" />
         Re-roll
       </button>
       <button
@@ -193,7 +190,6 @@ export function SuggestionActions({ onApply, onReroll, onDiscard, busy }: Sugges
         disabled={busy}
         className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/60 px-2 py-1 text-[11.5px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white disabled:opacity-50"
       >
-        <X className="size-3" />
         Discard
       </button>
     </div>

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Folder,
-  Plus,
   Search,
   Archive,
   MoreHorizontal,
@@ -89,7 +88,6 @@ export function ProjectsPage() {
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-2.5 py-1.5 text-[12px] font-medium text-white transition-colors hover:brightness-110"
           >
-            <Plus className="size-3.5" />
             New
           </button>
         </div>
@@ -253,7 +251,6 @@ function ProjectRow({
               }}
               className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
             >
-              <Archive className="size-3.5" />
               Archive
             </button>
           </div>
@@ -282,7 +279,6 @@ function ProjectOnboarding({ onCreateClick }: { onCreateClick: () => void }) {
             onClick={onCreateClick}
             className="flex min-h-9 items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 text-[13px] font-medium text-white transition-colors hover:brightness-110"
           >
-            <Plus className="size-4" />
             Create Project
           </button>
         </div>

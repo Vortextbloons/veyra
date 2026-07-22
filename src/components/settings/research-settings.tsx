@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FlaskConical, Plus, Trash2, RotateCcw, Sparkles } from "lucide-react";
+import { FlaskConical, Trash2 } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { ModelDropdown } from "./model-dropdown";
@@ -175,7 +175,6 @@ export function ResearchSettings() {
           onClick={handleResetAll}
           className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.06] hover:text-white"
         >
-          <RotateCcw className="size-3" />
           Reset all
         </button>
       </div>
@@ -242,7 +241,6 @@ export function ResearchSettings() {
                     onClick={() => loadCustomProfile(profile)}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    <Sparkles className="size-3.5 shrink-0 text-violet-300" />
                     <div className="min-w-0">
                       <div className="truncate text-[12px] font-medium text-white">
                         {profile.name}
@@ -276,7 +274,6 @@ export function ResearchSettings() {
             onClick={handleSaveAsCustomProfile}
             className="flex items-center gap-1.5 rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 py-1.5 text-[11.5px] font-medium text-violet-300 transition-colors hover:bg-violet-500/20"
           >
-            <Plus className="size-3" />
             Save current settings as a custom profile
           </button>
         </div>
@@ -367,7 +364,6 @@ export function ResearchSettings() {
             </div>
             {research.liteModelId && (
               <span className="flex items-center gap-1.5 rounded border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
-                <Sparkles className="size-3" />
                 Lite active
               </span>
             )}

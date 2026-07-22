@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { diffLines } from "diff";
-import { Check, X, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface InlineDiffPreviewProps {
@@ -99,7 +99,6 @@ export function InlineDiffPreview({
             onClick={onAccept}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-2 text-[12px] font-medium text-emerald-300 hover:bg-emerald-500/30 transition-colors"
           >
-            <Check className="size-3.5" />
             Accept
           </button>
           <button
@@ -107,7 +106,6 @@ export function InlineDiffPreview({
             onClick={onReject}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-2 text-[12px] font-medium text-red-400 hover:bg-red-500/25 transition-colors"
           >
-            <X className="size-3.5" />
             Reject
           </button>
         </div>

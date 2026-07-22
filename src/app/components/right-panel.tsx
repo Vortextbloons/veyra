@@ -3,12 +3,9 @@ import {
   FileText,
   Folder,
   Globe,
-  MessageSquare,
-  Database,
-  BookOpen,
-  TerminalSquare,
   PanelRightClose,
   PanelRightOpen,
+  TerminalSquare,
   Trash2,
 } from "lucide-react";
 import type { RightPanelProps } from "@/modules/chat/chat-types";
@@ -301,22 +298,18 @@ function ProjectContextPanel() {
       <PanelShell title="Project Context">
         <div className="space-y-2.5">
           <StatRow
-            icon={<MessageSquare className="size-3.5" />}
             label="Chats"
             value={String(projectChats.length)}
           />
           <StatRow
-            icon={<FileText className="size-3.5" />}
             label="Documents"
             value={String(projectDocs.length)}
           />
           <StatRow
-            icon={<Database className="size-3.5" />}
             label="Memory"
             value={memoryEnabled ? "On" : "Off"}
           />
           <StatRow
-            icon={<BookOpen className="size-3.5" />}
             label="System prompt"
             value={activeProject.systemPrompt ? "Set" : "Not set"}
           />
@@ -336,20 +329,15 @@ function ProjectContextPanel() {
 }
 
 function StatRow({
-  icon,
   label,
   value,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
 }) {
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2 text-[var(--color-text-dim)]">
-        {icon}
-        <span className="text-[11px]">{label}</span>
-      </div>
+      <span className="text-[11px] text-[var(--color-text-dim)]">{label}</span>
       <span className="text-[12px] font-medium text-[var(--color-text)]">{value}</span>
     </div>
   );

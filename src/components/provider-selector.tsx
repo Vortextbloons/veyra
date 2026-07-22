@@ -1,11 +1,5 @@
 import { useRef, useState } from "react";
-import {
-  ChevronDown,
-  Check,
-  RefreshCw,
-  Play,
-  Loader2,
-} from "lucide-react";
+import { ChevronDown, Check, Loader2 } from "lucide-react";
 import type { ProviderInfo } from "@/modules/chat/chat-types";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
@@ -146,11 +140,7 @@ export function ProviderSelector({
                   }}
                   className="flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-border)] bg-white/[0.03] py-1.5 text-[11px] font-medium text-white hover:bg-white/[0.06] disabled:opacity-50"
                 >
-                  {connecting ? (
-                    <Loader2 className="size-3 animate-spin" />
-                  ) : (
-                    <RefreshCw className="size-3" />
-                  )}
+                  {connecting && <Loader2 className="size-3 animate-spin" />}
                   Retry
                 </button>
                 {providerSupportsStartServer(current.id) && onStartServer && (
@@ -163,11 +153,7 @@ export function ProviderSelector({
                     }}
                     className="flex flex-1 items-center justify-center gap-1 rounded-md bg-[var(--color-accent)] py-1.5 text-[11px] font-medium text-white hover:brightness-110 disabled:opacity-50"
                   >
-                    {connecting ? (
-                      <Loader2 className="size-3 animate-spin" />
-                    ) : (
-                      <Play className="size-3" />
-                    )}
+                    {connecting && <Loader2 className="size-3 animate-spin" />}
                     Start
                   </button>
                 )}

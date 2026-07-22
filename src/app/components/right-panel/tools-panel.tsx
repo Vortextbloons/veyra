@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { FileText, Globe, TerminalSquare } from "lucide-react";
 import { PanelShell } from "@/app/components/right-panel";
 import { useSettingsStore } from "@/stores/settings-store";
 
@@ -24,7 +23,6 @@ const TOOL_ACCENT_STYLES: Record<ToolAccent, { on: string; icon: string; pill: s
 };
 
 export function ToolRow({
-  icon,
   label,
   on,
   onChange,
@@ -32,7 +30,6 @@ export function ToolRow({
   disabledReason,
   accent = "emerald",
 }: {
-  icon: ReactNode;
   label: string;
   on: boolean;
   onChange: (on: boolean) => void;
@@ -63,11 +60,6 @@ export function ToolRow({
           : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
       }`}
     >
-      <span
-        className={`grid size-5 place-items-center transition-colors ${on ? accentStyles.icon : "text-[var(--color-text-dim)]"}`}
-      >
-        {icon}
-      </span>
       <span className="flex-1 font-medium">{label}</span>
     </button>
   );
@@ -192,7 +184,6 @@ export function ToolsPanel({
     <PanelShell title="Tools">
       <div className="space-y-2">
         <ToolRow
-          icon={<Globe className="size-3.5" />}
           label="Web Search"
           on={webSearchOn}
           onChange={onWebSearchChange}
@@ -202,7 +193,6 @@ export function ToolsPanel({
         />
         {webSearchOn && <WebSearchSpeedToggle />}
         <ToolRow
-          icon={<TerminalSquare className="size-3.5" />}
           label="Code Execution"
           on={codeExecutionDisabled ? false : codeExecution}
           onChange={onCodeExecutionChange}
@@ -211,7 +201,6 @@ export function ToolsPanel({
           accent="amber"
         />
         <ToolRow
-          icon={<FileText className="size-3.5" />}
           label="Documents"
           on={documentPanelEnabled}
           onChange={setDocumentPanelEnabled}

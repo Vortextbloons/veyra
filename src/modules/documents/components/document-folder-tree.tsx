@@ -5,9 +5,6 @@ import {
   Folder,
   FolderOpen,
   MoreHorizontal,
-  Plus,
-  Pencil,
-  Trash2,
 } from "lucide-react";
 import { useDroppable } from "@dnd-kit/core";
 import { useDocumentStore } from "../document-store";
@@ -169,7 +166,6 @@ function FolderNode({
               }}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]"
             >
-              <Pencil className="size-3" />
               Rename
             </button>
             <button
@@ -180,7 +176,6 @@ function FolderNode({
               }}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-[var(--color-text)]"
             >
-              <Plus className="size-3" />
               New Subfolder
             </button>
             <button
@@ -191,7 +186,6 @@ function FolderNode({
               }}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:bg-white/[0.03]"
             >
-              <Trash2 className="size-3" />
               Delete
             </button>
           </div>
@@ -314,7 +308,6 @@ export function DocumentFolderTree() {
           }}
           className="flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
         >
-          <Plus className="size-3" />
           New
         </button>
       </div>

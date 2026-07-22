@@ -1,18 +1,17 @@
-import { useMemo, type ReactNode } from "react";
-import { Database, Inbox, Pin, Clock, Archive, Globe, Folder, Shield, Hourglass, User } from "lucide-react";
+import { useMemo } from "react";
 import { useMemoryStore, selectVisibleNodes } from "@/modules/memory/memory-store";
 import { useMemoryUi, type MemoryView } from "./memory-ui-context";
 import { calculateProfileCompleteness } from "@/modules/memory/profile-helpers";
 
-const VIEWS: { id: MemoryView; label: string; icon: ReactNode }[] = [
-  { id: "profile", label: "Profile", icon: <User className="size-3.5" /> },
-  { id: "all", label: "All", icon: <Database className="size-3.5" /> },
-  { id: "inbox", label: "Inbox", icon: <Inbox className="size-3.5" /> },
-  { id: "pinned", label: "Pinned", icon: <Pin className="size-3.5" /> },
-  { id: "permanent", label: "Permanent", icon: <Shield className="size-3.5" /> },
-  { id: "low_priority", label: "Low Priority", icon: <Hourglass className="size-3.5" /> },
-  { id: "recent", label: "Recent", icon: <Clock className="size-3.5" /> },
-  { id: "archived", label: "Archived", icon: <Archive className="size-3.5" /> },
+const VIEWS: { id: MemoryView; label: string }[] = [
+  { id: "profile", label: "Profile" },
+  { id: "all", label: "All" },
+  { id: "inbox", label: "Inbox" },
+  { id: "pinned", label: "Pinned" },
+  { id: "permanent", label: "Permanent" },
+  { id: "low_priority", label: "Low Priority" },
+  { id: "recent", label: "Recent" },
+  { id: "archived", label: "Archived" },
 ];
 
 export function MemorySidebar() {
@@ -53,10 +52,7 @@ export function MemorySidebar() {
                     : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2">
-                  {v.icon}
-                  {v.label}
-                </span>
+                <span>{v.label}</span>
                 <span className="font-mono text-[10.5px] text-[var(--color-text-dim)]">
                   {v.id === "profile" ? `${counts[v.id]}%` : counts[v.id]}
                 </span>
@@ -75,7 +71,6 @@ export function MemorySidebar() {
             type="button"
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
           >
-            <Globe className="size-3.5" />
             Global
           </button>
           <div className="mt-1 flex flex-col gap-0.5">
@@ -90,7 +85,6 @@ export function MemorySidebar() {
                   type="button"
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
                 >
-                  <Folder className="size-3.5" />
                   <span className="truncate">{f.name}</span>
                 </button>
               ))

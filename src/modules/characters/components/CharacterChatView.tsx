@@ -1,4 +1,4 @@
-import { ArrowLeft, Drama, RefreshCw, Trash2 } from "lucide-react";
+import { Drama } from "lucide-react";
 import { ChatPanel } from "@/app/components/chat-panel";
 import { useCharacterStore } from "../character-store";
 import { useCharacterChatPipeline } from "@/lib/use-character-chat-pipeline";
@@ -87,7 +87,6 @@ export function CharacterChatView({
         className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
         title="Regenerate greeting"
       >
-        <RefreshCw className="size-3" />
         New greeting
       </button>
       <button
@@ -96,7 +95,6 @@ export function CharacterChatView({
         className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
         title="Unbind from character"
       >
-        <Trash2 className="size-3" />
         Unbind
       </button>
       <button
@@ -105,7 +103,6 @@ export function CharacterChatView({
         className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
         title="Back to character"
       >
-        <ArrowLeft className="size-3" />
         Back
       </button>
     </>

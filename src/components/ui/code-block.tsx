@@ -1,5 +1,4 @@
 import { useState, useCallback, type ReactNode } from "react";
-import { Check, Copy } from "lucide-react";
 
 function CodeBlockHeader({
   language,
@@ -27,15 +26,9 @@ function CodeBlockHeader({
         className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] text-[var(--color-text-dim)] transition-colors hover:bg-white/5 hover:text-[var(--color-text)]"
       >
         {copied ? (
-          <>
-            <Check className="size-3" />
-            <span>Copied</span>
-          </>
+          <span>Copied</span>
         ) : (
-          <>
-            <Copy className="size-3" />
-            <span>Copy</span>
-          </>
+          <span>Copy</span>
         )}
       </button>
     </div>

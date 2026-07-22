@@ -1,15 +1,4 @@
 import { useState } from "react";
-import {
-  Settings,
-  MessageSquare,
-  Database,
-  Boxes,
-  Sliders,
-  Wrench,
-  Shield,
-  Drama,
-  FlaskConical,
-} from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
 import { ChatSettings } from "./chat-settings";
@@ -28,15 +17,15 @@ type SettingsTab =
   | "characters"
   | "research";
 
-const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-  { id: "general", label: "General", icon: <Settings className="size-4" /> },
-  { id: "privacy", label: "Privacy", icon: <Shield className="size-4" /> },
-  { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" /> },
-  { id: "memories", label: "Memories", icon: <Database className="size-4" /> },
-  { id: "models", label: "Models", icon: <Boxes className="size-4" /> },
-  { id: "tools", label: "Tools", icon: <Wrench className="size-4" /> },
-  { id: "research", label: "Research", icon: <FlaskConical className="size-4" /> },
-  { id: "characters", label: "Characters", icon: <Drama className="size-4" /> },
+const TABS: { id: SettingsTab; label: string }[] = [
+  { id: "general", label: "General" },
+  { id: "privacy", label: "Privacy" },
+  { id: "chat", label: "Chat" },
+  { id: "memories", label: "Memories" },
+  { id: "models", label: "Models" },
+  { id: "tools", label: "Tools" },
+  { id: "research", label: "Research" },
+  { id: "characters", label: "Characters" },
 ];
 
 export function SettingsPage() {
@@ -45,7 +34,6 @@ export function SettingsPage() {
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--color-border)] px-5">
-        <Sliders className="size-4 text-[var(--color-text-dim)]" />
         <h1 className="text-[13px] font-semibold text-white">Settings</h1>
       </header>
 
@@ -64,15 +52,6 @@ export function SettingsPage() {
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
               }`}
             >
-              <span
-                className={
-                  activeTab === tab.id
-                    ? "text-[var(--color-accent)]"
-                    : "text-[var(--color-text-dim)]"
-                }
-              >
-                {tab.icon}
-              </span>
               <span className="max-[900px]:hidden">{tab.label}</span>
             </button>
           ))}

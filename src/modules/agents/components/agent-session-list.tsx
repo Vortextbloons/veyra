@@ -1,4 +1,4 @@
-import { Plus, Square, Trash2 } from "lucide-react";
+import { Square, Trash2 } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { StatusDot } from "@/modules/agents/agent-status-dot";
 
@@ -31,7 +31,6 @@ export function AgentSessionList({
           onClick={onNew}
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-[12.5px] font-medium text-white transition-colors hover:border-indigo-400/25 hover:bg-indigo-400/10"
         >
-          <Plus className="size-3.5" />
           New session
         </button>
       </div>

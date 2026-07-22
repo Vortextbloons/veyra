@@ -3,10 +3,7 @@ import { open } from "@tauri-apps/plugin-shell";
 import {
   ArrowUpCircle,
   CheckCircle2,
-  Download,
-  ExternalLink,
   Loader2,
-  RefreshCw,
 } from "lucide-react";
 import {
   formatReleaseDate,
@@ -100,9 +97,7 @@ export function AboutUpdateSettings() {
               >
                 {checking ? (
                   <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-3.5" />
-                )}
+                ) : null}
                 Check for updates
               </button>
               {result?.status === "update-available" && (
@@ -111,7 +106,6 @@ export function AboutUpdateSettings() {
                   onClick={() => void handleDownload()}
                   className="inline-flex h-8 items-center gap-2 rounded-md bg-sky-500/20 px-3 text-[12px] font-medium text-sky-100 transition-colors hover:bg-sky-500/30"
                 >
-                  <Download className="size-3.5" />
                   Download {result.latest.version}
                 </button>
               )}
@@ -163,7 +157,6 @@ export function AboutUpdateSettings() {
           onClick={() => void handleOpenReleases()}
           className="inline-flex items-center gap-1.5 text-[11.5px] text-[var(--color-text-dim)] transition-colors hover:text-white"
         >
-          <ExternalLink className="size-3.5" />
           View all releases on GitHub
         </button>
       </div>

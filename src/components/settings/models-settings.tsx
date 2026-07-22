@@ -3,13 +3,10 @@ import { useProviderStore } from "@/stores/provider-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { ModelSettings } from "@/stores/settings-store";
 import {
-  RefreshCw,
-  Play,
   Check,
   AlertTriangle,
   Eye,
   ChevronDown,
-  RotateCcw,
 } from "lucide-react";
 import { SliderControl } from "@/components/ui/slider-control";
 import { CloudProvidersSettings } from "@/components/settings/cloud-providers-settings";
@@ -100,9 +97,6 @@ export function ModelsSettings() {
               disabled={isConnecting}
               className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:text-white disabled:opacity-50"
             >
-              <RefreshCw
-                className={`size-3 ${isConnecting ? "animate-spin" : ""}`}
-              />
               Reconnect
             </button>
             <button
@@ -111,7 +105,6 @@ export function ModelsSettings() {
               disabled={isConnecting}
               className="flex items-center gap-1.5 rounded-md border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/10 px-3 py-1.5 text-[11.5px] text-indigo-300 transition-colors hover:bg-[var(--color-accent)]/20 disabled:opacity-50"
             >
-              <Play className="size-3" />
               Start server
             </button>
           </div>
@@ -367,7 +360,6 @@ function ModelOverrideCard({
                 onClick={handleReset}
                 className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10.5px] text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.06] hover:text-white"
               >
-                <RotateCcw className="size-2.5" />
                 Reset
               </button>
             )}

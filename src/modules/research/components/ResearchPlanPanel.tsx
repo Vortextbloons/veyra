@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Pencil, X, Save } from "lucide-react";
 import type { ResearchPlan, ResearchPlanStep } from "../research-types";
 import { useResearchStore } from "../research-store";
 
@@ -68,7 +67,6 @@ export function ResearchPlanPanel({ plan, runId }: Props) {
               onClick={handleStartEdit}
               className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] text-[var(--color-text)] transition-colors hover:bg-white/[0.03]"
             >
-              <Pencil className="size-3.5" />
               Edit
             </button>
           </div>
@@ -81,7 +79,6 @@ export function ResearchPlanPanel({ plan, runId }: Props) {
               onClick={handleSaveEdit}
               className="flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110"
             >
-              <Save className="size-3.5" />
               Save
             </button>
             <button
@@ -89,7 +86,6 @@ export function ResearchPlanPanel({ plan, runId }: Props) {
               onClick={handleCancelEdit}
               className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
             >
-              <X className="size-3.5" />
               Cancel
             </button>
           </div>

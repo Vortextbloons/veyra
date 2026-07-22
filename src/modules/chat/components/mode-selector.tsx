@@ -1,32 +1,28 @@
-import { useRef, useState, type ReactNode } from "react";
-import { Bot, Check, ChevronDown, Drama, MessageSquare, Telescope } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 import type { ChatMode } from "@/modules/chat/chat-types";
 import { useClickOutside } from "@/hooks/use-click-outside";
 
-const MODES: { id: ChatMode; label: string; description: string; icon: ReactNode }[] = [
+const MODES: { id: ChatMode; label: string; description: string }[] = [
   {
     id: "chat",
     label: "Chat",
     description: "Single back-and-forth conversation",
-    icon: <MessageSquare className="size-3.5" />,
   },
   {
     id: "agents",
     label: "Agents",
     description: "Multi-step tasks with tools",
-    icon: <Bot className="size-3.5" />,
   },
   {
     id: "characters",
     label: "Characters",
     description: "Roleplay with custom persona cards",
-    icon: <Drama className="size-3.5" />,
   },
   {
     id: "research",
     label: "Deep Research",
     description: "In-depth research and analysis",
-    icon: <Telescope className="size-3.5" />,
   },
 ];
 
@@ -57,7 +53,6 @@ export function ModeSelector({ value, onChange, disabled = false }: ModeSelector
             : "border-[var(--color-border)] bg-[var(--color-bg)]/40 text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
         } ${disabled ? "cursor-not-allowed opacity-50 hover:border-[var(--color-border)] hover:bg-[var(--color-bg)]/40 hover:text-[var(--color-text-dim)]" : ""}`}
       >
-        {current.icon}
         <span>{current.label}</span>
         <ChevronDown
           className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
@@ -87,15 +82,6 @@ export function ModeSelector({ value, onChange, disabled = false }: ModeSelector
                     : "hover:bg-white/[0.04]"
                 }`}
               >
-                <div
-                  className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-md ${
-                    active
-                      ? "bg-[var(--color-accent)] text-white"
-                      : "bg-white/[0.04] text-[var(--color-text-dim)]"
-                  }`}
-                >
-                  {m.icon}
-                </div>
                 <div className="min-w-0 flex-1">
                   <div
                     className={`text-[12px] font-medium ${

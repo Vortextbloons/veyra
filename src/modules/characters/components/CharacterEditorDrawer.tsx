@@ -1,16 +1,8 @@
 import { useMemo, useState } from "react";
 import {
   X,
-  Save,
   AlertCircle,
   Loader2,
-  WandSparkles,
-  Eye,
-  User,
-  MessageSquare,
-  Sparkles,
-  BookOpen,
-  Info,
 } from "lucide-react";
 import type {
   CharacterAvatarColor,
@@ -29,13 +21,13 @@ import { MetadataTab } from "./tabs/MetadataTab";
 
 export type EditorTabId = "identity" | "persona" | "voice" | "system" | "lorebook" | "metadata";
 
-const TABS: { id: EditorTabId; label: string; icon: React.ReactNode }[] = [
-  { id: "identity", label: "Identity", icon: <User className="size-3.5" /> },
-  { id: "persona", label: "Persona", icon: <Eye className="size-3.5" /> },
-  { id: "voice", label: "Voice", icon: <MessageSquare className="size-3.5" /> },
-  { id: "system", label: "System", icon: <Sparkles className="size-3.5" /> },
-  { id: "lorebook", label: "Lorebook", icon: <BookOpen className="size-3.5" /> },
-  { id: "metadata", label: "Metadata", icon: <Info className="size-3.5" /> },
+const TABS: { id: EditorTabId; label: string }[] = [
+  { id: "identity", label: "Identity" },
+  { id: "persona", label: "Persona" },
+  { id: "voice", label: "Voice" },
+  { id: "system", label: "System" },
+  { id: "lorebook", label: "Lorebook" },
+  { id: "metadata", label: "Metadata" },
 ];
 
 interface CharacterEditorDrawerProps {
@@ -170,7 +162,7 @@ function DrawerBody({ character, onClose }: { character: CharacterRecord; onClos
               disabled={saving || !dirty}
               className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12.5px] font-medium text-white shadow-[0_0_0_1px_rgba(99,102,241,0.4)] hover:brightness-110 disabled:opacity-50"
             >
-              {saving ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
+              {saving ? <Loader2 className="size-3 animate-spin" /> : null}
               {saving ? "Saving…" : "Save"}
             </button>
             <button
@@ -196,13 +188,11 @@ function DrawerBody({ character, onClose }: { character: CharacterRecord; onClos
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
               }`}
             >
-              {t.icon}
               {t.label}
             </button>
           ))}
           {pendingChanges.length > 0 && (
             <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-0.5 text-[10.5px] font-medium text-emerald-200">
-              <WandSparkles className="size-2.5" />
               {pendingChanges.length} pending
             </span>
           )}

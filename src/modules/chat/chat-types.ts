@@ -237,8 +237,6 @@ export interface ContextBreakdown {
 export interface ProviderInfo {
   id: string;
   name: string;
-  /** Provider identifier used to render the appropriate logo icon */
-  icon: string;
   status: "connected" | "disconnected";
 }
 

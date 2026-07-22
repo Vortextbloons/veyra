@@ -168,7 +168,6 @@ function AgentHeader({
                     : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
                 }`}
               >
-                {item.icon}
                 {item.label}
               </button>
             );

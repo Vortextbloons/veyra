@@ -1,4 +1,4 @@
-import { Edit3, Pin, Archive, Check, X, Trash2, Sparkles } from "lucide-react";
+import { Edit3, Pin, Archive, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { MemoryNode } from "@/modules/memory/memory-types";
 import { useMemoryStore } from "@/modules/memory/memory-store";
@@ -24,7 +24,6 @@ export function MemoryDetail({ onEdit }: Props) {
   if (!node) {
     return (
       <aside className="flex w-[320px] shrink-0 flex-col items-center justify-center border-l border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center">
-        <Sparkles className="mb-2 size-4 text-[var(--color-text-dim)]" />
         <p className="text-[12.5px] text-[var(--color-text-dim)]">
           Select a memory to view details
         </p>
@@ -88,7 +87,6 @@ export function MemoryDetail({ onEdit }: Props) {
               onClick={() => approveNode(node.id)}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[12px] text-emerald-300 hover:bg-emerald-500/15"
             >
-              <Check className="size-3.5" />
               Approve
             </button>
             <button
@@ -96,7 +94,6 @@ export function MemoryDetail({ onEdit }: Props) {
               onClick={() => rejectNode(node.id)}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[12px] text-red-300 hover:bg-red-500/15"
             >
-              <X className="size-3.5" />
               Reject
             </button>
           </div>

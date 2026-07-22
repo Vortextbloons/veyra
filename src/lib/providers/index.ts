@@ -23,7 +23,6 @@ export function getInitialProviders() {
   ).map((provider) => ({
     id: provider.id,
     name: provider.name,
-    icon: provider.icon,
     status: "disconnected" as const,
   }));
 }

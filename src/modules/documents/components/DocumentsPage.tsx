@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, startTransition, useCallback } from "react";
-import { FileText, Eye, Columns2, Code } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useDocumentStore } from "../document-store";
 import type { ViewMode } from "../document-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -12,10 +12,10 @@ import { DocumentDiffView } from "./document-diff-view";
 import { AiAssistPanel } from "./ai-assist-panel";
 import { cn } from "@/lib/utils";
 
-const VIEW_MODES: { mode: ViewMode; icon: React.ReactNode; label: string }[] = [
-  { mode: "source", icon: <Code className="size-3.5" />, label: "Source" },
-  { mode: "split", icon: <Columns2 className="size-3.5" />, label: "Split" },
-  { mode: "preview", icon: <Eye className="size-3.5" />, label: "Preview" },
+const VIEW_MODES: { mode: ViewMode; label: string }[] = [
+  { mode: "source", label: "Source" },
+  { mode: "split", label: "Split" },
+  { mode: "preview", label: "Preview" },
 ];
 
 export function DocumentsPage() {
@@ -173,7 +173,6 @@ export function DocumentsPage() {
                         : "text-[var(--color-text-dim)] hover:text-[var(--color-text)]",
                     )}
                   >
-                    {v.icon}
                     {v.label}
                   </button>
                 ))}
@@ -215,7 +214,6 @@ export function DocumentsPage() {
                 onClick={handleNewDocument}
                 className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 text-[13px] font-medium text-white hover:brightness-110"
               >
-                <FileText className="size-4" />
                 Create document
               </button>
             </div>

@@ -1,18 +1,18 @@
 import { useState } from "react";
-import { X, Folder, LayoutGrid, GraduationCap, Briefcase, Code2, Palette, FlaskConical } from "lucide-react";
+import { X } from "lucide-react";
 import { useProjectStore } from "@/modules/projects/project-store";
 import type { ProjectKind } from "@/modules/projects/project-types";
 import { PROJECT_KIND_LABELS, PROJECT_COLORS } from "@/modules/projects/project-types";
 import { DialogSurface } from "@/components/dialog-surface";
 
-const KIND_OPTIONS: { kind: ProjectKind; icon: React.ReactNode; desc: string }[] = [
-  { kind: "app", icon: <LayoutGrid className="size-4" />, desc: "A software application or product" },
-  { kind: "codebase", icon: <Code2 className="size-4" />, desc: "A code repository or library" },
-  { kind: "creative", icon: <Palette className="size-4" />, desc: "Writing, art, or creative work" },
-  { kind: "research", icon: <FlaskConical className="size-4" />, desc: "Research or investigation" },
-  { kind: "class", icon: <GraduationCap className="size-4" />, desc: "A course or learning project" },
-  { kind: "client", icon: <Briefcase className="size-4" />, desc: "Client work or freelance" },
-  { kind: "general", icon: <Folder className="size-4" />, desc: "Anything else" },
+const KIND_OPTIONS: { kind: ProjectKind; desc: string }[] = [
+  { kind: "app", desc: "A software application or product" },
+  { kind: "codebase", desc: "A code repository or library" },
+  { kind: "creative", desc: "Writing, art, or creative work" },
+  { kind: "research", desc: "Research or investigation" },
+  { kind: "class", desc: "A course or learning project" },
+  { kind: "client", desc: "Client work or freelance" },
+  { kind: "general", desc: "Anything else" },
 ];
 
 const COLOR_BG: Record<string, string> = {
@@ -128,9 +128,6 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                       : "border-[var(--color-border)] bg-[var(--color-panel)] hover:border-white/20"
                   }`}
                 >
-                  <div className={`mt-0.5 ${kind === opt.kind ? "text-[var(--color-accent)]" : "text-[var(--color-text-dim)]"}`}>
-                    {opt.icon}
-                  </div>
                   <div>
                     <div className={`text-[12px] font-medium ${kind === opt.kind ? "text-white" : "text-[var(--color-text)]"}`}>
                       {PROJECT_KIND_LABELS[opt.kind]}

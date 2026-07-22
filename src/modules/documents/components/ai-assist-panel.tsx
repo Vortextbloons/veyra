@@ -1,18 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  WandSparkles,
-  Scissors,
-  StretchHorizontal,
-  MessageSquareQuote,
   Send,
   Check,
   X,
   Loader2,
   Sparkles,
-  Languages,
-  CaseSensitive,
-  ListTree,
-  Search,
   ChevronDown,
   RotateCcw,
 } from "lucide-react";
@@ -30,20 +22,19 @@ const EDIT_ACTIONS: Set<AiAssistAction> = new Set([
 type QuickAction = {
   id: AiAssistAction;
   label: string;
-  icon: React.ReactNode;
   color: string;
 };
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { id: "improve", label: "Improve", icon: <WandSparkles className="size-3.5" />, color: "text-emerald-400" },
-  { id: "expand", label: "Expand", icon: <StretchHorizontal className="size-3.5" />, color: "text-blue-400" },
-  { id: "shorten", label: "Shorten", icon: <Scissors className="size-3.5" />, color: "text-amber-400" },
-  { id: "rewrite", label: "Rewrite", icon: <MessageSquareQuote className="size-3.5" />, color: "text-purple-400" },
-  { id: "summarize", label: "Summarize", icon: <Sparkles className="size-3.5" />, color: "text-pink-400" },
-  { id: "translate", label: "Translate", icon: <Languages className="size-3.5" />, color: "text-cyan-400" },
-  { id: "tone", label: "Tone", icon: <CaseSensitive className="size-3.5" />, color: "text-orange-400" },
-  { id: "outline", label: "Outline", icon: <ListTree className="size-3.5" />, color: "text-indigo-400" },
-  { id: "research_draft", label: "Research", icon: <Search className="size-3.5" />, color: "text-teal-400" },
+  { id: "improve", label: "Improve", color: "text-emerald-400" },
+  { id: "expand", label: "Expand", color: "text-blue-400" },
+  { id: "shorten", label: "Shorten", color: "text-amber-400" },
+  { id: "rewrite", label: "Rewrite", color: "text-purple-400" },
+  { id: "summarize", label: "Summarize", color: "text-pink-400" },
+  { id: "translate", label: "Translate", color: "text-cyan-400" },
+  { id: "tone", label: "Tone", color: "text-orange-400" },
+  { id: "outline", label: "Outline", color: "text-indigo-400" },
+  { id: "research_draft", label: "Research", color: "text-teal-400" },
 ];
 
 interface AiAssistPanelProps {
@@ -397,7 +388,6 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
               action.color,
             )}
           >
-            {action.icon}
             {action.label}
           </button>
         ))}
@@ -538,7 +528,6 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
               onClick={handleAccept}
               className="flex flex-1 items-center justify-center gap-1 rounded-md bg-emerald-500/15 px-3 py-1.5 text-[12px] font-medium text-emerald-400 hover:bg-emerald-500/25 transition-colors"
             >
-              <Check className="size-3.5" />
               Accept
             </button>
             <button
@@ -546,7 +535,6 @@ export function AiAssistPanel({ onClose }: AiAssistPanelProps) {
               onClick={handleReject}
               className="flex flex-1 items-center justify-center gap-1 rounded-md bg-red-500/15 px-3 py-1.5 text-[12px] font-medium text-red-400 hover:bg-red-500/25 transition-colors"
             >
-              <X className="size-3.5" />
               Reject
             </button>
           </div>

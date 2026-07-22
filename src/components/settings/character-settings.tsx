@@ -6,7 +6,7 @@ import { Toggle } from "@/components/toggle";
 import { ModelDropdown } from "@/components/settings/model-dropdown";
 import { CHARACTER_TONE_PRESETS } from "@/modules/characters/ai-assist/tones";
 import { useCharacterAssistStore } from "@/modules/characters/ai-assist/ai-assist-store";
-import { Trash2, Eye } from "lucide-react";
+
 
 const SCAN_DEPTH_OPTIONS = [
   { id: "last_user", label: "Last user message", description: "Trigger on keywords in the most recent user message only." },
@@ -335,7 +335,6 @@ function CharacterAssistSettings() {
                     onClick={() => setShowLog((v) => !v)}
                     className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
                   >
-                    <Eye className="size-3" />
                     {showLog ? "Hide" : "View"}
                   </button>
                   <button
@@ -347,7 +346,6 @@ function CharacterAssistSettings() {
                     }}
                     className="inline-flex items-center gap-1 rounded-md border border-red-400/30 bg-red-500/10 px-2 py-0.5 text-[11px] text-red-200 hover:bg-red-500/20"
                   >
-                    <Trash2 className="size-3" />
                     Clear
                   </button>
                 </div>

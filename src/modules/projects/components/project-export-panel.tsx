@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, FileJson, Loader2 } from "lucide-react";
+import { FileJson, Loader2 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { ProjectRecord } from "@/modules/projects/project-types";
@@ -73,9 +73,7 @@ export function ProjectExportPanel({ project }: { project: ProjectRecord }) {
           >
             {exporting ? (
               <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Download className="size-3.5" />
-            )}
+            ) : null}
             {exporting ? "Exporting..." : "Export"}
           </button>
           {success && (

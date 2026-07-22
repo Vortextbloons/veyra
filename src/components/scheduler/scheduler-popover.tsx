@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Activity, Pause, Play, X } from "lucide-react";
+import { Activity, X } from "lucide-react";
 import { useAiScheduler } from "@/hooks/use-ai-scheduler";
 import { aiScheduler, JOB_LABELS } from "@/lib/ai-scheduler";
 import type { AiJobSnapshot } from "@/lib/ai-scheduler";
@@ -202,7 +202,6 @@ export function SchedulerPopover() {
                     onClick={() => aiScheduler.resumeBackgroundJobs()}
                     className="flex h-7 items-center gap-1.5 rounded-md bg-emerald-500/10 px-2.5 text-[11px] font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/20 transition-colors hover:bg-emerald-500/15"
                   >
-                    <Play className="size-3" />
                     Resume
                   </button>
                 ) : (
@@ -211,7 +210,6 @@ export function SchedulerPopover() {
                     onClick={() => aiScheduler.pauseBackgroundJobs()}
                     className="flex h-7 items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 text-[11px] font-medium text-amber-300 ring-1 ring-inset ring-amber-500/20 transition-colors hover:bg-amber-500/15"
                   >
-                    <Pause className="size-3" />
                     Pause
                   </button>
                 )}
@@ -225,7 +223,6 @@ export function SchedulerPopover() {
                     }}
                     className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.04] hover:text-red-400"
                   >
-                    <X className="size-3" />
                     Clear queue
                   </button>
                 )}

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ChevronRight, Bot, Sparkles, Square, TerminalSquare } from "lucide-react";
+import { ChevronRight, Bot, Sparkles, TerminalSquare } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { AgentChatTurn } from "@/modules/agents/components/agent-chat-turn";
 import { buildAgentChatTurns, type AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
@@ -44,7 +44,6 @@ export function AgentOutputView({
             onClick={() => onStop(session.id)}
             className="flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300 transition-colors hover:border-red-500/30 hover:bg-red-500/15"
           >
-            <Square className="size-3" />
             Stop
           </button>
         )}
