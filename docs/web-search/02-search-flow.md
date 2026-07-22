@@ -57,6 +57,17 @@ After pages are fetched, `passage-ranker.ts` splits each page into blocks, score
 - Content is extracted from HTML, with Wayback Machine fallback
 - Fetch status is tracked per result
 
+## Speed Preset
+
+Callers can override the user's search-speed preset at runtime via `speedPreset` in `RunSearchOptions`:
+
+| Preset | Effect |
+|--------|--------|
+| `"fast"` | Skips page fetching, returns up to 3 snippet-only results, disables multi-query fusion and adaptive fallback |
+| `"normal"` | Full-quality search respecting user settings for fetch, fusion, ranking, and capabilities |
+
+The research pipeline uses `"normal"` for background and gap-phase searches to ensure complete source collection, regardless of the user's configured speed preset.
+
 ## Context Bundle
 
 Returns a `SearchContextBundle` containing:

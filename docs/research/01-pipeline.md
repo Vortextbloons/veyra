@@ -19,6 +19,7 @@ Deep research pipeline with background research, 9 core phases, and citation aud
 | `src/modules/research/research-extract-phase.ts` | Evidence extraction (Phase 5) |
 | `src/modules/research/research-gap-phase.ts` | Gap analysis (Phase 7) |
 | `src/modules/research/research-synthesis-phase.ts` | Report synthesis + Citation audit (Phase 8) |
+| `src/modules/research/research-output-budgets.ts` | Per-phase output token budgets and scaling functions |
 
 ## Pipeline Phases
 

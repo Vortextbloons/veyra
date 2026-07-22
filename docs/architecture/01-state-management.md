@@ -12,7 +12,7 @@ Cross-cutting architecture patterns for state management.
 | `src/stores/connectivity-store.ts` | Connectivity state |
 | `src/stores/update-store.ts` | App update state |
 
-## Zustand Stores (14 total)
+## Zustand Stores (13 total)
 
 Stores live in both `src/stores/` and `src/modules/<feature>/`:
 
@@ -30,12 +30,11 @@ Stores live in both `src/stores/` and `src/modules/<feature>/`:
 | `useCharacterAssistStore` | `src/modules/characters/ai-assist/ai-assist-store.ts` | AI-assisted creation state |
 | `useProjectStore` | `src/modules/projects/project-store.ts` | Projects |
 | `useResearchStore` | `src/modules/research/research-store.ts` | Research runs and reports |
-| `useEmailStore` | `src/modules/email/email-store.ts` | Email accounts and threads |
 | `useAgentStore` | `src/modules/agents/agent-store.ts` | Agent sessions |
 
-## Settings Store (12 Slices)
+## Settings Store (11 Slices)
 
-The settings store is composed from 12 slices in `src/stores/slices/`:
+The settings store is composed from 11 slices in `src/stores/slices/`:
 
 | Slice | File | Purpose |
 |-------|------|---------|
@@ -49,7 +48,6 @@ The settings store is composed from 12 slices in `src/stores/slices/`:
 | `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |
 | `connectivity-slice` | `connectivity-slice.ts` | Online/offline preference |
 | `chat-slice` | `chat-slice.ts` | Workspace mode, context anchoring, enhanced mode |
-| `email-ai-slice` | `email-ai-slice.ts` | Auto-draft, classification, spam scoring, urgency |
 | `update-slice` | `update-slice.ts` | Auto-check updates, dismissed version |
 
 All settings persist to localStorage under `veyra.settings.v1`.

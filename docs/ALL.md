@@ -1,7 +1,7 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-18T03:04:13.598Z
-> Total files: 79
+> Generated: 2026-07-22T19:09:38.173Z
+> Total files: 74
 
 ## Table of Contents
 
@@ -67,12 +67,6 @@
   - [03-architecture](#projects-03-architecture)
   - [04-types](#projects-04-types)
   - [README](#projects-readme)
-- [email](#email)
-  - [01-setup](#email-01-setup)
-  - [02-features](#email-02-features)
-  - [03-tauri-commands](#email-03-tauri-commands)
-  - [04-types](#email-04-types)
-  - [README](#email-readme)
 - [agents](#agents)
   - [01-overview](#agents-01-overview)
   - [02-session-management](#agents-02-session-management)
@@ -158,13 +152,12 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 | Documents | SQLite via Tauri | Structured records |
 | Projects | SQLite via Tauri | Structured records |
 | Research | SQLite via Tauri | Structured records |
-| Email accounts | SQLite via Tauri | Structured records |
 | Agent sessions | localStorage | Serialized sessions |
 | Cloud credentials | OS credential vault | Tauri secure storage |
 
 ## Privacy
 
-- No data leaves the machine unless the user explicitly enables web search, cloud providers, or email sync
+- No data leaves the machine unless the user explicitly enables web search or cloud providers
 - Cloud API keys are stored in the operating-system credential vault through Tauri and are excluded from Zustand persistence
 - Conversation keys are stored in the operating-system credential vault, not beside ciphertext
 - Conversation writes are atomic and retain one previous encrypted snapshot for recovery
@@ -231,7 +224,6 @@ npm run version:check
 | Research | `docs/research/` | 9-phase deep research pipeline with citation auditing |
 | Web Search | `docs/web-search/` | SearXNG/Docker search with ArXiv and Wikipedia support |
 | Projects | `docs/projects/` | Per-project containers for scoping chats, memory, and settings |
-| Email | `docs/email/` | Gmail OAuth and IMAP email client |
 | Agents | `docs/agents/` | Optional Pi CLI integration for plan and build modes |
 | Architecture | `docs/architecture/` | Cross-cutting patterns, state management, providers, backend |
 
@@ -1691,6 +1683,7 @@ Deep research pipeline with background research, 9 core phases, and citation aud
 | `src/modules/research/research-extract-phase.ts` | Evidence extraction (Phase 5) |
 | `src/modules/research/research-gap-phase.ts` | Gap analysis (Phase 7) |
 | `src/modules/research/research-synthesis-phase.ts` | Report synthesis + Citation audit (Phase 8) |
+| `src/modules/research/research-output-budgets.ts` | Per-phase output token budgets and scaling functions |
 
 ## Pipeline Phases
 
@@ -2080,6 +2073,17 @@ After pages are fetched, `passage-ranker.ts` splits each page into blocks, score
 - Top results are fetched via Tauri IPC
 - Content is extracted from HTML, with Wayback Machine fallback
 - Fetch status is tracked per result
+
+## Speed Preset
+
+Callers can override the user's search-speed preset at runtime via `speedPreset` in `RunSearchOptions`:
+
+| Preset | Effect |
+|--------|--------|
+| `"fast"` | Skips page fetching, returns up to 3 snippet-only results, disables multi-query fusion and adaptive fallback |
+| `"normal"` | Full-quality search respecting user settings for fetch, fusion, ranking, and capabilities |
+
+The research pipeline uses `"normal"` for background and gap-phase searches to ensure complete source collection, regardless of the user's configured speed preset.
 
 ## Context Bundle
 
@@ -2545,272 +2549,6 @@ Persistent local containers that scope chats, documents, memories, tools, and se
 
 ---
 
-# email > 01-setup
-
-> Source: `docs/email/01-setup.md`
-
-# Email Setup
-
-Email client with Gmail OAuth and IMAP support.
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/modules/email/email-types.ts` | Type definitions |
-| `src/modules/email/email-store.ts` | Zustand store |
-| `src/modules/email/tauri-commands.ts` | Tauri IPC layer |
-| `src/modules/email/components/` | UI components |
-
-## Supported Providers
-
-| Provider | Authentication |
-|----------|---------------|
-| Gmail | OAuth 2.0 |
-| Outlook | IMAP |
-| IMAP (generic) | Username/password |
-
-## Gmail OAuth Setup
-
-### Requirements
-- Gmail OAuth client ID and client secret
-- Required OAuth scopes:
-  - `gmail.modify`
-  - `gmail.send`
-  - `gmail.compose`
-
-### Connection Flow
-1. **Configure OAuth**: User provides client ID and client secret
-2. **Connect Gmail**: Opens browser for Google consent screen
-3. **Receive callback**: OAuth tokens are stored securely
-4. **Account created**: Gmail account appears in the email panel
-
-### Scope Handling
-- Veyra detects Gmail scope insufficiency
-- Shows actionable error messages when scopes are missing
-- Guides user through re-authorization
-
-## IMAP Setup
-
-For non-Gmail providers:
-1. User provides IMAP and SMTP server details
-2. Username and password authentication
-3. Connection test to verify credentials
-
-## Account Fields
-
-| Field | Description |
-|-------|-------------|
-| `id` | Unique identifier |
-| `provider` | `gmail`, `outlook`, or `imap` |
-| `email` | Email address |
-| `displayName` | Display name |
-| `status` | `connected`, `disconnected`, or `syncing` |
-| `imapHost` | IMAP server (for IMAP accounts) |
-| `smtpHost` | SMTP server |
-
----
-
-# email > 02-features
-
-> Source: `docs/email/02-features.md`
-
-# Email Features
-
-## Thread Viewing
-
-- List threads by folder (Inbox, Drafts, Sent, etc.)
-- Thread-based email model with participants
-- Message history within threads
-- Search across threads
-
-## Compose and Send
-
-- New message composition
-- Fields: To, CC, BCC, Subject, Body
-- Save as draft
-- Send via SMTP
-
-## Thread Operations
-
-| Operation | Description |
-|-----------|-------------|
-| Archive | Move thread to archive |
-| Mark Read | Mark thread as read |
-| Mark Unread | Mark thread as unread |
-
-## Folder Browsing
-
-- Browse email folders
-- Standard folders: Inbox, Sent, Drafts, Archive, Trash
-- Custom folder support
-
-## Sync
-
-- Manual sync trigger
-- Account-level sync status
-- Error handling for sync failures
-
-## AI Features
-
-- `use-email-ai-dashboard.ts`: AI-powered email dashboard
-- `email-ai-worker.ts`: Background AI email processing
-- `email-ai-prompts.ts`: AI prompt templates for email tasks
-- `email-ai-coverage.ts`: Email AI feature detection
-- `email-ai-scheduler-sync.ts`: AI job scheduling integration
-
----
-
-# email > 03-tauri-commands
-
-> Source: `docs/email/03-tauri-commands.md`
-
-# Email Tauri IPC Commands
-
-| Command | Description |
-|---------|-------------|
-| `email_list_accounts` | List all email accounts |
-| `email_add_account` | Add IMAP account |
-| `email_remove_account` | Remove account |
-| `email_configure_gmail_oauth` | Set Gmail OAuth credentials |
-| `email_connect_gmail` | Initiate Gmail OAuth flow |
-| `email_connect_gmail_with_config` | Connect with pre-configured OAuth |
-| `email_has_gmail_oauth_config` | Check if OAuth is configured |
-| `email_list_threads` | List threads in a folder |
-| `email_get_thread` | Get full thread |
-| `email_send_message` | Send email |
-| `email_save_draft` | Save draft |
-| `email_archive_thread` | Archive thread |
-| `email_mark_read` | Mark as read |
-| `email_mark_unread` | Mark as unread |
-| `email_sync_account` | Sync account |
-
----
-
-# email > 04-types
-
-> Source: `docs/email/04-types.md`
-
-# Email Key Types
-
-From `src/modules/email/email-types.ts`:
-
-```typescript
-interface EmailAccount {
-  id: string;
-  name: string;
-  email: string;
-  provider: "gmail" | "outlook" | "imap" | string;
-  status: "connected" | "disconnected" | "syncing";
-  avatar?: string;
-  syncStatus?: "idle" | "syncing" | "error";
-  lastSyncAt?: string;
-  aiEnabled?: boolean;
-}
-
-interface EmailThread {
-  id: string;
-  accountId: string;
-  subject: string;
-  messages: EmailMessage[];
-  participants: string[];
-  lastMessageAt: number;
-  isRead: boolean;
-  isArchived: boolean;
-  isStarred: boolean;
-  labels: string[];
-  aiMetadata?: EmailThreadAiMetadata;
-}
-
-interface EmailMessage {
-  id: string;
-  threadId: string;
-  accountId: string;
-  from: EmailParticipant;
-  to: EmailParticipant[];
-  cc?: EmailParticipant[];
-  subject: string;
-  body: string;
-  snippet: string;
-  timestamp: number;
-  isRead: boolean;
-  isArchived: boolean;
-  isStarred: boolean;
-  labels?: string[];
-  attachments?: EmailAttachment[];
-  bodyHtml?: string;
-  sanitizedHtml?: string;
-  bodyParseStatus?: string;
-  parsedParts?: ParsedParts;
-}
-
-interface EmailParticipant {
-  name: string;
-  email: string;
-}
-
-interface EmailDraft {
-  id: string;
-  accountId: string;
-  to: string;
-  cc?: string;
-  bcc?: string;
-  subject: string;
-  body: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface EmailAttachment {
-  id: string;
-  accountId: string;
-  threadId: string;
-  messageId: string;
-  providerAttachmentId?: string;
-  filename: string;
-  mimeType: string;
-  size: number;
-  localPath?: string;
-  downloadStatus: string;
-  extractStatus: string;
-  extractedText?: string;
-  extractedTextChars: number;
-  error?: string;
-}
-
-interface EmailFolder {
-  id: string;
-  accountId: string;
-  providerId: string;
-  name: string;
-  kind: string;  /* inbox, sent, drafts, archive, trash, spam, starred, important, all, custom */
-  type: string;
-  isSystem: boolean;
-  isVisible: boolean;
-  unreadCount: number;
-  totalCount: number;
-}
-```
-
----
-
-# email > README
-
-> Source: `docs/email/README.md`
-
-# Email Module
-
-Email client with Gmail OAuth and IMAP support.
-
-## Contents
-
-- [01-setup.md](01-setup.md) — Providers, OAuth, IMAP configuration
-- [02-features.md](02-features.md) — Thread viewing, compose, folders, sync, AI features
-- [03-tauri-commands.md](03-tauri-commands.md) — Tauri IPC commands
-- [04-types.md](04-types.md) — Key type definitions
-
----
-
 # agents > 01-overview
 
 > Source: `docs/agents/01-overview.md`
@@ -3220,7 +2958,7 @@ Cross-cutting architecture patterns for state management.
 | `src/stores/connectivity-store.ts` | Connectivity state |
 | `src/stores/update-store.ts` | App update state |
 
-## Zustand Stores (14 total)
+## Zustand Stores (13 total)
 
 Stores live in both `src/stores/` and `src/modules/<feature>/`:
 
@@ -3238,12 +2976,11 @@ Stores live in both `src/stores/` and `src/modules/<feature>/`:
 | `useCharacterAssistStore` | `src/modules/characters/ai-assist/ai-assist-store.ts` | AI-assisted creation state |
 | `useProjectStore` | `src/modules/projects/project-store.ts` | Projects |
 | `useResearchStore` | `src/modules/research/research-store.ts` | Research runs and reports |
-| `useEmailStore` | `src/modules/email/email-store.ts` | Email accounts and threads |
 | `useAgentStore` | `src/modules/agents/agent-store.ts` | Agent sessions |
 
-## Settings Store (12 Slices)
+## Settings Store (11 Slices)
 
-The settings store is composed from 12 slices in `src/stores/slices/`:
+The settings store is composed from 11 slices in `src/stores/slices/`:
 
 | Slice | File | Purpose |
 |-------|------|---------|
@@ -3257,7 +2994,6 @@ The settings store is composed from 12 slices in `src/stores/slices/`:
 | `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |
 | `connectivity-slice` | `connectivity-slice.ts` | Online/offline preference |
 | `chat-slice` | `chat-slice.ts` | Workspace mode, context anchoring, enhanced mode |
-| `email-ai-slice` | `email-ai-slice.ts` | Auto-draft, classification, spam scoring, urgency |
 | `update-slice` | `update-slice.ts` | Auto-check updates, dismissed version |
 
 All settings persist to localStorage under `veyra.settings.v1`.
@@ -3272,7 +3008,7 @@ All settings persist to localStorage under `veyra.settings.v1`.
 
 Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority-based queueing.
 
-## Job Types (14 total)
+## Job Types (9 total)
 
 | Type | Priority | Description |
 |------|----------|-------------|
@@ -3284,11 +3020,6 @@ Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority
 | `summarize_chat` | 3 | Conversation summarization |
 | `extract_memory` | 3 | Memory extraction from chat |
 | `compress_context` | 3 | Context compression |
-| `email_thread_summary` | 3 | Email thread summarization |
-| `email_classification` | 3 | Email classification |
-| `email_spam_score` | 3 | Email spam scoring |
-| `email_urgency_score` | 3 | Email urgency scoring |
-| `email_reply_draft` | 3 | Email reply draft generation |
 | `maintenance` | 4 (lowest) | Background cleanup |
 
 ## Priority Levels
@@ -3486,7 +3217,7 @@ Each tool has a JSON schema defining its parameters. Tool calls execute in round
 
 # Tauri Backend
 
-## Rust Modules (13 total)
+## Rust Modules (12 total)
 
 | Module | Purpose |
 |--------|---------|
@@ -3496,7 +3227,6 @@ Each tool has a JSON schema defining its parameters. Tool calls execute in round
 | `connectivity/` | Network connectivity probe |
 | `document_extraction` | Document text extraction utility |
 | `documents/` | Document CRUD, versions, export, folders |
-| `email/` | Gmail OAuth, IMAP, AI jobs, drafts, tags |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
 | `memory/` | Memory CRUD, BM25 + vector search, embeddings |
 | `projects/` | Project CRUD, manifest export |
@@ -3506,14 +3236,13 @@ Each tool has a JSON schema defining its parameters. Tool calls execute in round
 
 ## Command Count
 
-**~140 Tauri commands** registered across all modules. Key counts:
+**~93 Tauri commands** registered across all modules. Key counts:
 - Agents: 6 commands
 - Code execution: 2 commands
 - Memory: 14 commands
 - Connectivity: 1 command
 - Web search: 9 commands
 - Documents: 16 commands
-- Email: 47 commands
 - Projects: 6 commands
 - Research: 16 commands
 - Characters: 18 commands

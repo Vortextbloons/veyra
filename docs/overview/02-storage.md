@@ -12,13 +12,12 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 | Documents | SQLite via Tauri | Structured records |
 | Projects | SQLite via Tauri | Structured records |
 | Research | SQLite via Tauri | Structured records |
-| Email accounts | SQLite via Tauri | Structured records |
 | Agent sessions | localStorage | Serialized sessions |
 | Cloud credentials | OS credential vault | Tauri secure storage |
 
 ## Privacy
 
-- No data leaves the machine unless the user explicitly enables web search, cloud providers, or email sync
+- No data leaves the machine unless the user explicitly enables web search or cloud providers
 - Cloud API keys are stored in the operating-system credential vault through Tauri and are excluded from Zustand persistence
 - Conversation keys are stored in the operating-system credential vault, not beside ciphertext
 - Conversation writes are atomic and retain one previous encrypted snapshot for recovery

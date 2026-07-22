@@ -30,6 +30,5 @@ Grab the latest installer and see what's new on the [releases page](https://gith
 - **Web Search** — search the web via SearXNG, ArXiv, Wikipedia
 - **Projects** — scope chats, memory, and settings per project
 - **Code Execution** — run code inside your workspace with AI
-- **Email** — Gmail integration (OAuth + IMAP)
 
 Your data stays on your machine — no accounts, no telemetry, no cloud.

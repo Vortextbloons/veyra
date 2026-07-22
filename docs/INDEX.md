@@ -33,7 +33,6 @@ Feature modules built around the chat core.
 | [research/README.md](research/README.md) | 9-phase deep research pipeline |
 | [web-search/README.md](web-search/README.md) | SearXNG, ArXiv, Wikipedia search |
 | [projects/README.md](projects/README.md) | Project containers and scoping |
-| [email/README.md](email/README.md) | Gmail OAuth, IMAP, email AI features |
 | [agents/README.md](agents/README.md) | Pi CLI integration, plan/build modes |
 | [connectivity/README.md](connectivity/README.md) | Online/offline mode, network detection |
 | [code-execution/README.md](code-execution/README.md) | Disabled native execution and future sandbox boundary |
@@ -64,4 +63,4 @@ Agent update instructions and generated output (excluded from combined docs).
 
 ## File Count
 
-**14 documentation folders** with multiple files each (auto-discovered by combine script).
+**13 documentation folders** with multiple files each (auto-discovered by combine script).

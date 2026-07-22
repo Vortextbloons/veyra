@@ -2,7 +2,7 @@
 
 Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority-based queueing.
 
-## Job Types (14 total)
+## Job Types (9 total)
 
 | Type | Priority | Description |
 |------|----------|-------------|
@@ -14,11 +14,6 @@ Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority
 | `summarize_chat` | 3 | Conversation summarization |
 | `extract_memory` | 3 | Memory extraction from chat |
 | `compress_context` | 3 | Context compression |
-| `email_thread_summary` | 3 | Email thread summarization |
-| `email_classification` | 3 | Email classification |
-| `email_spam_score` | 3 | Email spam scoring |
-| `email_urgency_score` | 3 | Email urgency scoring |
-| `email_reply_draft` | 3 | Email reply draft generation |
 | `maintenance` | 4 (lowest) | Background cleanup |
 
 ## Priority Levels

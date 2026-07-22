@@ -1,6 +1,6 @@
 # Tauri Backend
 
-## Rust Modules (13 total)
+## Rust Modules (12 total)
 
 | Module | Purpose |
 |--------|---------|
@@ -10,7 +10,6 @@
 | `connectivity/` | Network connectivity probe |
 | `document_extraction` | Document text extraction utility |
 | `documents/` | Document CRUD, versions, export, folders |
-| `email/` | Gmail OAuth, IMAP, AI jobs, drafts, tags |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
 | `memory/` | Memory CRUD, BM25 + vector search, embeddings |
 | `projects/` | Project CRUD, manifest export |
@@ -20,14 +19,13 @@
 
 ## Command Count
 
-**~140 Tauri commands** registered across all modules. Key counts:
+**~93 Tauri commands** registered across all modules. Key counts:
 - Agents: 6 commands
 - Code execution: 2 commands
 - Memory: 14 commands
 - Connectivity: 1 command
 - Web search: 9 commands
 - Documents: 16 commands
-- Email: 47 commands
 - Projects: 6 commands
 - Research: 16 commands
 - Characters: 18 commands

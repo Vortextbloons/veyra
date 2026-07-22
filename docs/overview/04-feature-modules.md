@@ -9,6 +9,5 @@
 | Research | `docs/research/` | 9-phase deep research pipeline with citation auditing |
 | Web Search | `docs/web-search/` | SearXNG/Docker search with ArXiv and Wikipedia support |
 | Projects | `docs/projects/` | Per-project containers for scoping chats, memory, and settings |
-| Email | `docs/email/` | Gmail OAuth and IMAP email client |
 | Agents | `docs/agents/` | Optional Pi CLI integration for plan and build modes |
 | Architecture | `docs/architecture/` | Cross-cutting patterns, state management, providers, backend |
