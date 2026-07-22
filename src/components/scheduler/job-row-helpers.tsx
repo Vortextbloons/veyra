@@ -11,11 +11,6 @@ import {
   FileText,
   Zap,
   Bot,
-  Mail,
-  Tag,
-  Shield,
-  AlertTriangle,
-  Sparkles,
 } from "lucide-react";
 import type { AiJobStatus, AiJobType } from "@/lib/ai-scheduler";
 
@@ -99,16 +94,6 @@ export function jobTypeIcon(type: AiJobType): ReactNode {
       return <Zap className="size-3.5" />;
     case "maintenance":
       return <Wrench className="size-3.5" />;
-    case "email_thread_summary":
-      return <Sparkles className="size-3.5" />;
-    case "email_classification":
-      return <Tag className="size-3.5" />;
-    case "email_spam_score":
-      return <Shield className="size-3.5" />;
-    case "email_urgency_score":
-      return <AlertTriangle className="size-3.5" />;
-    case "email_reply_draft":
-      return <Mail className="size-3.5" />;
     default:
       return <Bot className="size-3.5" />;
   }

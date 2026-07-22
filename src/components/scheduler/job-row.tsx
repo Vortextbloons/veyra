@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { aiScheduler, JOB_LABELS } from "@/lib/ai-scheduler";
 import type { AiJobSnapshot } from "@/lib/ai-scheduler";
-import { emailCancelAiJob } from "@/modules/email/tauri-commands";
 import { PriorityChip } from "@/components/scheduler/priority-chip";
 import { formatElapsed, statusIcon } from "@/components/scheduler/job-row-helpers";
 
@@ -71,11 +70,7 @@ export function JobRow({
             aria-label={`Cancel ${job.title}`}
             onClick={(e) => {
               e.stopPropagation();
-              if (aiScheduler.isExternalEmailJobId(job.id)) {
-                void emailCancelAiJob(aiScheduler.externalEmailJobId(job.id));
-              } else {
-                aiScheduler.cancelAiJob(job.id);
-              }
+              aiScheduler.cancelAiJob(job.id);
             }}
             className="grid size-5 place-items-center rounded text-[var(--color-text-dim)] opacity-0 transition-opacity hover:bg-white/[0.06] hover:text-red-400 group-hover/job:opacity-100"
           >

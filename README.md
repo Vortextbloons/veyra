@@ -2,28 +2,7 @@
 
 [![GitHub](https://img.shields.io/github/license/Vortextbloons/veyra)](https://github.com/Vortextbloons/veyra/blob/main/LICENSE)
 
-Local-first AI desktop workspace built with **Tauri v2**, **React**, and **TypeScript**. Veyra targets [LM Studio](https://lmstudio.ai/) as the primary model provider and supports optional web search (SearXNG via Docker) and Agents mode (Pi CLI).
-
-**Platform:** Windows is the supported development and build target for now.
-
-## Prerequisites (Windows)
-
-Install these before cloning:
-
-| Tool | Notes |
-|------|--------|
-| [Node.js](https://nodejs.org/) LTS | **20+** required (`package.json` `engines`) |
-| [Rust](https://www.rust-lang.org/tools/install) | **1.80.0+** (see `src-tauri/Cargo.toml`) |
-| [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) | Workload: **Desktop development with C++** |
-| [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) | Usually preinstalled on Windows 11 |
-
-Full Tauri checklist: [Tauri v2 — Prerequisites](https://v2.tauri.app/start/prerequisites/)
-
-Verify tools (optional):
-
-```powershell
-.\scripts\setup-windows.ps1
-```
+An AI desktop workspace that runs on your machine. Have real conversations with AI, research topics, write documents, build characters, and more — all private and local-first.
 
 ## Quick start
 
@@ -34,83 +13,23 @@ npm install
 npm run dev:full
 ```
 
-Repository: [github.com/Vortextbloons/veyra](https://github.com/Vortextbloons/veyra)
+Requires [Node.js](https://nodejs.org/), [Rust](https://www.rust-lang.org/), [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/), and [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/).
 
-### Faster development loop
+## Releases
 
-For quicker Rust restarts, run Vite and Tauri in two terminals:
+Grab the latest installer and see what's new on the [releases page](https://github.com/Vortextbloons/veyra/releases).
 
-```powershell
-# Terminal 1
-npm run dev
+## Features
 
-# Terminal 2
-npm run dev:app
-```
+- **Chat** — talk to local models (LM Studio) or cloud providers with streaming, tool calls, and memory
+- **Memory** — AI that remembers across sessions with 5 memory modes
+- **Research** — deep research pipeline with citations and source auditing
+- **Documents** — Markdown editor with versioning, export, and AI assistance
+- **Characters** — roleplay personas with lorebooks, group chats, and character card support
+- **Agents** — plan-building and code-writing agents
+- **Web Search** — search the web via SearXNG, ArXiv, Wikipedia
+- **Projects** — scope chats, memory, and settings per project
+- **Code Execution** — run code inside your workspace with AI
+- **Email** — Gmail integration (OAuth + IMAP)
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Vite only (http://localhost:1420) |
-| `npm run dev:app` | Tauri dev using `tauri.dev.conf.json` |
-| `npm run dev:full` | `tauri dev` (starts Vite via `beforeDevCommand`) |
-| `npm run build:app` | Production installer/binary |
-| `npm run lint` | ESLint |
-
-## Production build
-
-```powershell
-npm run sync-version
-npm run build:app
-```
-
-Artifacts appear under `src-tauri/target/release/bundle/`.
-
-## Optional features
-
-These are **not** required for basic chat:
-
-| Feature | Requirement |
-|---------|-------------|
-| Local models | [LM Studio](https://lmstudio.ai/) and `lms` on PATH |
-| Web search (SearXNG) | [Docker Desktop](https://www.docker.com/products/docker-desktop/) |
-| Agents mode | [Pi](https://pi.dev/) CLI on PATH |
-
-## Versioning
-
-The canonical version lives in [version.json](version.json).
-
-```powershell
-# After editing version.json
-npm run sync-version
-npm run version:check
-npm install
-```
-
-Release tags example: `git tag v0.1.0`
-
-## Environment variables
-
-Copy [.env.example](.env.example) to `.env.local` for optional `VITE_*` / `TAURI_*` build-time values. **Never commit real API keys.**
-
-## Privacy and local data
-
-Veyra stores runtime data on your machine only:
-
-- `%APPDATA%\com.veyra.app\` — encrypted conversations and SQLite feature databases
-- Browser `localStorage` — settings and caches (`veyra.*` keys)
-- Browser `localStorage` — agent sessions, selected model, and workspace path
-
-Do not commit these paths or files to git.
-
-### Local-only constants (not remote secrets)
-
-Some values in source are **intentional local-dev defaults**, not credentials for cloud services:
-
-- SearXNG `secret_key` in `src-tauri/src/web_search/searxng_setup.rs` — local Docker instance only
-- Conversation encryption fallback material in `src/lib/conversation-storage.ts` — decrypt-only migration support for legacy snapshots
-
-Do not put production passwords or API keys in the repository.
-
-.
-
-#
+Your data stays on your machine — no accounts, no telemetry, no cloud.

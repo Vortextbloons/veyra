@@ -27,6 +27,9 @@ export default defineConfig({
     warmup: {
       clientFiles: ["./src/app/main.tsx", "./src/app/App.tsx"],
     },
+    watch: {
+      ignored: ["**/src-tauri/target/**"],
+    },
   },
   build: {
     target: process.env.TAURI_PLATFORM === "macos" ? "safari14" : "chrome105",

@@ -5,7 +5,6 @@ import {
   FileText,
   FlaskConical,
   Folder,
-  Mail,
   MessageSquare,
   Settings,
 } from "lucide-react";
@@ -23,7 +22,6 @@ const NAV: NavItem[] = [
   { id: "projects", label: "Projects", icon: <Folder className="size-4" /> },
   { id: "documents", label: "Documents", icon: <FileText className="size-4" /> },
   { id: "research", label: "Research", icon: <FlaskConical className="size-4" /> },
-  { id: "email", label: "Email", icon: <Mail className="size-4" /> },
   { id: "memory", label: "Memory", icon: <Database className="size-4" /> },
   { id: "settings", label: "Settings", icon: <Settings className="size-4" /> },
 ];

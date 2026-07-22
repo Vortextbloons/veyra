@@ -41,7 +41,6 @@ export type LmStudioChatOptions = {
   onToolCallDetected?: (call: Pick<ProviderToolCall, "id" | "name">) => void;
   onComplete?: (result: LmChatCompleteResult) => void;
   onError: (error: string) => void;
-  /** Use the email AI concurrency pool instead of the global exclusive lane. */
   background?: boolean;
 };
 

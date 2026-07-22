@@ -38,7 +38,6 @@ mod code_execution;
 mod connectivity;
 mod document_extraction;
 mod documents;
-mod email;
 mod file_extraction;
 mod memory;
 mod projects;
@@ -378,52 +377,6 @@ pub fn run() {
             documents::commands::update_document_folder,
             documents::commands::delete_document_folder,
             documents::commands::move_document_to_folder,
-            email::commands::email_list_accounts,
-            email::commands::email_add_account,
-            email::commands::email_configure_gmail_oauth,
-            email::commands::email_connect_gmail,
-            email::commands::email_connect_gmail_with_config,
-            email::commands::email_has_gmail_oauth_config,
-            email::commands::email_sync_account,
-            email::commands::email_sync_all_gmail,
-            email::commands::email_remove_account,
-            email::commands::email_list_folders,
-            email::commands::email_list_threads,
-            email::commands::email_get_thread,
-            email::commands::email_send_message,
-            email::commands::email_save_draft,
-            email::commands::email_archive_thread,
-            email::commands::email_mark_read,
-            email::commands::email_mark_unread,
-            email::commands::email_reparse_message,
-            email::commands::email_list_attachments,
-            email::commands::email_download_attachment,
-            email::commands::email_extract_attachment_text,
-            email::commands::email_open_attachment,
-            email::commands::email_enqueue_ai_jobs,
-            email::commands::email_claim_ai_job,
-            email::commands::email_complete_ai_job,
-            email::commands::email_fail_ai_job,
-            email::commands::email_cancel_ai_job,
-            email::commands::email_reconcile_ai_jobs,
-            email::commands::email_requeue_ai_job,
-            email::commands::email_clear_ai_data,
-            email::commands::email_list_ai_jobs,
-            email::commands::email_list_ai_outputs,
-            email::commands::email_get_unprocessed_thread_ids,
-            email::commands::email_list_tags,
-            email::commands::email_create_tag,
-            email::commands::email_update_tag,
-            email::commands::email_delete_tag,
-            email::commands::email_apply_tag,
-            email::commands::email_remove_tag,
-            email::commands::email_list_message_tags,
-            email::commands::email_upsert_ai_tags,
-            email::commands::email_generate_ai_draft,
-            email::commands::email_list_ai_drafts,
-            email::commands::email_delete_ai_draft,
-            email::commands::email_save_ai_draft,
-            email::commands::email_update_ai_draft_status,
             projects::commands::create_project,
             projects::commands::get_project,
             projects::commands::update_project,
@@ -474,10 +427,6 @@ pub fn run() {
             let doc_db_state = documents::db::DocumentDbState::new(app.handle().clone());
             doc_db_state.spawn_background_init();
             app.manage(doc_db_state);
-
-            let email_db_state = email::db::EmailDbState::new(app.handle().clone());
-            email_db_state.spawn_background_init();
-            app.manage(email_db_state);
 
             let project_db_state = projects::db::ProjectDbState::new(app.handle().clone());
             project_db_state.spawn_background_init();

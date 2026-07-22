@@ -44,7 +44,6 @@ const MemoryPage = lazy(() => import("@/modules/memory/components/memory-page").
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
 const ProjectsPage = lazy(() => import("@/modules/projects/components/projects-page").then(m => ({ default: m.ProjectsPage })));
 const ResearchPage = lazy(() => import("@/modules/research/components/ResearchPage").then(m => ({ default: m.ResearchPage })));
-const EmailPage = lazy(() => import("@/modules/email/components/EmailPage").then(m => ({ default: m.EmailPage })));
 const CharacterPage = lazy(() => import("@/modules/characters/components/CharacterPage").then(m => ({ default: m.CharacterPage })));
 const DocumentsPage = lazy(() => import("@/modules/documents/components/DocumentsPage").then(m => ({ default: m.DocumentsPage })));
 
@@ -315,7 +314,6 @@ function App() {
             {activeNav === "projects" && <ProjectsPage />}
             {activeNav === "documents" && <DocumentsPage />}
             {activeNav === "research" && <ResearchPage />}
-            {activeNav === "email" && <EmailPage />}
             {activeNav === "characters" && <CharacterPage />}
             {activeNav === "settings" && <SettingsPage />}
           </Suspense>

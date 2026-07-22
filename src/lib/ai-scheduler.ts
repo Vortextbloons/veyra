@@ -9,12 +9,7 @@ export type AiJobType =
   | "compress_context"
   | "maintenance"
   | "research_run"
-  | "character_ai_assist"
-  | "email_thread_summary"
-  | "email_classification"
-  | "email_spam_score"
-  | "email_urgency_score"
-  | "email_reply_draft";
+  | "character_ai_assist";
 
 export type AiJobStatus =
   | "queued"
@@ -42,23 +37,16 @@ export type AiJob = {
   run: (signal: AbortSignal) => Promise<{ prompt?: string; output?: string } | string | void>;
 };
 
-export type AiJobSnapshot = Omit<AiJob, "run"> & {
-  source?: "scheduler" | "email";
-};
+export type AiJobSnapshot = Omit<AiJob, "run">;
 
 export type AiSchedulerSnapshot = {
   activeJob: AiJobSnapshot | null;
   queuedJobs: AiJobSnapshot[];
   recentJobs: AiJobSnapshot[];
-  emailActiveJobs: AiJobSnapshot[];
-  emailQueuedJobs: AiJobSnapshot[];
-  emailRecentJobs: AiJobSnapshot[];
   pausedBackground: boolean;
   isUserJobRunning: boolean;
-  isEmailJobRunning: boolean;
   queuedUserJobs: number;
   queuedBackgroundJobs: number;
-  queuedEmailJobs: number;
 };
 
 type Listener = () => void;
@@ -82,18 +70,11 @@ const EMPTY_SNAPSHOT: AiSchedulerSnapshot = {
   activeJob: null,
   queuedJobs: [],
   recentJobs: [],
-  emailActiveJobs: [],
-  emailQueuedJobs: [],
-  emailRecentJobs: [],
   pausedBackground: false,
   isUserJobRunning: false,
-  isEmailJobRunning: false,
   queuedUserJobs: 0,
   queuedBackgroundJobs: 0,
-  queuedEmailJobs: 0,
 };
-
-export const EMAIL_SCHEDULER_JOB_PREFIX = "email:";
 
 class AiScheduler {
   private queue: AiJob[] = [];
@@ -105,9 +86,6 @@ class AiScheduler {
   private draining = false;
   private drainTail: Promise<void> = Promise.resolve();
   private snapshot: AiSchedulerSnapshot = EMPTY_SNAPSHOT;
-  private emailActiveJobs: AiJobSnapshot[] = [];
-  private emailQueuedJobs: AiJobSnapshot[] = [];
-  private emailRecentJobs: AiJobSnapshot[] = [];
 
   enqueueAiJob(job: Omit<AiJob, "id" | "createdAt" | "status">): string {
     const id = crypto.randomUUID();
@@ -196,25 +174,6 @@ class AiScheduler {
     return this.snapshot;
   }
 
-  setExternalEmailJobs(jobs: {
-    active: AiJobSnapshot[];
-    queued: AiJobSnapshot[];
-    recent: AiJobSnapshot[];
-  }): void {
-    this.emailActiveJobs = jobs.active;
-    this.emailQueuedJobs = jobs.queued;
-    this.emailRecentJobs = jobs.recent;
-    this.notify();
-  }
-
-  isExternalEmailJobId(jobId: string): boolean {
-    return jobId.startsWith(EMAIL_SCHEDULER_JOB_PREFIX);
-  }
-
-  externalEmailJobId(jobId: string): string {
-    return jobId.slice(EMAIL_SCHEDULER_JOB_PREFIX.length);
-  }
-
   private rebuildSnapshot(): void {
     const queued = sortJobs(this.queue);
     const queuedUserJobs = queued.filter((j) => j.priority === 0).length;
@@ -223,15 +182,10 @@ class AiScheduler {
       activeJob: this.activeJob ? snapshotOf(this.activeJob) : null,
       queuedJobs: queued.map(snapshotOf),
       recentJobs: [...this.recentJobs],
-      emailActiveJobs: [...this.emailActiveJobs],
-      emailQueuedJobs: [...this.emailQueuedJobs],
-      emailRecentJobs: [...this.emailRecentJobs],
       pausedBackground: this.pausedBackground,
       isUserJobRunning: this.activeJob?.priority === 0,
-      isEmailJobRunning: this.emailActiveJobs.length > 0,
       queuedUserJobs,
       queuedBackgroundJobs,
-      queuedEmailJobs: this.emailQueuedJobs.length,
     };
   }
 
@@ -365,9 +319,4 @@ export const JOB_LABELS: Record<AiJobType, string> = {
   maintenance: "Maintenance",
   research_run: "Research run",
   character_ai_assist: "Character assist",
-  email_thread_summary: "Email summary",
-  email_classification: "Email classification",
-  email_spam_score: "Email spam check",
-  email_urgency_score: "Email urgency",
-  email_reply_draft: "Email draft",
 };

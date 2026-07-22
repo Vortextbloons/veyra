@@ -13,7 +13,6 @@ import { createResearchSlice, DEFAULT_RESEARCH_SLICE_STATE } from "./slices/rese
 import { createCodeExecutionSlice, DEFAULT_CODE_EXECUTION_STATE } from "./slices/code-execution-slice";
 import { createConnectivitySlice, DEFAULT_CONNECTIVITY_STATE } from "./slices/connectivity-slice";
 import { createChatSlice, DEFAULT_CHAT_STATE } from "./slices/chat-slice";
-import { createEmailAiSlice, DEFAULT_EMAIL_AI_STATE } from "./slices/email-ai-slice";
 import { createUpdateSlice, DEFAULT_UPDATE_STATE } from "./slices/update-slice";
 
 export type { ModelSettings, ResolvedModelSettings } from "./slices/model-slice";
@@ -33,7 +32,6 @@ export type SettingsStoreState = UiLayoutSliceState
   & CodeExecutionSliceState
   & ConnectivitySliceState
   & ChatSliceState
-  & EmailAiSliceState
   & UpdateSliceState;
 
 export type SettingsStore = SettingsStoreState
@@ -47,7 +45,6 @@ export type SettingsStore = SettingsStoreState
   & CodeExecutionSliceActions
   & ConnectivitySliceActions
   & ChatSliceActions
-  & EmailAiSliceActions
   & UpdateSliceActions;
 
 // Re-import state types for the combined type above.
@@ -61,7 +58,6 @@ import type { ResearchSliceState, ResearchSliceActions } from "./slices/research
 import type { CodeExecutionSliceState, CodeExecutionSliceActions } from "./slices/code-execution-slice";
 import type { ConnectivitySliceState, ConnectivitySliceActions } from "./slices/connectivity-slice";
 import type { ChatSliceState, ChatSliceActions } from "./slices/chat-slice";
-import type { EmailAiSliceState, EmailAiSliceActions } from "./slices/email-ai-slice";
 import type { UpdateSliceState, UpdateSliceActions } from "./slices/update-slice";
 
 // ── Defaults (for merge) ────────────────────────────────────────────────────
@@ -77,7 +73,6 @@ const DEFAULT_STATE: SettingsStoreState = {
   ...DEFAULT_CODE_EXECUTION_STATE,
   ...DEFAULT_CONNECTIVITY_STATE,
   ...DEFAULT_CHAT_STATE,
-  ...DEFAULT_EMAIL_AI_STATE,
   ...DEFAULT_UPDATE_STATE,
 };
 
@@ -175,17 +170,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     customPythonPath: state.customPythonPath,
     codeExecutionTimeoutSecs: state.codeExecutionTimeoutSecs,
     connectivityPreference: state.connectivityPreference,
-    emailAiEnabled: state.emailAiEnabled,
-    emailAiAutoDraft: state.emailAiAutoDraft,
-    emailAiWorkerCount: state.emailAiWorkerCount,
-    emailAiBackgroundSummary: state.emailAiBackgroundSummary,
-    emailAiBackgroundClassification: state.emailAiBackgroundClassification,
-    emailAiBackgroundSpam: state.emailAiBackgroundSpam,
-    emailAiBackgroundUrgency: state.emailAiBackgroundUrgency,
-    emailAiPollInterval: state.emailAiPollInterval,
-    emailAiSummaryModel: state.emailAiSummaryModel,
-    emailAiClassificationModel: state.emailAiClassificationModel,
-    emailAiDraftModel: state.emailAiDraftModel,
     autoCheckUpdatesEnabled: state.autoCheckUpdatesEnabled,
     dismissedUpdateVersion: state.dismissedUpdateVersion,
   };
@@ -216,7 +200,6 @@ export const useSettingsStore = create<SettingsStore>()(
       ...createCodeExecutionSlice(...a),
       ...createConnectivitySlice(...a),
       ...createChatSlice(...a),
-      ...createEmailAiSlice(...a),
       ...createUpdateSlice(...a),
     }),
     {
