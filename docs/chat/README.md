@@ -10,3 +10,4 @@ Core AI chat pipeline with streaming, tool calls, memory injection, and context 
 - [04-streaming.md](04-streaming.md) — Streaming behavior
 - [05-storage.md](05-storage.md) — Conversation encryption and persistence
 - [06-types.md](06-types.md) — Key type definitions
+- [07-studio-mode.md](07-studio-mode.md) — Studio presentation, artifacts, and export

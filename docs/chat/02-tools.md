@@ -13,6 +13,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | `inline_edit` | `documentToolsEnabled` | Edit a document with section/heading targeting |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
 | `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
+| `studio_render` | `studioModeEnabled` + conversation `presentationMode: "studio"` | Render a validated HTML/CSS visual artifact in Studio |
 
 ## Enhanced Mode
 

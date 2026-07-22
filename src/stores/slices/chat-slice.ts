@@ -6,6 +6,8 @@ export type ChatSliceState = {
   contextAnchoringEnabled: boolean;
   enhancedModeEnabled: boolean;
   studioModeEnabled: boolean;
+  /** Marks that Studio availability was rolled out to default-on (MVP). */
+  studioModeAvailabilityDefaultOn: boolean;
 };
 
 export type ChatSliceActions = {
@@ -19,7 +21,8 @@ export const DEFAULT_CHAT_STATE: ChatSliceState = {
   workspaceChatMode: "chat",
   contextAnchoringEnabled: true,
   enhancedModeEnabled: false,
-  studioModeEnabled: false,
+  studioModeEnabled: true,
+  studioModeAvailabilityDefaultOn: true,
 };
 
 export type ChatSlice = ChatSliceState & ChatSliceActions;

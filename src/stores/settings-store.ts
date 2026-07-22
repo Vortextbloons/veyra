@@ -164,6 +164,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     enhancedModeEnabled: state.enhancedModeEnabled,
     studioModeEnabled: state.studioModeEnabled,
+    studioModeAvailabilityDefaultOn: state.studioModeAvailabilityDefaultOn,
     research: state.research,
     researchAdvancedOpen: state.researchAdvancedOpen,
     researchFirstRunNoticeDismissed: state.researchFirstRunNoticeDismissed,
@@ -229,6 +230,11 @@ export const useSettingsStore = create<SettingsStore>()(
           depthOverrides: parsed.research?.depthOverrides ?? {},
           customProfiles: parsed.research?.customProfiles ?? [],
         };
+        // MVP rollout: Studio availability defaults on once after the guarded opt-in release.
+        if (parsed.studioModeAvailabilityDefaultOn === undefined) {
+          migrated.studioModeEnabled = true;
+          migrated.studioModeAvailabilityDefaultOn = true;
+        }
 
         return { ...current, ...DEFAULT_STATE, ...migrated };
       },

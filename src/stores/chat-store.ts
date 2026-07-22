@@ -10,6 +10,10 @@ import {
   reconcileStudioArtifactWithMessages,
   trimStudioRevisions,
 } from "@/modules/chat/studio/studio-normalize";
+import {
+  measureStudioArtifactBytes,
+  recordStudioArtifactSnapshotSize,
+} from "@/modules/chat/studio/studio-diagnostics";
 
 type ConversationHydrationState = "loading" | "ready";
 
@@ -238,6 +242,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
   commitStudioRevision: (id, input, options) => {
     let committed: StudioRevision | null = null;
+    let measuredBytes: number | null = null;
+    let measuredRevisionCount = 0;
     set((state) => {
       const conversations = state.conversations.map((conversation) => {
         if (conversation.id !== id || conversation.presentationMode !== "studio") return conversation;
@@ -253,23 +259,32 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         const shouldAdvancePointer = currentPointer === pointerRevisionAtStart;
         const currentRevision = shouldAdvancePointer ? nextNumber : currentPointer;
         const current = revisions.find((item) => item.revision === currentRevision) ?? committed;
+        const studioArtifact = {
+          id: conversation.studioArtifact?.id ?? crypto.randomUUID(),
+          title: current.title,
+          currentRevision,
+          latestRevision: nextNumber,
+          revisions,
+          createdAt: conversation.studioArtifact?.createdAt ?? now,
+          updatedAt: now,
+        };
+        measuredBytes = measureStudioArtifactBytes(studioArtifact);
+        measuredRevisionCount = revisions.length;
         return {
           ...conversation,
           updatedAt: now,
-          studioArtifact: {
-            id: conversation.studioArtifact?.id ?? crypto.randomUUID(),
-            title: current.title,
-            currentRevision,
-            latestRevision: nextNumber,
-            revisions,
-            createdAt: conversation.studioArtifact?.createdAt ?? now,
-            updatedAt: now,
-          },
+          studioArtifact,
         };
       });
       void saveConversationSnapshot(conversations);
       return { conversations };
     });
+    if (measuredBytes !== null) {
+      recordStudioArtifactSnapshotSize({
+        bytes: measuredBytes,
+        revisionCount: measuredRevisionCount,
+      });
+    }
     return committed;
   },
   selectStudioRevision: (id, revision) => {

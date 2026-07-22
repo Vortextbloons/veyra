@@ -24,3 +24,7 @@ Each conversation is serialized as an encrypted JSON file containing:
 - Messages array with content, reasoning, tool calls, and web search state
 - Metadata (title, mode, character binding, project binding, timestamps)
 - Conversation summary (if auto-summarized)
+- Optional `presentationMode` (`standard` or `studio`)
+- Optional `studioArtifact` with current/latest revision pointers and retained immutable HTML/CSS revisions
+
+Studio artifacts use the same encrypted snapshot path. Built outer iframe documents are not persisted; they are reconstructed from validated revision HTML and CSS.
