@@ -1,7 +1,20 @@
-import type { StudioArtifact } from "./studio-types";
+import type { StudioArtifact, StudioContextMode } from "./studio-types";
 
-export const STUDIO_SYSTEM_INSTRUCTION =
-  "Studio presentation is enabled. Use studio_render when a visual interface would improve the response. Return a complete HTML body fragment and CSS. Do not access Veyra, Tauri, the filesystem, credentials, scripts, or remote resources.";
+/** Returns a domain-specific Studio system instruction. */
+export function getStudioSystemInstruction(mode: StudioContextMode = "chat"): string {
+  const base = "Studio presentation is enabled. Use studio_render when a visual interface would improve the response. Return a complete HTML body fragment and CSS. Do not access Veyra, Tauri, the filesystem, credentials, scripts, or remote resources.";
+  const modeHints: Record<StudioContextMode, string> = {
+    chat: base,
+    character: `${base}\nBuild character-appropriate visual scenes such as settings, character displays, mood boards, or interactive dialogues that reflect the character's persona and world.`,
+    research: `${base}\nBuild evidence interfaces such as source comparison tables, evidence dashboards, claim maps, timeline visualizations, or research summaries.`,
+    project: `${base}\nBuild project command centers such as milestone trackers, task boards, status dashboards, or planning views that reflect the current project context.`,
+    document: `${base}\nBuild document presentations such as formatted readers, visual outlines, comparison views, or annotated layouts that help explore the document content.`,
+  };
+  return modeHints[mode] ?? base;
+}
+
+/** Legacy constant kept for backward compatibility — delegates to chat mode. */
+export const STUDIO_SYSTEM_INSTRUCTION = getStudioSystemInstruction("chat");
 
 const REVISION_HINT =
   /\b(studio|artifact|canvas|dashboard|timeline|visual|layout|restyle|redesign|revise|update the (view|ui|interface|artifact)|regenerate|make it (look|feel)|change the (colors|design|style))\b/i;
@@ -18,6 +31,46 @@ function truncateUtf8(value: string, maxBytes: number): string {
     end -= 1;
   }
   return `${value.slice(0, end)}\n<!-- truncated -->`;
+}
+
+/** Infers the Studio context mode from conversation properties and chat mode. */
+export function inferStudioContextMode(conversation?: {
+  characterId?: string | null;
+  groupId?: string | null;
+  projectId?: string | null;
+  mode?: string;
+}): StudioContextMode {
+  if (conversation?.characterId || conversation?.groupId) return "character";
+  if (conversation?.projectId) return "project";
+  if (conversation?.mode === "research") return "research";
+  return "chat";
+}
+
+/** Builds mode-specific context data to include alongside the artifact. */
+export function buildModeContextBlock(
+  mode: StudioContextMode,
+  domainData?: { persona?: string; scenario?: string; loreEntries?: string; projectName?: string; projectKind?: string; projectDescription?: string; documentTitle?: string; documentType?: string },
+): string | undefined {
+  if (mode === "chat") return undefined;
+  const parts: string[] = [];
+  if (mode === "character" && domainData) {
+    if (domainData.persona) parts.push(`Character persona: ${domainData.persona}`);
+    if (domainData.scenario) parts.push(`Scenario: ${domainData.scenario}`);
+    if (domainData.loreEntries) parts.push(`World lore: ${domainData.loreEntries}`);
+  }
+  if (mode === "project" && domainData) {
+    if (domainData.projectName) parts.push(`Project: ${domainData.projectName}`);
+    if (domainData.projectKind) parts.push(`Project kind: ${domainData.projectKind}`);
+    if (domainData.projectDescription) parts.push(`Description: ${domainData.projectDescription}`);
+  }
+  if (mode === "document" && domainData) {
+    if (domainData.documentTitle) parts.push(`Document: ${domainData.documentTitle}`);
+    if (domainData.documentType) parts.push(`Document type: ${domainData.documentType}`);
+  }
+  if (mode === "research") {
+    parts.push("Use available research sources and evidence to build informative visual interfaces.");
+  }
+  return parts.length > 0 ? `<veyra_context mode="${mode}">\n${parts.join("\n")}\n</veyra_context>` : undefined;
 }
 
 export function buildStudioArtifactContextBlock(

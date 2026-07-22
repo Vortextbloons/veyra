@@ -14,7 +14,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import type { StudioArtifact } from "../studio-types";
+import type { StudioArtifact, StudioContextMode } from "../studio-types";
 import { getCachedStudioDocument } from "../studio-document-cache";
 import { exportStudioRevisionToFile } from "../studio-export";
 import { previousStudioRevision } from "../studio-normalize";
@@ -24,10 +24,20 @@ type StudioShellProps = {
   artifactId?: string;
   generating: boolean;
   validationError?: string | null;
+  /** Context mode for specialized integrations, shown as a badge. */
+  mode?: StudioContextMode;
   onClose: () => void;
   onUndo?: () => void;
   onSelectRevision?: (revision: number) => void;
   onRegenerate?: (assistantMessageId: string) => void;
+};
+
+const MODE_LABELS: Record<StudioContextMode, string> = {
+  chat: "Chat",
+  character: "Character",
+  research: "Research",
+  project: "Project",
+  document: "Document",
 };
 
 function usePrefersReducedMotion(): boolean {
@@ -47,6 +57,7 @@ export function StudioShell({
   artifactId,
   generating,
   validationError,
+  mode,
   onClose,
   onUndo,
   onSelectRevision,
@@ -128,6 +139,11 @@ export function StudioShell({
       <header className="shrink-0 border-b border-[var(--color-border)]">
         <div className="flex h-11 items-center gap-2 px-3">
           <span className="shrink-0 font-mono text-[10px] uppercase tracking-[.16em] text-violet-300">Studio</span>
+          {mode && mode !== "chat" && (
+            <span className="shrink-0 rounded border border-violet-400/20 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[.12em] text-violet-200/70">
+              {MODE_LABELS[mode]}
+            </span>
+          )}
           <span className="min-w-0 flex-1 truncate text-xs text-white/80">
             {revision?.title ?? "Visual canvas"}
             {revision ? ` · r${revision.revision}` : ""}

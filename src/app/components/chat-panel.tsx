@@ -233,7 +233,7 @@ export function ChatPanel({
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
         </div>
-        {studioModeEnabled && presentationMode === "studio" && mode !== "agents" && mode !== "research" && (
+        {studioModeEnabled && presentationMode === "studio" && mode !== "agents" && (
           <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-violet-200">
             Studio
           </span>
@@ -372,7 +372,7 @@ export function ChatPanel({
       </div>
     </main>
   );
-  if (!studioModeEnabled || presentationMode !== "studio" || mode === "agents" || mode === "research") return chatContent;
+  if (!studioModeEnabled || presentationMode !== "studio" || mode === "agents") return chatContent;
   return (
     <StudioSplitLayout
       chat={chatContent}
@@ -380,6 +380,7 @@ export function ChatPanel({
         <StudioShell
           artifact={activeStudioArtifact}
           artifactId={activeStudioArtifact?.id}
+          mode={activeStudioArtifact?.mode}
           generating={isStreaming}
           validationError={studioValidationError}
           onClose={() => onPresentationModeChange?.("standard")}

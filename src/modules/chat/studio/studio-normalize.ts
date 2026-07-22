@@ -65,6 +65,7 @@ export function normalizeStudioArtifact(raw: unknown): StudioArtifact | undefine
     revisions: trimmed,
     createdAt: typeof artifact.createdAt === "number" ? artifact.createdAt : current.createdAt,
     updatedAt: typeof artifact.updatedAt === "number" ? artifact.updatedAt : current.createdAt,
+    mode: typeof artifact.mode === "string" ? (artifact.mode as StudioArtifact["mode"]) : undefined,
   };
 }
 
@@ -89,6 +90,7 @@ export function reconcileStudioArtifactWithMessages(
     latestRevision,
     revisions: trimStudioRevisions(revisions, currentRevision),
     updatedAt: artifact.updatedAt,
+    mode: artifact.mode,
   };
 }
 
@@ -120,6 +122,7 @@ export function copyStudioArtifactForFork(
     revisions,
     createdAt: now,
     updatedAt: now,
+    mode: artifact.mode,
   };
 }
 

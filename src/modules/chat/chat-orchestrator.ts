@@ -24,7 +24,7 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { STUDIO_SYSTEM_INSTRUCTION, buildStudioArtifactContextBlock, shouldIncludeStudioArtifactContext } from "@/modules/chat/studio/studio-context";
+import { getStudioSystemInstruction, buildStudioArtifactContextBlock, buildModeContextBlock, inferStudioContextMode, shouldIncludeStudioArtifactContext } from "@/modules/chat/studio/studio-context";
 
 export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;
@@ -119,15 +119,32 @@ export async function sendChatRequest({
     : extensionState.resolveActiveSkillSelection(conversationId ?? "new-chat", projectId);
   const baseSkillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
   const studioEnabled = conversation?.presentationMode === "studio" && settings.studioModeEnabled;
+  const studioContextMode = studioEnabled ? inferStudioContextMode({
+    characterId: conversation?.characterId,
+    groupId: conversation?.groupId,
+    projectId: conversation?.projectId,
+  }) : undefined;
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
   const studioArtifactBlock =
     studioEnabled &&
+    studioContextMode &&
     conversation?.studioArtifact &&
     lastUserMessage?.content &&
     shouldIncludeStudioArtifactContext(lastUserMessage.content)
       ? buildStudioArtifactContextBlock(conversation.studioArtifact)
       : undefined;
-  const skillContextBlock = [baseSkillContextBlock, studioEnabled ? STUDIO_SYSTEM_INSTRUCTION : undefined, studioArtifactBlock]
+  const modeContextBlock = studioContextMode
+    ? buildModeContextBlock(studioContextMode, {
+        persona: conversation?.characterSnapshot?.name
+          ? `${conversation.characterSnapshot.name}${conversation.characterSnapshot.title ? ` — ${conversation.characterSnapshot.title}` : ""}`
+          : undefined,
+        projectName: projectRecord?.name,
+        projectKind: projectRecord?.kind,
+        projectDescription: projectRecord?.description,
+      })
+    : undefined;
+  const studioInstruction = studioContextMode ? getStudioSystemInstruction(studioContextMode) : undefined;
+  const skillContextBlock = [baseSkillContextBlock, studioInstruction, modeContextBlock, studioArtifactBlock]
     .filter(Boolean).join("\n\n") || undefined;
 
   const contextAnchoringBlock = settings.contextAnchoringEnabled
@@ -256,6 +273,7 @@ export async function sendChatRequest({
     signal: options.signal,
     projectId,
     conversationId,
+    studioMode: studioContextMode,
     effectiveWebSearchEnabled,
     webSearchAvailability,
     retryDocMutationWithLLM,

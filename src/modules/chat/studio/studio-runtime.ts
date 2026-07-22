@@ -20,7 +20,7 @@ export function resetStudioRepairGuard(conversationId: string, assistantMessageI
   studioRepairAttempts.delete(studioRepairKey(conversationId, assistantMessageId));
 }
 
-export function executeStudioCall(call: ProviderToolCall, context: { conversationId?: string; assistantMessageId?: string }): string {
+export function executeStudioCall(call: ProviderToolCall, context: { conversationId?: string; assistantMessageId?: string; mode?: import("./studio-types").StudioContextMode }): string {
   const label = "Studio Render";
   const fail = (issues: Array<{ code: string; message: string }>, finalFailure = false) => {
     const message = issues.map((issue) => `${issue.code}: ${issue.message}`).join("; ");
@@ -86,7 +86,7 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
       css: validated.css,
       assistantMessageId: context.assistantMessageId,
     },
-    { pointerRevisionAtStart },
+    { pointerRevisionAtStart, mode: context.mode },
   );
   if (!revision) {
     return fail([{ code: "commit_failed", message: "The conversation no longer accepts Studio output." }]);

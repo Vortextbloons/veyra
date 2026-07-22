@@ -560,7 +560,7 @@ export function Composer({
             {!isEditMode && (
               <>
                 <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
-                {(mode === "chat" || mode === "characters") && studioToolAvailable !== false && (
+                {(mode === "chat" || mode === "characters" || mode === "research") && studioToolAvailable !== false && (
                   <ToggleIconButton
                     icon={PanelsTopLeft}
                     label="Studio presentation"

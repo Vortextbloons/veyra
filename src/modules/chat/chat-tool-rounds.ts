@@ -43,6 +43,8 @@ type ToolRoundContext = {
   projectId?: string;
   conversationId?: string;
   assistantMessageId?: string;
+  /** Studio context mode for specialized integrations (character scenes, research evidence, etc.). */
+  studioMode?: import("@/modules/chat/studio/studio-types").StudioContextMode;
   webSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
   retryDocMutationWithLLM: (
@@ -96,7 +98,7 @@ export async function executeToolRound(
     toolResultSections.push(`Tool result for ${STUDIO_RENDER_TOOL_NAME}: skipped because only the last Studio call in a batch is committed.`);
   }
   const studioCall = studioCalls.at(-1);
-  if (studioCall) toolResultSections.push(executeStudioCall(studioCall, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId }));
+  if (studioCall) toolResultSections.push(executeStudioCall(studioCall, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId, mode: ctx.studioMode }));
 
   const webResults = await Promise.all(
     webSearchCalls.map(async (call) => {

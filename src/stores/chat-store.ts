@@ -3,7 +3,7 @@ import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSe
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { normalizeAttachment } from "@/lib/message-attachments";
 import { abortPendingQuestion } from "@/modules/chat/pending-question-registry";
-import type { PresentationMode, StudioRevision } from "@/modules/chat/studio/studio-types";
+import type { PresentationMode, StudioArtifact, StudioContextMode, StudioRevision } from "@/modules/chat/studio/studio-types";
 import {
   copyStudioArtifactForFork,
   normalizeConversationStudio,
@@ -43,7 +43,7 @@ type ChatStore = {
   setActiveConversationId: (id: string | null) => void;
   createConversation: (projectId?: string) => string;
   setConversationPresentation: (id: string, mode: PresentationMode) => void;
-  commitStudioRevision: (id: string, revision: Omit<StudioRevision, "revision" | "createdAt">, options?: { pointerRevisionAtStart?: number }) => StudioRevision | null;
+  commitStudioRevision: (id: string, revision: Omit<StudioRevision, "revision" | "createdAt">, options?: { pointerRevisionAtStart?: number; mode?: StudioContextMode }) => StudioRevision | null;
   selectStudioRevision: (id: string, revision: number) => boolean;
   undoStudioRevision: (id: string) => boolean;
   deleteConversation: (id: string) => void;
@@ -259,7 +259,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         const shouldAdvancePointer = currentPointer === pointerRevisionAtStart;
         const currentRevision = shouldAdvancePointer ? nextNumber : currentPointer;
         const current = revisions.find((item) => item.revision === currentRevision) ?? committed;
-        const studioArtifact = {
+        const studioArtifact: StudioArtifact = {
           id: conversation.studioArtifact?.id ?? crypto.randomUUID(),
           title: current.title,
           currentRevision,
@@ -267,6 +267,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           revisions,
           createdAt: conversation.studioArtifact?.createdAt ?? now,
           updatedAt: now,
+          mode: conversation.studioArtifact?.mode ?? options?.mode,
         };
         measuredBytes = measureStudioArtifactBytes(studioArtifact);
         measuredRevisionCount = revisions.length;

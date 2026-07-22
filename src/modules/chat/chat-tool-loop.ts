@@ -151,6 +151,8 @@ export async function rePromptWithTools(params: {
   });
 }
 
+import type { StudioContextMode } from "@/modules/chat/studio/studio-types";
+
 export function createExecuteToolRoundLocal(params: {
   signal?: AbortSignal;
   projectId?: string;
@@ -159,6 +161,7 @@ export function createExecuteToolRoundLocal(params: {
   webSearchAvailability: { available: boolean; reason?: string };
   retryDocMutationWithLLM: (assistantContent: string, errorMessage: string) => Promise<ProviderToolCall[]>;
   conversationIdForDocMutation?: string;
+  studioMode?: StudioContextMode;
 }) {
   const settings = useSettingsStore.getState();
   let preferredDocumentId: string | undefined;
@@ -175,6 +178,7 @@ export function createExecuteToolRoundLocal(params: {
       projectId: params.projectId,
       conversationId: params.conversationId,
       assistantMessageId: buffer?.messageId,
+      studioMode: params.studioMode,
       webSearchEnabled: params.effectiveWebSearchEnabled,
       webSearchAvailability: params.webSearchAvailability,
       retryDocMutationWithLLM: params.retryDocMutationWithLLM,
