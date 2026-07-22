@@ -2,6 +2,7 @@ import { aiScheduler } from "@/lib/ai-scheduler";
 import { executeChatSend, ensureProviderReady } from "@/modules/chat/chat-actions";
 import type { ChatMessage, RequestStatus } from "@/modules/chat/chat-types";
 import { useChatStore } from "@/stores/chat-store";
+import { resetStudioRepairGuard } from "@/modules/chat/studio/studio-runtime";
 
 export interface RunChatJobParams {
   conversationId: string;
@@ -48,6 +49,7 @@ export function runChatJob({
 
   setStreamingMessageId(assistantMessage.id);
   setRequestStatus("streaming");
+  resetStudioRepairGuard(conversationId, assistantMessage.id);
   aiScheduler.abortActiveBackgroundJob();
 
   const jobId = aiScheduler.enqueueAiJob({

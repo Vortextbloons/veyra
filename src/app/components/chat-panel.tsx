@@ -94,7 +94,10 @@ export function ChatPanel({
   const setEnhancedModeEnabled = useSettingsStore((s) => s.setEnhancedModeEnabled);
   const studioModeEnabled = useSettingsStore((s) => s.studioModeEnabled);
   const streamingBuffer = useChatStore((s) => s.streamingBuffer);
-  const activeStudioArtifact = useChatStore((s) => s.conversations.find((item) => item.id === s.activeConversationId)?.studioArtifact);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const activeStudioArtifact = useChatStore((s) =>
+    s.conversations.find((item) => item.id === s.activeConversationId)?.studioArtifact,
+  );
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const mode = controlledMode ?? internalMode;
@@ -347,7 +350,14 @@ export function ChatPanel({
     </main>
   );
   if (!studioModeEnabled || presentationMode !== "studio" || mode === "agents" || mode === "research") return chatContent;
-  return <div className="relative flex h-full min-w-0 flex-1 overflow-hidden">{chatContent}<StudioShell artifact={activeStudioArtifact} generating={isStreaming} onClose={() => onPresentationModeChange?.("standard")} /></div>;
+  return <div className="relative flex h-full min-w-0 flex-1 overflow-hidden">{chatContent}<StudioShell
+    artifact={activeStudioArtifact}
+    generating={isStreaming}
+    onClose={() => onPresentationModeChange?.("standard")}
+    onUndo={() => activeConversationId && useChatStore.getState().undoStudioRevision(activeConversationId)}
+    onSelectRevision={(revision) => activeConversationId && useChatStore.getState().selectStudioRevision(activeConversationId, revision)}
+    onRegenerate={onRegenerate}
+  /></div>;
 }
 
 function EmptyChat({
