@@ -3,11 +3,22 @@ import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSe
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { normalizeAttachment } from "@/lib/message-attachments";
 import { abortPendingQuestion } from "@/modules/chat/pending-question-registry";
-import type { PresentationMode, StudioArtifact, StudioContextMode, StudioRevision } from "@/modules/chat/studio/studio-types";
+import type {
+  PresentationMode,
+  StudioArtifact,
+  StudioContextMode,
+  StudioResponseRevision,
+  StudioResponseStatus,
+  StudioRevision,
+  StudioValidationIssue,
+} from "@/modules/chat/studio/studio-types";
 import {
   copyStudioArtifactForFork,
   normalizeConversationStudio,
+  previousStudioResponseRevision,
   reconcileStudioArtifactWithMessages,
+  resolveConversationExperience,
+  trimStudioResponseRevisions,
   trimStudioRevisions,
 } from "@/modules/chat/studio/studio-normalize";
 import {
@@ -46,6 +57,10 @@ type ChatStore = {
   commitStudioRevision: (id: string, revision: Omit<StudioRevision, "revision" | "createdAt">, options?: { pointerRevisionAtStart?: number; mode?: StudioContextMode }) => StudioRevision | null;
   selectStudioRevision: (id: string, revision: number) => boolean;
   undoStudioRevision: (id: string) => boolean;
+  commitStudioResponseRevision: (conversationId: string, assistantMessageId: string, revision: Omit<StudioResponseRevision, "revision" | "createdAt" | "assistantMessageId">, options?: { pointerRevisionAtStart?: number }) => StudioResponseRevision | null;
+  setStudioResponseStatus: (conversationId: string, assistantMessageId: string, status: StudioResponseStatus, error?: StudioValidationIssue[]) => boolean;
+  selectStudioResponseRevision: (conversationId: string, assistantMessageId: string, revision: number) => boolean;
+  undoStudioResponseRevision: (conversationId: string, assistantMessageId: string) => boolean;
   deleteConversation: (id: string) => void;
   deleteAllConversations: () => void;
   addMessagePair: (
@@ -321,6 +336,126 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const index = sorted.findIndex((item) => item.revision === artifact.currentRevision);
     if (index <= 0) return false;
     return get().selectStudioRevision(id, sorted[index - 1]!.revision);
+  },
+  commitStudioResponseRevision: (conversationId, assistantMessageId, input, options) => {
+    let committed: StudioResponseRevision | null = null;
+    set((state) => {
+      let changed = false;
+      const conversations = state.conversations.map((conversation) => {
+        if (
+          conversation.id !== conversationId ||
+          resolveConversationExperience(conversation) !== "studio" ||
+          conversation.characterId ||
+          conversation.groupId
+        ) return conversation;
+
+        const target = conversation.messages.find((message) => message.id === assistantMessageId);
+        if (!target || target.role !== "assistant") return conversation;
+
+        const now = Date.now();
+        const previous = target.studioResponse;
+        const nextNumber = (previous?.latestRevision ?? 0) + 1;
+        committed = { ...input, revision: nextNumber, createdAt: now };
+        const pointerAtStart = options?.pointerRevisionAtStart ?? previous?.currentRevision ?? 0;
+        const currentPointer = previous?.currentRevision ?? 0;
+        const desiredPointer = currentPointer === pointerAtStart ? nextNumber : currentPointer;
+        const revisions = trimStudioResponseRevisions(
+          [...(previous?.revisions ?? []), committed],
+          desiredPointer,
+        );
+        const currentRevision = revisions.some((item) => item.revision === desiredPointer)
+          ? desiredPointer
+          : nextNumber;
+        const current = revisions.find((item) => item.revision === currentRevision) ?? committed;
+        changed = true;
+        return {
+          ...conversation,
+          updatedAt: now,
+          messages: conversation.messages.map((message) => message.id === assistantMessageId
+            ? {
+                ...message,
+                studioResponse: {
+                  id: previous?.id ?? crypto.randomUUID(),
+                  title: current.title,
+                  currentRevision,
+                  latestRevision: nextNumber,
+                  revisions,
+                  status: "ready" as const,
+                  createdAt: previous?.createdAt ?? now,
+                  updatedAt: now,
+                },
+              }
+            : message),
+        };
+      });
+      if (changed) void saveConversationSnapshot(conversations);
+      return changed ? { conversations } : state;
+    });
+    return committed;
+  },
+  setStudioResponseStatus: (conversationId, assistantMessageId, status, error) => {
+    let updated = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId || resolveConversationExperience(conversation) !== "studio") return conversation;
+        const target = conversation.messages.find((message) => message.id === assistantMessageId);
+        if (!target || target.role !== "assistant") return conversation;
+        const now = Date.now();
+        updated = true;
+        return {
+          ...conversation,
+          updatedAt: now,
+          messages: conversation.messages.map((message) => message.id === assistantMessageId
+            ? {
+                ...message,
+                studioResponse: message.studioResponse
+                  ? { ...message.studioResponse, status, error: error?.length ? error : undefined, updatedAt: now }
+                  : {
+                      id: crypto.randomUUID(),
+                      title: "Studio response",
+                      currentRevision: 0,
+                      latestRevision: 0,
+                      revisions: [],
+                      status,
+                      error: error?.length ? error : undefined,
+                      createdAt: now,
+                      updatedAt: now,
+                    },
+              }
+            : message),
+        };
+      });
+      if (updated) void saveConversationSnapshot(conversations);
+      return updated ? { conversations } : state;
+    });
+    return updated;
+  },
+  selectStudioResponseRevision: (conversationId, assistantMessageId, revision) => {
+    let selected = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        const now = Date.now();
+        const messages = conversation.messages.map((message) => {
+          if (message.id !== assistantMessageId || message.role !== "assistant" || !message.studioResponse) return message;
+          const match = message.studioResponse.revisions.find((item) => item.revision === revision);
+          if (!match) return message;
+          selected = true;
+          return { ...message, studioResponse: { ...message.studioResponse, title: match.title, currentRevision: revision, updatedAt: now } };
+        });
+        return selected ? { ...conversation, messages, updatedAt: now } : conversation;
+      });
+      if (selected) void saveConversationSnapshot(conversations);
+      return selected ? { conversations } : state;
+    });
+    return selected;
+  },
+  undoStudioResponseRevision: (conversationId, assistantMessageId) => {
+    const conversation = get().conversations.find((item) => item.id === conversationId);
+    const response = conversation?.messages.find((message) => message.id === assistantMessageId)?.studioResponse;
+    if (!response) return false;
+    const previous = previousStudioResponseRevision(response);
+    return previous ? get().selectStudioResponseRevision(conversationId, assistantMessageId, previous.revision) : false;
   },
   deleteConversation: (id) => {
     set((state) => {

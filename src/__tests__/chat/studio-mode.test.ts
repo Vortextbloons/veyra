@@ -13,11 +13,20 @@ import { buildProviderTools } from "@/lib/tool-registry";
 
 const mocks = vi.hoisted(() => ({
   saveConversationSnapshot: vi.fn(),
+  commitStudioResponseRevision: vi.fn(() => ({
+    revision: 1,
+    title: "Board",
+    html: "<main>Hi</main>",
+    css: "",
+    createdAt: 1,
+  })),
+  setStudioResponseStatus: vi.fn(() => true),
   conversations: [] as Array<{
     id: string;
+    experience?: "standard" | "studio";
     presentationMode?: "standard" | "studio";
     studioArtifact?: unknown;
-    messages: Array<{ id: string }>;
+    messages: Array<{ id: string; role: "assistant" | "user"; studioResponse?: { currentRevision: number } }>;
   }>,
 }));
 
@@ -25,14 +34,8 @@ vi.mock("@/stores/chat-store", () => ({
   useChatStore: {
     getState: () => ({
       conversations: mocks.conversations,
-      commitStudioRevision: vi.fn(() => ({
-        revision: 1,
-        title: "Board",
-        html: "<main>Hi</main>",
-        css: "",
-        createdAt: 1,
-        assistantMessageId: "assistant-1",
-      })),
+      commitStudioResponseRevision: mocks.commitStudioResponseRevision,
+      setStudioResponseStatus: mocks.setStudioResponseStatus,
       setStreamingToolState: vi.fn(),
     }),
   },
@@ -42,10 +45,13 @@ const call = (arguments_: Record<string, unknown>) => ({ id: "1", name: STUDIO_R
 
 describe("Studio Mode containment", () => {
   beforeEach(() => {
+    mocks.commitStudioResponseRevision.mockClear();
+    mocks.setStudioResponseStatus.mockClear();
     mocks.conversations = [{
       id: "conversation-1",
+      experience: "studio",
       presentationMode: "studio",
-      messages: [{ id: "assistant-1" }],
+      messages: [{ id: "assistant-1", role: "assistant" }],
     }];
     resetStudioRepairGuard("conversation-1", "assistant-1");
   });
@@ -64,6 +70,21 @@ describe("Studio Mode containment", () => {
   it.runIf(typeof DOMParser !== "undefined")("accepts safe layout primitives", () => {
     const result = validateStudioArtifact({ html: "<main><details><summary>Plan</summary><table><tbody><tr><td>A</td></tr></tbody></table></details></main>", css: "main{display:grid;background:linear-gradient(#111,#222)}" });
     expect(result.ok).toBe(true);
+  });
+
+  it.runIf(typeof DOMParser !== "undefined")("commits a valid render to its originating assistant message", () => {
+    const result = executeStudioCall(
+      call({ title: "Board", html: "<main>Hi</main>", css: "" }),
+      { conversationId: "conversation-1", assistantMessageId: "assistant-1" },
+    );
+
+    expect(mocks.commitStudioResponseRevision).toHaveBeenCalledWith(
+      "conversation-1",
+      "assistant-1",
+      { title: "Board", html: "<main>Hi</main>", css: "" },
+      { pointerRevisionAtStart: 0 },
+    );
+    expect(result).toContain("revision 1");
   });
 
   it.runIf(typeof DOMParser !== "undefined").each([

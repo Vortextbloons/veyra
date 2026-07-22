@@ -203,3 +203,111 @@ describe("chat store studio revisions", () => {
     expect(forked?.studioArtifact?.revisions[0]?.assistantMessageId).toBe(forked?.messages[0]?.id);
   });
 });
+
+describe("chat store message-owned studio responses", () => {
+  const assistant = (id: string): ChatMessage => ({
+    id,
+    role: "assistant",
+    content: "",
+    timestamp: 1,
+  });
+
+  beforeEach(() => {
+    mocks.saveConversationSnapshot.mockClear();
+    useChatStore.setState({ conversations: [], activeConversationId: null, streamingBuffer: null });
+  });
+
+  it("commits only to the named assistant and never writes the legacy artifact", () => {
+    useChatStore.setState({
+      conversations: [conversation([assistant("assistant-1"), assistant("assistant-2")], { experience: "studio" })],
+    });
+
+    const revision = useChatStore.getState().commitStudioResponseRevision(
+      "conversation-1",
+      "assistant-2",
+      { title: "Board", html: "<main>Board</main>", css: "" },
+    );
+    const stored = useChatStore.getState().conversations[0];
+
+    expect(revision?.revision).toBe(1);
+    expect(stored?.messages[0]?.studioResponse).toBeUndefined();
+    expect(stored?.messages[1]?.studioResponse).toMatchObject({
+      title: "Board",
+      currentRevision: 1,
+      latestRevision: 1,
+      status: "ready",
+    });
+    expect(stored?.studioArtifact).toBeUndefined();
+  });
+
+  it("rejects standard, missing, user, character, and cross-conversation targets", () => {
+    const user: ChatMessage = { id: "user-1", role: "user", content: "x", timestamp: 1 };
+    useChatStore.setState({
+      conversations: [
+        conversation([assistant("assistant-standard")], { id: "standard", experience: "standard" }),
+        conversation([user], { id: "studio", experience: "studio" }),
+        conversation([assistant("assistant-character")], { id: "character", experience: "studio", characterId: "character-1" }),
+      ],
+    });
+    const commit = (conversationId: string, messageId: string) => useChatStore.getState().commitStudioResponseRevision(
+      conversationId,
+      messageId,
+      { title: "No", html: "<main>No</main>", css: "" },
+    );
+
+    expect(commit("standard", "assistant-standard")).toBeNull();
+    expect(commit("studio", "missing")).toBeNull();
+    expect(commit("studio", "user-1")).toBeNull();
+    expect(commit("character", "assistant-character")).toBeNull();
+    expect(commit("missing-conversation", "assistant-standard")).toBeNull();
+    expect(mocks.saveConversationSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("keeps independent monotonic histories, retains eight, and preserves a user-selected pointer", () => {
+    useChatStore.setState({
+      conversations: [conversation([assistant("assistant-1"), assistant("assistant-2")], { experience: "studio" })],
+    });
+    const commit = (messageId: string, title: string, pointerRevisionAtStart?: number) =>
+      useChatStore.getState().commitStudioResponseRevision(
+        "conversation-1",
+        messageId,
+        { title, html: `<main>${title}</main>`, css: "" },
+        pointerRevisionAtStart == null ? undefined : { pointerRevisionAtStart },
+      );
+
+    commit("assistant-1", "One");
+    commit("assistant-2", "Other");
+    for (let index = 2; index <= 9; index += 1) commit("assistant-1", `Revision ${index}`);
+    expect(useChatStore.getState().selectStudioResponseRevision("conversation-1", "assistant-1", 2)).toBe(true);
+    commit("assistant-1", "Revision 10", 9);
+
+    const [first, second] = useChatStore.getState().conversations[0]!.messages;
+    expect(first.studioResponse?.latestRevision).toBe(10);
+    expect(first.studioResponse?.currentRevision).toBe(2);
+    expect(first.studioResponse?.revisions).toHaveLength(8);
+    expect(first.studioResponse?.revisions.some((item) => item.revision === 2)).toBe(true);
+    expect(second.studioResponse?.latestRevision).toBe(1);
+  });
+
+  it("preserves valid source when status becomes rejected", () => {
+    useChatStore.setState({
+      conversations: [conversation([assistant("assistant-1")], { experience: "studio" })],
+    });
+    useChatStore.getState().commitStudioResponseRevision(
+      "conversation-1",
+      "assistant-1",
+      { title: "Valid", html: "<main>Valid</main>", css: "" },
+    );
+    useChatStore.getState().setStudioResponseStatus(
+      "conversation-1",
+      "assistant-1",
+      "rejected",
+      [{ code: "unsafe", message: "Rejected" }],
+    );
+
+    const response = useChatStore.getState().conversations[0]!.messages[0]!.studioResponse;
+    expect(response?.status).toBe("rejected");
+    expect(response?.revisions[0]?.html).toBe("<main>Valid</main>");
+    expect(response?.error?.[0]?.code).toBe("unsafe");
+  });
+});

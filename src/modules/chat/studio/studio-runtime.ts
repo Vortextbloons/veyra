@@ -9,6 +9,7 @@ import {
 } from "./studio-diagnostics";
 import { parseStudioArguments, STUDIO_RENDER_TOOL_NAME } from "./studio-tool";
 import { validateStudioArtifact } from "./studio-validator";
+import { resolveConversationExperience } from "./studio-normalize";
 
 const studioRepairAttempts = new Map<string, number>();
 
@@ -27,6 +28,14 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
     recordStudioValidationIssues(issues.map((issue) => issue.code));
     if (finalFailure) recordStudioFinalFailure(issues.map((issue) => issue.code));
     useChatStore.getState().setStreamingToolState({ id: call.id, name: STUDIO_RENDER_TOOL_NAME, label, phase: "error", error: message });
+    if (context.conversationId && context.assistantMessageId) {
+      useChatStore.getState().setStudioResponseStatus(
+        context.conversationId,
+        context.assistantMessageId,
+        "rejected",
+        issues,
+      );
+    }
     if (finalFailure) {
       return `Tool result for ${STUDIO_RENDER_TOOL_NAME}: rejected. ${message}. Studio generation failed for this response.`;
     }
@@ -45,11 +54,19 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
   if (!conversation) {
     return fail([{ code: "missing_context", message: "The originating conversation is unavailable." }]);
   }
-  if (conversation.presentationMode !== "studio") {
+  if (
+    resolveConversationExperience(conversation) !== "studio" ||
+    conversation.characterId ||
+    conversation.groupId
+  ) {
     return fail([{ code: "studio_disabled", message: "Studio is not enabled for this conversation." }]);
   }
 
-  const pointerRevisionAtStart = conversation.studioArtifact?.currentRevision ?? 0;
+  const targetMessage = conversation.messages.find((message) => message.id === context.assistantMessageId);
+  if (!targetMessage || targetMessage.role !== "assistant") {
+    return fail([{ code: "missing_target", message: "The originating assistant message is unavailable." }]);
+  }
+  const pointerRevisionAtStart = targetMessage.studioResponse?.currentRevision ?? 0;
   recordStudioRenderAttempt();
   useChatStore.getState().setStreamingToolState({
     id: call.id,
@@ -58,6 +75,11 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
     phase: "running",
     detail: "Validating artifact",
   });
+  useChatStore.getState().setStudioResponseStatus(
+    context.conversationId,
+    context.assistantMessageId,
+    "validating",
+  );
 
   const parsed = parseStudioArguments(call);
   if (!parsed.ok) {
@@ -78,15 +100,15 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
   }
 
   studioRepairAttempts.delete(repairKey);
-  const revision = useChatStore.getState().commitStudioRevision(
+  const revision = useChatStore.getState().commitStudioResponseRevision(
     context.conversationId,
+    context.assistantMessageId,
     {
       title: parsed.value.title,
       html: validated.html,
       css: validated.css,
-      assistantMessageId: context.assistantMessageId,
     },
-    { pointerRevisionAtStart, mode: context.mode },
+    { pointerRevisionAtStart },
   );
   if (!revision) {
     return fail([{ code: "commit_failed", message: "The conversation no longer accepts Studio output." }]);
