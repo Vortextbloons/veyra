@@ -16,6 +16,7 @@ import { MessageBubble } from "@/modules/chat/components/message-bubble";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { resolvePendingQuestion } from "@/modules/chat/tools/ask-question-tool";
+import { StudioShell } from "@/modules/chat/studio/components/studio-shell";
 
 const VIRTUALIZE_AFTER_MESSAGES = 80;
 const ESTIMATED_MESSAGE_HEIGHT = 180;
@@ -60,6 +61,8 @@ export function ChatPanel({
   mode: controlledMode,
   defaultMode = "chat",
   onModeChange,
+  presentationMode = "standard",
+  onPresentationModeChange,
   agentSessions = [],
   activeAgentSessionId = null,
   agentRuntimeAvailable = null,
@@ -89,7 +92,9 @@ export function ChatPanel({
   const setReasoningEnabled = useSettingsStore((s) => s.setReasoningEnabled);
   const enhancedModeEnabled = useSettingsStore((s) => s.enhancedModeEnabled);
   const setEnhancedModeEnabled = useSettingsStore((s) => s.setEnhancedModeEnabled);
+  const studioModeEnabled = useSettingsStore((s) => s.studioModeEnabled);
   const streamingBuffer = useChatStore((s) => s.streamingBuffer);
+  const activeStudioArtifact = useChatStore((s) => s.conversations.find((item) => item.id === s.activeConversationId)?.studioArtifact);
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const mode = controlledMode ?? internalMode;
@@ -200,8 +205,8 @@ export function ChatPanel({
   }, [messages, scrollState.height, scrollState.top, shouldVirtualizeMessages]);
   const isEmptyChat = mode !== "agents" && messages.length === 0;
 
-  return (
-    <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
+  const chatContent = (
+    <main className="flex h-full min-w-[320px] flex-1 flex-col bg-[var(--color-bg)]">
       {!isEmptyChat && <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
@@ -296,6 +301,8 @@ export function ChatPanel({
           onEnhancedModeChange={setEnhancedModeEnabled}
           mode={mode}
           onModeChange={handleModeChange}
+          presentationMode={studioModeEnabled ? presentationMode : "standard"}
+          onPresentationModeChange={onPresentationModeChange}
           suggestedPrompt={suggestedPrompt}
           selectorControls={
             <>
@@ -339,6 +346,8 @@ export function ChatPanel({
       </div>
     </main>
   );
+  if (!studioModeEnabled || presentationMode !== "studio" || mode === "agents" || mode === "research") return chatContent;
+  return <div className="relative flex h-full min-w-0 flex-1 overflow-hidden">{chatContent}<StudioShell artifact={activeStudioArtifact} generating={isStreaming} onClose={() => onPresentationModeChange?.("standard")} /></div>;
 }
 
 function EmptyChat({

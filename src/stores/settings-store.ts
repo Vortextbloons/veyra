@@ -163,6 +163,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     workspaceChatMode: state.workspaceChatMode,
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     enhancedModeEnabled: state.enhancedModeEnabled,
+    studioModeEnabled: state.studioModeEnabled,
     research: state.research,
     researchAdvancedOpen: state.researchAdvancedOpen,
     researchFirstRunNoticeDismissed: state.researchFirstRunNoticeDismissed,

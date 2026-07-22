@@ -24,6 +24,7 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
+import { STUDIO_SYSTEM_INSTRUCTION } from "@/modules/chat/studio/studio-context";
 
 export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;
@@ -116,7 +117,10 @@ export async function sendChatRequest({
         return skill ? { skill, workflowId: sentSkillSnapshot.workflowId } : undefined;
       })()
     : extensionState.resolveActiveSkillSelection(conversationId ?? "new-chat", projectId);
-  const skillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
+  const baseSkillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
+  const studioEnabled = conversation?.presentationMode === "studio" && settings.studioModeEnabled;
+  const skillContextBlock = [baseSkillContextBlock, studioEnabled ? STUDIO_SYSTEM_INSTRUCTION : undefined]
+    .filter(Boolean).join("\n\n") || undefined;
 
   const contextAnchoringBlock = settings.contextAnchoringEnabled
     ? buildContextAnchoringBlock()
@@ -133,6 +137,7 @@ export async function sendChatRequest({
     enhancedMode,
     projectId,
     conversationId,
+    studioEnabled,
   });
 
   const providerStore = useProviderStore.getState();

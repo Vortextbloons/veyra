@@ -287,30 +287,14 @@ pub(crate) fn run_pi_agent_blocking(
     let stderr = stderr_lines.join("\n");
 
     // Wait for the killed process to be reaped
-    let exit_status = child.wait().unwrap_or({
+    let exit_status = child.wait().unwrap_or_else(|_| {
         // Process already reaped — treat as success since we got agent_end
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::ExitStatusExt;
-            std::process::ExitStatus::from_raw(0)
-        }
-        #[cfg(not(windows))]
-        {
-            std::process::ExitStatus::from_raw(0)
-        }
+        successful_exit_status()
     });
 
     // If we saw agent_end, the kill was intentional — override non-zero exit code
     let exit_status = if ended_flag.load(Ordering::Relaxed) && !exit_status.success() {
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::ExitStatusExt;
-            std::process::ExitStatus::from_raw(0)
-        }
-        #[cfg(not(windows))]
-        {
-            std::process::ExitStatus::from_raw(0)
-        }
+        successful_exit_status()
     } else {
         exit_status
     };
@@ -320,6 +304,18 @@ pub(crate) fn run_pi_agent_blocking(
         stdout,
         stderr,
     })
+}
+
+#[cfg(windows)]
+fn successful_exit_status() -> std::process::ExitStatus {
+    use std::os::windows::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw(0)
+}
+
+#[cfg(unix)]
+fn successful_exit_status() -> std::process::ExitStatus {
+    use std::os::unix::process::ExitStatusExt;
+    std::process::ExitStatus::from_raw(0)
 }
 
 /// Generate `~/.pi/agent/models.json` with LM Studio provider config.

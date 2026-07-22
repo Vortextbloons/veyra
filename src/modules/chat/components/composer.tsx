@@ -7,8 +7,10 @@ import {
   Send,
   SlidersHorizontal,
   X,
+  PanelsTopLeft,
 } from "lucide-react";
 import type { ChatMode } from "@/modules/chat/chat-types";
+import type { PresentationMode } from "@/modules/chat/studio/studio-types";
 import {
   fileToAttachment,
   formatFileSize,
@@ -266,6 +268,8 @@ type ComposerProps = {
   onEnhancedModeChange: (on: boolean) => void;
   mode: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
+  presentationMode?: PresentationMode;
+  onPresentationModeChange?: (mode: PresentationMode) => void;
   selectorControls?: React.ReactNode;
   suggestedPrompt?: string;
   onSend?: (
@@ -295,6 +299,8 @@ export function Composer({
   onEnhancedModeChange,
   mode,
   onModeChange,
+  presentationMode = "standard",
+  onPresentationModeChange,
   selectorControls,
   suggestedPrompt,
   onSend,
@@ -547,6 +553,7 @@ export function Composer({
             {!isEditMode && (
               <>
                 <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
+                {(mode === "chat" || mode === "characters") && <ToggleIconButton icon={PanelsTopLeft} label="Studio presentation" active={presentationMode === "studio"} accent="violet" disabled={isControlsBlocked} onChange={(enabled) => onPresentationModeChange?.(enabled ? "studio" : "standard")} />}
                 <div className="relative">
                   <IconButton
                     aria-label="Chat options"

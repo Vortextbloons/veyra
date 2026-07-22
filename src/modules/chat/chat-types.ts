@@ -6,6 +6,7 @@ import type { MemoryPack, MemoryRetrievalInfo } from "@/modules/memory/memory-ty
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult } from "@/modules/web-search/types";
 import type { FetchStatus } from "@/lib/fetch-status";
+import type { PresentationMode, StudioArtifact } from "@/modules/chat/studio/studio-types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -114,6 +115,8 @@ export interface Conversation {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  presentationMode?: PresentationMode;
+  studioArtifact?: StudioArtifact;
   /** Project this conversation belongs to. undefined = no project (global chat). */
   projectId?: string;
   /** Character this conversation is bound to. undefined = plain (non-character) chat. */
@@ -313,6 +316,8 @@ export interface ChatPanelProps {
   mode?: ChatMode;
   defaultMode?: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
+  presentationMode?: PresentationMode;
+  onPresentationModeChange?: (mode: PresentationMode) => void;
   agentSessions?: AgentSession[];
   activeAgentSessionId?: string | null;
   agentRuntimeAvailable?: boolean | null;

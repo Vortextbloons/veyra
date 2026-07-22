@@ -58,12 +58,14 @@ export function resolveProviderTooling({
   enhancedMode,
   projectId,
   conversationId,
+  studioEnabled = false,
 }: {
   webSearchEnabled: boolean;
   codeExecutionEnabled: boolean;
   enhancedMode: boolean;
   projectId?: string;
   conversationId?: string;
+  studioEnabled?: boolean;
 }): ProviderTooling {
   const settings = useSettingsStore.getState();
   const effectiveConnectivity = useConnectivityStore.getState().effectiveConnectivity;
@@ -97,6 +99,7 @@ export function resolveProviderTooling({
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
     activeDocumentId: docState.activeDocumentId ?? undefined,
     enhancedMode,
+    studioEnabled,
   }), ...buildMcpProviderTools(extensions.mcpServers, projectId, extensions.featureFlags, disabledMcpServersForChat(extensions.mcpServers, conversationId ? extensions.chatDisabledMcpServerIds[conversationId] : undefined), conversationId ? extensions.chatEnabledMcpServerIds[conversationId] ?? [] : [])];
 
   return {

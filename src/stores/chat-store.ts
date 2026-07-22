@@ -3,6 +3,7 @@ import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSe
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { normalizeAttachment } from "@/lib/message-attachments";
 import { abortPendingQuestion } from "@/modules/chat/pending-question-registry";
+import type { PresentationMode, StudioRevision } from "@/modules/chat/studio/studio-types";
 
 type ConversationHydrationState = "loading" | "ready";
 
@@ -31,6 +32,8 @@ type ChatStore = {
   hydrateConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
   createConversation: (projectId?: string) => string;
+  setConversationPresentation: (id: string, mode: PresentationMode) => void;
+  commitStudioRevision: (id: string, revision: Omit<StudioRevision, "revision" | "createdAt">) => StudioRevision | null;
   deleteConversation: (id: string) => void;
   deleteAllConversations: () => void;
   addMessagePair: (
@@ -180,8 +183,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         conversations = [];
       }
       // Normalize old attachments that may lack fileType/size
-      const normalized = conversations.map((conv) => ({
+      const normalized: Conversation[] = conversations.map((conv) => ({
         ...conv,
+        presentationMode: conv.presentationMode === "studio" ? ("studio" as const) : ("standard" as const),
         messages: conv.messages.map((msg) => ({
           ...msg,
           attachments: msg.attachments?.map(normalizeAttachment),
@@ -206,6 +210,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       return { conversations, activeConversationId: conversation.id };
     });
     return conversation.id;
+  },
+  setConversationPresentation: (id, presentationMode) => {
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => conversation.id === id
+        ? { ...conversation, presentationMode, updatedAt: Date.now() }
+        : conversation);
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  commitStudioRevision: (id, input) => {
+    let committed: StudioRevision | null = null;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== id || conversation.presentationMode !== "studio") return conversation;
+        const now = Date.now();
+        const nextNumber = (conversation.studioArtifact?.latestRevision ?? 0) + 1;
+        committed = { ...input, revision: nextNumber, createdAt: now };
+        const revisions = [...(conversation.studioArtifact?.revisions ?? []), committed].slice(-20);
+        return { ...conversation, updatedAt: now, studioArtifact: {
+          id: conversation.studioArtifact?.id ?? crypto.randomUUID(),
+          title: input.title,
+          currentRevision: nextNumber,
+          latestRevision: nextNumber,
+          revisions,
+          createdAt: conversation.studioArtifact?.createdAt ?? now,
+          updatedAt: now,
+        } };
+      });
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+    return committed;
   },
   deleteConversation: (id) => {
     set((state) => {

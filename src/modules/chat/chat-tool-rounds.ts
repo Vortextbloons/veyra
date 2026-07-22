@@ -9,6 +9,7 @@ import {
   SCRATCHPAD_TOOL_NAME,
   ASK_QUESTION_TOOL_NAME,
   INLINE_EDIT_TOOL_NAME,
+  STUDIO_RENDER_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
@@ -27,6 +28,7 @@ import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
 import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
 import { disabledMcpServersForChat, findCapabilityGrant, isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
+import { executeStudioCall } from "@/modules/chat/studio/studio-runtime";
 
 export type ToolRoundResult = {
   toolResultSections: string[];
@@ -73,6 +75,7 @@ export async function executeToolRound(
     [DOC_READ_TOOL_NAME, INLINE_EDIT_TOOL_NAME, DOC_CREATE_TOOL_NAME, DOC_UPDATE_TOOL_NAME].includes(call.name),
   );
   const mcpCalls = toolCalls.filter((call) => call.name.startsWith("mcp_"));
+  const studioCalls = toolCalls.filter((call) => call.name === STUDIO_RENDER_TOOL_NAME);
 
   registerStreamingToolCalls(toolCalls, "running", (call) => {
     if (call.name === WEB_SEARCH_TOOL_NAME) return stringArg(call.arguments, "query");
@@ -87,6 +90,13 @@ export async function executeToolRound(
   const webSearchSources: WebSearchSource[] = [];
   const webSearchContextBlocks: string[] = [];
   const streamedChunks: string[] = [];
+
+  for (const call of studioCalls.slice(0, -1)) {
+    useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio Render", phase: "done", detail: "Skipped duplicate render" });
+    toolResultSections.push(`Tool result for ${STUDIO_RENDER_TOOL_NAME}: skipped because only the last Studio call in a batch is committed.`);
+  }
+  const studioCall = studioCalls.at(-1);
+  if (studioCall) toolResultSections.push(executeStudioCall(studioCall, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId }));
 
   const webResults = await Promise.all(
     webSearchCalls.map(async (call) => {

@@ -18,11 +18,20 @@ export function ChatSettings() {
   const setSummaryModel = useSettingsStore((s) => s.setSummaryModel);
   const contextAnchoringEnabled = useSettingsStore((s) => s.contextAnchoringEnabled);
   const setContextAnchoringEnabled = useSettingsStore((s) => s.setContextAnchoringEnabled);
+  const studioModeEnabled = useSettingsStore((s) => s.studioModeEnabled);
+  const setStudioModeEnabled = useSettingsStore((s) => s.setStudioModeEnabled);
 
   const models = useProviderStore((s) => s.models);
 
   return (
     <div className="space-y-8">
+      <section>
+        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">Studio Mode</h2>
+        <div className="space-y-3">
+          <Toggle label="Enable Studio Mode" on={studioModeEnabled} onChange={setStudioModeEnabled} />
+          <p className="text-[11px] text-[var(--color-text-dim)]">Allows chat and character conversations to render isolated HTML and CSS visual artifacts. Scripts and remote resources remain blocked.</p>
+        </div>
+      </section>
       <section>
         <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
           System Prompt

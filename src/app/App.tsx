@@ -346,6 +346,12 @@ function App() {
             modelLoadProgress={pipelineRest.modelLoadProgress}
             mode={workspaceChatMode}
             onModeChange={handleModeChange}
+            presentationMode={activeConversation?.presentationMode ?? "standard"}
+            onPresentationModeChange={(presentationMode) => {
+              let conversationId = useChatStore.getState().activeConversationId;
+              if (!conversationId) conversationId = useChatStore.getState().createConversation();
+              useChatStore.getState().setConversationPresentation(conversationId, presentationMode);
+            }}
             agentSessions={agent.visibleAgentSessions}
             activeAgentSessionId={agent.activeAgentSession?.id ?? null}
             agentRuntimeAvailable={agent.agentRuntimeAvailable}
