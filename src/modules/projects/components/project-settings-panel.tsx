@@ -4,6 +4,7 @@ import { useProjectStore } from "@/modules/projects/project-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { MemoryMode } from "@/modules/memory/memory-types";
 import { Toggle } from "@/components/toggle";
+import { ProjectSkillsSettings } from "@/modules/extensions/components/project-skills-settings";
 
 export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
   const updateProject = useProjectStore((s) => s.updateProject);
@@ -136,6 +137,9 @@ export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
           }
         />
       </SettingGroup>
+
+      {/* Model overrides */}
+      <ProjectSkillsSettings projectId={project.id} />
 
       {/* Model overrides */}
       <SettingGroup label="Model Overrides">

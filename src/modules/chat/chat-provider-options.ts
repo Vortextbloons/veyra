@@ -5,6 +5,8 @@ import { useDocumentStore } from "@/modules/documents/document-store";
 import { buildProviderTools } from "@/lib/tool-registry";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 import { useConnectivityStore } from "@/stores/connectivity-store";
+import { useExtensionsStore } from "@/modules/extensions/extensions-store";
+import { buildMcpProviderTools } from "@/modules/extensions/mcp-tool-adapter";
 
 export type ResolvedModelSettings = {
   contextLength: number;
@@ -54,10 +56,14 @@ export function resolveProviderTooling({
   webSearchEnabled,
   codeExecutionEnabled,
   enhancedMode,
+  projectId,
+  conversationId,
 }: {
   webSearchEnabled: boolean;
   codeExecutionEnabled: boolean;
   enhancedMode: boolean;
+  projectId?: string;
+  conversationId?: string;
 }): ProviderTooling {
   const settings = useSettingsStore.getState();
   const effectiveConnectivity = useConnectivityStore.getState().effectiveConnectivity;
@@ -84,13 +90,14 @@ export function resolveProviderTooling({
 
   const docState = useDocumentStore.getState();
 
-  const providerTools = buildProviderTools({
+  const extensions = useExtensionsStore.getState();
+  const providerTools = [...buildProviderTools({
     webSearchEnabled: effectiveWebSearchEnabled,
     documentToolsEnabled: settings.documentPanelEnabled,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
     activeDocumentId: docState.activeDocumentId ?? undefined,
     enhancedMode,
-  });
+  }), ...buildMcpProviderTools(extensions.mcpServers, projectId, extensions.featureFlags, conversationId ? extensions.chatDisabledMcpServerIds[conversationId] ?? [] : [])];
 
   return {
     providerTools,

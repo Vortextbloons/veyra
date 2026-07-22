@@ -38,6 +38,7 @@ mod code_execution;
 mod connectivity;
 mod document_extraction;
 mod documents;
+mod extensions;
 mod file_extraction;
 mod memory;
 mod projects;
@@ -53,6 +54,7 @@ const MAX_CONVERSATIONS_JSON_BYTES: usize = 50 * 1024 * 1024;
 const KEYRING_SERVICE: &str = "com.veyra.app";
 const KEYRING_USER: &str = "conversation-key";
 const PROVIDER_KEYRING_PREFIX: &str = "provider:";
+const MCP_KEYRING_PREFIX: &str = "mcp:";
 
 fn provider_keyring_user(provider_id: &str) -> Result<String, String> {
     let trimmed = provider_id.trim();
@@ -65,6 +67,14 @@ fn provider_keyring_user(provider_id: &str) -> Result<String, String> {
         return Err("invalid provider id".into());
     }
     Ok(format!("{PROVIDER_KEYRING_PREFIX}{trimmed}"))
+}
+
+fn mcp_keyring_user(server_id: &str) -> Result<String, String> {
+    let trimmed = server_id.trim();
+    if trimmed.is_empty() || trimmed.len() > 160 || !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+        return Err("invalid MCP server id".into());
+    }
+    Ok(format!("{MCP_KEYRING_PREFIX}{trimmed}"))
 }
 
 #[tauri::command]
@@ -97,6 +107,25 @@ fn delete_provider_credential(provider_id: String) -> Result<(), String> {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(error) => Err(error.to_string()),
     }
+}
+
+#[tauri::command]
+fn save_mcp_credential(server_id: String, secret: String) -> Result<(), String> {
+    if secret.trim().is_empty() || secret.len() > 16_384 { return Err("invalid MCP credential".into()); }
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &mcp_keyring_user(&server_id)?).map_err(|error| error.to_string())?;
+    entry.set_password(&secret).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn has_mcp_credential(server_id: String) -> Result<bool, String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &mcp_keyring_user(&server_id)?).map_err(|error| error.to_string())?;
+    match entry.get_password() { Ok(_) => Ok(true), Err(keyring::Error::NoEntry) => Ok(false), Err(error) => Err(error.to_string()) }
+}
+
+#[tauri::command]
+fn delete_mcp_credential(server_id: String) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &mcp_keyring_user(&server_id)?).map_err(|error| error.to_string())?;
+    match entry.delete_credential() { Ok(()) | Err(keyring::Error::NoEntry) => Ok(()), Err(error) => Err(error.to_string()) }
 }
 
 fn app_data_file_path(app: &tauri::AppHandle, file_name: &str) -> Result<PathBuf, String> {
@@ -325,6 +354,9 @@ pub fn run() {
             save_provider_credential,
             load_provider_credential,
             delete_provider_credential,
+            save_mcp_credential,
+            has_mcp_credential,
+            delete_mcp_credential,
             app_ready,
             exit_app,
             agents::commands::check_pi_available,
@@ -418,6 +450,16 @@ pub fn run() {
             characters::io_commands::delete_character_avatar,
             characters::io_commands::read_character_avatar,
             file_extraction::commands::extract_file_text,
+            extensions::commands::snapshot_skill_directory,
+            extensions::commands::snapshot_skill_zip,
+            extensions::commands::discover_streamable_http_mcp,
+            extensions::commands::discover_stdio_mcp,
+            extensions::commands::call_streamable_http_mcp,
+            extensions::commands::read_streamable_http_mcp_resource,
+            extensions::commands::get_streamable_http_mcp_prompt,
+            extensions::commands::read_stdio_mcp_resource,
+            extensions::commands::get_stdio_mcp_prompt,
+            extensions::commands::call_stdio_mcp,
         ])
         .setup(|app| {
             let db_state = memory::db::MemoryDbState::new(app.handle().clone());

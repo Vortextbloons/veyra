@@ -7,6 +7,7 @@ import { ModelsSettings } from "./models-settings";
 import { ToolsSettings } from "./tools-settings";
 import { CharacterSettings } from "./character-settings";
 import { ResearchSettings } from "./research-settings";
+import { ExtensionsSettings } from "./extensions-settings";
 type SettingsTab =
   | "general"
   | "privacy"
@@ -15,7 +16,8 @@ type SettingsTab =
   | "models"
   | "tools"
   | "characters"
-  | "research";
+  | "research"
+  | "extensions";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
@@ -26,6 +28,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "tools", label: "Tools" },
   { id: "research", label: "Research" },
   { id: "characters", label: "Characters" },
+  { id: "extensions", label: "Extensions" },
 ];
 
 export function SettingsPage() {
@@ -66,6 +69,7 @@ export function SettingsPage() {
           {activeTab === "tools" && <ToolsSettings />}
           {activeTab === "research" && <ResearchSettings />}
           {activeTab === "characters" && <CharacterSettings />}
+          {activeTab === "extensions" && <ExtensionsSettings />}
         </div>
       </div>
     </main>

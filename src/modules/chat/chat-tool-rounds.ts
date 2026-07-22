@@ -25,6 +25,8 @@ import {
 } from "@/modules/chat/tools/code-execution-tool";
 import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
 import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
+import { findCapabilityGrant, useExtensionsStore } from "@/modules/extensions/extensions-store";
+import { invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
 
 export type ToolRoundResult = {
   toolResultSections: string[];
@@ -70,6 +72,7 @@ export async function executeToolRound(
   const documentCalls = toolCalls.filter((call) =>
     [DOC_READ_TOOL_NAME, INLINE_EDIT_TOOL_NAME, DOC_CREATE_TOOL_NAME, DOC_UPDATE_TOOL_NAME].includes(call.name),
   );
+  const mcpCalls = toolCalls.filter((call) => call.name.startsWith("mcp_"));
 
   registerStreamingToolCalls(toolCalls, "running", (call) => {
     if (call.name === WEB_SEARCH_TOOL_NAME) return stringArg(call.arguments, "query");
@@ -189,6 +192,37 @@ export async function executeToolRound(
     toolResultSections.push(result);
   }
 
+  for (const call of mcpCalls) {
+    const extensionState = useExtensionsStore.getState();
+    const resolved = resolveMcpTool(extensionState.mcpServers, call.name);
+    if (!resolved) { completeMcpTool(call, "error", "MCP capability is unavailable."); toolResultSections.push(`Tool result for ${call.name}: MCP capability is unavailable.`); continue; }
+    const provenance = `${resolved.server.name} · ${resolved.toolName}`;
+    useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: `MCP · ${resolved.toolName}`, phase: "running", input: provenance });
+    if ((ctx.conversationId && extensionState.chatDisabledMcpServerIds[ctx.conversationId]?.includes(resolved.server.id)) || !resolved.server.enabled || resolved.server.health !== "ready" || (ctx.projectId && resolved.server.projectIds.length > 0 && !resolved.server.projectIds.includes(ctx.projectId))) {
+      const message = "This MCP capability is disabled, disconnected, or unavailable in the active project.";
+      completeMcpTool(call, "error", message); toolResultSections.push(`Tool result for ${call.name}: ${message}`); continue;
+    }
+    if (!extensionState.featureFlags.mcp || (resolved.server.transport === "stdio" ? !extensionState.featureFlags.stdio : !extensionState.featureFlags.streamableHttp)) { completeMcpTool(call, "error", "This MCP transport is disabled by Veyra's safety controls."); toolResultSections.push(`Tool result for ${call.name}: This MCP transport is disabled by Veyra's safety controls.`); continue; }
+    const capabilityId = mcpCapabilityId(resolved.server.id, resolved.toolName);
+    const destructive = /\b(delete|destroy|drop|remove|terminate|reset|wipe)\b/i.test(resolved.toolName);
+    if (destructive) { completeMcpTool(call, "error", "Destructive action: a fresh one-time approval is required."); toolResultSections.push(`Tool result for ${call.name}: This destructive action requires a fresh one-time approval and cannot use a saved grant.`); continue; }
+    const grant = findCapabilityGrant(useExtensionsStore.getState().grants, { serverId: resolved.server.id, capabilityId, projectId: ctx.projectId, chatId: ctx.conversationId, capabilityFingerprint: resolved.server.capabilityFingerprint });
+    if (!grant) {
+      const message = `Permission is required before Veyra can call ${resolved.server.name}.${resolved.toolName}.`;
+      completeMcpTool(call, "error", message, undefined, {
+        serverId: resolved.server.id,
+        toolName: resolved.toolName,
+        projectId: ctx.projectId,
+        chatId: ctx.conversationId,
+        capabilityFingerprint: resolved.server.capabilityFingerprint,
+      });
+      toolResultSections.push(`Tool result for ${call.name}: ${message}`);
+      continue;
+    }
+    if (grant.usesRemaining !== undefined) useExtensionsStore.getState().consumeGrant(grant.id);
+    try { const result = formatMcpResult(await invokeMcpTool(resolved.server, resolved.toolName, call.arguments)); completeMcpTool(call, "done", "Completed through Veyra MCP host.", result); toolResultSections.push(`Tool result for ${call.name}:\n${result}`); } catch (error) { const message = error instanceof Error ? error.message : String(error); completeMcpTool(call, "error", message); toolResultSections.push(`Tool result for ${call.name}: ${message}`); }
+  }
+
   return {
     toolResultSections,
     webSearchSources,
@@ -196,4 +230,30 @@ export async function executeToolRound(
     streamedChunks,
     lastCreatedDocumentId: preferredDocumentId,
   };
+}
+
+function formatMcpResult(value: unknown): string {
+  const serialized = JSON.stringify(value);
+  // MCP servers are untrusted and can return arbitrarily large text. Keep enough
+  // context for the model without letting one response crowd out the conversation.
+  return serialized.length <= 60_000 ? serialized : `${serialized.slice(0, 60_000)}\n[Output truncated by Veyra: 60 KB limit]`;
+}
+
+function completeMcpTool(
+  call: ProviderToolCall,
+  phase: "done" | "error",
+  detail: string,
+  result?: string,
+  mcpApproval?: import("@/modules/chat/chat-types").ToolCallState["mcpApproval"],
+): void {
+  useChatStore.getState().setStreamingToolState({
+    id: call.id,
+    name: call.name,
+    label: call.name,
+    phase,
+    detail: phase === "done" ? detail : undefined,
+    error: phase === "error" ? detail : undefined,
+    result,
+    mcpApproval,
+  });
 }

@@ -7,6 +7,7 @@ import { useAgentStore } from "@/modules/agents/agent-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { filterAttachments } from "@/hooks/use-chat-attachments";
 import { runChatJob } from "@/hooks/run-chat-job";
+import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 
 interface UseChatSendOptions {
   activeConversationId: string | null;
@@ -121,6 +122,10 @@ export function useChatSend({
         content: trimmed,
         attachments: effectiveAttachments.length > 0 ? effectiveAttachments : undefined,
         timestamp: Date.now(),
+        skillSnapshot: (() => {
+          const selection = useExtensionsStore.getState().resolveActiveSkillSelection(conversationId ?? "new-chat", projectId);
+          return selection ? { id: selection.skill.id, version: selection.skill.version, workflowId: selection.workflowId } : undefined;
+        })(),
       };
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),

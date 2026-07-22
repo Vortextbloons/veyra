@@ -32,6 +32,8 @@ export interface BuildChatContextOptions {
   documentInstructionsBlock?: string | null;
   /** Project-level instructions and context. */
   projectPromptBlock?: string | null;
+  /** One explicitly selected local Skill. */
+  skillContextBlock?: string | null;
   /** Custom user preferences block appended after the core prompt. */
   userPrompt?: string | null;
   /** Number of tokens reserved for the model's response. */
@@ -88,6 +90,7 @@ function buildContextContents(options: BuildChatContextOptions): {
   const contextAnchoringBlock = options.contextAnchoringBlock?.trim() || undefined;
   const documentInstructionsBlock = options.documentInstructionsBlock?.trim() || undefined;
   const projectPromptBlock = options.projectPromptBlock?.trim() || undefined;
+  const skillContextBlock = options.skillContextBlock?.trim() || undefined;
   const userPrompt = options.userPrompt?.trim() || undefined;
 
   const characterBlock = options.characterBlock?.trim() || undefined;
@@ -95,6 +98,7 @@ function buildContextContents(options: BuildChatContextOptions): {
   const systemContent = composeMainSystemPrompt({
     userPrompt,
     projectPromptBlock,
+    skillContextBlock,
     characterBlock,
     contextAnchoringBlock,
     documentInstructionsBlock,

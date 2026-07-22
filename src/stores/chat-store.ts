@@ -52,6 +52,7 @@ type ChatStore = {
   upsertStreamingWebSearchRound: (round: WebSearchRound) => void;
   completeStreamingWebSearchRounds: () => void;
   setStreamingToolState: (state: ToolCallState) => void;
+  updateToolCallState: (toolCallId: string, patch: Partial<ToolCallState>) => void;
   appendToScratchpad: (conversationId: string, messageId: string, content: string) => void;
   setPendingQuestion: (question: { toolCallId: string; questions: Array<{ text: string; options?: string[] }>; answers: Record<number, string> } | null) => void;
   commitAssistantMessage: (
@@ -351,6 +352,28 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         ? existing.map((item) => item.id === toolState.id ? { ...item, ...toolState } : item)
         : [...existing, toolState];
       return { streamingBuffer: { ...buffer, toolStates: next } };
+    });
+  },
+  updateToolCallState: (toolCallId, patch) => {
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) => ({
+          ...message,
+          toolStates: message.toolStates?.map((toolState) =>
+            toolState.id === toolCallId ? { ...toolState, ...patch } : toolState,
+          ),
+        })),
+      }));
+      void saveConversationSnapshot(conversations);
+      const buffer = state.streamingBuffer;
+      const toolStates = buffer?.toolStates?.map((toolState) =>
+        toolState.id === toolCallId ? { ...toolState, ...patch } : toolState,
+      );
+      return {
+        conversations,
+        streamingBuffer: buffer && toolStates ? { ...buffer, toolStates } : buffer,
+      };
     });
   },
   appendToScratchpad: (conversationId, messageId, content) => {

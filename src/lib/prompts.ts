@@ -60,6 +60,7 @@ ${trimmed}
 export function composeMainSystemPrompt(options: {
   userPrompt?: string;
   projectPromptBlock?: string;
+  skillContextBlock?: string;
   characterBlock?: string;
   contextAnchoringBlock?: string;
   documentInstructionsBlock?: string;
@@ -72,6 +73,7 @@ export function composeMainSystemPrompt(options: {
   if (identityBlock) parts.push(identityBlock);
   if (options.userPrompt?.trim()) parts.push(buildUserPreferencesBlock(options.userPrompt));
   if (options.projectPromptBlock?.trim()) parts.push(options.projectPromptBlock.trim());
+  if (options.skillContextBlock?.trim()) parts.push(options.skillContextBlock.trim());
   if (options.characterBlock?.trim()) parts.push(options.characterBlock.trim());
   if (options.contextAnchoringBlock?.trim()) parts.push(options.contextAnchoringBlock.trim());
   if (options.documentInstructionsBlock?.trim()) parts.push(options.documentInstructionsBlock.trim());

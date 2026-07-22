@@ -22,6 +22,8 @@ import {
   stripImageAttachments,
 } from "@/modules/chat/chat-context-builder";
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
+import { useExtensionsStore } from "@/modules/extensions/extensions-store";
+import { buildSkillContext } from "@/modules/extensions/skill-runtime";
 
 export interface SendChatCompleteContext {
   memoryPack: MemoryPack | null;
@@ -106,6 +108,15 @@ export async function sendChatRequest({
   const conversation = conversationId
     ? useChatStore.getState().conversations.find((c) => c.id === conversationId)
     : undefined;
+  const sentSkillSnapshot = [...messages].reverse().find((message) => message.role === "user" && message.skillSnapshot)?.skillSnapshot;
+  const extensionState = useExtensionsStore.getState();
+  const activeSkill = sentSkillSnapshot
+    ? (() => {
+        const skill = extensionState.skills.find((item) => item.id === sentSkillSnapshot.id && item.version === sentSkillSnapshot.version);
+        return skill ? { skill, workflowId: sentSkillSnapshot.workflowId } : undefined;
+      })()
+    : extensionState.resolveActiveSkillSelection(conversationId ?? "new-chat", projectId);
+  const skillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
 
   const contextAnchoringBlock = settings.contextAnchoringEnabled
     ? buildContextAnchoringBlock()
@@ -120,6 +131,8 @@ export async function sendChatRequest({
     webSearchEnabled,
     codeExecutionEnabled,
     enhancedMode,
+    projectId,
+    conversationId,
   });
 
   const providerStore = useProviderStore.getState();
@@ -138,6 +151,7 @@ export async function sendChatRequest({
     documentInstructionsBlock,
     contextAnchoringBlock,
     projectPromptBlock,
+    skillContextBlock,
     resolvedContextLength: resolved.contextLength,
   };
 
@@ -324,6 +338,7 @@ export async function sendChatRequest({
       contextAnchoringBlock,
       documentInstructionsBlock,
       projectPromptBlock,
+      skillContextBlock,
       userPrompt: resolved.userPrompt,
       reservedOutputTokens: resolved.reservedOutputTokens,
       modelName: activeModelName,

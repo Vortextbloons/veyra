@@ -52,3 +52,6 @@ rayon = "1.10"
 htmd = "0.5"
 keyring = "4"
 uuid = { version = "1", features = ["v4"] }
+# Official Model Context Protocol Rust SDK. The host adapter is intentionally
+# isolated under `extensions` so protocol/library upgrades do not leak into chat.
+rmcp = { version = "2.2.0", features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }

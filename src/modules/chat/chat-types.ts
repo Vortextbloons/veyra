@@ -58,6 +58,14 @@ export type ToolCallState = {
   error?: string;
   attempts?: number;
   result?: unknown;
+  /** Metadata for an MCP permission request, retained so the chat card can approve it safely. */
+  mcpApproval?: {
+    serverId: string;
+    toolName: string;
+    projectId?: string;
+    chatId?: string;
+    capabilityFingerprint?: string;
+  };
 };
 
 export interface ChatMessage {
@@ -66,6 +74,8 @@ export interface ChatMessage {
   content: string;
   /** Images and other media attached to user messages */
   attachments?: MessageAttachment[];
+  /** Immutable record of the explicitly active Skill for this sent message. */
+  skillSnapshot?: { id: string; version: string; workflowId?: string };
   /** Model reasoning / chain-of-thought from LM Studio (when supported) */
   reasoning?: string;
   timestamp: number;

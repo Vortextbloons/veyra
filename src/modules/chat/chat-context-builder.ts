@@ -15,6 +15,7 @@ export type RoundMessagesContext = {
   documentInstructionsBlock?: string;
   contextAnchoringBlock?: string;
   projectPromptBlock?: string;
+  skillContextBlock?: string;
   resolvedContextLength: number;
 };
 
@@ -50,6 +51,7 @@ export function buildRoundMessages(
       documentInstructionsBlock: context.documentInstructionsBlock,
       contextAnchoringBlock: context.contextAnchoringBlock,
       projectPromptBlock: context.projectPromptBlock,
+      skillContextBlock: context.skillContextBlock,
       userPrompt: context.resolvedUserPrompt,
       reservedOutputTokens: context.resolvedReservedOutputTokens,
       modelName: context.activeModelName,

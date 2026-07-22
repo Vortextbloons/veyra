@@ -18,6 +18,8 @@ import {
 } from "@/lib/message-attachments";
 import { ModeSelector } from "@/modules/chat/components/mode-selector";
 import { FileTypeIcon, FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
+import { SkillSelector } from "@/modules/extensions/components/skill-selector";
+import { McpChatToggle } from "@/modules/extensions/components/mcp-chat-toggle";
 
 type FileAttachmentPreviewProps = {
   attachment: MessageAttachment;
@@ -340,6 +342,17 @@ export function Composer({
     }
   }, [editMessageId, editInitialValue]);
 
+  useEffect(() => {
+    const insert = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: string }>).detail?.text?.trim();
+      if (!text || isEditMode) return;
+      setValue((current) => current.trim() ? `${current.trim()}\n\n${text}` : text);
+      textareaRef.current?.focus();
+    };
+    window.addEventListener("veyra:insert-composer-text", insert);
+    return () => window.removeEventListener("veyra:insert-composer-text", insert);
+  }, [isEditMode]);
+
   const activeAttachments = attachments;
   const activeAttachError = attachError;
   const isInputBlocked = Boolean(disabled || busy);
@@ -513,6 +526,8 @@ export function Composer({
                 <div className="flex min-w-0 items-center gap-1">{selectorControls}</div>
               </>
             )}
+            {!isEditMode && <SkillSelector />}
+            {!isEditMode && <McpChatToggle />}
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
