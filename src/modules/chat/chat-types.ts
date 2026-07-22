@@ -6,7 +6,12 @@ import type { MemoryPack, MemoryRetrievalInfo } from "@/modules/memory/memory-ty
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult } from "@/modules/web-search/types";
 import type { FetchStatus } from "@/lib/fetch-status";
-import type { PresentationMode, StudioArtifact } from "@/modules/chat/studio/studio-types";
+import type {
+  ConversationExperience,
+  PresentationMode,
+  StudioArtifact,
+  StudioResponse,
+} from "@/modules/chat/studio/studio-types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -96,6 +101,8 @@ export interface ChatMessage {
   /** Model id that produced this assistant message. Used to render the
    *  correct avatar/label even when the active model changes later. */
   modelId?: string;
+  /** Message-owned Studio response (assistant messages only). */
+  studioResponse?: StudioResponse;
 }
 
 export interface MessagePerformance {
@@ -115,7 +122,11 @@ export interface Conversation {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  /** Presentation/response expectations within normal chat (`standard` | `studio`). */
+  experience?: ConversationExperience;
+  /** Legacy live presentation field retained for migration compatibility. */
   presentationMode?: PresentationMode;
+  /** Legacy conversation-level artifact retained for migration recovery. */
   studioArtifact?: StudioArtifact;
   /** Project this conversation belongs to. undefined = no project (global chat). */
   projectId?: string;
