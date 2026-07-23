@@ -2,13 +2,6 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-function hasLegacyToken(source: string, token: string): boolean {
-  // Use word-boundary-like checks for token names that could be substrings
-  // of valid identifiers (e.g. "StudioRevision" in "StudioResponseRevision").
-  const pattern = new RegExp(`\\b${token}\\b`);
-  return pattern.test(source);
-}
-
 describe("Studio Stage 6 clean schema cutover", () => {
   it("has no live references to legacy Studio types, fields, or migration functions in production sources", () => {
     const roots = [

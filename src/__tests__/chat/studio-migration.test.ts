@@ -75,8 +75,8 @@ describe("Studio Stage 6 clean cutover — conversation normalization", () => {
 
   it("does not contain obsolete conversation-level studio fields", () => {
     const normalized = normalizeConversationStudio(nativeStudioConversationFixture());
-    expect((normalized as Record<string, unknown>).presentationMode).toBeUndefined();
-    expect((normalized as Record<string, unknown>).studioArtifact).toBeUndefined();
+    expect((normalized as unknown as Record<string, unknown>).presentationMode).toBeUndefined();
+    expect((normalized as unknown as Record<string, unknown>).studioArtifact).toBeUndefined();
   });
 });
 

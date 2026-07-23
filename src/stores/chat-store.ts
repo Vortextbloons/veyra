@@ -8,6 +8,9 @@ import type {
   StudioResponseRevision,
   StudioResponseStatus,
   StudioValidationIssue,
+  StudioScene,
+  StudioTransition,
+  StudioWorkspaceStatus,
 } from "@/modules/chat/studio/studio-types";
 import {
   copyStudioResponseForFork,
@@ -15,6 +18,7 @@ import {
   previousStudioResponseRevision,
   resolveConversationExperience,
   trimStudioResponseRevisions,
+  trimStudioScenes,
 } from "@/modules/chat/studio/studio-normalize";
 
 type ConversationHydrationState = "loading" | "ready";
@@ -45,6 +49,9 @@ type ChatStore = {
   setActiveConversationId: (id: string | null) => void;
   createConversation: (projectId?: string, options?: { experience?: ConversationExperience }) => string;
   setConversationExperience: (id: string, experience: ConversationExperience) => boolean;
+  commitStudioScene: (conversationId: string, assistantMessageId: string, scene: { title: string; html: string; css: string; caption?: string; transition?: StudioTransition }, options?: { pointerSceneIdAtStart?: string }) => StudioScene | null;
+  setStudioWorkspaceStatus: (conversationId: string, status: StudioWorkspaceStatus, assistantMessageId?: string, error?: StudioValidationIssue[]) => boolean;
+  selectStudioScene: (conversationId: string, sceneId: string) => boolean;
   commitStudioResponseRevision: (conversationId: string, assistantMessageId: string, revision: Omit<StudioResponseRevision, "revision" | "createdAt" | "assistantMessageId">, options?: { pointerRevisionAtStart?: number }) => StudioResponseRevision | null;
   setStudioResponseStatus: (conversationId: string, assistantMessageId: string, status: StudioResponseStatus, error?: StudioValidationIssue[]) => boolean;
   selectStudioResponseRevision: (conversationId: string, assistantMessageId: string, revision: number) => boolean;
@@ -247,6 +254,61 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
     return changed;
   },
+  commitStudioScene: (conversationId, assistantMessageId, input, options) => {
+    let committed: StudioScene | null = null;
+    set((state) => {
+      let changed = false;
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId || resolveConversationExperience(conversation) !== "studio" || conversation.characterId || conversation.groupId) return conversation;
+        const target = conversation.messages.find((message) => message.id === assistantMessageId);
+        if (!target || target.role !== "assistant") return conversation;
+        const now = Date.now();
+        const previous = conversation.studioWorkspace;
+        const priorForMessage = [...(previous?.scenes ?? [])].reverse().find((scene) => scene.assistantMessageId === assistantMessageId);
+        committed = { ...input, id: crypto.randomUUID(), assistantMessageId, transition: input.transition ?? "fade", lineageId: priorForMessage?.lineageId ?? crypto.randomUUID(), revision: (priorForMessage?.revision ?? 0) + 1, createdAt: now };
+        const pointerAtStart = options?.pointerSceneIdAtStart ?? previous?.currentSceneId;
+        const currentPointer = previous?.currentSceneId;
+        const desiredPointer = currentPointer === pointerAtStart ? committed.id : currentPointer ?? committed.id;
+        const scenes = trimStudioScenes([...(previous?.scenes ?? []), committed], desiredPointer);
+        const currentSceneId = scenes.some((scene) => scene.id === desiredPointer) ? desiredPointer : committed.id;
+        const workspaceId = previous?.id ?? crypto.randomUUID();
+        changed = true;
+        return { ...conversation, updatedAt: now, studioWorkspace: { id: workspaceId, scenes, currentSceneId, latestSceneId: committed.id, status: "idle" as const, createdAt: previous?.createdAt ?? now, updatedAt: now } };
+      });
+      if (changed) void saveConversationSnapshot(conversations);
+      return changed ? { conversations } : {};
+    });
+    return committed;
+  },
+  setStudioWorkspaceStatus: (conversationId, status, assistantMessageId, error) => {
+    let changed = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId || resolveConversationExperience(conversation) !== "studio") return conversation;
+        const now = Date.now();
+        const previous = conversation.studioWorkspace;
+        changed = true;
+        return { ...conversation, updatedAt: now, studioWorkspace: { id: previous?.id ?? crypto.randomUUID(), scenes: previous?.scenes ?? [], currentSceneId: previous?.currentSceneId, latestSceneId: previous?.latestSceneId, status, pendingAssistantMessageId: status === "generating" || status === "validating" ? assistantMessageId : undefined, error: error?.length ? error : undefined, createdAt: previous?.createdAt ?? now, updatedAt: now } };
+      });
+      if (changed) void saveConversationSnapshot(conversations);
+      return changed ? { conversations } : {};
+    });
+    return changed;
+  },
+  selectStudioScene: (conversationId, sceneId) => {
+    let selected = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        const workspace = conversation.studioWorkspace;
+        if (conversation.id !== conversationId || !workspace?.scenes.some((scene) => scene.id === sceneId)) return conversation;
+        selected = true;
+        return { ...conversation, updatedAt: Date.now(), studioWorkspace: { ...workspace, currentSceneId: sceneId, updatedAt: Date.now() } };
+      });
+      if (selected) void saveConversationSnapshot(conversations);
+      return selected ? { conversations } : {};
+    });
+    return selected;
+  },
   commitStudioResponseRevision: (conversationId, assistantMessageId, input, options) => {
     let committed: StudioResponseRevision | null = null;
     set((state) => {
@@ -394,11 +456,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           : (userMessage.content.trim() ||
               userMessage.attachments?.[0]?.name ||
               "Image message").slice(0, 50);
+        const now = Date.now();
+        const workspace = conversation.studioWorkspace;
         return {
           ...conversation,
           title: isFirstUser ? provisionalTitle : conversation.title,
           messages: [...conversation.messages, userMessage, assistantMessage],
-          updatedAt: Date.now(),
+          updatedAt: now,
+          studioWorkspace: resolveConversationExperience(conversation) === "studio" ? {
+            id: workspace?.id ?? crypto.randomUUID(),
+            scenes: workspace?.scenes ?? [],
+            currentSceneId: workspace?.currentSceneId,
+            latestSceneId: workspace?.latestSceneId,
+            status: "generating" as const,
+            pendingAssistantMessageId: assistantMessage.id,
+            createdAt: workspace?.createdAt ?? now,
+            updatedAt: now,
+          } : workspace,
         };
       });
       void saveConversationSnapshot(conversations);
@@ -562,6 +636,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           : null;
       const conversations = state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
+        const now = Date.now();
+        const workspace = conversation.studioWorkspace;
         return {
           ...conversation,
           lmResponseId: patch.lmResponseId ?? conversation.lmResponseId,
@@ -578,7 +654,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                 }
               : message,
           ),
-          updatedAt: Date.now(),
+          studioWorkspace: workspace?.pendingAssistantMessageId === messageId
+            ? { ...workspace, status: workspace.status === "rejected" || workspace.status === "render_error" ? workspace.status : "idle" as const, pendingAssistantMessageId: undefined, updatedAt: now }
+            : workspace,
+          updatedAt: now,
         };
       });
       void saveConversationSnapshot(conversations);
@@ -668,11 +747,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         const idx = conversation.messages.findIndex((m) => m.id === messageId);
         if (idx < 0) return conversation;
         const truncated = conversation.messages.slice(0, idx + 1);
-        return {
+        return normalizeConversationStudio({
           ...conversation,
           messages: truncated,
           updatedAt: Date.now(),
-        };
+        });
       });
       void saveConversationSnapshot(conversations);
       return { conversations };
@@ -690,11 +769,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           (last.role === "assistant" && secondLast.role === "user") ||
           (last.role === "user" && secondLast.role === "assistant");
         const sliced = isPair ? messages.slice(0, -2) : messages.slice(0, -1);
-        return {
+        return normalizeConversationStudio({
           ...conversation,
           messages: sliced,
           updatedAt: Date.now(),
-        };
+        });
       });
       void saveConversationSnapshot(conversations);
       return { conversations };
@@ -704,11 +783,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set((state) => {
       const conversations = state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
-        return {
+        return normalizeConversationStudio({
           ...conversation,
           messages: conversation.messages.filter((m) => m.id !== messageId),
           updatedAt: Date.now(),
-        };
+        });
       });
       void saveConversationSnapshot(conversations);
       return { conversations };
@@ -723,8 +802,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       if (idx < 0) return state;
       const forkedMessages = source.messages.slice(0, idx + 1);
       const now = Date.now();
+      const messageIdMap = new Map<string, string>();
       const remappedMessages = forkedMessages.map((message) => {
         const nextId = crypto.randomUUID();
+        messageIdMap.set(message.id, nextId);
         return {
           ...message,
           id: nextId,
@@ -740,6 +821,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         updatedAt: now,
         projectId: source.projectId,
         experience: resolveConversationExperience(source),
+        studioWorkspace: source.studioWorkspace ? (() => {
+          const scenes = source.studioWorkspace.scenes.filter((scene) => messageIdMap.has(scene.assistantMessageId)).map((scene) => ({ ...scene, id: crypto.randomUUID(), assistantMessageId: messageIdMap.get(scene.assistantMessageId)!, lineageId: crypto.randomUUID() }));
+          const latest = scenes[scenes.length - 1];
+          return { id: crypto.randomUUID(), scenes, currentSceneId: latest?.id, latestSceneId: latest?.id, status: "idle" as const, createdAt: now, updatedAt: now };
+        })() : undefined,
       };
       newId = forked.id;
       const conversations = [forked, ...state.conversations];

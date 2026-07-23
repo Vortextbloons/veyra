@@ -24,7 +24,7 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { getStudioSystemInstruction, buildStudioResponseContextBlock, buildModeContextBlock, findLatestReadyStudioResponse, inferStudioContextMode, shouldIncludeStudioResponseContext } from "@/modules/chat/studio/studio-context";
+import { getStudioSystemInstruction, buildStudioSceneContextBlock, buildModeContextBlock, inferStudioContextMode, shouldIncludeStudioResponseContext } from "@/modules/chat/studio/studio-context";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 export interface SendChatCompleteContext {
@@ -132,14 +132,14 @@ export async function sendChatRequest({
     projectId: conversation?.projectId,
   }) : undefined;
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
-  const latestStudioResponse = studioEnabled ? findLatestReadyStudioResponse(messages) : undefined;
+  const currentStudioScene = studioEnabled ? conversation?.studioWorkspace?.scenes.find((scene) => scene.id === conversation.studioWorkspace?.currentSceneId) : undefined;
   const studioResponseBlock =
     studioEnabled &&
     studioContextMode &&
     lastUserMessage?.content &&
     shouldIncludeStudioResponseContext(lastUserMessage.content) &&
-    latestStudioResponse
-      ? buildStudioResponseContextBlock(latestStudioResponse)
+    currentStudioScene
+      ? buildStudioSceneContextBlock(currentStudioScene)
       : undefined;
   const modeContextBlock = studioContextMode
     ? buildModeContextBlock(studioContextMode, {

@@ -5,7 +5,6 @@ import {
   inferStudioContextMode,
   shouldIncludeStudioResponseContext,
 } from "@/modules/chat/studio/studio-context";
-import type { StudioContextMode } from "@/modules/chat/studio/studio-types";
 
 describe("Studio Phase 5 — specialized integrations", () => {
   describe("mode-aware system instructions", () => {

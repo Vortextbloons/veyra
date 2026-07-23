@@ -9,6 +9,7 @@ import type { FetchStatus } from "@/lib/fetch-status";
 import type {
   ConversationExperience,
   StudioResponse,
+  StudioWorkspace,
 } from "@/modules/chat/studio/studio-types";
 
 export type ChatRole = "user" | "assistant" | "system";
@@ -122,6 +123,8 @@ export interface Conversation {
   updatedAt: number;
   /** Presentation/response expectations within normal chat (`standard` | `studio`). */
   experience?: ConversationExperience;
+  /** Conversation-owned dynamic Studio stage. */
+  studioWorkspace?: StudioWorkspace;
   /** Project this conversation belongs to. undefined = no project (global chat). */
   projectId?: string;
   /** Character this conversation is bound to. undefined = plain (non-character) chat. */

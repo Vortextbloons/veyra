@@ -1,10 +1,10 @@
 import type { ChatMessage } from "@/modules/chat/chat-types";
-import type { StudioContextMode, StudioResponse } from "./studio-types";
+import type { StudioContextMode, StudioResponse, StudioScene } from "./studio-types";
 
 /** Returns a domain-specific Studio system instruction. */
 export function getStudioSystemInstruction(mode: StudioContextMode = "chat"): string {
   const base =
-    "This is a Studio conversation. Prefer studio_render for substantive answers. Return one complete HTML body fragment and stylesheet designed for full conversation width. Ordinary text is allowed for acknowledgements, clarifications, errors, and clearly inappropriate visual cases. Do not access Veyra, Tauri, the filesystem, credentials, scripts, or remote resources.";
+    "This is a dynamic full-workspace Studio conversation. Use studio_render for substantive answers and transformations. Its HTML and CSS are the entire central stage, never a widget, card, message attachment, or side artifact, and every call is a coherent complete replacement responsive to the available width and height. Brief ordinary text is reserved for acknowledgements, clarifications, and failures. Use semantic HTML, readable contrast, keyboard-accessible native controls, and reduced-motion-safe design. You cannot control Veyra chrome, navigation, permissions, files, credentials, tools, host state, scripts, or remote resources.";
   const modeHints: Record<StudioContextMode, string> = {
     chat: base,
     character: `${base}\nBuild character-appropriate visual scenes such as settings, character displays, mood boards, or interactive dialogues that reflect the character's persona and world.`,
@@ -110,6 +110,10 @@ export function buildStudioResponseContextBlock(
     css: revision.css,
     label: "Studio response",
   }, maxBytes);
+}
+
+export function buildStudioSceneContextBlock(scene: StudioScene, maxBytes = 12_000): string | undefined {
+  return buildStudioSourceContextBlock({ title: scene.title, revision: scene.revision, html: scene.html, css: scene.css, label: "Studio scene" }, maxBytes);
 }
 
 /** Most recent ready Studio assistant response in transcript order. */

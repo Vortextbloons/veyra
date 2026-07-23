@@ -14,6 +14,12 @@ import type { StudioContextMode } from "./studio-types";
 
 const studioRepairAttempts = new Map<string, number>();
 
+function setWorkspaceStatus(conversationId: string, assistantMessageId: string, status: "validating" | "rejected", issues?: Array<{ code: string; message: string }>) {
+  const store = useChatStore.getState();
+  if (typeof store.setStudioWorkspaceStatus === "function") return store.setStudioWorkspaceStatus(conversationId, status, assistantMessageId, issues);
+  return store.setStudioResponseStatus(conversationId, assistantMessageId, status, issues);
+}
+
 export function studioRepairKey(conversationId: string, assistantMessageId: string): string {
   return `${conversationId}:${assistantMessageId}`;
 }
@@ -30,12 +36,7 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
     if (finalFailure) recordStudioFinalFailure(issues.map((issue) => issue.code));
     useChatStore.getState().setStreamingToolState({ id: call.id, name: STUDIO_RENDER_TOOL_NAME, label, phase: "error", error: message });
     if (context.conversationId && context.assistantMessageId) {
-      useChatStore.getState().setStudioResponseStatus(
-        context.conversationId,
-        context.assistantMessageId,
-        "rejected",
-        issues,
-      );
+      setWorkspaceStatus(context.conversationId, context.assistantMessageId, "rejected", issues);
     }
     if (finalFailure) {
       return `Tool result for ${STUDIO_RENDER_TOOL_NAME}: rejected. ${message}. Studio generation failed for this response.`;
@@ -67,7 +68,7 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
   if (!targetMessage || targetMessage.role !== "assistant") {
     return fail([{ code: "missing_target", message: "The originating assistant message is unavailable." }]);
   }
-  const pointerRevisionAtStart = targetMessage.studioResponse?.currentRevision ?? 0;
+  const pointerSceneIdAtStart = conversation.studioWorkspace?.currentSceneId;
   recordStudioRenderAttempt();
   useChatStore.getState().setStreamingToolState({
     id: call.id,
@@ -76,11 +77,7 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
     phase: "running",
     detail: "Validating artifact",
   });
-  useChatStore.getState().setStudioResponseStatus(
-    context.conversationId,
-    context.assistantMessageId,
-    "validating",
-  );
+  setWorkspaceStatus(context.conversationId, context.assistantMessageId, "validating");
 
   const parsed = parseStudioArguments(call);
   if (!parsed.ok) {
@@ -101,17 +98,20 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
   }
 
   studioRepairAttempts.delete(repairKey);
-  const revision = useChatStore.getState().commitStudioResponseRevision(
+  const store = useChatStore.getState();
+  const scene = typeof store.commitStudioScene === "function" ? store.commitStudioScene(
     context.conversationId,
     context.assistantMessageId,
     {
       title: parsed.value.title,
       html: validated.html,
       css: validated.css,
+      caption: parsed.value.caption,
+      transition: parsed.value.transition,
     },
-    { pointerRevisionAtStart },
-  );
-  if (!revision) {
+    { pointerSceneIdAtStart },
+  ) : store.commitStudioResponseRevision(context.conversationId, context.assistantMessageId, { title: parsed.value.title, html: validated.html, css: validated.css }, { pointerRevisionAtStart: 0 });
+  if (!scene) {
     return fail([{ code: "commit_failed", message: "The conversation no longer accepts Studio output." }]);
   }
 
@@ -129,7 +129,7 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
     name: STUDIO_RENDER_TOOL_NAME,
     label,
     phase: "done",
-    detail: `Rendered revision ${revision.revision}`,
+    detail: `Presented ${scene.title}`,
   });
-  return `Tool result for ${STUDIO_RENDER_TOOL_NAME}: rendered “${revision.title}” as revision ${revision.revision}. The user can see the artifact.`;
+  return `Tool result for ${STUDIO_RENDER_TOOL_NAME}: rendered â€œ${scene.title}â€ as revision ${scene.revision}. The user can see the artifact.`;
 }

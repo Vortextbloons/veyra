@@ -41,3 +41,32 @@ export type StudioResponse = {
   createdAt: number;
   updatedAt: number;
 };
+
+export type StudioTransition = "none" | "fade" | "dissolve" | "slide";
+
+export type StudioScene = {
+  id: string;
+  assistantMessageId: string;
+  title: string;
+  html: string;
+  css: string;
+  caption?: string;
+  transition: StudioTransition;
+  lineageId: string;
+  revision: number;
+  createdAt: number;
+};
+
+export type StudioWorkspaceStatus = "idle" | "generating" | "validating" | "transitioning" | "rejected" | "render_error";
+
+export type StudioWorkspace = {
+  id: string;
+  currentSceneId?: string;
+  latestSceneId?: string;
+  scenes: StudioScene[];
+  status: StudioWorkspaceStatus;
+  pendingAssistantMessageId?: string;
+  error?: StudioValidationIssue[];
+  createdAt: number;
+  updatedAt: number;
+};

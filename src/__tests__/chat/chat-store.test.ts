@@ -197,3 +197,29 @@ describe("chat store message-owned studio responses", () => {
     expect(response?.error?.[0]?.code).toBe("unsafe");
   });
 });
+
+describe("chat store conversation-owned Studio workspace", () => {
+  const assistant: ChatMessage = { id: "assistant-stage", role: "assistant", content: "", timestamp: 2 };
+
+  beforeEach(() => {
+    mocks.saveConversationSnapshot.mockClear();
+    useChatStore.setState({ conversations: [conversation([assistant], { experience: "studio" })], activeConversationId: "conversation-1", streamingBuffer: null });
+  });
+
+  it("commits immutable scenes and preserves a historical pointer", () => {
+    const first = useChatStore.getState().commitStudioScene("conversation-1", assistant.id, { title: "First", html: "<main>One</main>", css: "main{}" });
+    expect(first).not.toBeNull();
+    expect(useChatStore.getState().selectStudioScene("conversation-1", first!.id)).toBe(true);
+    const second = useChatStore.getState().commitStudioScene("conversation-1", assistant.id, { title: "Second", html: "<main>Two</main>", css: "main{}" }, { pointerSceneIdAtStart: "a-different-start-pointer" });
+    const workspace = useChatStore.getState().conversations[0]!.studioWorkspace!;
+    expect(workspace.scenes).toHaveLength(2);
+    expect(workspace.currentSceneId).toBe(first!.id);
+    expect(workspace.latestSceneId).toBe(second!.id);
+    expect(second?.lineageId).toBe(first?.lineageId);
+    expect(second?.revision).toBe(2);
+  });
+
+  it("rejects a scene for a missing assistant target", () => {
+    expect(useChatStore.getState().commitStudioScene("conversation-1", "missing", { title: "No", html: "<main />", css: "" })).toBeNull();
+  });
+});

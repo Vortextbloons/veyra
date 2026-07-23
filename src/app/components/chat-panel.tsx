@@ -20,6 +20,7 @@ import { StudioExperienceChoice } from "@/modules/chat/studio/components/studio-
 import { resolveStudioToolAvailability } from "@/modules/chat/chat-provider-options";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
+import { StudioWorkspacePresenter } from "@/modules/chat/studio/components/studio-workspace";
 
 const VIRTUALIZE_AFTER_MESSAGES = 80;
 const ESTIMATED_MESSAGE_HEIGHT = 180;
@@ -236,6 +237,7 @@ export function ChatPanel({
     mode === "chat" &&
     !activeConversation?.characterId &&
     !activeConversation?.groupId;
+  const showStudioWorkspace = studioModeEnabled && experience === "studio" && mode === "chat" && !!activeConversationId;
 
   const handleExperienceChange = useCallback(
     (next: ConversationExperience) => {
@@ -269,7 +271,17 @@ export function ChatPanel({
         onStartServer={() => onProviderStartServer?.()}
       />
 
-        <div
+      {showStudioWorkspace ? (
+        <StudioWorkspacePresenter
+          messages={messages}
+          workspace={activeConversation?.studioWorkspace}
+          isStreaming={isStreaming}
+          streamingMessageId={streamingMessageId}
+          streamingContent={streamingBuffer?.conversationId === activeConversationId ? streamingBuffer.content : undefined}
+          onSelectScene={(sceneId) => useChatStore.getState().selectStudioScene(activeConversationId, sceneId)}
+          onRegenerate={onRegenerate}
+        />
+      ) : <div
           ref={messagesScrollRef}
           onScroll={handleMessagesScroll}
           className="relative flex flex-1 flex-col overflow-y-auto"
@@ -330,7 +342,7 @@ export function ChatPanel({
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       <div
         className={`shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)] pb-3 pt-2.5 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
