@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use std::fs;
 use std::process::{Command, Stdio};
 use tauri::Emitter;
 
@@ -8,9 +7,7 @@ use super::pi_runner::{
     PiRunFinishedEvent, PiRunResult,
 };
 use super::process::{kill_agent_process, kill_pid, RUNNING_AGENT_PIDS, RUNNING_AGENT_STDIN};
-use super::sessions::{
-    list_pi_sessions_sync, resolve_pi_session_file, resolve_workspace_path, switch_pi_session_sync,
-};
+use super::sessions::resolve_workspace_path;
 
 // ---------------------------------------------------------------------------
 // Input / event types
@@ -148,28 +145,4 @@ pub fn stop_all_pi_agents() {
     }
     // Drop all stdin handles
     RUNNING_AGENT_STDIN.lock().clear();
-}
-
-#[tauri::command]
-pub async fn list_pi_sessions(project_path: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || list_pi_sessions_sync(project_path))
-        .await
-        .map_err(|e| format!("pi list sessions task failed: {e}"))?
-}
-
-#[tauri::command]
-pub async fn switch_pi_session(session_path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || switch_pi_session_sync(session_path))
-        .await
-        .map_err(|e| format!("pi switch session task failed: {e}"))?
-}
-
-#[tauri::command]
-pub async fn delete_pi_session(session_path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let path = resolve_pi_session_file(&session_path)?;
-        fs::remove_file(&path).map_err(|e| format!("failed to delete session: {e}"))
-    })
-    .await
-    .map_err(|e| format!("pi delete session task failed: {e}"))?
 }

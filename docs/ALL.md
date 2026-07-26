@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-22T22:41:34.488Z
+> Generated: 2026-07-26T18:22:48.567Z
 > Total files: 80
 
 ## Table of Contents
@@ -339,13 +339,12 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG with intent routing, time range, language, safe search, and pagination parameters |
-| `code_execution` | `codeExecutionEnabled` | Execute Python code via the host interpreter with timeout kill |
 | `doc_create` | `documentToolsEnabled` | Create a new document |
 | `doc_read` | `documentToolsEnabled` | Read a document |
 | `inline_edit` | `documentToolsEnabled` | Edit a document with section/heading targeting |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
 | `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
-| `studio_render` | `studioModeEnabled` + conversation `presentationMode: "studio"` | Render a validated HTML/CSS visual artifact in Studio |
+| `studio_render` | `studioModeEnabled` + conversation `experience: "studio"` | Render a validated HTML/CSS Studio response |
 
 ## Enhanced Mode
 
@@ -369,6 +368,8 @@ When enhanced mode is enabled (`enhancedModeEnabled` setting):
 - Document mutations retry up to 2 times with LLM-based re-prompting for corrections
 - `doc_create` calls are deduplicated within a single tool round — repeated create requests with identical arguments are skipped
 - `doc_update` is a legacy constant kept for backward-compatible runtime handling; it has been replaced by `inline_edit`
+
+Native `code_execution` is not offered to models. Legacy calls fail closed until an OS-enforced sandbox is implemented.
 
 ## Tool Registry
 
@@ -483,10 +484,11 @@ Each conversation is serialized as an encrypted JSON file containing:
 - Messages array with content, reasoning, tool calls, and web search state
 - Metadata (title, mode, character binding, project binding, timestamps)
 - Conversation summary (if auto-summarized)
-- Optional `presentationMode` (`standard` or `studio`)
-- Optional `studioArtifact` with current/latest revision pointers and retained immutable HTML/CSS revisions
+- Conversation `experience` (`standard` or `studio`)
+- Optional message-owned `studioResponse` values with bounded revision history
+- Optional conversation-owned `studioWorkspace` timeline metadata
 
-Studio artifacts use the same encrypted snapshot path. Built outer iframe documents are not persisted; they are reconstructed from validated revision HTML and CSS.
+Studio responses use the same encrypted snapshot path. Built outer iframe documents are not persisted; they are reconstructed from validated revision HTML and CSS.
 
 ---
 
@@ -1748,39 +1750,37 @@ Documents are accessible via 3 chat tools. These tools allow the AI to programma
 
 ## `doc_read`
 
-Reads a document by ID. Optionally includes version history.
+Reads a document by ID.
 
 ```json
 {
-  "documentId": "string",
-  "includeVersions": false
+  "documentId": "string"
 }
 ```
 
 ## `doc_create`
 
-Creates a new document. Can be scoped to a conversation or project.
+Creates a new document.
 
 ```json
 {
   "title": "string",
-  "content": "string",
-  "type": "document",
-  "conversationId": "optional",
-  "projectId": "optional"
+  "documentType": "document",
+  "contentMarkdown": "string"
 }
 ```
 
-## `doc_update`
+## `inline_edit`
 
 Updates an existing document with selective mutation modes.
 
 ```json
 {
   "documentId": "string",
-  "updateMode": "replace_all | replace_section | insert_after_section | replace_text",
-  "targetSection": "optional heading text",
-  "newContent": "string"
+  "mode": "replace_all | replace_section | insert_after_section | replace_text",
+  "target": "optional heading or exact text",
+  "contentMarkdown": "string",
+  "explanation": "optional summary"
 }
 ```
 
@@ -1792,6 +1792,8 @@ Updates an existing document with selective mutation modes.
 | `replace_section` | Replace a section by heading |
 | `insert_after_section` | Insert content after a section |
 | `replace_text` | Replace specific text |
+
+`doc_update` remains a runtime-only alias for compatibility with older model calls. It is not advertised in the tool schema.
 
 ---
 
@@ -1902,7 +1904,7 @@ Markdown document editor with versioning, AI-assisted creation/update, and expor
 
 - [01-overview.md](01-overview.md) — Document types, statuses, storage, and sync
 - [02-editor.md](02-editor.md) — Editor features, auto-save, export
-- [03-tools.md](03-tools.md) — AI document tools (doc_read, doc_create, doc_update)
+- [03-tools.md](03-tools.md) — AI document tools (doc_read, doc_create, inline_edit)
 - [04-versioning.md](04-versioning.md) — Version history and change tracking
 - [05-types.md](05-types.md) — Key type definitions
 
@@ -3299,9 +3301,6 @@ Events are streamed from Pi CLI via Tauri events.
 | Command | Description |
 |---------|-------------|
 | `check_pi_available` | Check if Pi CLI is on PATH |
-| `list_pi_sessions` | List Pi sessions |
-| `switch_pi_session` | Switch active session |
-| `delete_pi_session` | Delete a session |
 | `stop_pi_agent` | Stop a running agent |
 | `run_pi_agent` | Start an agent run (streams events) |
 
@@ -3469,68 +3468,17 @@ Controls online/offline behavior and determines which features are available bas
 
 # Code Execution
 
-Executes Python code locally by spawning the host interpreter as a subprocess.
+Native host code execution is disabled until Veyra has a real OS-enforced
+sandbox. Timeouts, process termination, working-directory selection, and source
+filtering are not security boundaries.
 
-## Key Files
+Veyra therefore does not register a Tauri command that spawns Python or expose
+`code_execution` in provider tool definitions. The legacy tool name remains
+recognized so stored or model-emitted calls fail closed with a clear disabled
+error.
 
-| File | Purpose |
-|------|---------|
-| `src/lib/code-execution.ts` | Frontend types and Tauri invoke wrappers |
-| `src-tauri/src/code_execution/commands.rs` | Rust backend: interpreter discovery and subprocess management |
-
-## Python Availability Check
-
-```typescript
-type PythonAvailabilityResult = {
-  available: boolean;
-  resolvedPath: string | null;
-  source: string | null;
-  version: string | null;
-  message: string | null;
-};
-```
-
-On start (or when the user provides a custom path), `check_python_available`
-probes the system:
-- If a custom Python path is configured, it checks that path directly
-- Otherwise it tries `python`, `python3`, and `py` in order
-- Runs `python --version` to confirm the interpreter works and capture the
-  version string
-
-Returns `available: true` with the resolved path, source (`"custom"` or
-`"probe"`), and version. Returns `available: false` with a help message if no
-Python interpreter is found.
-
-## Execution
-
-```typescript
-type PythonExecutionResult = {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  pythonPath: string;
-  durationMs: number;
-  workingDirectory: string;
-};
-```
-
-`execute_python_code` spawns the Python interpreter as a `tokio::process`:
-
-- Code is passed via `-c` to avoid writing temporary files
-- stdout and stderr are captured as strings
-- A configurable timeout (1–300s, default 30) kills the process if exceeded
-- If the process times out, `timedOut` is `true` and the process is killed
-- The exit code, wall-clock duration, working directory, and Python path are
-  returned alongside the output
-
-## Safety
-
-- Code runs as a child process with the same user privileges as Veyra
-- No filesystem, network, or credential isolation is enforced at the OS level
-- The timeout kill prevents runaway processes
-- The chat tool exposes `code_execution` to the AI model only when the feature
-  is enabled
+Persisted code-execution settings are retained for state compatibility, but
+they do not enable native execution.
 
 ---
 
@@ -3540,12 +3488,12 @@ type PythonExecutionResult = {
 
 # Code Execution
 
-Native Python execution via `python`, `python3`, or `py` on the system PATH (or
-a custom path configured in Settings → Tools → Code Execution).
+Native host code execution is disabled. Veyra does not spawn Python or another
+host interpreter without an OS-enforced sandbox.
 
 ## Contents
 
-- [01-overview.md](01-overview.md) — Code execution system and types
+- [01-overview.md](01-overview.md) — Disabled boundary and compatibility behavior
 
 ---
 
@@ -3763,7 +3711,6 @@ under `veyra.provider.v1`.
 | Tool | Condition | Description |
 |------|-----------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG. Parallel execution with up to 2 retries. |
-| `code_execution` | `codeExecutionEnabled` | Execute Python code via the host interpreter. Timeout-kill and workspace-root confinement. |
 | `doc_create` | `documentToolsEnabled` | Create a new document. |
 | `doc_read` | `documentToolsEnabled` | Read a document by ID. |
 | `inline_edit` | `documentToolsEnabled` | Edit a document (replace_all, replace_section, insert_after_section, replace_text). Retries up to 2 times with LLM re-prompt. |
@@ -3775,6 +3722,8 @@ Each tool has a JSON schema defining its parameters. Tool calls execute in round
 - Enhanced mode: up to **10 rounds**
 
 `doc_update` is a legacy constant kept for backward-compatible runtime handling; it has been replaced by `inline_edit`.
+
+Native `code_execution` is disabled and is not included in provider tool definitions. Legacy calls return a disabled error until an OS-enforced sandbox exists.
 
 ## Key Files
 

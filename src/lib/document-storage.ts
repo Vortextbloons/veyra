@@ -76,10 +76,6 @@ export async function listDocumentVersions(documentId: string): Promise<Document
   return invoke<DocumentVersion[]>("list_document_versions", { documentId });
 }
 
-export async function getDocumentVersion(id: string): Promise<DocumentVersion> {
-  return invoke<DocumentVersion>("get_document_version", { id });
-}
-
 export async function restoreDocumentVersion(versionId: string): Promise<DocumentRecord> {
   return invoke<DocumentRecord>("restore_document_version", { versionId });
 }

@@ -22,27 +22,6 @@ pub struct MemoryFolderRow {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct MemoryFileRow {
-    pub id: String,
-    pub folder_id: String,
-    pub project_id: Option<String>,
-    pub title: String,
-    pub slug: String,
-    pub summary: String,
-    pub purpose: String,
-    pub key_points: Vec<String>,
-    pub status: String,
-    pub tags: Vec<String>,
-    pub importance: i64,
-    pub confidence: f64,
-    pub created_at: String,
-    pub updated_at: String,
-    pub node_count: i64,
-    pub chunk_count: i64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct MemoryNodeRow {
     pub id: String,
     pub folder_id: String,

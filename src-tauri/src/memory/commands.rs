@@ -15,17 +15,6 @@ pub async fn list_memory_folders(
 }
 
 #[tauri::command]
-pub async fn list_memory_files(
-    folder_id: Option<String>,
-    state: State<'_, MemoryDbState>,
-) -> Result<Vec<memory_db::MemoryFileRow>, String> {
-    run_db_command(state.inner(), "memory", move |conn| {
-        memory_db::list_files(conn, folder_id)
-    })
-    .await
-}
-
-#[tauri::command]
 pub async fn list_memory_nodes(
     filter: String,
     state: State<'_, MemoryDbState>,

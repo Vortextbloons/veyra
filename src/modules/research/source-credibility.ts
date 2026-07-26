@@ -105,24 +105,3 @@ export function getCredibilityScore(url: string): { score: number; label: string
   // Default: unknown = medium
   return { score: 3, label: "unknown source" };
 }
-
-/**
- * Returns a normalized authority score 0.0–1.0 for the evidence weighting system.
- */
-export function getNormalizedAuthority(url: string): number {
-  const { score } = getCredibilityScore(url);
-  return score / 5;
-}
-
-/**
- * Builds a summary string for the AI prompt showing source credibility.
- */
-export function formatCredibilitySummary(sources: Array<{ title: string; url: string }>): string {
-  return sources
-    .map((s, i) => {
-      const { score, label } = getCredibilityScore(s.url);
-      const bar = "█".repeat(score) + "░".repeat(5 - score);
-      return `[${i + 1}] ${s.title} — ${bar} ${score}/5 (${label})`;
-    })
-    .join("\n");
-}

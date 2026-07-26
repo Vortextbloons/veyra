@@ -79,17 +79,6 @@ pub async fn list_document_versions(
 }
 
 #[tauri::command]
-pub async fn get_document_version(
-    id: String,
-    state: State<'_, DocumentDbState>,
-) -> Result<document_db::DocumentVersionRow, String> {
-    run_db_command(state.inner(), "document", move |conn| {
-        document_db::get_version(conn, id)
-    })
-    .await
-}
-
-#[tauri::command]
 pub async fn restore_document_version(
     version_id: String,
     state: State<'_, DocumentDbState>,

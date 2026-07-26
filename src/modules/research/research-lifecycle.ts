@@ -42,12 +42,6 @@ async function pauseRunInDatabase(run: ResearchRun): Promise<ResearchRun> {
   });
 }
 
-/** Mark a single run paused when it was left active after an unclean exit. */
-export async function reconcileStaleResearchRun(run: ResearchRun): Promise<ResearchRun> {
-  if (!isActiveResearchRunStatus(run.status)) return run;
-  return pauseRunInDatabase(run);
-}
-
 /** Mark in-flight runs as paused after an unclean exit or failed shutdown. */
 export async function reconcileInterruptedResearchRuns(
   runs: ResearchRun[],

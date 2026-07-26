@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AgentMode, PiSession, PiRunResult } from "@/modules/agents/agent-types";
+import type { AgentMode, PiRunResult } from "@/modules/agents/agent-types";
 
 type StartPiAgentInput = {
   sessionId: string;
@@ -39,26 +39,6 @@ export async function checkPiAvailable(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export async function listPiSessions(projectPath: string): Promise<PiSession[]> {
-  const raw = await invoke<string>("list_pi_sessions", { projectPath });
-  if (!raw.trim()) return [];
-  try {
-    const parsed = JSON.parse(raw) as PiSession[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Validates that the session file exists. Does not switch an active Pi process. */
-export async function switchPiSession(sessionPath: string): Promise<void> {
-  await invoke<void>("switch_pi_session", { sessionPath });
-}
-
-export async function deletePiSession(sessionPath: string): Promise<void> {
-  await invoke<void>("delete_pi_session", { sessionPath });
 }
 
 export async function stopPiAgent(sessionId: string): Promise<void> {

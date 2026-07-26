@@ -53,7 +53,6 @@ Agent update instructions and generated output (excluded from combined docs).
 | File | Description |
 |------|-------------|
 | [AI_DOCS_UPDATE_PROMPT.md](AI_DOCS_UPDATE_PROMPT.md) | AI agent update instructions |
-| [VEYRA_FULL_DOCS.md](VEYRA_FULL_DOCS.md) | Legacy combined output (deprecated) |
 
 ## Adding new docs
 

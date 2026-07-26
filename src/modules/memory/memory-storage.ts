@@ -12,7 +12,6 @@ import { newId, nowIso } from "@/lib/id";
 import { useSettingsStore } from "@/stores/settings-store";
 import type {
   CreateMemoryNode,
-  MemoryFile,
   MemoryFolder,
   MemoryNode,
   MemoryNodeFilter,
@@ -39,12 +38,6 @@ export type VectorSearchResult = {
 
 export async function listMemoryFolders(): Promise<MemoryFolder[]> {
   return invoke<MemoryFolder[]>("list_memory_folders");
-}
-
-export async function listMemoryFiles(
-  folderId?: string,
-): Promise<MemoryFile[]> {
-  return invoke<MemoryFile[]>("list_memory_files", { folderId: folderId ?? null });
 }
 
 export async function listMemoryNodes(

@@ -138,7 +138,6 @@ dependencies = [
  "tokio",
  "url",
  "urlencoding",
- "uuid",
  "zip",
 ]
 

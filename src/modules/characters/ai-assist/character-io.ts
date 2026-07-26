@@ -490,26 +490,3 @@ export function veyraToCcv3Png(pngBytes: Uint8Array, character: CharacterRecord)
   const card = veyraToCcv3(character);
   return embedCcv3InPng(pngBytes, card);
 }
-
-export function emptyCcv3Card(): Ccv3Card {
-  return {
-    spec: "chara_card_v3",
-    spec_version: "3.0",
-    data: {
-      name: "",
-      description: "",
-      personality: "",
-      scenario: "",
-      first_mes: "",
-      mes_example: "",
-      creator_notes: "",
-      system_prompt: "",
-      post_history_instructions: "",
-      alternate_greetings: [],
-      tags: [],
-      creator: "",
-      character_version: "1.0.0",
-      extensions: {},
-    },
-  };
-}

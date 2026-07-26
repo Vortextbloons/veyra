@@ -387,7 +387,3 @@ export async function runCharacterAssist(
   void startedAt;
   return parsed;
 }
-
-export function createEmptyResult(): CharacterAssistResult {
-  return { card: null, warnings: [], text: "" };
-}

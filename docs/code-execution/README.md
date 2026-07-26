@@ -1,8 +1,8 @@
 # Code Execution
 
-Native Python execution via `python`, `python3`, or `py` on the system PATH (or
-a custom path configured in Settings → Tools → Code Execution).
+Native host code execution is disabled. Veyra does not spawn Python or another
+host interpreter without an OS-enforced sandbox.
 
 ## Contents
 
-- [01-overview.md](01-overview.md) — Code execution system and types
+- [01-overview.md](01-overview.md) — Disabled boundary and compatibility behavior

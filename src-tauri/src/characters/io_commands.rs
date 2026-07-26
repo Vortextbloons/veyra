@@ -188,33 +188,6 @@ pub fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub fn export_character_card(
-    app: AppHandle,
-    character_id: String,
-    target_path: String,
-    format: String,
-) -> Result<(), String> {
-    use crate::characters::db::{self as character_db, CharacterDbState};
-
-    // Fetch the character row.
-    let character = app
-        .state::<CharacterDbState>()
-        .with_connection(|conn| character_db::get_character(conn, character_id))?;
-    let record = serde_json::to_value(&character).map_err(|e| e.to_string())?;
-
-    match format.as_str() {
-        "veyra" | "chara_card_v3" => {
-            let text = serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?;
-            write_text_file(target_path, text)
-        }
-        "chara_card_v3_png" => {
-            Err("PNG export is performed by the front-end. Use write_binary_file.".into())
-        }
-        other => Err(format!("unsupported format: {}", other)),
-    }
-}
-
-#[tauri::command]
 pub fn save_character_avatar(
     app: AppHandle,
     character_id: String,

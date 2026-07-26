@@ -10,7 +10,7 @@ pub use types::*;
 pub use init::MemoryDbState;
 
 pub use nodes::{
-    archive_node, create_node, delete_node, list_files, list_folders, list_nodes, pin_node,
+    archive_node, create_node, delete_node, list_folders, list_nodes, pin_node,
     update_node,
 };
 

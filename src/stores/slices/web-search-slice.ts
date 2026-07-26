@@ -33,7 +33,6 @@ export type WebSearchSliceState = {
 export type WebSearchSliceActions = {
   setDefaultWebSearchEnabled: (enabled: boolean) => void;
   setWebSearchSearxngUrl: (url: string) => void;
-  setWebSearchDefaultMode: (mode: "auto" | "always" | "off") => void;
   setWebSearchMaxResults: (n: number) => void;
   setWebSearchTimeRange: (range: "" | "day" | "week" | "month" | "year") => void;
   setWebSearchCategories: (categories: string) => void;
@@ -96,7 +95,6 @@ export const createWebSearchSlice: StateCreator<WebSearchSlice, [], [], WebSearc
   ...DEFAULT_WEB_SEARCH_STATE,
   setDefaultWebSearchEnabled: (defaultWebSearchEnabled) => set({ defaultWebSearchEnabled }),
   setWebSearchSearxngUrl: (webSearchSearxngUrl) => set({ webSearchSearxngUrl }),
-  setWebSearchDefaultMode: (webSearchDefaultMode) => set({ webSearchDefaultMode }),
   setWebSearchMaxResults: (webSearchMaxResults) => set({ webSearchMaxResults }),
   setWebSearchTimeRange: (webSearchTimeRange) => set({ webSearchTimeRange }),
   setWebSearchCategories: (webSearchCategories) => set({ webSearchCategories }),

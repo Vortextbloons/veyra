@@ -7,10 +7,6 @@ let backgroundSlots = 1;
 let backgroundActive = 0;
 const backgroundWaiters: Array<() => void> = [];
 
-export function configureLmStudioBackgroundConcurrency(slots: number): void {
-  backgroundSlots = Math.max(1, Math.min(4, slots));
-}
-
 async function acquireBackgroundSlot(): Promise<void> {
   if (backgroundActive < backgroundSlots) {
     backgroundActive++;

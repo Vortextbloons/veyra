@@ -2,7 +2,7 @@ use rusqlite::{params_from_iter, types::Value, Connection};
 
 use super::helpers::escape_like_pattern;
 use super::types::{
-    MemoryFileRow, MemoryFolderRow, MemoryNodeCreateInput, MemoryNodeFilter, MemoryNodeRow,
+    MemoryFolderRow, MemoryNodeCreateInput, MemoryNodeFilter, MemoryNodeRow,
     MemoryNodeUpdateInput,
 };
 use crate::shared::db_utils::parse_json_array;
@@ -77,64 +77,6 @@ pub fn list_folders(conn: &Connection) -> Result<Vec<MemoryFolderRow>, String> {
         out.push(r.map_err(|e| format!("row error in list_folders: {}", e))?);
     }
     Ok(out)
-}
-
-pub fn list_files(
-    conn: &Connection,
-    folder_id: Option<String>,
-) -> Result<Vec<MemoryFileRow>, String> {
-    const COLS: &str =
-        "id, folder_id, project_id, title, slug, summary, purpose, key_points, status, tags, \
-                        importance, confidence, created_at, updated_at, node_count, chunk_count";
-
-    let (sql, params): (String, Vec<Value>) = match folder_id {
-        Some(fid) => (
-            format!(
-                "SELECT {COLS} FROM memory_files WHERE folder_id = ?1 ORDER BY updated_at DESC"
-            ),
-            vec![Value::Text(fid)],
-        ),
-        None => (
-            format!("SELECT {COLS} FROM memory_files ORDER BY updated_at DESC"),
-            vec![],
-        ),
-    };
-
-    let mut stmt = conn
-        .prepare(&sql)
-        .map_err(|e| format!("prepare list_files failed: {}", e))?;
-    let rows = stmt
-        .query_map(params_from_iter(params.iter()), map_memory_file_row)
-        .map_err(|e| format!("query list_files failed: {}", e))?;
-
-    let mut out = Vec::new();
-    for r in rows {
-        out.push(r.map_err(|e| format!("row error in list_files: {}", e))?);
-    }
-    Ok(out)
-}
-
-pub fn map_memory_file_row(row: &rusqlite::Row) -> rusqlite::Result<MemoryFileRow> {
-    let key_points_str: String = row.get("key_points")?;
-    let tags_str: String = row.get("tags")?;
-    Ok(MemoryFileRow {
-        id: row.get("id")?,
-        folder_id: row.get("folder_id")?,
-        project_id: row.get("project_id")?,
-        title: row.get("title")?,
-        slug: row.get("slug")?,
-        summary: row.get("summary")?,
-        purpose: row.get("purpose")?,
-        key_points: parse_json_array(&key_points_str),
-        status: row.get("status")?,
-        tags: parse_json_array(&tags_str),
-        importance: row.get("importance")?,
-        confidence: row.get("confidence")?,
-        created_at: row.get("created_at")?,
-        updated_at: row.get("updated_at")?,
-        node_count: row.get("node_count")?,
-        chunk_count: row.get("chunk_count")?,
-    })
 }
 
 pub fn list_nodes(conn: &Connection, filter_json: String) -> Result<Vec<MemoryNodeRow>, String> {

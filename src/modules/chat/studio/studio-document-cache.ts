@@ -26,7 +26,3 @@ export function getCachedStudioDocument(input: {
   }
   return document;
 }
-
-export function clearStudioDocumentCache(): void {
-  cache.clear();
-}

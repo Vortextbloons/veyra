@@ -27,17 +27,6 @@ pub async fn create_project(
 }
 
 #[tauri::command]
-pub async fn get_project(
-    id: String,
-    state: State<'_, ProjectDbState>,
-) -> Result<project_db::ProjectRow, String> {
-    run_db_command(state.inner(), "project", move |conn| {
-        project_db::get_project(conn, id)
-    })
-    .await
-}
-
-#[tauri::command]
 pub async fn update_project(
     input: String,
     state: State<'_, ProjectDbState>,

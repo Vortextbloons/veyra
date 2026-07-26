@@ -2,7 +2,6 @@ import type { StateCreator } from "zustand";
 import {
   DEFAULT_RESEARCH_CONFIG,
   applyResearchConfig,
-  type ResearchConfigSetter,
   type ResearchConfigState,
   type ResearchDepthProfileId,
   type ResearchProfileOverride,
@@ -17,14 +16,11 @@ export type ResearchSliceState = {
 };
 
 export type ResearchSliceActions = {
-  applyResearch: (action: ResearchConfigSetter) => void;
-  setResearchAdvancedOpen: (open: boolean) => void;
   setResearchFirstRunNoticeDismissed: (dismissed: boolean) => void;
   setResearchActiveProfile: (id: ResearchDepthProfileId) => void;
   setResearchOverride: (override: ResearchProfileOverride) => void;
   setResearchDepthOverride: (depth: ResearchDepth, override: ResearchProfileOverride) => void;
   addResearchCustomProfile: (profile: ResearchDepthProfile) => void;
-  updateResearchCustomProfile: (id: string, profile: Partial<ResearchDepthProfile>) => void;
   deleteResearchCustomProfile: (id: string) => void;
   setResearchDefaultDepth: (depth: ResearchDepth) => void;
   setResearchDefaultModelId: (modelId: string | null) => void;
@@ -42,9 +38,6 @@ export type ResearchSlice = ResearchSliceState & ResearchSliceActions;
 
 export const createResearchSlice: StateCreator<ResearchSlice, [], [], ResearchSlice> = (set) => ({
   ...DEFAULT_RESEARCH_SLICE_STATE,
-  applyResearch: (action) =>
-    set((state) => ({ research: applyResearchConfig(state.research, action) })),
-  setResearchAdvancedOpen: (researchAdvancedOpen) => set({ researchAdvancedOpen }),
   setResearchFirstRunNoticeDismissed: (researchFirstRunNoticeDismissed) =>
     set({ researchFirstRunNoticeDismissed }),
   setResearchActiveProfile: (id) =>
@@ -55,8 +48,6 @@ export const createResearchSlice: StateCreator<ResearchSlice, [], [], ResearchSl
     set((state) => ({ research: applyResearchConfig(state.research, { kind: "setDepthOverride", depth, override }) })),
   addResearchCustomProfile: (profile) =>
     set((state) => ({ research: applyResearchConfig(state.research, { kind: "addCustomProfile", profile }) })),
-  updateResearchCustomProfile: (id, profile) =>
-    set((state) => ({ research: applyResearchConfig(state.research, { kind: "updateCustomProfile", id, profile }) })),
   deleteResearchCustomProfile: (id) =>
     set((state) => ({ research: applyResearchConfig(state.research, { kind: "deleteCustomProfile", id }) })),
   setResearchDefaultDepth: (defaultDepth) =>

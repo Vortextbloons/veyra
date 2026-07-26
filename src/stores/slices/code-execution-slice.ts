@@ -6,23 +6,14 @@ export type CodeExecutionSliceState = {
   codeExecutionTimeoutSecs: number;
 };
 
-export type CodeExecutionSliceActions = {
-  setCodeExecutionEnabled: (enabled: boolean) => void;
-  setCustomPythonPath: (path: string) => void;
-  setCodeExecutionTimeoutSecs: (secs: number) => void;
-};
-
 export const DEFAULT_CODE_EXECUTION_STATE: CodeExecutionSliceState = {
   codeExecutionEnabled: true,
   customPythonPath: "",
   codeExecutionTimeoutSecs: 30,
 };
 
-export type CodeExecutionSlice = CodeExecutionSliceState & CodeExecutionSliceActions;
+export type CodeExecutionSlice = CodeExecutionSliceState;
 
-export const createCodeExecutionSlice: StateCreator<CodeExecutionSlice, [], [], CodeExecutionSlice> = (set) => ({
+export const createCodeExecutionSlice: StateCreator<CodeExecutionSlice, [], [], CodeExecutionSlice> = () => ({
   ...DEFAULT_CODE_EXECUTION_STATE,
-  setCodeExecutionEnabled: () => set({ codeExecutionEnabled: false }),
-  setCustomPythonPath: (customPythonPath) => set({ customPythonPath }),
-  setCodeExecutionTimeoutSecs: (codeExecutionTimeoutSecs) => set({ codeExecutionTimeoutSecs }),
 });

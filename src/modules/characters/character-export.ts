@@ -22,31 +22,9 @@ export async function exportCharacterJson(character: CharacterRecord): Promise<s
   return text;
 }
 
-export async function exportCharacterJsonToFile(character: CharacterRecord): Promise<string | null> {
-  const path = await save({
-    defaultPath: `${sanitizeFileName(character.name)}.veyra.json`,
-    filters: [{ name: "Veyra Character", extensions: ["json"] }],
-  });
-  if (!path) return null;
-  await invoke("write_text_file", { path, contents: JSON.stringify(character, null, 2) });
-  return path;
-}
-
 export function exportCharacterCcv3(character: CharacterRecord): string {
   const card = veyraToCcv3(character);
   return JSON.stringify(card, null, 2);
-}
-
-export async function exportCharacterCcv3ToFile(character: CharacterRecord): Promise<string | null> {
-  const card = veyraToCcv3(character);
-  const text = JSON.stringify(card, null, 2);
-  const path = await save({
-    defaultPath: `${sanitizeFileName(character.name)}.card.json`,
-    filters: [{ name: "Character Card V3", extensions: ["json"] }],
-  });
-  if (!path) return null;
-  await invoke("write_text_file", { path, contents: text });
-  return path;
 }
 
 export async function exportCharacterCcv3Png(

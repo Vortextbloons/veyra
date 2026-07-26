@@ -47,16 +47,3 @@ export function webSearchRoundForToolCall(
     (rounds.length === 1 && rounds[0].id === "legacy" ? rounds[0] : undefined)
   );
 }
-
-export function markWebSearchRoundsDone(
-  state?: WebSearchStateLike | null,
-): WebSearchState | undefined {
-  const rounds = normalizeWebSearchRounds(state);
-  if (rounds.length === 0) return undefined;
-  return {
-    rounds: rounds.map((round) => ({
-      ...round,
-      phase: round.phase === "error" ? "error" : "done",
-    })),
-  };
-}

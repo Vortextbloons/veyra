@@ -200,23 +200,6 @@ export type ContextBlockCategory =
   | "assistant_message"
   | "system_message";
 
-export const CONTEXT_BLOCK_LABELS: Record<ContextBlockCategory, string> = {
-  system_core: "System Core",
-  model_identity: "Model Identity",
-  user_prompt: "Custom Instructions",
-  memory: "Memory",
-  character: "Character",
-  project: "Project",
-  summary: "Conversation Summary",
-  context_anchor: "Context Anchoring",
-  documents_instructions: "Document Instructions",
-  tool_definitions: "Tool Definitions",
-  web_search_results: "Web Search Results",
-  user_message: "User Message",
-  assistant_message: "Assistant",
-  system_message: "System",
-};
-
 export const CONTEXT_BLOCK_ACCENTS: Record<ContextBlockCategory, string> = {
   system_core: "var(--color-text-dim)",
   model_identity: "var(--color-text-dim)",
@@ -268,12 +251,6 @@ export interface ModelInfo {
   size?: string;
   /** Vision-language model — accepts image input */
   supportsImages?: boolean;
-}
-
-export interface ProviderConfig {
-  baseUrl: string;
-  model: string;
-  temperature: number;
 }
 
 // ── Request status ──────────────────────────────────────────────────────────

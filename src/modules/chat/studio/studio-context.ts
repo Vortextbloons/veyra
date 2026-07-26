@@ -15,8 +15,6 @@ export function getStudioSystemInstruction(mode: StudioContextMode = "chat"): st
   return modeHints[mode] ?? base;
 }
 
-export const STUDIO_SYSTEM_INSTRUCTION = getStudioSystemInstruction("chat");
-
 const REVISION_HINT =
   /\b(studio|artifact|canvas|dashboard|timeline|visual|layout|restyle|redesign|revise|update the (view|ui|interface|artifact)|regenerate|make it (look|feel)|change the (colors|design|style))\b/i;
 
@@ -95,21 +93,6 @@ function buildStudioSourceContextBlock(input: {
     return `${header}\n\nThe current response is too large to include in full. Regenerate from the user's request and this summary only.`;
   }
   return block;
-}
-
-export function buildStudioResponseContextBlock(
-  response: StudioResponse,
-  maxBytes = 12_000,
-): string | undefined {
-  const revision = response.revisions.find((item) => item.revision === response.currentRevision);
-  if (!revision) return undefined;
-  return buildStudioSourceContextBlock({
-    title: revision.title,
-    revision: revision.revision,
-    html: revision.html,
-    css: revision.css,
-    label: "Studio response",
-  }, maxBytes);
 }
 
 export function buildStudioSceneContextBlock(scene: StudioScene, maxBytes = 12_000): string | undefined {

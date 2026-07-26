@@ -6,8 +6,6 @@ import {
   docReadIntentFromToolCall,
   stripPythonCodeFence,
   summarizeCodeSnippet,
-  summarizePythonExecutionResult,
-  formatPythonExecutionSection,
 } from "../../modules/chat/chat-tool-utils";
 
 function makeCall(args: Record<string, unknown> = {}) {
@@ -131,81 +129,4 @@ describe("chat-tool-utils", () => {
     });
   });
 
-  describe("summarizePythonExecutionResult", () => {
-    it("reports timeout", () => {
-      expect(summarizePythonExecutionResult({ stdout: "", stderr: "", exitCode: null, timedOut: true, durationMs: 30000 })).toBe("Timed out after 30s");
-    });
-
-    it("reports non-zero exit code", () => {
-      expect(summarizePythonExecutionResult({ stdout: "", stderr: "error", exitCode: 1, timedOut: false, durationMs: 100 })).toBe("Exited with code 1");
-    });
-
-    it("reports stdout and stderr", () => {
-      expect(summarizePythonExecutionResult({ stdout: "out", stderr: "err", exitCode: 0, timedOut: false, durationMs: 100 })).toBe("Exited 0 · stdout and stderr captured");
-    });
-
-    it("reports stderr only", () => {
-      expect(summarizePythonExecutionResult({ stdout: "", stderr: "warning", exitCode: 0, timedOut: false, durationMs: 100 })).toBe("Exited 0 · stderr captured");
-    });
-
-    it("reports short stdout", () => {
-      expect(summarizePythonExecutionResult({ stdout: "hello", stderr: "", exitCode: 0, timedOut: false, durationMs: 100 })).toBe("Exited 0 · hello");
-    });
-
-    it("reports long stdout as captured", () => {
-      const longStdout = "x".repeat(200);
-      expect(summarizePythonExecutionResult({ stdout: longStdout, stderr: "", exitCode: 0, timedOut: false, durationMs: 100 })).toBe("Exited 0 · output captured");
-    });
-
-    it("reports no output", () => {
-      expect(summarizePythonExecutionResult({ stdout: "", stderr: "", exitCode: 0, timedOut: false, durationMs: 100 })).toBe("Exited 0 · no output");
-    });
-  });
-
-  describe("formatPythonExecutionSection", () => {
-    it("formats full result", () => {
-      const result = formatPythonExecutionSection({
-        stdout: "hello",
-        stderr: "warning",
-        exitCode: 0,
-        timedOut: false,
-        pythonPath: "/usr/bin/python3",
-        durationMs: 150,
-        workingDirectory: "/tmp",
-      });
-      expect(result).toContain("Python: /usr/bin/python3");
-      expect(result).toContain("Working directory: /tmp");
-      expect(result).toContain("Duration: 150 ms");
-      expect(result).toContain("Exit code: 0");
-      expect(result).toContain("Stdout:\nhello");
-      expect(result).toContain("Stderr:\nwarning");
-    });
-
-    it("shows empty labels when no output", () => {
-      const result = formatPythonExecutionSection({
-        stdout: "",
-        stderr: "",
-        exitCode: 0,
-        timedOut: false,
-        pythonPath: "python",
-        durationMs: 0,
-        workingDirectory: ".",
-      });
-      expect(result).toContain("Stdout: (empty)");
-      expect(result).toContain("Stderr: (empty)");
-    });
-
-    it("marks timed out", () => {
-      const result = formatPythonExecutionSection({
-        stdout: "",
-        stderr: "",
-        exitCode: null,
-        timedOut: true,
-        pythonPath: "python",
-        durationMs: 30000,
-        workingDirectory: ".",
-      });
-      expect(result).toContain("(timed out)");
-    });
-  });
 });

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 
 describe("feature capabilities", () => {
-  it("makes code execution available when its requirement is met", () => {
+  it("keeps native code execution disabled without an OS-enforced sandbox", () => {
     expect(isFeatureAvailable("codeExecution", "online", true)).toEqual({
-      available: true,
+      available: false,
+      reason: "Code execution requires an OS-enforced sandbox and is currently disabled.",
     });
   });
 });

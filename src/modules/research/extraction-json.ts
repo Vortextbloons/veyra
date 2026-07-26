@@ -252,10 +252,3 @@ export function parseResearchEvidenceArray(text: string): Array<Record<string, u
 export function maxEvidenceItemsPerSource(batchSourceCount: number): number {
   return Math.min(3, Math.max(1, 5 - batchSourceCount));
 }
-
-export function isLikelyTruncatedJsonResponse(text: string): boolean {
-  const cleaned = stripMarkdownJsonFence(stripThinkingBlocks(text)).trim();
-  if (!cleaned) return false;
-  if (cleaned.endsWith("}") || cleaned.endsWith("]")) return false;
-  return cleaned.includes("{") || cleaned.includes("[");
-}

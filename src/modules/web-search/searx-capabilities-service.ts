@@ -21,7 +21,3 @@ export async function getSearxCapabilities(baseUrl: string): Promise<SearxCapabi
   inflight.set(key, pending);
   return pending;
 }
-
-export function clearSearxCapabilitiesCache(): void {
-  cache.clear();
-}

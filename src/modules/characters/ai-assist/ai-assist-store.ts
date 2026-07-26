@@ -18,11 +18,7 @@ import type {
   CharacterLorebookTestRun,
   CharacterPendingChange,
 } from "./ai-assist-types";
-import type {
-  CharacterLorebookEntry,
-  CharacterRecord,
-} from "../character-types";
-import { evaluateLorebook } from "../lorebook";
+import type { CharacterLorebookEntry, CharacterRecord } from "../character-types";
 
 const STORAGE_KEY = "veyra.character.assist.directorSessions.v1";
 const TELEMETRY_STORAGE_KEY = "veyra.character.assist.telemetry.v1";
@@ -429,11 +425,6 @@ export const useCharacterAssistStore = create<AssistState>((set, get) => ({
 
 // ── Selectors / derived helpers ─────────────────────────────────────────────
 
-export function selectActiveJob(state: AssistState, jobId: string | null): AssistJob | null {
-  if (!jobId) return null;
-  return state.jobs[jobId] ?? null;
-}
-
 export function selectPendingChangesFor(
   pendingChanges: AssistState["pendingChanges"],
   characterId: string,
@@ -448,19 +439,6 @@ export function selectDirectorSessionFor(
   characterId: string,
 ): CharacterDirectorSession | null {
   return Object.values(state.directorSessions).find((s) => s.characterId === characterId) ?? null;
-}
-
-// ── Lorebook test helper (pure) ─────────────────────────────────────────────
-
-export function runLorebookTestAgainstConversation(character: CharacterRecord, conversation: {
-  messages: Array<{ role: string; content: string }>;
-}, options?: { scanDepth?: number; maxEntries?: number }) {
-  const scanDepth = options?.scanDepth ?? character.chatDefaults?.scanDepth ?? 4;
-  const maxEntries = options?.maxEntries ?? character.chatDefaults?.maxLorebookEntries ?? 6;
-  return evaluateLorebook(character.lorebookEntries, conversation.messages, {
-    scanDepth,
-    maxEntries,
-  });
 }
 
 export type { CharacterAssistAction };

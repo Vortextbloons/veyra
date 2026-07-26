@@ -44,10 +44,3 @@ export function isSourceValid(
     (typeof source.sourceQuality.quality !== "number" || source.sourceQuality.quality >= minQuality)
   );
 }
-
-export function filterValidSources(
-  sources: ResearchSource[],
-  minQuality: number,
-): ResearchSource[] {
-  return sources.filter((source) => isSourceValid(source, minQuality));
-}

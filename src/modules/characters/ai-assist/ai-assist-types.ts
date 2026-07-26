@@ -178,16 +178,3 @@ export interface CharacterAssistTelemetryEvent {
 export interface CharacterAssistLog {
   events: CharacterAssistTelemetryEvent[];
 }
-
-export type CharacterExportFormat = "veyra" | "chara_card_v3" | "chara_card_v3_png";
-
-export interface CharacterImportPreview {
-  /** Veyra-native draft, ready to be passed to create_character. */
-  draft: Partial<CharacterRecord>;
-  /** Original CCv3 spec used for export. */
-  sourceFormat: "chara_card_v3" | "veyra" | "chara_card_v3_png";
-  /** Soft warnings (missing fields, schema migrations, etc.). */
-  warnings: string[];
-  /** The original Veyra id (if present, used to detect duplicates). */
-  sourceId?: string;
-}

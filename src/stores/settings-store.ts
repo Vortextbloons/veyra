@@ -42,7 +42,6 @@ export type SettingsStore = SettingsStoreState
   & DocumentSliceActions
   & CharacterSliceActions
   & ResearchSliceActions
-  & CodeExecutionSliceActions
   & ConnectivitySliceActions
   & ChatSliceActions
   & UpdateSliceActions;
@@ -55,7 +54,7 @@ import type { WebSearchSliceState, WebSearchSliceActions } from "./slices/web-se
 import type { DocumentSliceState, DocumentSliceActions } from "./slices/document-slice";
 import type { CharacterSliceState, CharacterSliceActions } from "./slices/character-slice";
 import type { ResearchSliceState, ResearchSliceActions } from "./slices/research-slice";
-import type { CodeExecutionSliceState, CodeExecutionSliceActions } from "./slices/code-execution-slice";
+import type { CodeExecutionSliceState } from "./slices/code-execution-slice";
 import type { ConnectivitySliceState, ConnectivitySliceActions } from "./slices/connectivity-slice";
 import type { ChatSliceState, ChatSliceActions } from "./slices/chat-slice";
 import type { UpdateSliceState, UpdateSliceActions } from "./slices/update-slice";

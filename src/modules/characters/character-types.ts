@@ -8,8 +8,6 @@
 export type CharacterSpec = "veyra" | "chara_card_v3";
 export type CharacterSource = "native" | "imported_ccv3" | "duplicate";
 
-export type CharacterScope = "global" | "project";
-
 export type CharacterLorebookMatchType = "any" | "all" | "regex";
 export type CharacterLorebookPosition = "before" | "after";
 

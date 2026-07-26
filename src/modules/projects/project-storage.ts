@@ -10,10 +10,6 @@ export async function listProjects(status?: string): Promise<ProjectRecord[]> {
   return invoke<ProjectRecord[]>("list_projects", { status: status ?? null });
 }
 
-export async function getProject(id: string): Promise<ProjectRecord> {
-  return invoke<ProjectRecord>("get_project", { id });
-}
-
 export async function createProject(
   input: Omit<CreateProjectInput, "id" | "createdAt" | "updatedAt"> & { id?: string },
 ): Promise<ProjectRecord> {

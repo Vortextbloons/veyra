@@ -66,50 +66,6 @@ export function summarizeCodeSnippet(code: string, maxLength = 120): string {
   return `${oneLine.slice(0, maxLength - 1)}…`;
 }
 
-export function summarizePythonExecutionResult(result: {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  durationMs: number;
-}): string {
-  if (result.timedOut) {
-    return `Timed out after ${Math.round(result.durationMs / 1000)}s`;
-  }
-  if (result.exitCode !== 0) {
-    return `Exited with code ${result.exitCode ?? "unknown"}`;
-  }
-
-  const stdout = result.stdout.trim();
-  const stderr = result.stderr.trim();
-  if (stdout && stderr) return "Exited 0 · stdout and stderr captured";
-  if (stderr) return "Exited 0 · stderr captured";
-  if (stdout) return stdout.length > 120 ? "Exited 0 · output captured" : `Exited 0 · ${stdout}`;
-  return "Exited 0 · no output";
-}
-
-export function formatPythonExecutionSection(result: {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  pythonPath: string;
-  durationMs: number;
-  workingDirectory: string;
-}): string {
-  const stdout = result.stdout.trim();
-  const stderr = result.stderr.trim();
-
-  return [
-    `Python: ${result.pythonPath}`,
-    `Working directory: ${result.workingDirectory}`,
-    `Duration: ${result.durationMs} ms`,
-    `Exit code: ${result.exitCode ?? "unknown"}${result.timedOut ? " (timed out)" : ""}`,
-    stdout ? `Stdout:\n${stdout}` : "Stdout: (empty)",
-    stderr ? `Stderr:\n${stderr}` : "Stderr: (empty)",
-  ].join("\n\n");
-}
-
 export function registerStreamingToolCall(
   call: Pick<ProviderToolCall, "id" | "name">,
   phase: "pending" | "running",
