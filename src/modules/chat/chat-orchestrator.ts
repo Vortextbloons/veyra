@@ -24,7 +24,7 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { getStudioSystemInstruction, buildStudioSceneContextBlock, buildModeContextBlock, inferStudioContextMode, shouldIncludeStudioResponseContext } from "@/modules/chat/studio/studio-context";
+import { getStudioSystemInstruction, buildStudioResponseContextBlock, buildStudioThemeContextBlock, buildModeContextBlock, findLatestReadyStudioResponse, inferStudioContextMode, shouldIncludeStudioResponseContext } from "@/modules/chat/studio/studio-context";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 export interface SendChatCompleteContext {
@@ -132,15 +132,18 @@ export async function sendChatRequest({
     projectId: conversation?.projectId,
   }) : undefined;
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
-  const currentStudioScene = studioEnabled ? conversation?.studioWorkspace?.scenes.find((scene) => scene.id === conversation.studioWorkspace?.currentSceneId) : undefined;
+  const currentStudioResponse = studioEnabled && conversation ? findLatestReadyStudioResponse(conversation.messages) : undefined;
   const studioResponseBlock =
     studioEnabled &&
     studioContextMode &&
     lastUserMessage?.content &&
     shouldIncludeStudioResponseContext(lastUserMessage.content) &&
-    currentStudioScene
-      ? buildStudioSceneContextBlock(currentStudioScene)
+    currentStudioResponse
+      ? buildStudioResponseContextBlock(currentStudioResponse)
       : undefined;
+  const studioThemeBlock = studioEnabled && conversation
+    ? buildStudioThemeContextBlock(conversation.messages)
+    : undefined;
   const modeContextBlock = studioContextMode
     ? buildModeContextBlock(studioContextMode, {
         persona: conversation?.characterSnapshot?.name
@@ -152,7 +155,7 @@ export async function sendChatRequest({
       })
     : undefined;
   const studioInstruction = studioContextMode ? getStudioSystemInstruction(studioContextMode) : undefined;
-  const skillContextBlock = [baseSkillContextBlock, studioInstruction, modeContextBlock, studioResponseBlock]
+  const skillContextBlock = [baseSkillContextBlock, studioInstruction, modeContextBlock, studioThemeBlock, studioResponseBlock]
     .filter(Boolean).join("\n\n") || undefined;
 
   const contextAnchoringBlock = settings.contextAnchoringEnabled

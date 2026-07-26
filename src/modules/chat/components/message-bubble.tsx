@@ -2,6 +2,7 @@ import { lazy, memo, Suspense, useRef, useState } from "react";
 import {
   Brain,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import type { ChatMessage, MessagePerformance } from "@/modules/chat/chat-types";
 import { hasWebSearchActivity } from "@/lib/web-search-state";
@@ -35,6 +36,7 @@ type MessageBubbleProps = {
   isStreaming: boolean;
   layout: ChatMessageLayout;
   isLastAssistant?: boolean;
+  isStudio?: boolean;
   pendingQuestion?: {
     toolCallId: string;
     questions: Array<{ text: string; options?: string[] }>;
@@ -55,6 +57,7 @@ export const MessageBubble = memo(function MessageBubble({
   isStreaming,
   layout,
   isLastAssistant = false,
+  isStudio = false,
   pendingQuestion,
   onResolveQuestion,
   onEdit,
@@ -95,7 +98,7 @@ export const MessageBubble = memo(function MessageBubble({
               onDelete={() => onDelete?.(message.id)}
             />
             <div
-              className={`rounded-2xl rounded-tr-md border border-indigo-500/10 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white transition-[font-size] duration-200 ease-out ${layout.messageText}`}
+              className={`studio-theme-user-message rounded-2xl rounded-tr-md border border-indigo-500/10 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white transition-[font-size] duration-200 ease-out ${layout.messageText}`}
             >
               {message.attachments && message.attachments.length > 0 && (
                 <MessageAttachmentsPreview
@@ -128,9 +131,10 @@ export const MessageBubble = memo(function MessageBubble({
   const showThinking = isStreaming && !body && !reasoningOnlyStreaming;
   const showPulseInReply = isStreaming && !reasoningOnlyStreaming && Boolean(body);
   const studioResponse = message.studioResponse;
+  const studioTool = message.toolStates?.find((tool) => tool.name === "studio_render");
 
   return (
-      <div className="group/message flex items-start gap-3">
+      <div className="studio-theme-assistant-message group/message flex items-start gap-3">
       <div className="min-w-0 flex-1">
         <div className="max-w-3xl">
         <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
@@ -164,10 +168,10 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
         {showReplyBubble && (
         <div
-          className={`rounded-2xl rounded-tl-md border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-2.5 text-[var(--color-text)] transition-[font-size] duration-200 ease-out ${layout.messageText}`}
+          className={`rounded-2xl rounded-tl-md border px-4 py-2.5 text-[var(--color-text)] transition-[font-size] duration-200 ease-out ${isStudio ? "border-violet-300/[0.09] bg-[linear-gradient(135deg,rgba(139,92,246,0.045),rgba(255,255,255,0.025)_38%,rgba(34,211,238,0.018))]" : "border-[var(--color-border)] bg-[var(--color-panel)]"} ${layout.messageText}`}
         >
           {showThinking && !body ? (
-            <ThinkingIndicator />
+              isStudio ? <StudioThinkingIndicator /> : <ThinkingIndicator />
           ) : (
             <Suspense>
               <MarkdownRenderer className="leading-snug">
@@ -179,6 +183,9 @@ export const MessageBubble = memo(function MessageBubble({
             <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
           )}
         </div>
+        )}
+        {isStreaming && isStudio && body && (
+          <StudioProgress phase={studioTool?.phase} hasCustomMessage={Boolean(studioTool)} />
         )}
         </div>
         {studioResponse && conversationId && (
@@ -201,6 +208,38 @@ export const MessageBubble = memo(function MessageBubble({
     </div>
   );
 });
+
+function StudioThinkingIndicator() {
+  return (
+    <div role="status" aria-live="polite" className="flex items-center gap-3 py-0.5 text-[12px] text-[var(--color-text-dim)]">
+      <span className="relative grid size-5 place-items-center">
+        <span className="absolute inset-0 animate-ping rounded-full bg-violet-400/10 motion-reduce:hidden" />
+        <Sparkles className="relative size-3.5 text-violet-300" />
+      </span>
+      <span>Finding the clearest way to respond</span>
+      <span aria-hidden className="h-px min-w-8 flex-1 overflow-hidden bg-white/[0.06]">
+        <span className="block h-full w-1/2 animate-[pulse_1.4s_ease-in-out_infinite] bg-gradient-to-r from-violet-400/20 to-cyan-300/60 motion-reduce:animate-none" />
+      </span>
+    </div>
+  );
+}
+
+function StudioProgress({ phase, hasCustomMessage }: { phase?: string; hasCustomMessage: boolean }) {
+  const label = hasCustomMessage
+    ? phase === "running" || phase === "retrying"
+      ? "Shaping the custom message"
+      : phase === "pending"
+        ? "Preparing a visual response"
+        : "Finishing the response"
+    : "Writing";
+  return (
+    <div role="status" aria-live="polite" className="mt-2 flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[0.14em] text-white/30">
+      <span className="h-1 w-1 rounded-full bg-violet-300 shadow-[0_0_8px_rgba(196,181,253,0.8)]" />
+      <span>{label}</span>
+      <span aria-hidden className="h-px w-10 bg-gradient-to-r from-violet-400/50 to-cyan-300/10" />
+    </div>
+  );
+}
 
 type ReasoningBlockProps = {
   content: string;

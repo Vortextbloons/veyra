@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CSSProperties } from "react";
+import { Palette } from "lucide-react";
 import type { ChatMode, ChatPanelProps } from "@/modules/chat/chat-types";
 import { ProviderConnectionBanner } from "@/components/provider-connection-banner";
 import { ProviderSelector } from "@/components/provider-selector";
@@ -20,7 +22,11 @@ import { StudioExperienceChoice } from "@/modules/chat/studio/components/studio-
 import { resolveStudioToolAvailability } from "@/modules/chat/chat-provider-options";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
-import { StudioWorkspacePresenter } from "@/modules/chat/studio/components/studio-workspace";
+import {
+  findLatestStudioTheme,
+  studioThemeCssVariables,
+  studioThemeScopedCss,
+} from "@/modules/chat/studio/studio-theme";
 
 const VIRTUALIZE_AFTER_MESSAGES = 80;
 const ESTIMATED_MESSAGE_HEIGHT = 180;
@@ -105,6 +111,20 @@ export function ChatPanel({
   const experience = resolveConversationExperience({
     experience: experienceProp ?? activeConversation?.experience,
   });
+  const activeStudioTheme = useMemo(
+    () => experience === "studio" ? findLatestStudioTheme(messages) : undefined,
+    [experience, messages],
+  );
+  const activeStudioThemeStyle = useMemo(
+    () => activeStudioTheme
+      ? studioThemeCssVariables(activeStudioTheme) as CSSProperties
+      : undefined,
+    [activeStudioTheme],
+  );
+  const activeStudioThemeCss = useMemo(
+    () => activeStudioTheme ? studioThemeScopedCss(activeStudioTheme) : undefined,
+    [activeStudioTheme],
+  );
   const studioToolAvailable = useMemo(
     () =>
       resolveStudioToolAvailability({
@@ -237,7 +257,6 @@ export function ChatPanel({
     mode === "chat" &&
     !activeConversation?.characterId &&
     !activeConversation?.groupId;
-  const showStudioWorkspace = studioModeEnabled && experience === "studio" && mode === "chat" && !!activeConversationId;
 
   const handleExperienceChange = useCallback(
     (next: ConversationExperience) => {
@@ -247,8 +266,14 @@ export function ChatPanel({
   );
 
   return (
-    <main className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
-      {!isEmptyChat && <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
+    <main
+      className="studio-themed-chat flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-bg)] transition-colors duration-500"
+      style={activeStudioThemeStyle}
+      data-studio-theme={activeStudioTheme ? activeStudioTheme.name : undefined}
+      data-studio-effect={activeStudioTheme?.effect === "none" ? undefined : activeStudioTheme?.effect}
+    >
+      {activeStudioThemeCss && <style>{activeStudioThemeCss}</style>}
+      {!isEmptyChat && <header className="studio-theme-header flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
         </div>
@@ -258,6 +283,15 @@ export function ChatPanel({
             aria-label="Studio conversation"
           >
             Studio
+          </span>
+        )}
+        {activeStudioTheme && mode !== "agents" && (
+          <span
+            className="flex max-w-40 shrink-0 items-center gap-1.5 truncate rounded-full border border-[var(--color-border)] bg-[var(--color-accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-accent)]"
+            title={`Studio theme: ${activeStudioTheme.name}`}
+          >
+            <Palette className="size-3 shrink-0" />
+            <span className="truncate">{activeStudioTheme.name}</span>
           </span>
         )}
         {titleAccessory}
@@ -271,20 +305,10 @@ export function ChatPanel({
         onStartServer={() => onProviderStartServer?.()}
       />
 
-      {showStudioWorkspace ? (
-        <StudioWorkspacePresenter
-          messages={messages}
-          workspace={activeConversation?.studioWorkspace}
-          isStreaming={isStreaming}
-          streamingMessageId={streamingMessageId}
-          streamingContent={streamingBuffer?.conversationId === activeConversationId ? streamingBuffer.content : undefined}
-          onSelectScene={(sceneId) => useChatStore.getState().selectStudioScene(activeConversationId, sceneId)}
-          onRegenerate={onRegenerate}
-        />
-      ) : <div
+      <div
           ref={messagesScrollRef}
           onScroll={handleMessagesScroll}
-          className="relative flex flex-1 flex-col overflow-y-auto"
+          className="studio-theme-messages relative flex flex-1 flex-col overflow-y-auto"
         >
           {mode === "agents" ? (
           <AgentsPanel
@@ -326,6 +350,7 @@ export function ChatPanel({
                   isStreaming={m.id === streamingMessageId}
                   layout={layout}
                   isLastAssistant={m.id === lastAssistantId}
+                  isStudio={experience === "studio"}
                   pendingQuestion={m.id === streamingMessageId ? streamingBuffer?.pendingQuestion : undefined}
                   onResolveQuestion={m.id === streamingMessageId ? resolvePendingQuestion : undefined}
                   onEdit={onEditMessage}
@@ -342,10 +367,11 @@ export function ChatPanel({
             )}
           </div>
         )}
-      </div>}
+      </div>
 
       <div
-        className={`shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)] pb-3 pt-2.5 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
+        className={`studio-theme-composer shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)] pb-3 pt-2.5 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
+        style={activeStudioTheme ? { "--color-panel": activeStudioTheme.composer } as CSSProperties : undefined}
       >
         {modelLoadProgress && modelLoadProgress.phase !== "ready" && (
           <div className="px-1 pb-2">

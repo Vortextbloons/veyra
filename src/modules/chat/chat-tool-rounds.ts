@@ -10,6 +10,7 @@ import {
   ASK_QUESTION_TOOL_NAME,
   INLINE_EDIT_TOOL_NAME,
   STUDIO_RENDER_TOOL_NAME,
+  STUDIO_THEME_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
@@ -28,7 +29,7 @@ import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
 import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
 import { disabledMcpServersForChat, findCapabilityGrant, isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
-import { executeStudioCall } from "@/modules/chat/studio/studio-runtime";
+import { executeStudioCall, executeStudioThemeCall } from "@/modules/chat/studio/studio-runtime";
 
 export type ToolRoundResult = {
   toolResultSections: string[];
@@ -55,6 +56,8 @@ type ToolRoundContext = {
   codeExecution: CodeExecutionSettings;
   preferredDocumentId?: string;
   completedDocumentCreations?: Map<string, { documentId: string; title: string }>;
+  /** Shared across tool rounds for one assistant response. */
+  studioThemeCallAttempted?: { value: boolean };
 };
 
 function documentCreationKey(call: ProviderToolCall): string {
@@ -78,6 +81,7 @@ export async function executeToolRound(
   );
   const mcpCalls = toolCalls.filter((call) => call.name.startsWith("mcp_"));
   const studioCalls = toolCalls.filter((call) => call.name === STUDIO_RENDER_TOOL_NAME);
+  const studioThemeCalls = toolCalls.filter((call) => call.name === STUDIO_THEME_TOOL_NAME);
 
   registerStreamingToolCalls(toolCalls, "running", (call) => {
     if (call.name === WEB_SEARCH_TOOL_NAME) return stringArg(call.arguments, "query");
@@ -85,6 +89,7 @@ export async function executeToolRound(
       return summarizeCodeSnippet(stripPythonCodeFence(stringArg(call.arguments, "code")));
     }
     if (call.name === INLINE_EDIT_TOOL_NAME) return stringArg(call.arguments, "documentId");
+    if (call.name === STUDIO_THEME_TOOL_NAME) return stringArg(call.arguments, "vibe");
     return stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId");
   });
 
@@ -94,11 +99,27 @@ export async function executeToolRound(
   const streamedChunks: string[] = [];
 
   for (const call of studioCalls.slice(0, -1)) {
-    useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio Render", phase: "done", detail: "Skipped duplicate render" });
+    useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio message", phase: "done", detail: "Used the final custom message" });
     toolResultSections.push(`Tool result for ${STUDIO_RENDER_TOOL_NAME}: skipped because only the last Studio call in a batch is committed.`);
   }
   const studioCall = studioCalls.at(-1);
   if (studioCall) toolResultSections.push(executeStudioCall(studioCall, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId, mode: ctx.studioMode }));
+  if (studioThemeCalls.length > 0 && ctx.studioThemeCallAttempted?.value) {
+    for (const call of studioThemeCalls) {
+      useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio theme", phase: "done", detail: "Kept the theme already chosen for this response" });
+    }
+    toolResultSections.push(`Tool result for ${STUDIO_THEME_TOOL_NAME}: skipped because a theme was already chosen for this assistant turn. Do not call studio_theme again; continue with the answer.`);
+  } else {
+    for (const call of studioThemeCalls.slice(0, -1)) {
+      useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio theme", phase: "done", detail: "Used the final theme direction" });
+      toolResultSections.push(`Tool result for ${STUDIO_THEME_TOOL_NAME}: skipped because only the last theme call in a batch is applied.`);
+    }
+    const studioThemeCall = studioThemeCalls.at(-1);
+    if (studioThemeCall) {
+      if (ctx.studioThemeCallAttempted) ctx.studioThemeCallAttempted.value = true;
+      toolResultSections.push(executeStudioThemeCall(studioThemeCall, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId }));
+    }
+  }
 
   const webResults = await Promise.all(
     webSearchCalls.map(async (call) => {

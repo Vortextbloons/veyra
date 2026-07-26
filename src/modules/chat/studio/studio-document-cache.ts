@@ -8,6 +8,7 @@ export function getCachedStudioDocument(input: {
   title: string;
   html: string;
   css: string;
+  javascript?: string;
   reducedMotion: boolean;
 }): string {
   const key = `${input.artifactId}:${input.revision}:${input.reducedMotion ? "rm" : "full"}`;
@@ -17,6 +18,7 @@ export function getCachedStudioDocument(input: {
     title: input.title,
     html: input.html,
     css: input.css,
+    javascript: input.javascript,
     reducedMotion: input.reducedMotion,
   });
   cache.set(key, document);

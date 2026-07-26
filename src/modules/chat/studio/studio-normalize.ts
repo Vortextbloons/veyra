@@ -9,6 +9,7 @@ import type {
   StudioWorkspace,
   StudioWorkspaceStatus,
 } from "./studio-types";
+import { normalizeStudioTheme } from "./studio-theme";
 
 /** Message-owned Studio response revision retention. */
 export const STUDIO_MAX_RESPONSE_REVISIONS = 8;
@@ -17,8 +18,8 @@ export const STUDIO_MAX_RETAINED_BYTES = 3 * 1024 * 1024;
 
 const WORKSPACE_STATUSES: ReadonlySet<StudioWorkspaceStatus> = new Set(["idle", "generating", "validating", "transitioning", "rejected", "render_error"]);
 
-function sceneBytes(scene: Pick<StudioScene, "html" | "css">): number {
-  return new TextEncoder().encode(scene.html).byteLength + new TextEncoder().encode(scene.css).byteLength;
+function sceneBytes(scene: Pick<StudioScene, "html" | "css" | "javascript">): number {
+  return new TextEncoder().encode(scene.html).byteLength + new TextEncoder().encode(scene.css).byteLength + new TextEncoder().encode(scene.javascript ?? "").byteLength;
 }
 
 export function trimStudioScenes(scenes: StudioScene[], currentSceneId?: string): StudioScene[] {
@@ -43,7 +44,7 @@ export function normalizeStudioWorkspace(raw: unknown, messageIds: Set<string>):
     if (!entry || typeof entry !== "object") return false;
     const scene = entry as StudioScene;
     return typeof scene.id === "string" && typeof scene.assistantMessageId === "string" && messageIds.has(scene.assistantMessageId) && typeof scene.title === "string" && typeof scene.html === "string" && typeof scene.css === "string" && typeof scene.createdAt === "number";
-  }).map((scene) => ({ ...scene, transition: ["none", "fade", "dissolve", "slide"].includes(scene.transition) ? scene.transition : "fade", lineageId: scene.lineageId || scene.id, revision: Number.isFinite(scene.revision) ? scene.revision : 1 }));
+  }).map((scene) => ({ ...scene, javascript: typeof scene.javascript === "string" ? scene.javascript : undefined, transition: ["none", "fade", "dissolve", "slide"].includes(scene.transition) ? scene.transition : "fade", lineageId: scene.lineageId || scene.id, revision: Number.isFinite(scene.revision) ? scene.revision : 1 }));
   const retained = trimStudioScenes(scenes, value.currentSceneId);
   const latest = retained[retained.length - 1];
   const currentSceneId = retained.some((scene) => scene.id === value.currentSceneId) ? value.currentSceneId : latest?.id;
@@ -138,6 +139,8 @@ export function normalizeStudioResponse(
       title: revision.title,
       html: revision.html,
       css: revision.css,
+      javascript: typeof revision.javascript === "string" ? revision.javascript : undefined,
+      theme: normalizeStudioTheme(revision.theme),
       createdAt: revision.createdAt,
     });
   }
@@ -195,13 +198,26 @@ export function copyStudioResponseForFork(response: StudioResponse | undefined):
 export function normalizeConversationStudio(conversation: Conversation): Conversation {
   const experience = resolveConversationExperience(conversation);
   const messages = conversation.messages.map<ChatMessage>((message) => {
-    if (!message.studioResponse) return message;
+    let normalizedMessage = message;
+    if (Object.prototype.hasOwnProperty.call(message, "studioTheme")) {
+      if (message.studioTheme === null) {
+        normalizedMessage = { ...message, studioTheme: null };
+      } else {
+        const studioTheme = normalizeStudioTheme(message.studioTheme);
+        if (studioTheme) normalizedMessage = { ...message, studioTheme };
+        else {
+          const { studioTheme: _removed, ...rest } = message;
+          normalizedMessage = rest;
+        }
+      }
+    }
+    if (!message.studioResponse) return normalizedMessage;
     const normalized = normalizeStudioResponse(message.studioResponse);
     if (!normalized) {
-      const { studioResponse: _removed, ...rest } = message;
+      const { studioResponse: _removed, ...rest } = normalizedMessage;
       return rest;
     }
-    return { ...message, studioResponse: normalized };
+    return { ...normalizedMessage, studioResponse: normalized };
   });
   let studioWorkspace = normalizeStudioWorkspace(conversation.studioWorkspace, new Set(messages.map((message) => message.id)));
   // Development cutover: lift valid legacy message-owned revisions into one conversation timeline.
@@ -209,7 +225,7 @@ export function normalizeConversationStudio(conversation: Conversation): Convers
     const scenes: StudioScene[] = [];
     for (const message of messages) {
       if (message.role !== "assistant" || !message.studioResponse) continue;
-      for (const revision of message.studioResponse.revisions) scenes.push({ id: crypto.randomUUID(), assistantMessageId: message.id, title: revision.title, html: revision.html, css: revision.css, transition: "fade", lineageId: message.studioResponse.id, revision: revision.revision, createdAt: revision.createdAt });
+      for (const revision of message.studioResponse.revisions) scenes.push({ id: crypto.randomUUID(), assistantMessageId: message.id, title: revision.title, html: revision.html, css: revision.css, javascript: revision.javascript, transition: "fade", lineageId: message.studioResponse.id, revision: revision.revision, createdAt: revision.createdAt });
     }
     if (scenes.length) { const latest = scenes[scenes.length - 1]!; studioWorkspace = { id: crypto.randomUUID(), scenes: trimStudioScenes(scenes, latest.id), currentSceneId: latest.id, latestSceneId: latest.id, status: "idle", createdAt: scenes[0]!.createdAt, updatedAt: latest.createdAt }; }
   }

@@ -169,6 +169,7 @@ export function createExecuteToolRoundLocal(params: {
     string,
     { documentId: string; title: string }
   >();
+  const studioThemeCallAttempted = { value: false };
   return async (toolCalls: ProviderToolCall[]) => {
     const buffer = useChatStore.getState().streamingBuffer;
     const activeProject = useProjectStore.getState().activeProject();
@@ -190,6 +191,7 @@ export function createExecuteToolRoundLocal(params: {
       },
       preferredDocumentId,
       completedDocumentCreations,
+      studioThemeCallAttempted,
     });
     preferredDocumentId = result.lastCreatedDocumentId ?? preferredDocumentId;
     return result;

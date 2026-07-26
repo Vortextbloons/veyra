@@ -12,6 +12,46 @@ export type StudioValidationIssue = {
   message: string;
 };
 
+export type StudioThemeFont = "system" | "mono" | "serif" | "rounded";
+export type StudioThemeEffect = "none" | "glow" | "grid" | "scanlines";
+export type StudioThemeIntensity = "subtle" | "balanced" | "bold";
+export type StudioThemeStyles = Partial<Record<
+  "window" | "header" | "messages" | "assistantMessage" | "userMessage" | "composer",
+  string
+>>;
+export type StudioThemePalette = Partial<Pick<
+  StudioTheme,
+  "background" | "surface" | "panel" | "composer" | "text" | "muted" | "accent" | "border"
+>>;
+
+/** Validated host-chrome styling authored by Studio, scoped to the chat panel. */
+export type StudioTheme = {
+  name: string;
+  background: string;
+  surface: string;
+  panel: string;
+  composer: string;
+  text: string;
+  muted: string;
+  accent: string;
+  border: string;
+  font: StudioThemeFont;
+  effect: StudioThemeEffect;
+  /** Validated declaration blocks applied only to fixed chat-panel regions. */
+  styles?: StudioThemeStyles;
+};
+
+/** Compact model-facing direction; Veyra derives the complete safe palette. */
+export type StudioThemeRequest = {
+  vibe: string;
+  intensity: StudioThemeIntensity;
+  accent?: string;
+  effect?: StudioThemeEffect;
+  palette?: StudioThemePalette;
+  font?: StudioThemeFont;
+  styles?: StudioThemeStyles;
+};
+
 /** Message-owned Studio response status. */
 export type StudioResponseStatus =
   | "generating"
@@ -26,6 +66,10 @@ export type StudioResponseRevision = {
   title: string;
   html: string;
   css: string;
+  /** Optional interaction code executed only inside the sandboxed Studio frame. */
+  javascript?: string;
+  /** Optional scoped chat-window theme activated by this revision. */
+  theme?: StudioTheme;
   createdAt: number;
 };
 
@@ -50,6 +94,7 @@ export type StudioScene = {
   title: string;
   html: string;
   css: string;
+  javascript?: string;
   caption?: string;
   transition: StudioTransition;
   lineageId: string;

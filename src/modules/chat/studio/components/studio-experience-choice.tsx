@@ -13,7 +13,7 @@ const CHOICES: Array<{
   {
     value: "studio",
     title: "Studio Chat",
-    description: "Wide visual responses generated with HTML and CSS.",
+    description: "Back-and-forth chat with custom visual and interactive messages.",
   },
 ];
 

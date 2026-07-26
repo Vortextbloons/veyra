@@ -150,6 +150,33 @@ body {
   box-sizing: border-box;
 }
 
+.studio-themed-chat {
+  font-family: var(--studio-font-family, var(--font-sans));
+}
+
+.studio-themed-chat[data-studio-effect="glow"] {
+  background-image:
+    radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--color-accent) 20%, transparent), transparent 34%),
+    radial-gradient(circle at 84% 72%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 38%);
+}
+
+.studio-themed-chat[data-studio-effect="grid"] {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-accent) 9%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 9%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.studio-themed-chat[data-studio-effect="scanlines"] {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 3px,
+    color-mix(in srgb, var(--color-accent) 7%, transparent) 3px,
+    color-mix(in srgb, var(--color-accent) 7%, transparent) 4px
+  );
+}
+
 .lucide {
   stroke-width: 1.7;
 }

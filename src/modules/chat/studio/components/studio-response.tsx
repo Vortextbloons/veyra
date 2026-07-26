@@ -6,7 +6,10 @@ import {
   Copy,
   Download,
   History,
+  Maximize2,
+  Minimize2,
   RefreshCw,
+  Sparkles,
   Undo2,
 } from "lucide-react";
 import type { StudioResponse } from "../studio-types";
@@ -42,11 +45,14 @@ export function StudioResponseView({
 }: StudioResponseViewProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [source, setSource] = useState<"html" | "css" | null>(null);
+  const [source, setSource] = useState<"html" | "css" | "javascript" | null>(null);
   const [copied, setCopied] = useState<"document" | "source" | null>(null);
   const [frameKey, setFrameKey] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const [frameHeight, setFrameHeight] = useState(320);
   const [exportError, setExportError] = useState<string | null>(null);
   const historyButtonRef = useRef<HTMLButtonElement>(null);
+  const frameRef = useRef<HTMLIFrameElement>(null);
   const reducedMotion = usePrefersReducedMotion();
   const revision = response.revisions.find((item) => item.revision === response.currentRevision);
   const previousRevision = previousStudioResponseRevision(response);
@@ -62,6 +68,7 @@ export function StudioResponseView({
         title: revision.title,
         html: revision.html,
         css: revision.css,
+        javascript: revision.javascript,
         reducedMotion,
       })
     : "", [reducedMotion, response.id, revision]);
@@ -77,6 +84,16 @@ export function StudioResponseView({
     return () => window.removeEventListener("keydown", close);
   }, [historyOpen]);
 
+  useEffect(() => {
+    const receiveSize = (event: MessageEvent) => {
+      if (event.source !== frameRef.current?.contentWindow) return;
+      if (!event.data || event.data.type !== "veyra-studio-size" || typeof event.data.height !== "number") return;
+      setFrameHeight(Math.max(180, Math.min(760, Math.ceil(event.data.height))));
+    };
+    window.addEventListener("message", receiveSize);
+    return () => window.removeEventListener("message", receiveSize);
+  }, []);
+
   const selectRevision = (number: number) => {
     useChatStore.getState().selectStudioResponseRevision(conversationId, assistantMessageId, number);
     setHistoryOpen(false);
@@ -85,7 +102,7 @@ export function StudioResponseView({
 
   const copySource = async () => {
     if (!revision) return;
-    await navigator.clipboard.writeText(source === "css" ? revision.css : revision.html);
+    await navigator.clipboard.writeText(source === "css" ? revision.css : source === "javascript" ? revision.javascript ?? "" : revision.html);
     setCopied("source");
     window.setTimeout(() => setCopied(null), 1200);
   };
@@ -111,18 +128,19 @@ export function StudioResponseView({
   const status = response.status === "render_error" ? "Render error" : response.status;
 
   return (
-    <section aria-label={`Studio response: ${response.title}`} className="mt-3 min-w-0 overflow-hidden rounded-xl border border-white/[0.09] bg-[#0b0c10] shadow-[0_16px_50px_rgba(0,0,0,0.22)]">
-      <header className="flex min-h-11 items-center gap-2 border-b border-white/[0.07] px-2.5">
-        <span aria-hidden className={`h-5 w-0.5 rounded-full ${response.status === "rejected" || response.status === "render_error" ? "bg-red-400/70" : "bg-violet-400/80"}`} />
+    <section aria-label={`Studio response: ${response.title}`} className={`mt-2 min-w-0 overflow-hidden rounded-2xl border border-white/[0.09] bg-[#090a0e] shadow-[0_18px_60px_rgba(0,0,0,0.24)] ${expanded ? "ring-1 ring-violet-300/20" : ""}`}>
+      <header className="flex min-h-10 items-center gap-2 border-b border-white/[0.06] bg-gradient-to-r from-violet-400/[0.035] to-cyan-300/[0.015] px-2.5">
+        <span aria-hidden className={`grid size-5 place-items-center rounded-md ${response.status === "rejected" || response.status === "render_error" ? "bg-red-400/10 text-red-300" : "bg-violet-400/10 text-violet-200"}`}><Sparkles className="size-3" /></span>
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70"
           aria-expanded={!collapsed}
           onClick={() => setCollapsed((value) => !value)}
         >
-          <span className="truncate text-[12px] font-medium text-white/85">{revision?.title ?? response.title}</span>
+          <span className="truncate text-[11.5px] font-medium text-white/80">{revision?.title ?? response.title}</span>
           {revision && <span className="shrink-0 font-mono text-[10px] text-white/35">r{revision.revision}{hasNewerRevision ? ` / r${response.latestRevision}` : ""}</span>}
-          <span aria-live="polite" className="shrink-0 text-[10px] capitalize text-white/35">{status}</span>
+          {revision?.javascript?.trim() && <span className="shrink-0 rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-cyan-100/60">Interactive</span>}
+          <span aria-live="polite" className="sr-only">{status}</span>
           <ChevronDown className={`ml-auto size-3.5 shrink-0 text-white/35 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
         </button>
         {revision && (
@@ -141,6 +159,7 @@ export function StudioResponseView({
               )}
             </div>
             <button type="button" className={actionClass} aria-label="View Studio source" title="View source" onClick={() => setSource((value) => value ? null : "html")}><Code2 className="size-3.5" /></button>
+            <button type="button" className={actionClass} aria-label={expanded ? "Use compact Studio message" : "Expand Studio message"} title={expanded ? "Compact" : "Expand"} onClick={() => setExpanded((value) => !value)}>{expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}</button>
             <button type="button" className={actionClass} aria-label="Copy Studio HTML" title="Copy HTML" onClick={() => void copyDocument()}>{copied === "document" ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}</button>
             <button type="button" className={actionClass} aria-label="Export Studio response" title="Export HTML" onClick={() => void exportRevision()}><Download className="size-3.5" /></button>
           </div>
@@ -148,7 +167,7 @@ export function StudioResponseView({
       </header>
 
       {!collapsed && (
-        <div className="relative h-[clamp(420px,68vh,820px)] min-h-0 overflow-hidden">
+        <div className="relative min-h-0 overflow-hidden transition-[height] duration-200 motion-reduce:transition-none" style={{ height: expanded ? "min(76vh, 880px)" : `${frameHeight}px` }}>
           {hasNewerRevision && revision && (
             <div className="absolute left-3 right-3 top-3 z-10 flex items-center justify-between rounded-lg border border-violet-400/20 bg-[#111218]/95 px-3 py-2 text-[11px] text-violet-100 shadow-lg backdrop-blur">
               <span>A newer revision is ready.</span>
@@ -158,17 +177,17 @@ export function StudioResponseView({
           {source && revision ? (
             <div className="flex h-full flex-col">
               <div className="flex h-10 items-center gap-1 border-b border-white/[0.07] px-2.5">
-                {(["html", "css"] as const).map((kind) => <button key={kind} type="button" onClick={() => setSource(kind)} className={`rounded px-2 py-1 font-mono text-[10px] uppercase ${source === kind ? "bg-violet-400/15 text-violet-100" : "text-white/40 hover:text-white"}`}>{kind}</button>)}
-                <span className="ml-auto font-mono text-[10px] text-white/30">{new TextEncoder().encode(revision[source]).byteLength.toLocaleString()} bytes</span>
+                {(["html", "css", "javascript"] as const).map((kind) => <button key={kind} type="button" onClick={() => setSource(kind)} disabled={kind === "javascript" && !revision.javascript} className={`rounded px-2 py-1 font-mono text-[10px] uppercase disabled:opacity-25 ${source === kind ? "bg-violet-400/15 text-violet-100" : "text-white/40 hover:text-white"}`}>{kind === "javascript" ? "js" : kind}</button>)}
+                <span className="ml-auto font-mono text-[10px] text-white/30">{new TextEncoder().encode(source === "javascript" ? revision.javascript ?? "" : revision[source]).byteLength.toLocaleString()} bytes</span>
                 <button type="button" className={actionClass} aria-label={`Copy ${source.toUpperCase()} source`} onClick={() => void copySource()}>{copied === "source" ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}</button>
               </div>
-              <textarea readOnly spellCheck={false} value={revision[source]} aria-label={`${source.toUpperCase()} source`} className="min-h-0 flex-1 resize-none bg-transparent p-4 font-mono text-[11px] leading-relaxed text-white/65 outline-none" />
+              <textarea readOnly spellCheck={false} value={source === "javascript" ? revision.javascript ?? "" : revision[source]} aria-label={`${source.toUpperCase()} source`} className="min-h-0 flex-1 resize-none bg-transparent p-4 font-mono text-[11px] leading-relaxed text-white/65 outline-none" />
             </div>
           ) : revision ? (
-            <iframe key={frameKey} title={revision.title} sandbox="" allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; display-capture 'none'; fullscreen 'none'; payment 'none'; usb 'none'; serial 'none'; bluetooth 'none'" referrerPolicy="no-referrer" srcDoc={document} className="absolute inset-0 block size-full border-0 bg-transparent" />
+            <iframe ref={frameRef} key={frameKey} title={revision.title} sandbox="allow-scripts" allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; display-capture 'none'; fullscreen 'none'; payment 'none'; usb 'none'; serial 'none'; bluetooth 'none'" referrerPolicy="no-referrer" srcDoc={document} className="absolute inset-0 block size-full border-0 bg-transparent" />
           ) : (
             <div className="grid size-full place-items-center px-6 text-center" aria-live="polite">
-              <div><div className="mx-auto mb-3 h-px w-16 bg-gradient-to-r from-transparent via-violet-400/60 to-transparent" /><p className="text-sm text-white/75">{response.status === "rejected" ? "Visual response rejected" : "Creating visual response"}</p>{error && <p className="mt-2 max-w-md text-xs leading-relaxed text-red-200/70">{error}</p>}</div>
+              <div><div className="mx-auto mb-3 h-px w-20 overflow-hidden bg-white/[0.06]"><span className="block h-full w-1/2 animate-pulse bg-gradient-to-r from-violet-300/20 to-cyan-200/70 motion-reduce:animate-none" /></div><p className="text-sm text-white/75">{response.status === "rejected" ? "The custom message could not be displayed" : "Shaping a custom response"}</p>{error && <p className="mt-2 max-w-md text-xs leading-relaxed text-red-200/70">{error}</p>}</div>
             </div>
           )}
           {response.status === "validating" && revision && <div aria-live="polite" className="absolute right-3 top-3 rounded-full border border-violet-400/20 bg-[#111218]/90 px-2.5 py-1 text-[10px] text-violet-100">Validating next revision…</div>}

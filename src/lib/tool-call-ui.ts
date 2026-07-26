@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { FileText, Search, TerminalSquare, Wrench, NotepadText, MessageCircleQuestion } from "lucide-react";
+import { FileText, Search, TerminalSquare, Wrench, NotepadText, MessageCircleQuestion, Palette } from "lucide-react";
 import type { ToolCallPhase } from "@/modules/chat/chat-types";
 import {
   CODE_EXEC_TOOL_NAME,
@@ -60,6 +60,16 @@ export const TOOL_CALL_UI: Record<string, ToolCallUiMeta> = {
     label: "Inline Edit",
     icon: FileText,
     accent: "emerald",
+  },
+  studio_render: {
+    label: "Studio Message",
+    icon: Palette,
+    accent: "violet",
+  },
+  studio_theme: {
+    label: "Studio Theme",
+    icon: Palette,
+    accent: "violet",
   },
 };
 

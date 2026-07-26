@@ -9,6 +9,7 @@ import type { FetchStatus } from "@/lib/fetch-status";
 import type {
   ConversationExperience,
   StudioResponse,
+  StudioTheme,
   StudioWorkspace,
 } from "@/modules/chat/studio/studio-types";
 
@@ -102,6 +103,8 @@ export interface ChatMessage {
   modelId?: string;
   /** Message-owned Studio response (assistant messages only). */
   studioResponse?: StudioResponse;
+  /** Message-owned chat theme. Null explicitly restores Veyra's default theme. */
+  studioTheme?: StudioTheme | null;
 }
 
 export interface MessagePerformance {

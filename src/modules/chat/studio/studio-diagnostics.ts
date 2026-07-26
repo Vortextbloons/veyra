@@ -12,6 +12,7 @@ type StudioDiagnosticsSnapshot = {
   issueCodes: Record<string, number>;
   htmlBytesTotal: number;
   cssBytesTotal: number;
+  javascriptBytesTotal: number;
   elementCountTotal: number;
   responseSnapshotBytesMax: number;
   responseSnapshotThresholdBreaches: number;
@@ -27,6 +28,7 @@ const diagnostics: StudioDiagnosticsSnapshot = {
   issueCodes: {},
   htmlBytesTotal: 0,
   cssBytesTotal: 0,
+  javascriptBytesTotal: 0,
   elementCountTotal: 0,
   responseSnapshotBytesMax: 0,
   responseSnapshotThresholdBreaches: 0,
@@ -50,17 +52,20 @@ export function recordStudioRenderSuccess(input: {
   validationMs: number;
   htmlBytes: number;
   cssBytes: number;
+  javascriptBytes?: number;
   elementCount: number;
 }): void {
   diagnostics.successfulRenders += 1;
   diagnostics.validationMsTotal += input.validationMs;
   diagnostics.htmlBytesTotal += input.htmlBytes;
   diagnostics.cssBytesTotal += input.cssBytes;
+  diagnostics.javascriptBytesTotal += input.javascriptBytes ?? 0;
   diagnostics.elementCountTotal += input.elementCount;
   logDev("render success", {
     validationMs: input.validationMs,
     htmlBytes: input.htmlBytes,
     cssBytes: input.cssBytes,
+    javascriptBytes: input.javascriptBytes ?? 0,
     elementCount: input.elementCount,
   });
 }

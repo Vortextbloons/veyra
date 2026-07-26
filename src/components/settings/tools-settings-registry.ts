@@ -79,7 +79,7 @@ export const TOOL_SETTINGS_SECTIONS: ToolSettingsSection[] = [
   {
     id: "studio",
     label: "Studio Mode",
-    description: "Visual HTML and CSS artifacts in chat and character conversations.",
+    description: "Custom visual and interactive messages with isolated HTML, CSS, and JavaScript.",
     icon: PanelsTopLeft,
     keywords: [
       "studio",

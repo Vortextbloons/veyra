@@ -7,6 +7,7 @@ import type {
   ConversationExperience,
   StudioResponseRevision,
   StudioResponseStatus,
+  StudioTheme,
   StudioValidationIssue,
   StudioScene,
   StudioTransition,
@@ -49,7 +50,8 @@ type ChatStore = {
   setActiveConversationId: (id: string | null) => void;
   createConversation: (projectId?: string, options?: { experience?: ConversationExperience }) => string;
   setConversationExperience: (id: string, experience: ConversationExperience) => boolean;
-  commitStudioScene: (conversationId: string, assistantMessageId: string, scene: { title: string; html: string; css: string; caption?: string; transition?: StudioTransition }, options?: { pointerSceneIdAtStart?: string }) => StudioScene | null;
+  setStudioMessageTheme: (conversationId: string, assistantMessageId: string, theme: StudioTheme | null) => boolean;
+  commitStudioScene: (conversationId: string, assistantMessageId: string, scene: { title: string; html: string; css: string; javascript?: string; caption?: string; transition?: StudioTransition }, options?: { pointerSceneIdAtStart?: string }) => StudioScene | null;
   setStudioWorkspaceStatus: (conversationId: string, status: StudioWorkspaceStatus, assistantMessageId?: string, error?: StudioValidationIssue[]) => boolean;
   selectStudioScene: (conversationId: string, sceneId: string) => boolean;
   commitStudioResponseRevision: (conversationId: string, assistantMessageId: string, revision: Omit<StudioResponseRevision, "revision" | "createdAt" | "assistantMessageId">, options?: { pointerRevisionAtStart?: number }) => StudioResponseRevision | null;
@@ -289,6 +291,32 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         const previous = conversation.studioWorkspace;
         changed = true;
         return { ...conversation, updatedAt: now, studioWorkspace: { id: previous?.id ?? crypto.randomUUID(), scenes: previous?.scenes ?? [], currentSceneId: previous?.currentSceneId, latestSceneId: previous?.latestSceneId, status, pendingAssistantMessageId: status === "generating" || status === "validating" ? assistantMessageId : undefined, error: error?.length ? error : undefined, createdAt: previous?.createdAt ?? now, updatedAt: now } };
+      });
+      if (changed) void saveConversationSnapshot(conversations);
+      return changed ? { conversations } : {};
+    });
+    return changed;
+  },
+  setStudioMessageTheme: (conversationId, assistantMessageId, theme) => {
+    let changed = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (
+          conversation.id !== conversationId ||
+          resolveConversationExperience(conversation) !== "studio" ||
+          conversation.characterId ||
+          conversation.groupId
+        ) return conversation;
+        const target = conversation.messages.find((message) => message.id === assistantMessageId);
+        if (!target || target.role !== "assistant") return conversation;
+        const now = Date.now();
+        changed = true;
+        return {
+          ...conversation,
+          updatedAt: now,
+          messages: conversation.messages.map((message) =>
+            message.id === assistantMessageId ? { ...message, studioTheme: theme } : message),
+        };
       });
       if (changed) void saveConversationSnapshot(conversations);
       return changed ? { conversations } : {};

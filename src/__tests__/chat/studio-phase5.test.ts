@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getStudioSystemInstruction,
+  buildStudioThemeContextBlock,
   buildModeContextBlock,
   inferStudioContextMode,
   shouldIncludeStudioResponseContext,
@@ -11,6 +12,7 @@ describe("Studio Phase 5 — specialized integrations", () => {
     it("returns the base instruction for chat mode", () => {
       const instruction = getStudioSystemInstruction("chat");
       expect(instruction).toContain("studio_render");
+      expect(instruction).toContain("studio_theme");
       expect(instruction).not.toContain("character-appropriate");
       expect(instruction).not.toContain("evidence interfaces");
     });
@@ -42,6 +44,31 @@ describe("Studio Phase 5 — specialized integrations", () => {
     it("defaults to chat mode when not specified", () => {
       expect(getStudioSystemInstruction()).toBe(getStudioSystemInstruction("chat"));
     });
+  });
+
+  it("summarizes the active theme without exposing full palette plumbing", () => {
+    const block = buildStudioThemeContextBlock([{
+      id: "assistant-1",
+      role: "assistant",
+      content: "Styled",
+      timestamp: 1,
+      studioTheme: {
+        name: "Hacker Terminal",
+        background: "#020805",
+        surface: "#06110a",
+        panel: "#08170e",
+        composer: "#06130b",
+        text: "#c4ffd4",
+        muted: "#78b98a",
+        accent: "#35ff72",
+        border: "#1d6b38",
+        font: "mono",
+        effect: "scanlines",
+      },
+    }]);
+    expect(block).toContain("Hacker Terminal");
+    expect(block).toContain("studio_theme");
+    expect(block).not.toContain("#020805");
   });
 
   describe("mode inference", () => {

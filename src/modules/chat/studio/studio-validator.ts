@@ -6,11 +6,12 @@ const MAX_ELEMENTS = 5_000;
 const MAX_DEPTH = 64;
 const MAX_ATTRIBUTES = 20_000;
 
-export function validateStudioRender(input: { html: string; css: string }):
-  | { ok: true; html: string; css: string; elementCount: number }
+export function validateStudioRender(input: { html: string; css: string; javascript?: string }):
+  | { ok: true; html: string; css: string; javascript?: string; elementCount: number }
   | { ok: false; issues: StudioValidationIssue[] } {
   const cssIssue = validateCss(input.css);
   if (cssIssue) return { ok: false, issues: [cssIssue] };
+  if (/<\/script/i.test(input.javascript ?? "")) return { ok: false, issues: [{ code: "script_termination", message: "JavaScript may not terminate its script element." }] };
   if (typeof DOMParser === "undefined") return { ok: false, issues: [{ code: "parser_unavailable", message: "The HTML parser is unavailable." }] };
   const parser = new DOMParser();
   const document = parser.parseFromString(`<body>${input.html}</body>`, "text/html");
@@ -39,7 +40,7 @@ export function validateStudioRender(input: { html: string; css: string }):
   if (elements > MAX_ELEMENTS) issues.push({ code: "too_many_elements", message: `HTML exceeds ${MAX_ELEMENTS} elements.` });
   if (attributes > MAX_ATTRIBUTES) issues.push({ code: "too_many_attributes", message: `HTML exceeds ${MAX_ATTRIBUTES} attributes.` });
   if (issues.length) return { ok: false, issues: issues.slice(0, 8) };
-  return { ok: true, html: document.body.innerHTML, css: input.css, elementCount: elements };
+  return { ok: true, html: document.body.innerHTML, css: input.css, javascript: input.javascript, elementCount: elements };
 }
 
 function validateCss(css: string): StudioValidationIssue | null {

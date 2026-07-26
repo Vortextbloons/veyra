@@ -29,7 +29,9 @@ export function ToolCallList({ message, pendingQuestion, onResolveQuestion }: To
       {message.toolStates.map((toolState) => {
         if (toolState.name === "web_search") {
           const round = webSearchRoundForToolCall(message.webSearchState, toolState.id);
-          if (!round) return null;
+          // Tool detection precedes web-search round initialization. Keep that
+          // short interval visible instead of making the assistant look idle.
+          if (!round) return <ToolCallIndicator key={toolState.id} state={toolState} />;
           const roundIndex =
             webSearchRoundTotal > 1
               ? webSearchToolStates.findIndex((item) => item.id === toolState.id) + 1

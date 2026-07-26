@@ -18,7 +18,7 @@ type Props = {
 const FRAME_POLICY = "clipboard-read 'none'; clipboard-write 'none'; camera 'none'; microphone 'none'; geolocation 'none'; fullscreen 'none'";
 
 function sceneDocument(workspaceId: string, scene: StudioScene, reducedMotion: boolean) {
-  return getCachedStudioDocument({ artifactId: `${workspaceId}:${scene.id}`, revision: scene.revision, title: scene.title, html: scene.html, css: scene.css, reducedMotion });
+  return getCachedStudioDocument({ artifactId: `${workspaceId}:${scene.id}`, revision: scene.revision, title: scene.title, html: scene.html, css: scene.css, javascript: scene.javascript, reducedMotion });
 }
 
 function StudioStage({ workspace, scene }: { workspace: StudioWorkspace; scene: StudioScene }) {
@@ -43,7 +43,7 @@ function StudioStage({ workspace, scene }: { workspace: StudioWorkspace; scene: 
         key={frame.id}
         title={frame.title}
         srcDoc={sceneDocument(workspace.id, frame, reducedMotion)}
-        sandbox=""
+        sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         allow={FRAME_POLICY}
         aria-hidden={index !== activeIndex}
@@ -70,7 +70,7 @@ export function StudioWorkspacePresenter({ messages, workspace, isStreaming, str
   const working = isStreaming || workspace?.status === "generating" || workspace?.status === "validating";
 
   const copySource = async () => {
-    if (selected) await navigator.clipboard.writeText(`<!-- ${selected.title} -->\n${selected.html}\n\n<style>\n${selected.css}\n</style>`);
+    if (selected) await navigator.clipboard.writeText(`<!-- ${selected.title} -->\n${selected.html}\n\n<style>\n${selected.css}\n</style>${selected.javascript ? `\n\n<script>\n${selected.javascript}\n</script>` : ""}`);
   };
 
   return (

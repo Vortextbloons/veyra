@@ -22,9 +22,9 @@ export function StudioSettingsSection() {
     <div className="space-y-3">
       <Toggle label="Enable Studio Mode" on={studioModeEnabled} onChange={setStudioModeEnabled} />
       <p className="text-[11px] text-[var(--color-text-dim)]">
-        Available for plain chat conversations. Choose Studio Chat when creating a conversation to render
-        isolated HTML and CSS visual responses inline in the transcript. Character and group chats stay on
-        Standard for now.
+        Available for plain chat conversations. Studio stays conversational while giving the assistant the
+        option to create custom-styled, visual, and interactive messages with isolated HTML, CSS, and JavaScript.
+        Character and group chats stay on Standard for now.
       </p>
       <div className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-2.5">
         <div className="flex items-start justify-between gap-3">
@@ -32,7 +32,7 @@ export function StudioSettingsSection() {
             <p className="text-[11px] font-medium text-[var(--color-text)]">Local diagnostics</p>
             <p className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
               Optional feedback summary with validation issue codes and snapshot-size counters. Never includes
-              generated HTML or CSS.
+              generated HTML, CSS, or JavaScript.
             </p>
           </div>
           <button

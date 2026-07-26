@@ -43,11 +43,12 @@ describe("inline Studio response", () => {
       <StudioResponseView conversationId="conversation-1" assistantMessageId="assistant-1" response={response()} />,
     );
 
-    expect(markup).toContain("sandbox=\"\"");
+    expect(markup).toContain("sandbox=\"allow-scripts\"");
     expect(markup).toContain("referrerPolicy=\"no-referrer\"");
     expect(markup).toContain("camera &#x27;none&#x27;");
     expect(markup).toContain("title=\"Release board\"");
-    expect(markup).toContain("h-[clamp(420px,68vh,820px)]");
+    expect(markup).toContain("style=\"height:320px\"");
+    expect(markup).toContain("Expand Studio message");
   });
 
   it("retains the selected valid frame while reporting a rejected newer render", () => {
@@ -83,7 +84,7 @@ describe("inline Studio response", () => {
     );
 
     expect(markup).not.toContain("<iframe");
-    expect(markup).toContain("Creating visual response");
+    expect(markup).toContain("Shaping a custom response");
     expect(markup).toContain("Studio response: Release board");
   });
 });
