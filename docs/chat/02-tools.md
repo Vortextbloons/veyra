@@ -13,6 +13,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
 | `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
 | `studio_render` | `studioModeEnabled` + conversation `experience: "studio"` | Render a validated HTML/CSS Studio response |
+| `studio_theme` | `studioModeEnabled` + conversation `experience: "studio"` | Restyle the chat panel, messages, and composer |
 
 ## Enhanced Mode
 

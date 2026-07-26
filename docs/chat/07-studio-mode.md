@@ -57,11 +57,14 @@ Custom declarations are attached to fixed chat regions, so the assistant can cre
 
 | File | Responsibility |
 |------|----------------|
-| `src/modules/chat/studio/` | Types, prompt context, tool contract, validator, document builder, runtime, export, and custom-message UI |
+| `src/modules/chat/studio/` | Types, prompt context, tool contract, validator, document builder, runtime, theme, export, workspace, and custom-message UI |
+| `src/modules/chat/studio/studio-theme-tool.ts` | `studio_theme` tool definition, vibe parsing, palette and CSS style validation |
+| `src/modules/chat/studio/studio-theme.ts` | Theme derivation from vibe, preset matching, CSS variable generation, scoped region styling |
+| `src/modules/chat/studio/components/studio-workspace.tsx` | Full-workspace scene viewer with history, navigation, source view, and export |
 | `src/modules/chat/components/message-bubble.tsx` | Studio-aware conversational and working states |
 | `src/app/components/chat-panel.tsx` | Keeps Studio in the standard transcript flow |
-| `src/stores/chat-store.ts` | Message-owned revision commit, selection, undo, fork, and hydration |
-| `src/lib/tool-registry.ts` | Conditionally registers `studio_render` |
+| `src/stores/chat-store.ts` | Message-owned revision commit, selection, undo, fork, and hydration; workspace state |
+| `src/lib/tool-registry.ts` | Conditionally registers `studio_render` and `studio_theme` |
 | `src/modules/chat/chat-provider-options.ts` | Eligibility and tool availability |
 | `src/components/settings/studio-settings-section.tsx` | Global availability and local diagnostics copy |
 

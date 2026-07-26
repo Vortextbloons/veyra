@@ -22,7 +22,7 @@ From `src/modules/research/research-types.ts`:
 
 ## Source Quality Scoring
 
-Sources are scored on credibility using `src/modules/research/source-credibility.ts` and `src/modules/research/source-quality.ts` considering:
+Sources are scored on credibility using `src/modules/research/source-credibility.ts` considering:
 - Domain authority
 - Publication recency
 - Content depth and structure

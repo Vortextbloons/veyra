@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-26T18:22:48.567Z
+> Generated: 2026-07-26T20:38:52.200Z
 > Total files: 80
 
 ## Table of Contents
@@ -345,6 +345,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
 | `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
 | `studio_render` | `studioModeEnabled` + conversation `experience: "studio"` | Render a validated HTML/CSS Studio response |
+| `studio_theme` | `studioModeEnabled` + conversation `experience: "studio"` | Restyle the chat panel, messages, and composer |
 
 ## Enhanced Mode
 
@@ -692,70 +693,79 @@ interface MessagePerformance {
 
 # Studio Mode
 
-Studio Mode is a conversation-level presentation mode that lets the assistant return a complete visual artifact made from ordinary HTML and CSS. Veyra owns the shell, validation, isolation, persistence, and revisions. The model owns the content inside the canvas.
+Studio Mode is a conversation experience that lets the assistant respond naturally while optionally giving an individual assistant message a custom visual or interactive body. A Studio turn can remain formatted text, or use self-contained HTML, CSS, inline SVG, and JavaScript when bespoke presentation makes the answer clearer. Independently, a turn may apply a validated chat-panel theme so the transcript, header, and composer share the response's atmosphere without requiring a custom message body.
 
-Eligible for Chat and Characters. Agents and Research are unchanged.
+Veyra owns validation, isolation, persistence, revisions, sizing, and host controls. The model owns the content and styling inside the custom message. Studio is currently available for plain chat conversations; character and group chats remain Standard.
 
 ## User guidance
 
 ### Enable Studio
 
-1. Open **Settings → Tools → Studio Mode** and leave **Enable Studio Mode** on (default for MVP).
-2. In a chat or character conversation, set the composer presentation control to **Studio**.
-3. Ask for a visual response such as a dashboard, timeline, comparison, scene, or planner.
+1. Open **Settings → Chat → Studio Mode** and enable Studio Mode.
+2. Choose **Studio Chat** when starting an empty plain chat.
+3. Talk normally. You can explicitly request a diagram, comparison, visual explanation, or interactive control, but you do not have to choose a format for every turn.
 
-Turning the global setting off hides the presentation control and stops advertising the Studio tool. Existing encrypted artifacts remain and reappear if the setting is turned back on.
+Turning the global setting off hides the experience choice and stops advertising the Studio tool. Existing encrypted custom messages remain stored and reappear if Studio is enabled again.
 
-### Revise an artifact
+### Conversational behavior
 
-Ask for visual or content changes in the same conversation. Veyra includes the current validated artifact only when the turn is a revision request. Successful renders create a new immutable revision; the previous valid revision stays recoverable through undo and history.
+Studio keeps the normal transcript visible. Text begins streaming in the assistant message while the model decides whether a custom presentation adds value. Short answers and follow-ups can remain text-only. When a custom message is appropriate, it appears on the originating assistant turn rather than replacing the conversation with a workspace.
 
-### View source and copy
+### Revise a custom message
 
-Use the Studio toolbar to open the source viewer (HTML and CSS tabs), copy HTML, or copy CSS. Source viewing is Veyra UI, not iframe content, and is read-only in MVP.
+Ask for visual, interaction, or content changes in the same conversation. Veyra includes the latest validated Studio response for likely revision requests. Successful regenerations create immutable message-owned revisions; the previous valid revision remains recoverable through undo and history.
 
-### Export limitations
+### View source, copy, and export
 
-Export writes the validated, self-contained Veyra-built HTML document through the native save dialog. Exports:
+The Studio message toolbar can show HTML, CSS, and JavaScript source, copy the complete self-contained document, export it, expand the message, or navigate its revision history. Source viewing is read-only Veyra UI rather than generated iframe content.
 
-- Do not include JavaScript
-- Do not load remote scripts, styles, fonts, images, or other network resources
-- Are built from the selected validated revision, never from raw unvalidated tool arguments
-- May differ slightly from future shell CSP policy because the outer document is regenerated at export time
+Exports are regenerated from the selected validated revision and include its self-contained JavaScript. They do not load remote scripts, styles, fonts, images, or other network resources.
 
-### What Studio does not do in MVP
+## JavaScript capability and isolation
 
-- No JavaScript execution inside artifacts
-- No automatic Studio activation without the presentation control
-- No network, filesystem, clipboard, Tauri, or host-store access from the iframe
-- No Agents or Research Studio support
-- Transient form control state inside an artifact is not persisted
+JavaScript is optional and runs only inside an iframe with `allow-scripts` and an opaque origin. The generated document uses a restrictive content security policy:
+
+- No network connections, remote resources, child frames, workers, plugins, or form submissions
+- No filesystem, Tauri, host-store, device, payment, or clipboard permissions
+- No same-origin access to Veyra and no privileged host API bridge
+- No `eval` or dynamically compiled code
+- Self-contained DOM interaction, CSS animation, inline SVG, and native controls are supported
+
+Transient interaction state is not persisted unless the assistant produces a new revision that encodes it.
 
 ## How it works
 
-When Studio is enabled for a conversation:
+1. The chat pipeline adds Studio conversation guidance and exposes two focused tools: `studio_render` for an optional custom message body, and `studio_theme` for the surrounding chat atmosphere.
+2. Text and reasoning stream through the normal assistant message immediately.
+3. A tool call creates a message-local working state while its arguments are parsed and validated.
+4. Valid source becomes a new message-owned revision and loads into a networkless sandboxed iframe.
+5. A sizing bridge reports document height so compact messages fit their content; unusually large messages remain bounded and can be expanded.
+6. Invalid custom source leaves the conversational answer usable, preserves the last valid revision, and allows one repair attempt per assistant run.
 
-1. The chat pipeline adds a short Studio instruction and exposes `studio_render`.
-2. Text and reasoning continue streaming normally.
-3. Completed tool arguments are validated (HTML and CSS structural policy).
-4. A valid payload becomes a new revision and loads into a sandboxed iframe (`srcDoc`, empty sandbox tokens).
-5. Invalid payloads keep the last valid revision and allow one repair attempt per assistant run.
+`studio_theme` requires only a short `vibe`, keeping the default call inexpensive for smaller models. It also supports progressive disclosure: the assistant may optionally author a partial or complete palette, typography, intensity, ambient effect, and scoped CSS declaration blocks for the window, header, transcript, assistant messages, user messages, and composer. Veyra derives only the values the assistant omits.
+
+Custom declarations are attached to fixed chat regions, so the assistant can create its own borders, gradients, shadows, spacing, typography, and other treatments without writing selectors or escaping into navigation and other host UI. Network URLs, rule injection, hidden or disabled interaction surfaces, and viewport-positioned overlays are rejected. Unthemed turns preserve the latest theme, and the vibe `default` explicitly restores Veyra's standard appearance.
 
 ## Key files
 
 | File | Responsibility |
 |------|----------------|
-| `src/modules/chat/studio/` | Types, tool, validator, document builder, runtime, export, shell |
-| `src/stores/chat-store.ts` | Presentation, revision commit/select/undo, fork/hydration |
-| `src/lib/tool-registry.ts` | Conditionally registers `studio_render` |
+| `src/modules/chat/studio/` | Types, prompt context, tool contract, validator, document builder, runtime, theme, export, workspace, and custom-message UI |
+| `src/modules/chat/studio/studio-theme-tool.ts` | `studio_theme` tool definition, vibe parsing, palette and CSS style validation |
+| `src/modules/chat/studio/studio-theme.ts` | Theme derivation from vibe, preset matching, CSS variable generation, scoped region styling |
+| `src/modules/chat/studio/components/studio-workspace.tsx` | Full-workspace scene viewer with history, navigation, source view, and export |
+| `src/modules/chat/components/message-bubble.tsx` | Studio-aware conversational and working states |
+| `src/app/components/chat-panel.tsx` | Keeps Studio in the standard transcript flow |
+| `src/stores/chat-store.ts` | Message-owned revision commit, selection, undo, fork, and hydration; workspace state |
+| `src/lib/tool-registry.ts` | Conditionally registers `studio_render` and `studio_theme` |
 | `src/modules/chat/chat-provider-options.ts` | Eligibility and tool availability |
 | `src/components/settings/studio-settings-section.tsx` | Global availability and local diagnostics copy |
 
 ## Diagnostics and storage threshold
 
-Local counters track render attempts, repairs, final failures, validation issue codes, and serialized artifact byte size. They never record generated source.
+Local counters track render attempts, repairs, final failures, validation issue codes, validation time, HTML/CSS/JavaScript byte totals, and serialized response size. They never record generated source.
 
-If a conversation’s Studio revision payload approaches **5 MB**, that is the migration trigger to reconsider separate encrypted artifact storage. Use **Copy for feedback** in Studio settings to share redacted counters when reporting issues.
+If a Studio response snapshot approaches **5 MB**, that is the migration trigger to reconsider separate encrypted response storage. Use **Copy for feedback** in Studio settings to share redacted counters when reporting issues.
 
 ---
 
@@ -2335,7 +2345,7 @@ From `src/modules/research/research-types.ts`:
 
 ## Source Quality Scoring
 
-Sources are scored on credibility using `src/modules/research/source-credibility.ts` and `src/modules/research/source-quality.ts` considering:
+Sources are scored on credibility using `src/modules/research/source-credibility.ts` considering:
 - Domain authority
 - Publication recency
 - Content depth and structure
@@ -3716,6 +3726,8 @@ under `veyra.provider.v1`.
 | `inline_edit` | `documentToolsEnabled` | Edit a document (replace_all, replace_section, insert_after_section, replace_text). Retries up to 2 times with LLM re-prompt. |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds. |
 | `ask_question` | `enhancedMode` | Pause execution to ask the user a question. |
+| `studio_render` | `studioEnabled` | Render a validated HTML/CSS Studio response in an isolated iframe. |
+| `studio_theme` | `studioEnabled` | Restyle the chat panel, messages, and composer via vibe or complete palette. |
 
 Each tool has a JSON schema defining its parameters. Tool calls execute in rounds:
 - Standard mode: up to **6 rounds**
@@ -3732,8 +3744,9 @@ Native `code_execution` is disabled and is not included in provider tool definit
 | `src/lib/tool-registry.ts` | Tool definitions for LLM (JSON Schema) |
 | `src/lib/tool-call-ui.ts` | UI rendering for tool calls |
 | `src/modules/chat/chat-tool-rounds.ts` | Tool call execution engine |
-| `src/modules/chat/chat-tool-utils.ts` | Tool utility functions |
 | `src/modules/chat/chat-tool-loop.ts` | Tool loop iteration control |
+| `src/modules/chat/studio/studio-tool.ts` | `studio_render` tool definition and argument parsing |
+| `src/modules/chat/studio/studio-theme-tool.ts` | `studio_theme` tool definition and argument parsing |
 | `src/modules/chat/tools/` | Individual tool implementations |
 
 ---
@@ -3775,16 +3788,17 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 # Tauri Backend
 
-## Rust Modules (12 total)
+## Rust Modules (13 total)
 
 | Module | Purpose |
 |--------|---------|
 | `agents/` | Pi CLI integration |
+| `app_update` | Application auto-update download, validation, installer launch |
 | `characters/` | Character and group CRUD, I/O commands, avatar management |
-| `code_execution/` | Defense-in-depth rejection of native Python execution |
 | `connectivity/` | Network connectivity probe |
 | `document_extraction` | Document text extraction utility |
 | `documents/` | Document CRUD, versions, export, folders |
+| `extensions/` | MCP server discovery and invocation |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
 | `memory/` | Memory CRUD, BM25 + vector search, embeddings |
 | `projects/` | Project CRUD, manifest export |
@@ -3794,18 +3808,19 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 ## Command Count
 
-**~93 Tauri commands** registered across all modules. Key counts:
-- Agents: 6 commands
-- Code execution: 2 commands
-- Memory: 14 commands
+**~105 Tauri commands** registered across all modules. Key counts:
+- Agents: 3 commands
+- App update: 1 command
+- Memory: 12 commands
 - Connectivity: 1 command
-- Web search: 9 commands
-- Documents: 16 commands
-- Projects: 6 commands
-- Research: 16 commands
-- Characters: 18 commands
+- Web search: 14 commands
+- Documents: 15 commands
+- Projects: 5 commands
+- Research: 15 commands
+- Characters: 17 commands
+- Extensions: 14 commands
 - File extraction: 1 command
-- Core (conversations, credentials, app lifecycle): 9 commands
+- Core (conversations, credentials, app lifecycle): 8 commands
 
 ## Storage
 

@@ -1,15 +1,16 @@
 # Tauri Backend
 
-## Rust Modules (12 total)
+## Rust Modules (13 total)
 
 | Module | Purpose |
 |--------|---------|
 | `agents/` | Pi CLI integration |
+| `app_update` | Application auto-update download, validation, installer launch |
 | `characters/` | Character and group CRUD, I/O commands, avatar management |
-| `code_execution/` | Defense-in-depth rejection of native Python execution |
 | `connectivity/` | Network connectivity probe |
 | `document_extraction` | Document text extraction utility |
 | `documents/` | Document CRUD, versions, export, folders |
+| `extensions/` | MCP server discovery and invocation |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
 | `memory/` | Memory CRUD, BM25 + vector search, embeddings |
 | `projects/` | Project CRUD, manifest export |
@@ -19,18 +20,19 @@
 
 ## Command Count
 
-**~93 Tauri commands** registered across all modules. Key counts:
-- Agents: 6 commands
-- Code execution: 2 commands
-- Memory: 14 commands
+**~105 Tauri commands** registered across all modules. Key counts:
+- Agents: 3 commands
+- App update: 1 command
+- Memory: 12 commands
 - Connectivity: 1 command
-- Web search: 9 commands
-- Documents: 16 commands
-- Projects: 6 commands
-- Research: 16 commands
-- Characters: 18 commands
+- Web search: 14 commands
+- Documents: 15 commands
+- Projects: 5 commands
+- Research: 15 commands
+- Characters: 17 commands
+- Extensions: 14 commands
 - File extraction: 1 command
-- Core (conversations, credentials, app lifecycle): 9 commands
+- Core (conversations, credentials, app lifecycle): 8 commands
 
 ## Storage
 
