@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useReducer, useState } from "react";
 import { ArrowLeft, ArrowRight, Clock3, Code2, Copy, Download, History, Loader2, X } from "lucide-react";
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { StudioScene, StudioWorkspace } from "../studio-types";
@@ -21,21 +21,41 @@ function sceneDocument(workspaceId: string, scene: StudioScene, reducedMotion: b
   return getCachedStudioDocument({ artifactId: `${workspaceId}:${scene.id}`, revision: scene.revision, title: scene.title, html: scene.html, css: scene.css, javascript: scene.javascript, reducedMotion });
 }
 
+type FrameState = {
+  frames: [StudioScene | undefined, StudioScene | undefined];
+  activeIndex: 0 | 1;
+};
+
+type FrameAction =
+  | { type: "stage"; scene: StudioScene }
+  | { type: "activate"; index: 0 | 1 };
+
+function frameReducer(state: FrameState, action: FrameAction): FrameState {
+  switch (action.type) {
+    case "stage": {
+      const stagingIndex = (1 - state.activeIndex) as 0 | 1;
+      if (state.frames[state.activeIndex]?.id === action.scene.id || state.frames[stagingIndex]?.id === action.scene.id) {
+        return state;
+      }
+      const next = [...state.frames] as [StudioScene | undefined, StudioScene | undefined];
+      next[stagingIndex] = action.scene;
+      return { ...state, frames: next };
+    }
+    case "activate":
+      return { ...state, activeIndex: action.index };
+  }
+}
+
 function StudioStage({ workspace, scene }: { workspace: StudioWorkspace; scene: StudioScene }) {
   const reducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const [frames, setFrames] = useState<[StudioScene | undefined, StudioScene | undefined]>([scene, undefined]);
-  const [activeIndex, setActiveIndex] = useState<0 | 1>(0);
-  const activeScene = frames[activeIndex];
+  const [state, dispatch] = useReducer(frameReducer, scene, (initial) => ({
+    frames: [initial, undefined] as [StudioScene | undefined, StudioScene | undefined],
+    activeIndex: 0 as 0 | 1,
+  }));
 
-  useEffect(() => {
-    if (activeScene?.id === scene.id || frames[1 - activeIndex]?.id === scene.id) return;
-    const stagingIndex = (1 - activeIndex) as 0 | 1;
-    setFrames((current) => {
-      const next: [StudioScene | undefined, StudioScene | undefined] = [...current];
-      next[stagingIndex] = scene;
-      return next;
-    });
-  }, [activeIndex, activeScene?.id, frames, scene]);
+  dispatch({ type: "stage", scene });
+
+  const { frames, activeIndex } = state;
 
   return (
     <div className="relative h-full min-h-0 overflow-hidden bg-[#090a0f]">
@@ -50,7 +70,7 @@ function StudioStage({ workspace, scene }: { workspace: StudioWorkspace; scene: 
         tabIndex={index === activeIndex ? 0 : -1}
         onLoad={() => {
           if (frame.id !== scene.id || index === activeIndex) return;
-          setActiveIndex(index as 0 | 1);
+          dispatch({ type: "activate", index: index as 0 | 1 });
         }}
         className={`absolute inset-0 h-full w-full border-0 bg-[#0b0c12] ${index === activeIndex ? "z-10 opacity-100" : "pointer-events-none z-0 opacity-0"} ${reducedMotion ? "" : "transition-opacity duration-200"}`}
       />)}

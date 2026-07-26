@@ -283,7 +283,7 @@ function App() {
 
   const handleExperienceChange = useCallback((experience: ConversationExperience) => {
     const store = useChatStore.getState();
-    let conversationId = store.activeConversationId;
+    const conversationId = store.activeConversationId;
     if (!conversationId) {
       store.createConversation(activeProjectId ?? undefined, { experience });
       return;

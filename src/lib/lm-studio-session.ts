@@ -3,7 +3,7 @@ let chain: Promise<void> = Promise.resolve();
 
 const DEFAULT_LM_STUDIO_TASK_TIMEOUT_MS = 300_000;
 
-let backgroundSlots = 1;
+const backgroundSlots = 1;
 let backgroundActive = 0;
 const backgroundWaiters: Array<() => void> = [];
 

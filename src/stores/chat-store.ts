@@ -242,8 +242,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   setConversationExperience: (id, experience) => {
     let changed = false;
     set((state) => {
-      let nextConversations = state.conversations;
-      nextConversations = state.conversations.map((conversation) => {
+      const nextConversations = state.conversations.map((conversation) => {
         if (conversation.id !== id) return conversation;
         if (conversation.messages.length > 0) return conversation;
         if (resolveConversationExperience(conversation) === experience) return conversation;
