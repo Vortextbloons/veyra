@@ -8,7 +8,11 @@ import { useUpdateStore } from "@/stores/update-store";
 export function UpdateAvailableBanner() {
   const result = useUpdateStore((s) => s.result);
   const checking = useUpdateStore((s) => s.checking);
+  const installing = useUpdateStore((s) => s.installing);
+  const downloadProgress = useUpdateStore((s) => s.downloadProgress);
+  const installError = useUpdateStore((s) => s.installError);
   const checkForUpdates = useUpdateStore((s) => s.checkForUpdates);
+  const installUpdate = useUpdateStore((s) => s.installUpdate);
   const dismissedUpdateVersion = useSettingsStore((s) => s.dismissedUpdateVersion);
   const dismissUpdateVersion = useSettingsStore((s) => s.dismissUpdateVersion);
   const setActiveNav = useSettingsStore((s) => s.setActiveNav);
@@ -18,11 +22,14 @@ export function UpdateAvailableBanner() {
   const visible =
     latest !== null && dismissedUpdateVersion !== latest.version;
 
-  const handleDownload = useCallback(async () => {
+  const handleUpdate = useCallback(async () => {
     if (!latest) return;
-    const target = latest.downloadUrl ?? latest.htmlUrl;
-    await open(target);
-  }, [latest]);
+    try {
+      await installUpdate(latest);
+    } catch {
+      // The store exposes the actionable error in the banner.
+    }
+  }, [installUpdate, latest]);
 
   const handleViewRelease = useCallback(async () => {
     if (!latest) return;
@@ -56,7 +63,13 @@ export function UpdateAvailableBanner() {
           Update available — Veyra {latest.version}
         </p>
         <p className="truncate text-[11px] text-[var(--color-text-dim)]">
-          Released {formatReleaseDate(latest.publishedAt)}
+          {installError
+            ? installError
+            : installing
+              ? downloadProgress === null
+                ? "Downloading update…"
+                : `Downloading update… ${downloadProgress}%`
+              : `Released ${formatReleaseDate(latest.publishedAt)}`}
           {latest.downloadAssetName ? ` · ${latest.downloadAssetName}` : ""}
         </p>
       </div>
@@ -64,10 +77,16 @@ export function UpdateAvailableBanner() {
       <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
-          onClick={() => void handleDownload()}
-          className="inline-flex h-7 items-center gap-1.5 rounded-md bg-sky-500/20 px-2.5 text-[11.5px] font-medium text-sky-100 transition-colors hover:bg-sky-500/30"
+          onClick={() => void handleUpdate()}
+          disabled={installing || !latest.downloadUrl}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md bg-sky-500/20 px-2.5 text-[11.5px] font-medium text-sky-100 transition-colors hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Download
+          {installing && <Loader2 className="size-3.5 animate-spin" />}
+          {installing
+            ? downloadProgress === null
+              ? "Downloading"
+              : `${downloadProgress}%`
+            : "Update now"}
         </button>
         <button
           type="button"

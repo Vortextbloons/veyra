@@ -33,6 +33,7 @@ fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
 }
 
 mod agents;
+mod app_update;
 mod characters;
 mod connectivity;
 mod document_extraction;
@@ -327,6 +328,7 @@ pub fn run() {
             delete_provider_credential,
             app_ready,
             exit_app,
+            app_update::install_app_update,
             agents::commands::check_pi_available,
             agents::commands::run_pi_agent,
             agents::commands::stop_pi_agent,

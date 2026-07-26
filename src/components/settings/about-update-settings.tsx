@@ -24,10 +24,14 @@ export function AboutUpdateSettings() {
   const clearDismissedUpdateVersion = useSettingsStore((s) => s.clearDismissedUpdateVersion);
 
   const checking = useUpdateStore((s) => s.checking);
+  const installing = useUpdateStore((s) => s.installing);
+  const downloadProgress = useUpdateStore((s) => s.downloadProgress);
+  const installError = useUpdateStore((s) => s.installError);
   const currentVersion = useUpdateStore((s) => s.currentVersion);
   const lastCheckedAt = useUpdateStore((s) => s.lastCheckedAt);
   const result = useUpdateStore((s) => s.result);
   const checkForUpdates = useUpdateStore((s) => s.checkForUpdates);
+  const installUpdate = useUpdateStore((s) => s.installUpdate);
 
   const handleCheck = useCallback(async () => {
     clearDismissedUpdateVersion();
@@ -38,15 +42,14 @@ export function AboutUpdateSettings() {
     await open(GITHUB_RELEASES_PAGE);
   }, []);
 
-  const handleDownload = useCallback(async () => {
-    if (result?.status !== "update-available" && result?.status !== "up-to-date") {
-      await handleOpenReleases();
-      return;
+  const handleUpdate = useCallback(async () => {
+    if (result?.status !== "update-available") return;
+    try {
+      await installUpdate(result.latest);
+    } catch {
+      // The store exposes the actionable error below.
     }
-
-    const latest = result.latest;
-    await open(latest.downloadUrl ?? latest.htmlUrl);
-  }, [handleOpenReleases, result]);
+  }, [installUpdate, result]);
 
   const statusLabel =
     result?.status === "update-available"
@@ -103,10 +106,16 @@ export function AboutUpdateSettings() {
               {result?.status === "update-available" && (
                 <button
                   type="button"
-                  onClick={() => void handleDownload()}
-                  className="inline-flex h-8 items-center gap-2 rounded-md bg-sky-500/20 px-3 text-[12px] font-medium text-sky-100 transition-colors hover:bg-sky-500/30"
+                  onClick={() => void handleUpdate()}
+                  disabled={installing || !result.latest.downloadUrl}
+                  className="inline-flex h-8 items-center gap-2 rounded-md bg-sky-500/20 px-3 text-[12px] font-medium text-sky-100 transition-colors hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Download {result.latest.version}
+                  {installing && <Loader2 className="size-3.5 animate-spin" />}
+                  {installing
+                    ? downloadProgress === null
+                      ? "Downloading update"
+                      : `Downloading ${downloadProgress}%`
+                    : `Update to ${result.latest.version}`}
                 </button>
               )}
             </div>
@@ -129,6 +138,9 @@ export function AboutUpdateSettings() {
                   {result.latest.releaseNotes}
                 </pre>
               )}
+              {installError && (
+                <p className="mt-3 text-[11.5px] text-rose-300">{installError}</p>
+              )}
             </div>
           )}
 
@@ -148,8 +160,8 @@ export function AboutUpdateSettings() {
           />
         </div>
         <p className="text-[11px] text-[var(--color-text-dim)]">
-          Veyra checks GitHub releases on startup when online. Updates download from the official
-          release page — install the new build to upgrade.
+          Veyra checks GitHub releases on startup when online. Click Update to download the
+          official installer, launch it, and close Veyra automatically.
         </p>
 
         <button

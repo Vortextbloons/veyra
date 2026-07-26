@@ -1,4 +1,6 @@
 import { getVersion } from "@tauri-apps/api/app";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { resolveEffectiveConnectivity } from "@/lib/connectivity/connectivity-service";
 import { useConnectivityStore } from "@/stores/connectivity-store";
@@ -54,6 +56,11 @@ export type UpdateCheckResult =
       status: "error";
       message: string;
     };
+
+export type UpdateDownloadProgress = {
+  downloadedBytes: number;
+  totalBytes: number | null;
+};
 
 export function normalizeVersion(version: string): string {
   return version.trim().replace(/^v/i, "");
@@ -164,6 +171,28 @@ export async function checkForAppUpdate(options?: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { status: "error", message };
+  }
+}
+
+export async function installAppUpdate(
+  release: AppReleaseInfo,
+  onProgress: (progress: UpdateDownloadProgress) => void,
+): Promise<void> {
+  if (!release.downloadUrl || !release.downloadAssetName) {
+    throw new Error("This release does not contain a Windows installer.");
+  }
+
+  const unlisten = await listen<UpdateDownloadProgress>(
+    "app-update-download-progress",
+    (event) => onProgress(event.payload),
+  );
+  try {
+    await invoke("install_app_update", {
+      downloadUrl: release.downloadUrl,
+      assetName: release.downloadAssetName,
+    });
+  } finally {
+    unlisten();
   }
 }
 
