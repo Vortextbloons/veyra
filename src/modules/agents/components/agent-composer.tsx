@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { ArrowUp, ListTodo, Hammer, Square, Brain, RefreshCw } from "lucide-react";
-import type { AgentMode, AgentReasoningLevel } from "../agent-types";
+import type { AgentMode } from "../agent-types";
 import { useAgentStore } from "../agent-store";
 import { useProviderStore } from "@/stores/provider-store";
-import { effectiveReasoningLevel, inspectAgentReasoning, reasoningModelKey, type ModelReasoning } from "../agent-reasoning";
+import { reasoningToggleState, inspectAgentReasoning, reasoningModelKey, type ModelReasoning } from "../agent-reasoning";
 
 export function AgentComposer({ projectPath, draftKey, mode, onModeChange, onSend, onStop, busy: running, unavailable, controls, suggestion }: {
   projectPath: string; draftKey: string; mode: AgentMode; onModeChange: (mode: AgentMode) => void;
@@ -35,7 +35,7 @@ export function AgentComposer({ projectPath, draftKey, mode, onModeChange, onSen
   }, [providerId, model, baseUrl, modelKey, refresh]);
   const capabilities = lookup?.key === modelKey ? lookup.result : null;
   const levels = capabilities?.levels ?? [];
-  const reasoningLevel = effectiveReasoningLevel(preferredLevel, levels);
+  const reasoning = reasoningToggleState(preferredLevel, levels);
   const scheduler = useSyncExternalStore(
     (listener) => aiScheduler.subscribeToScheduler(listener),
     () => aiScheduler.getSchedulerSnapshot(),
@@ -80,13 +80,13 @@ export function AgentComposer({ projectPath, draftKey, mode, onModeChange, onSen
           </button>)}
         </div>
         <fieldset disabled={busy} className="agent-model-controls">{controls}</fieldset>
-        <label className="agent-reasoning-control" title={capabilities?.message || "Reasoning levels supported by this model in Pi"}>
+        <button type="button" role="switch" aria-label="Agent reasoning" aria-checked={reasoning.enabled}
+          className="agent-reasoning-control" title={capabilities?.message || "Turn reasoning on or off"}
+          disabled={busy || !reasoning.canToggle}
+          onClick={() => setReasoningLevel(modelKey, reasoning.enabled ? "off" : "medium")}>
           <Brain size={14} aria-hidden="true" />
-          <select aria-label="Agent reasoning level" value={levels.length ? reasoningLevel : ""} disabled={busy || levels.length < 2} onChange={(event) => setReasoningLevel(modelKey, event.target.value as AgentReasoningLevel)}>
-            {!levels.length && <option value="">{!model ? "Select model" : !capabilities ? "Checking reasoning…" : capabilities.known ? "Model managed" : "Reasoning unknown"}</option>}
-            {levels.map((level) => <option key={level} value={level}>{level === "off" ? levels.length === 1 ? "No reasoning" : "Reasoning off" : capabilities?.control === "toggle" ? "Reasoning on" : level === "xhigh" ? "Extra high" : level.charAt(0).toUpperCase() + level.slice(1)}</option>)}
-          </select>
-        </label>
+          <span>{!model ? "Select model" : !capabilities ? "Checking reasoning…" : !capabilities.known ? "Reasoning unavailable" : !levels.length ? "Model managed" : reasoning.enabled ? "Reasoning on" : "Reasoning off"}</span>
+        </button>
         <button type="button" className="agent-icon-button" aria-label="Refresh reasoning capabilities" title="Refresh after changing Pi model configuration" disabled={busy || !model} onClick={() => { setLookup(null); setRefresh((value) => value + 1); }}><RefreshCw size={12} /></button>
         <button type="button" className="agent-send" aria-label={busy ? "Stop agent" : "Run task"} disabled={!busy && (!text.trim() || unavailable || !onSend)} onClick={busy ? stop : send}>
           {busy ? <Square size={14} fill="currentColor" /> : <ArrowUp size={18} />}

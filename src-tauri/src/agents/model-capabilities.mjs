@@ -1,5 +1,6 @@
-// Read-only bridge to the same installed Pi registry and reasoning helpers used by its CLI.
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+// Bridge to the same installed Pi registry and reasoning helpers used by its CLI.
+import { existsSync, readFileSync, realpathSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { delimiter, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -28,7 +29,7 @@ function locatePi() {
 const normalizeUrl = (value) => value?.replace(/\/+$/, "");
 export async function main() {
 try {
-  const [providerId, modelId, baseUrl, requested] = process.argv.slice(1);
+  const [providerId, modelId, baseUrl, requested, contextLength, maxTokens] = process.argv.slice(1);
   const root = locatePi();
   const sdk = await import(pathToFileURL(join(root, "dist/index.js")).href);
   const scope = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).name.split("/")[0];
@@ -37,15 +38,64 @@ try {
   if (!aiPath) throw new Error("Pi reasoning helpers not found");
   const ai = await import(pathToFileURL(aiPath).href);
   const auth = sdk.AuthStorage.inMemory();
-  const registry = sdk.ModelRegistry.create(auth);
-  const models = await registry.getAll();
-  console.log(JSON.stringify(resolveModelReasoning(models, { providerId, modelId, baseUrl, requested }, ai)));
+  let registry = sdk.ModelRegistry.create(auth);
+  let models = await registry.getAll();
+  const input = { providerId, modelId, baseUrl, requested, contextLength, maxTokens };
+  let result = resolveModelReasoning(models, input, ai);
+  if (!result.known || (result.provider?.startsWith("veyra-") && contextLength)) {
+    const directory = sdk.getAgentDir();
+    const path = join(directory, "models.json");
+    const existing = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+    const configured = configureModelRoute(existing, input, models);
+    mkdirSync(directory, { recursive: true });
+    const temporary = `${path}.${process.pid}.tmp`;
+    writeFileSync(temporary, JSON.stringify(configured.config, null, 2), { mode: 0o600 });
+    renameSync(temporary, path);
+    registry = sdk.ModelRegistry.create(auth);
+    models = await registry.getAll();
+    result = resolveModelReasoning(models, { ...input, providerId: configured.provider }, ai);
+  }
+  console.log(JSON.stringify(result));
 
 } catch {
   // Registry errors may contain credential/configuration details. Do not return them to the UI.
   console.log(JSON.stringify({ known: false, levels: [], message: "Could not read reasoning capabilities from the installed Pi SDK." }));
 }
 
+}
+
+/** Add an isolated route so a Veyra endpoint never changes a user's Pi provider. */
+export function configureModelRoute(config, { providerId, modelId, baseUrl, contextLength, maxTokens }, models = []) {
+  const local = providerId === "lm-studio";
+  const endpoint = normalizeUrl(baseUrl || (local ? "http://localhost:1234/v1" : ""));
+  if (!endpoint || !modelId) throw new Error("Model and endpoint are required");
+  if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("Invalid Pi configuration");
+  config = structuredClone(config);
+  config.providers ??= {};
+  if (typeof config.providers !== "object" || Array.isArray(config.providers)) throw new Error("Invalid Pi providers");
+  const hash = createHash("sha256").update(JSON.stringify([providerId, endpoint])).digest("hex").slice(0, 16);
+  const provider = `veyra-${hash}`;
+  const contextWindow = Math.max(1024, Math.min(262144, Number(contextLength) || 8192));
+  const output = Math.max(128, Math.min(contextWindow - 128, Number(maxTokens) || Math.max(256, Math.floor(contextWindow / 4))));
+  const alias = { "lm-studio": "lmstudio", "opencode-zen": "opencode" }[providerId] ?? providerId;
+  const template = models.find((model) => model.provider === alias && model.id === modelId);
+  const entry = config.providers[provider] ??= {
+    baseUrl: endpoint, api: "openai-completions",
+    apiKey: local ? "lm-studio" : "$VEYRA_PI_API_KEY",
+    models: [],
+  };
+  if (normalizeUrl(entry.baseUrl) !== endpoint || !Array.isArray(entry.models)) throw new Error("Invalid Pi route");
+  const model = {
+    id: modelId, name: modelId, reasoning: template?.reasoning ?? true,
+    input: template?.input ?? ["text"], contextWindow, maxTokens: output,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    compat: local ? { supportsDeveloperRole: false, supportsReasoningEffort: false, thinkingFormat: "qwen-chat-template" } : template?.compat,
+    ...(template?.thinkingLevelMap ? { thinkingLevelMap: template.thinkingLevelMap } : {}),
+  };
+  const existing = entry.models.find((item) => item.id === modelId);
+  if (existing) Object.assign(existing, { contextWindow, maxTokens: output });
+  else entry.models.push(model);
+  return { config, provider };
 }
 
 export function resolveModelReasoning(models, { providerId, modelId, baseUrl, requested }, ai) {

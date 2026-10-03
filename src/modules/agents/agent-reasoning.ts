@@ -19,6 +19,14 @@ export function effectiveReasoningLevel(requested: AgentReasoningLevel, levels: 
     ?? [...AGENT_REASONING_LEVELS.slice(0, index)].reverse().find((level) => levels.includes(level)) ?? "off";
 }
 
+export function reasoningToggleState(preferred: AgentReasoningLevel, levels: AgentReasoningLevel[]) {
+  const onLevel = levels.includes("medium") ? "medium" : levels.find((level) => level !== "off");
+  return {
+    enabled: Boolean(onLevel) && (preferred !== "off" || !levels.includes("off")),
+    canToggle: Boolean(onLevel) && levels.includes("off"),
+  };
+}
+
 const cache = new Map<string, { at: number; value: Promise<ModelReasoning> }>();
 export function inspectAgentReasoning(providerId: string, model: string, providerBaseUrl?: string, refresh = false): Promise<ModelReasoning> {
   const key = reasoningModelKey(providerId, model, providerBaseUrl);

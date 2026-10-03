@@ -8,7 +8,7 @@ import { exportStudioRevisionToFile } from "../studio-export";
 import { parseStudioBridgeMessage, studioEnvironmentEntries, type StudioEnvironmentEntry } from "../studio-environment";
 import type { StudioJsonObject } from "../studio-types";
 import { StudioGenerationProgress } from "./studio-generation-progress";
-import { studioProgressLabel } from "../studio-progress";
+import { formatLiveTokens, studioLiveTokenCount, studioProgressLabel } from "../studio-progress";
 
 const actionClass = "flex min-h-9 items-center justify-center gap-2 rounded-lg px-2.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:opacity-30 disabled:pointer-events-none";
 const permissions = "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; display-capture 'none'; fullscreen 'none'; payment 'none'; usb 'none'; serial 'none'; bluetooth 'none'";
@@ -130,6 +130,7 @@ export function StudioEnvironmentView({ conversation, messages, isStreaming, str
   const streaming = messages.find((message) => message.id === streamingMessageId);
   const rejection = assistant?.studioResponse?.status === "rejected" ? assistant.studioResponse.error?.[0]?.message : undefined;
   const progress = studioProgressLabel(streaming);
+  const liveTokens = studioLiveTokenCount(streaming);
   const select = (entry?: StudioEnvironmentEntry) => {
     if (conversation) useChatStore.getState().selectStudioEnvironment(conversation.id, entry ? { messageId: entry.messageId, revision: entry.revision.revision } : undefined);
   };
@@ -186,7 +187,7 @@ export function StudioEnvironmentView({ conversation, messages, isStreaming, str
       {selected && !displayed && !failed && !isStreaming && <div role="status" className="absolute bottom-5 left-5 z-20 flex items-center gap-2 rounded-lg border border-white/10 bg-[#111218]/95 px-3 py-2 text-xs text-zinc-300"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Opening the view</div>}
     </div>
     <div aria-live="polite" className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-t border-white/[0.06] px-4 py-2 text-xs text-zinc-500">
-      {isStreaming ? <><Loader2 size={13} className="animate-spin text-violet-300 motion-reduce:animate-none" /><span>{progress}</span><button className={`${actionClass} ml-auto min-h-6`} aria-label="Stop Studio generation" onClick={onStop}>Stop</button></> : error ? <><span className="min-w-0 flex-1 text-amber-200/80">{error}</span>{failed && <button className={actionClass} onClick={() => dispatch({ type: "retry" })}>Retry view</button>}<button className={actionClass} disabled={!onRepair} onClick={() => onRepair?.(`Repair the Studio environment that failed to render. Runtime or validation feedback: ${error}. Preserve its data and interaction state.`)}>Repair</button></> : <span className="truncate">{actionMessage || (conversation?.studioEnvironment?.lastEvent ? `${selectionLabel ? `Selected ${selectionLabel}.` : "Selection saved."} Ask a follow-up to explore it.` : displayed?.revision.summary || "Direct Studio with the prompt below.")}</span>}
+      {isStreaming ? <><Loader2 size={13} className="animate-spin text-violet-300 motion-reduce:animate-none" /><span>{progress}</span><span aria-live="off" className="font-mono tabular-nums text-violet-200/70">{formatLiveTokens(liveTokens)}</span><button className={`${actionClass} ml-auto min-h-6`} aria-label="Stop Studio generation" onClick={onStop}>Stop</button></> : error ? <><span className="min-w-0 flex-1 text-amber-200/80">{error}</span>{failed && <button className={actionClass} onClick={() => dispatch({ type: "retry" })}>Retry view</button>}<button className={actionClass} disabled={!onRepair} onClick={() => onRepair?.(`Repair the Studio environment that failed to render. Runtime or validation feedback: ${error}. Preserve its data and interaction state.`)}>Repair</button></> : <span className="truncate">{actionMessage || (conversation?.studioEnvironment?.lastEvent ? `${selectionLabel ? `Selected ${selectionLabel}.` : "Selection saved."} Ask a follow-up to explore it.` : displayed?.revision.summary || "Direct Studio with the prompt below.")}</span>}
       {displayed && latest?.key !== displayed.key && !isStreaming && <button className={`${actionClass} ml-auto min-h-6`} onClick={() => select()}><ArrowLeft size={13} className="rotate-180" />View latest</button>}
       {!isStreaming && displayed && assistant?.content.trim() && <button className={`${actionClass} ml-auto min-h-6`} onClick={onConversation}>Read response</button>}
     </div>

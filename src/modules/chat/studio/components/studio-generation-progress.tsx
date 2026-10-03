@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Brain, Check, ChevronDown, Clock3, Loader2, MessageSquare, Sparkles, TerminalSquare, TriangleAlert } from "lucide-react";
 import type { ChatMessage } from "@/modules/chat/chat-types";
-import { studioProgressLabel } from "../studio-progress";
+import { formatLiveTokens, studioLiveTokenCount, studioProgressLabel } from "../studio-progress";
 
 const phases = { pending: "Preparing", running: "Running", retrying: "Retrying", done: "Done", error: "Failed" };
 
@@ -18,6 +18,8 @@ export function StudioGenerationProgress({ message, compact, onConversation }: {
   const reasoning = message?.reasoning?.trim();
   const tools = message?.toolStates ?? [];
   const progress = studioProgressLabel(message);
+  const liveTokens = studioLiveTokenCount(message);
+  const tokensPerSecond = elapsed > 0 && liveTokens > 0 ? liveTokens / elapsed : 0;
   const needsAnswer = tools.some((tool) => (tool.name === "ask_question" || tool.mcpApproval) && (tool.phase === "running" || tool.phase === "pending"));
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export function StudioGenerationProgress({ message, compact, onConversation }: {
         <p role="status" className="flex items-center gap-2 text-sm text-zinc-200"><Loader2 size={13} className="shrink-0 animate-spin text-violet-300 motion-reduce:animate-none" /><span>{progress}</span></p>
       </div>
       <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] tabular-nums text-zinc-500" title="Time since this progress card appeared"><Clock3 size={12} />{elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`}</span>
+      <span aria-live="off" className="shrink-0 font-mono text-[11px] tabular-nums text-violet-200/80" title="Estimated output tokens streamed so far">{formatLiveTokens(liveTokens)}{tokensPerSecond > 0 && <span className="ml-1.5 hidden text-zinc-500 sm:inline">{tokensPerSecond >= 100 ? Math.round(tokensPerSecond) : tokensPerSecond.toFixed(1)} tok/s</span>}</span>
       <button type="button" aria-label={expanded ? "Collapse Studio activity" : "Expand Studio activity"} aria-expanded={expanded} onClick={() => setUserExpanded(!expanded)} className="grid size-8 shrink-0 place-items-center rounded-lg text-zinc-400 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"><ChevronDown size={15} className={`transition-transform motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} /></button>
     </div>
     {expanded && <div className="max-h-[min(40vh,320px)] overflow-y-auto border-t border-white/[0.06] px-4 py-3">

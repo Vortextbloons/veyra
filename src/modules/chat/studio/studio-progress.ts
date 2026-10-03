@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@/modules/chat/chat-types";
+import { estimateTokens } from "@/lib/context";
 
 export function studioProgressLabel(message?: ChatMessage): string {
   const tool = message?.toolStates?.findLast((item) => item.phase === "pending" || item.phase === "running" || item.phase === "retrying");
@@ -15,4 +16,16 @@ export function studioProgressLabel(message?: ChatMessage): string {
   if (message?.content.trim()) return "Writing the response";
   if (message?.reasoning?.trim()) return "Thinking through your request";
   return "Waiting for the model";
+}
+
+/** Live estimated output tokens streamed so far (content + reasoning). */
+export function studioLiveTokenCount(message?: ChatMessage): number {
+  if (!message) return 0;
+  const text = `${message.reasoning ?? ""}\n${message.content ?? ""}`.trim();
+  if (!text) return 0;
+  return estimateTokens(text);
+}
+
+export function formatLiveTokens(count: number): string {
+  return `${count.toLocaleString()} tok`;
 }

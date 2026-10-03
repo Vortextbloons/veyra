@@ -7,7 +7,7 @@ use std::sync::{
 use tauri::Emitter;
 
 use super::pi_runner::{
-    generate_pi_models_json, pi_candidates, resolve_thinking_level, run_pi_agent_blocking,
+    pi_candidates, resolve_thinking_level, run_pi_agent_blocking,
     validate_pi_agent_input, PiRunFinishedEvent, PiRunResult,
 };
 use super::process::AGENT_CANCELLATION;
@@ -85,7 +85,7 @@ pub async fn run_pi_agent(
     let context_length = input.context_length;
     let reserved_output_tokens = input.reserved_output_tokens;
 
-    // Generate models.json if routing to LM Studio
+    // Resolve and automatically configure the selected Pi route before execution.
     let sid = session_id.clone();
     let app_clone = app.clone();
     let cancelled = Arc::new(AtomicBool::new(false));
@@ -95,14 +95,13 @@ pub async fn run_pi_agent(
 
     std::thread::spawn(move || {
         let result = (|| {
-            if provider_id == "lm-studio" {
-                generate_pi_models_json(&model, context_length, reserved_output_tokens)?;
-            }
             let capability = inspect_model(
                 &provider_id,
                 &model,
                 input.provider_base_url.as_deref().unwrap_or(""),
                 &thinking_level,
+                context_length,
+                reserved_output_tokens,
             )?;
             if !capability.known {
                 return Err(capability.message);
@@ -110,6 +109,13 @@ pub async fn run_pi_agent(
             if cancelled.load(Ordering::Relaxed) {
                 return Err("Agent run cancelled".into());
             }
+            let api_key = if provider_id != "lm-studio"
+                && capability.provider.as_deref().is_some_and(|provider| provider.starts_with("veyra-"))
+            {
+                crate::load_provider_credential(provider_id.clone())?
+            } else {
+                String::new()
+            };
             run_pi_agent_blocking(
                 &app_clone,
                 &sid,
@@ -125,6 +131,7 @@ pub async fn run_pi_agent(
                     .ok_or("Pi provider route is unavailable")?,
                 &input.mode,
                 capability.effective_level.as_deref().unwrap_or("off"),
+                &api_key,
                 &cancelled,
             )
         })();

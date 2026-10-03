@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+// Inspection may register a missing route; serialize models.json read/modify/write.
+static MODEL_CONFIG_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,7 +23,17 @@ pub(crate) fn inspect_model(
     model: &str,
     base_url: &str,
     requested: &str,
+    context_length: Option<u32>,
+    max_tokens: Option<u32>,
 ) -> Result<ModelReasoning, String> {
+    let _guard = MODEL_CONFIG_LOCK
+        .lock()
+        .map_err(|_| "Pi model configuration lock failed")?;
+    let base_url = if provider == "lm-studio" && base_url.is_empty() {
+        crate::shared::constants::LM_STUDIO_OPENAI_BASE_URL
+    } else {
+        base_url
+    };
     let mut child = Command::new("node")
         .args([
             "--input-type=module",
@@ -29,6 +43,8 @@ pub(crate) fn inspect_model(
             model,
             base_url,
             requested,
+            &context_length.map(|value| value.to_string()).unwrap_or_default(),
+            &max_tokens.map(|value| value.to_string()).unwrap_or_default(),
         ])
         .env("PI_OFFLINE", "1")
         .stdin(Stdio::null())
@@ -69,6 +85,8 @@ pub async fn inspect_agent_reasoning(
             &model,
             provider_base_url.as_deref().unwrap_or(""),
             "medium",
+            None,
+            None,
         )
     })
     .await

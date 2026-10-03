@@ -1,8 +1,6 @@
 use serde::Serialize;
-use serde_json::json;
-use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -12,7 +10,6 @@ use tauri::Emitter;
 use super::process::{
     register_agent_process, unregister_agent_process, PiAgentOutput, RUNNING_AGENT_STDIN,
 };
-use crate::shared::constants::LM_STUDIO_OPENAI_BASE_URL;
 
 // ---------------------------------------------------------------------------
 // Input / event types
@@ -69,14 +66,6 @@ pub(crate) fn validate_pi_agent_input(
     Ok(())
 }
 
-/// Returns `~/.pi/agent/` directory path.
-pub(crate) fn pi_agent_dir() -> Result<PathBuf, String> {
-    let home = std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .map_err(|_| "failed to resolve home directory".to_string())?;
-    Ok(PathBuf::from(home).join(".pi").join("agent"))
-}
-
 // ---------------------------------------------------------------------------
 // Core execution
 // ---------------------------------------------------------------------------
@@ -88,6 +77,9 @@ pub(crate) fn resolve_thinking_level(
     level: Option<&str>,
     enabled: Option<bool>,
 ) -> Result<&str, String> {
+    if let Some(enabled) = enabled {
+        return Ok(if enabled { "medium" } else { "off" });
+    }
     match level {
         Some(level @ ("off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max")) => {
             Ok(level)
@@ -112,6 +104,7 @@ pub(crate) fn run_pi_agent_blocking(
     provider: &str,
     mode: &str,
     thinking_level: &str,
+    api_key: &str,
     cancelled: &AtomicBool,
 ) -> Result<PiAgentOutput, String> {
     let mut args = vec![
@@ -144,6 +137,7 @@ pub(crate) fn run_pi_agent_blocking(
     for candidate in pi_candidates() {
         match Command::new(candidate)
             .args(&args)
+            .env("VEYRA_PI_API_KEY", api_key)
             .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -247,7 +241,7 @@ pub(crate) fn run_pi_agent_blocking(
             _ => "",
         };
         let full_prompt = format!("{}{}", system_instruction, prompt);
-        let prompt_cmd = json!({
+        let prompt_cmd = serde_json::json!({
             "type": "prompt",
             "message": full_prompt
         });
@@ -341,99 +335,6 @@ fn successful_exit_status() -> std::process::ExitStatus {
     std::process::ExitStatus::from_raw(0)
 }
 
-/// Generate `~/.pi/agent/models.json` with LM Studio provider config.
-pub(crate) fn generate_pi_models_json(
-    model: &str,
-    context_length: Option<u32>,
-    reserved_output_tokens: Option<u32>,
-) -> Result<(), String> {
-    let model_id = model.trim().trim_end_matches('/').trim_end_matches('\\');
-    if model_id.is_empty() {
-        return Err("LM Studio model is required".into());
-    }
-
-    let context_limit = context_length.unwrap_or(8192).clamp(1024, 262_144);
-    let output_limit = reserved_output_tokens
-        .unwrap_or_else(|| (context_limit / 4).max(256))
-        .clamp(128, context_limit.saturating_sub(128).max(128));
-
-    let models_dir = pi_agent_dir()?;
-    fs::create_dir_all(&models_dir).map_err(|e| format!("failed to create pi agent dir: {e}"))?;
-
-    let models_json = json!({
-        "providers": {
-            "lmstudio": {
-                "baseUrl": LM_STUDIO_OPENAI_BASE_URL,
-                "api": "openai-completions",
-                "apiKey": "lm-studio",
-                "compat": {
-                    "supportsDeveloperRole": false,
-                    "supportsReasoningEffort": false
-                },
-                "models": [
-                    {
-                        "id": model_id,
-                        "name": model_id,
-                        "reasoning": false,
-                        "input": ["text"],
-                        "contextWindow": context_limit,
-                        "maxTokens": output_limit,
-                        "cost": {
-                            "input": 0,
-                            "output": 0,
-                            "cacheRead": 0,
-                            "cacheWrite": 0
-                        }
-                    }
-                ]
-            }
-        }
-    });
-
-    let path = models_dir.join("models.json");
-    let existing = if path.exists() {
-        serde_json::from_str(&fs::read_to_string(&path).map_err(|_| "Cannot read Pi models.json")?)
-            .map_err(|_| "Pi models.json is invalid; refusing to overwrite it")?
-    } else {
-        json!({})
-    };
-    let merged = merge_lm_studio_config(existing, &models_json)?;
-    let content = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
-    fs::write(&path, content).map_err(|e| format!("failed to write models.json: {e}"))?;
-
-    Ok(())
-}
-
-fn merge_lm_studio_config(
-    mut config: serde_json::Value,
-    defaults: &serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    let root = config
-        .as_object_mut()
-        .ok_or("Pi models.json must be an object")?;
-    let providers = root
-        .entry("providers")
-        .or_insert_with(|| json!({}))
-        .as_object_mut()
-        .ok_or("Pi providers must be an object")?;
-    let provider = providers
-        .entry("lmstudio")
-        .or_insert_with(|| defaults["providers"]["lmstudio"].clone());
-    let object = provider
-        .as_object_mut()
-        .ok_or("Pi LM Studio provider must be an object")?;
-    let models = object
-        .entry("models")
-        .or_insert_with(|| json!([]))
-        .as_array_mut()
-        .ok_or("Pi LM Studio models must be an array")?;
-    let new_model = &defaults["providers"]["lmstudio"]["models"][0];
-    if !models.iter().any(|model| model["id"] == new_model["id"]) {
-        models.push(new_model.clone());
-    }
-    Ok(config)
-}
-
 #[cfg(test)]
 mod reasoning_tests {
     use super::*;
@@ -443,32 +344,8 @@ mod reasoning_tests {
         assert_eq!(resolve_thinking_level(None, Some(true)).unwrap(), "medium");
         assert_eq!(
             resolve_thinking_level(Some("max"), Some(false)).unwrap(),
-            "max"
+            "off"
         );
         assert!(resolve_thinking_level(Some("invalid"), None).is_err());
-    }
-    #[test]
-    fn preserves_custom_pi_provider_and_reasoning_metadata() {
-        let existing = json!({"providers":{"custom":{"baseUrl":"https://example.invalid"},"lmstudio":{"compat":{"thinkingFormat":"qwen"},"models":[{"id":"model","reasoning":true,"thinkingLevelMap":{"minimal":null}}]}}});
-        let defaults =
-            json!({"providers":{"lmstudio":{"models":[{"id":"model","reasoning":false}]}}});
-        assert_eq!(
-            merge_lm_studio_config(existing.clone(), &defaults).unwrap(),
-            existing
-        );
-        let new_defaults =
-            json!({"providers":{"lmstudio":{"models":[{"id":"second","reasoning":false}]}}});
-        let merged = merge_lm_studio_config(existing.clone(), &new_defaults).unwrap();
-        assert_eq!(
-            merged["providers"]["custom"],
-            existing["providers"]["custom"]
-        );
-        assert_eq!(
-            merged["providers"]["lmstudio"]["models"]
-                .as_array()
-                .unwrap()
-                .len(),
-            2
-        );
     }
 }
