@@ -8,10 +8,8 @@ Veyra core          — Base AI identity and behavior
 <veyra_project>     — Active project context
 <veyra_character>   — Character persona
 <veyra_context>     — Date, time, platform
-<veyra_documents>   — Document tool instructions
 
 Non-system reference message:
-<veyra_memory>      — Retrieved memory nodes
 <veyra_conversation_summary>  — Summary of older turns
 <veyra_web_search>  — Untrusted web evidence from tool calls
 ```

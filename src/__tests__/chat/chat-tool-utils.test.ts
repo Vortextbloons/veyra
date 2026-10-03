@@ -1,16 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   stringArg,
-  docCreateIntentFromToolCall,
-  docUpdateIntentFromToolCall,
-  docReadIntentFromToolCall,
   stripPythonCodeFence,
   summarizeCodeSnippet,
 } from "../../modules/chat/chat-tool-utils";
-
-function makeCall(args: Record<string, unknown> = {}) {
-  return { id: "call-1", name: "test", arguments: args };
-}
 
 describe("chat-tool-utils", () => {
   describe("stringArg", () => {
@@ -32,57 +25,6 @@ describe("chat-tool-utils", () => {
 
     it("returns empty string for null", () => {
       expect(stringArg({ key: null }, "key")).toBe("");
-    });
-  });
-
-  describe("docCreateIntentFromToolCall", () => {
-    it("returns intent with valid args", () => {
-      const result = docCreateIntentFromToolCall(
-        makeCall({ title: "My Doc", documentType: "document", contentMarkdown: "# Hello" }),
-      );
-      expect(result).toEqual({ type: "doc.create", title: "My Doc", documentType: "document", contentMarkdown: "# Hello" });
-    });
-
-    it("returns null when title missing", () => {
-      expect(docCreateIntentFromToolCall(makeCall({ documentType: "document", contentMarkdown: "content" }))).toBeNull();
-    });
-
-    it("returns null when documentType missing", () => {
-      expect(docCreateIntentFromToolCall(makeCall({ title: "Doc", contentMarkdown: "content" }))).toBeNull();
-    });
-
-    it("returns null when contentMarkdown missing", () => {
-      expect(docCreateIntentFromToolCall(makeCall({ title: "Doc", documentType: "document" }))).toBeNull();
-    });
-  });
-
-  describe("docUpdateIntentFromToolCall", () => {
-    it("returns intent with valid args", () => {
-      const result = docUpdateIntentFromToolCall(
-        makeCall({ documentId: "doc-1", mode: "replace_all", contentMarkdown: "new content" }),
-      );
-      expect(result).toEqual({ type: "doc.update", documentId: "doc-1", mode: "replace_all", contentMarkdown: "new content", target: undefined });
-    });
-
-    it("includes target when provided", () => {
-      const result = docUpdateIntentFromToolCall(
-        makeCall({ documentId: "doc-1", mode: "replace_section", contentMarkdown: "new", target: "Section Title" }),
-      );
-      expect(result?.target).toBe("Section Title");
-    });
-
-    it("returns null when documentId missing", () => {
-      expect(docUpdateIntentFromToolCall(makeCall({ mode: "replace_all", contentMarkdown: "content" }))).toBeNull();
-    });
-  });
-
-  describe("docReadIntentFromToolCall", () => {
-    it("returns intent with valid doc id", () => {
-      expect(docReadIntentFromToolCall(makeCall({ documentId: "doc-1" }))).toEqual({ type: "doc.read", documentId: "doc-1" });
-    });
-
-    it("returns null when documentId missing", () => {
-      expect(docReadIntentFromToolCall(makeCall({}))).toBeNull();
     });
   });
 

@@ -1,6 +1,6 @@
 # Projects Overview
 
-Persistent local containers that scope chats, documents, memories, tools, and settings around a goal or workstream.
+Persistent local containers that scope chats, tools, and settings around a goal or workstream.
 
 ## Key Files
 

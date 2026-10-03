@@ -1,7 +1,7 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-07-26T20:38:52.200Z
-> Total files: 80
+> Generated: 2026-10-03T22:03:10.421Z
+> Total files: 67
 
 ## Table of Contents
 
@@ -20,15 +20,6 @@
   - [06-types](#chat-06-types)
   - [07-studio-mode](#chat-07-studio-mode)
   - [README](#chat-readme)
-- [memory](#memory)
-  - [01-modes](#memory-01-modes)
-  - [02-node-types](#memory-02-node-types)
-  - [03-extraction](#memory-03-extraction)
-  - [04-retrieval](#memory-04-retrieval)
-  - [05-retention](#memory-05-retention)
-  - [06-profile](#memory-06-profile)
-  - [07-types](#memory-07-types)
-  - [README](#memory-readme)
 - [hooks](#hooks)
   - [01-overview](#hooks-01-overview)
   - [README](#hooks-readme)
@@ -38,13 +29,6 @@
   - [03-chat-integration](#extensions-03-chat-integration)
   - [04-types](#extensions-04-types)
   - [README](#extensions-readme)
-- [documents](#documents)
-  - [01-overview](#documents-01-overview)
-  - [02-editor](#documents-02-editor)
-  - [03-tools](#documents-03-tools)
-  - [04-versioning](#documents-04-versioning)
-  - [05-types](#documents-05-types)
-  - [README](#documents-readme)
 - [characters](#characters)
   - [01-overview](#characters-01-overview)
   - [02-lorebook](#characters-02-lorebook)
@@ -81,6 +65,7 @@
   - [04-ui](#agents-04-ui)
   - [05-tauri-commands](#agents-05-tauri-commands)
   - [06-types](#agents-06-types)
+  - [07-reasoning](#agents-07-reasoning)
   - [README](#agents-readme)
 - [connectivity](#connectivity)
   - [01-overview](#connectivity-01-overview)
@@ -152,11 +137,10 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 | Data | Location | Format |
 |------|----------|--------|
 | Conversations | `%APPDATA%/com.veyra.app/` | AES-GCM encrypted JSON with rotating backup |
-| Memory DB | `%APPDATA%/com.veyra.app/` | SQLite |
+| App database | `%APPDATA%/com.veyra.app/` | SQLite |
 | Settings | localStorage | `veyra.settings.v1` key |
 | Provider config | localStorage | `veyra.provider.v1` key |
 | Characters | SQLite via Tauri | Structured records |
-| Documents | SQLite via Tauri | Structured records |
 | Projects | SQLite via Tauri | Structured records |
 | Research | SQLite via Tauri | Structured records |
 | Agent sessions | localStorage | Serialized sessions |
@@ -224,13 +208,11 @@ npm run version:check
 
 | Module | Folder | Description |
 |--------|--------|-------------|
-| Chat | `docs/chat/` | Core AI chat pipeline with streaming, tool calls, and memory injection |
-| Memory | `docs/memory/` | Local-first memory system with 5 modes and 10 node types |
-| Documents | `docs/documents/` | Markdown document editor with versioning and AI assistance |
+| Chat | `docs/chat/` | Core AI chat pipeline with streaming and tool calls |
 | Characters | `docs/characters/` | Roleplay personas with lorebook, group chat, and CCv3 support |
 | Research | `docs/research/` | 9-phase deep research pipeline with citation auditing |
 | Web Search | `docs/web-search/` | SearXNG/Docker search with ArXiv and Wikipedia support |
-| Projects | `docs/projects/` | Per-project containers for scoping chats, memory, and settings |
+| Projects | `docs/projects/` | Per-project containers for scoping chats and settings |
 | Agents | `docs/agents/` | Optional Pi CLI integration for plan and build modes |
 | Architecture | `docs/architecture/` | Cross-cutting patterns, state management, providers, backend |
 
@@ -259,7 +241,7 @@ Veyra is a **local-first AI desktop workspace** built with Tauri v2, React, Type
 
 # Chat Pipeline
 
-The chat module is Veyra's core AI pipeline. It manages conversations, streaming responses, tool calls, memory injection, and context window management.
+The chat module is Veyra's core AI pipeline. It manages conversations, streaming responses, tool calls, and context window management.
 
 ## Key Files
 
@@ -289,11 +271,9 @@ User types a message in the composer component and hits send.
 
 ### 2. Pipeline Entry (`executeChatSend`)
 - Loads the orchestrator lazily
-- Handles explicit memory saves if requested
 - Prepares the model via LM Studio adapter
 
 ### 3. Orchestrator (`sendChatRequest`)
-- **Memory pack**: Builds memory context from relevant stored memories
 - **System prompt composition**: Assembles context blocks from `BuildChatContextOptions`:
   - `<veyra_core>` — Base AI identity
   - `<model_identity>` — Model name/identity
@@ -301,8 +281,6 @@ User types a message in the composer component and hits send.
   - `<veyra_project>` — Active project context
   - `<veyra_character>` — Character persona (if in character mode)
   - `<veyra_context>` — Date, time, platform info (context anchoring)
-  - `<veyra_documents>` — Document tool instructions
-  - `<veyra_memory>` — Retrieved memory nodes
   - `<veyra_conversation_summary>` — Summary of older turns
   - `<veyra_tools>` — Available tool definitions
 - **Message trimming**: Fits messages within the token budget (context limit minus reserved output)
@@ -315,9 +293,7 @@ During streaming, pressing **Escape** or calling `handleStopStreaming` (returned
 
 ### 5. Post-Chat Jobs
 After the response completes:
-- **Memory handoff**: Explicit memory saves
 - **Auto-summarization**: If context usage > 55%, older turns are folded into a summary
-- **Memory extraction**: LLM extracts memory candidates from the conversation
 
 Cloud providers use the same orchestration and local tool loop as LM Studio. Their
 API keys are supplied by the Rust credential store at request time. Provider presets
@@ -339,9 +315,6 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG with intent routing, time range, language, safe search, and pagination parameters |
-| `doc_create` | `documentToolsEnabled` | Create a new document |
-| `doc_read` | `documentToolsEnabled` | Read a document |
-| `inline_edit` | `documentToolsEnabled` | Edit a document with section/heading targeting |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
 | `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
 | `studio_render` | `studioModeEnabled` + conversation `experience: "studio"` | Render a validated HTML/CSS Studio response |
@@ -366,9 +339,6 @@ When enhanced mode is enabled (`enhancedModeEnabled` setting):
 ## Retry Logic
 
 - Web searches retry up to 2 times on failure (`TOOL_RETRY_LIMIT = 2`)
-- Document mutations retry up to 2 times with LLM-based re-prompting for corrections
-- `doc_create` calls are deduplicated within a single tool round — repeated create requests with identical arguments are skipped
-- `doc_update` is a legacy constant kept for backward-compatible runtime handling; it has been replaced by `inline_edit`
 
 Native `code_execution` is not offered to models. Legacy calls fail closed until an OS-enforced sandbox is implemented.
 
@@ -518,8 +488,6 @@ interface ChatMessage {
   reasoning?: string;
   timestamp: number;
   performance?: MessagePerformance;
-  memoryPack?: MemoryPack;
-  memoryRetrieval?: MemoryRetrievalInfo;
   webSearchSources?: WebSearchSource[];
   webSearchState?: WebSearchState;
   toolStates?: ToolCallState[];
@@ -583,8 +551,6 @@ interface Conversation {
   lmResponseId?: string;
   conversationSummary?: string;
   summaryCoversMessageCount?: number;
-  memoryLastProcessedMessageCount?: number;
-  memoryPendingSince?: number;
 }
 ```
 
@@ -593,8 +559,8 @@ interface Conversation {
 ```typescript
 type ContextBlockCategory =
   | "system_core" | "model_identity" | "user_prompt"
-  | "memory" | "character" | "project" | "summary"
-  | "context_anchor" | "documents_instructions"
+  | "character" | "project" | "summary"
+  | "context_anchor"
   | "tool_definitions" | "web_search_results"
   | "user_message" | "assistant_message" | "system_message";
 
@@ -642,7 +608,7 @@ interface ModelInfo {
 ```typescript
 interface ChatPanelProps {
   messages?: ChatMessage[];
-  onSend?: (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => void;
+  onSend?: (text: string, attachments?: MessageAttachment[]) => void;
   onStop?: () => void;
   onEditMessage?: (messageId: string) => void;
   onEditCancel?: () => void;
@@ -652,13 +618,11 @@ interface ChatPanelProps {
   onCopyMessage?: (messageId: string) => void;
   onForkMessage?: (messageId: string) => void;
   onDeleteMessage?: (messageId: string) => void;
-  onTriggerMemoryExtraction?: () => void;
   isStreaming?: boolean;
   streamingMessageId?: string | null;
   editingMessageId?: string | null;
   editInitialValue?: string;
   supportsImages?: boolean;
-  defaultMemoryEnabled?: boolean;
   providers?: ProviderInfo[];
   models?: ModelInfo[];
   mode?: ChatMode;
@@ -691,81 +655,93 @@ interface MessagePerformance {
 
 > Source: `docs/chat/07-studio-mode.md`
 
-# Studio Mode
+# Studio
 
-Studio Mode is a conversation experience that lets the assistant respond naturally while optionally giving an individual assistant message a custom visual or interactive body. A Studio turn can remain formatted text, or use self-contained HTML, CSS, inline SVG, and JavaScript when bespoke presentation makes the answer clearer. Independently, a turn may apply a validated chat-panel theme so the transcript, header, and composer share the response's atmosphere without requiring a custom message body.
+Studio is a persistent environment that the assistant shapes around a task. The main surface can become a visual explanation, chart, comparison, simulation, creative scene, or readable HTML. The conversation remains available in a drawer, and the normal composer, model selection, Stop, and host permissions remain under Veyra's control.
 
-Veyra owns validation, isolation, persistence, revisions, sizing, and host controls. The model owns the content and styling inside the custom message. Studio is currently available for plain chat conversations; character and group chats remain Standard.
+Studio is available for plain chat and project conversations. Character and group chats remain Standard. Enable it in **Settings → Chat → Studio Mode**, then choose **Studio** when starting an empty conversation. Disabling the global setting restores the transcript view without deleting existing responses or interaction state.
 
-## User guidance
+## Core experience
 
-### Enable Studio
+- The current view stays usable while a replacement loads in a separate sandboxed frame.
+- A replacement becomes visible after its script initializes and reports ready. This verifies initialization, not visual quality or factual accuracy.
+- If initialization fails, Veyra retains the previous usable view. Reopening a failed latest version tries earlier versions until a usable view is found.
+- The footer reports gathering sources, shaping the environment, updating a view, or opening it. Stop remains accessible.
+- **Conversation** opens the transcript without running duplicate copies of generated frames. Tool questions, pending MCP approvals, and message editing expose the drawer when attention is needed.
+- **Undo** selects the previous version, skipping versions known to have failed in the current session. History retains failed versions for inspection or retry. **View latest** returns to the latest version.
+- Source, copy, and export live in the environment options menu. Exports include selected facts and interaction state, and work without a Veyra connection.
+- Text-only replies remain readable before the first environment exists; **Read response** exposes accompanying prose once a view exists.
 
-1. Open **Settings → Chat → Studio Mode** and enable Studio Mode.
-2. Choose **Studio Chat** when starting an empty plain chat.
-3. Talk normally. You can explicitly request a diagram, comparison, visual explanation, or interactive control, but you do not have to choose a format for every turn.
+## Model behavior and tools
 
-Turning the global setting off hides the experience choice and stops advertising the Studio tool. Existing encrypted custom messages remain stored and reappear if Studio is enabled again.
+The system instruction treats the environment as the primary answer. It does not require a prose preamble. Substantial text can itself be presented as readable HTML; acknowledgements and clarifying questions can remain conversational.
 
-### Conversational behavior
+Three Studio tools are advertised only when Studio is enabled:
 
-Studio keeps the normal transcript visible. Text begins streaming in the assistant message while the model decides whether a custom presentation adds value. Short answers and follow-ups can remain text-only. When a custom message is appropriate, it appears on the originating assistant turn rather than replacing the conversation with a workspace.
+| Tool | Purpose |
+|------|---------|
+| `studio_render` | Create or transform a view with complete HTML, CSS, optional JavaScript, a concise summary, and optional JSON facts |
+| `studio_update` | Replace the inner HTML of one unique `data-studio-region`, preserving surrounding content and omitted stylesheet, script, and facts |
+| `studio_theme` | Adjust the surrounding atmosphere using a short vibe, or optional palette, font, and scoped declarations |
 
-### Revise a custom message
+Region updates require the exact current environment base key. Veyra rejects stale keys, missing or ambiguous regions, invalid arguments, and unsafe merged source. Each update becomes a complete immutable revision; partial source is never executed.
 
-Ask for visual, interaction, or content changes in the same conversation. Veyra includes the latest validated Studio response for likely revision requests. Successful regenerations create immutable message-owned revisions; the previous valid revision remains recoverable through undo and history.
+Every follow-up includes the active version's summary, region names, bounded source, facts, interaction state, latest interaction, and runtime feedback. Tool rounds refresh that context. This applies to ordinary prompts such as “remove that” and “what if we double it,” rather than relying on revision keywords. Large context sections are explicitly truncated; the full validated source remains local.
 
-### View source, copy, and export
+## Local interaction API
 
-The Studio message toolbar can show HTML, CSS, and JavaScript source, copy the complete self-contained document, export it, expand the message, or navigate its revision history. Source viewing is read-only Veyra UI rather than generated iframe content.
+Generated JavaScript runs after state initialization. The frame provides:
 
-Exports are regenerated from the selected validated revision and include its self-contained JavaScript. They do not load remote scripts, styles, fonts, images, or other network resources.
+| API | Behavior |
+|-----|----------|
+| `studio.data` | JSON facts supplied with the revision, separate from appearance |
+| `studio.getState()` | A copy of persistent interaction state |
+| `studio.setState(object)` | Merge a small JSON state patch |
+| `studio.emit(name, payload)` | Record a selection or other interaction for the next prompt |
+| `studio.chart(element, options)` | Local SVG bar or line chart with labels, numeric values, optional color/title, and optional `onSelect` callback |
 
-## JavaScript capability and isolation
+Charts support pointer and keyboard selection, expose accessible values, and restore their saved selection. Chart options use `type: "bar" | "line"`, `labels`, and `values` (1–200 finite numbers). No external chart dependency is loaded.
 
-JavaScript is optional and runs only inside an iframe with `allow-scripts` and an opaque origin. The generated document uses a restrictive content security policy:
+Inputs, selects, and textareas with stable `name` or `data-studio-key` attributes automatically preserve values. Password, file, and hidden inputs are excluded. Scroll position is retained. Custom controls use `studio.setState`. Form-control values and scroll position use reserved `$controls` and `$scroll` state keys.
 
-- No network connections, remote resources, child frames, workers, plugins, or form submissions
-- No filesystem, Tauri, host-store, device, payment, or clipboard permissions
-- No same-origin access to Veyra and no privileged host API bridge
-- No `eval` or dynamically compiled code
-- Self-contained DOM interaction, CSS animation, inline SVG, and native controls are supported
+Events do not automatically start a model request or execute a host action. Local controls respond immediately; the user sends a prompt when interpretation or new information is needed. The last selected chart category is surfaced in the footer and included in follow-up context.
 
-Transient interaction state is not persisted unless the assistant produces a new revision that encodes it.
+## Runtime feedback and repair
 
-## How it works
+The bridge supports initialization, readiness, state, interaction, and error messages. Veyra verifies the originating frame window and a per-frame channel, then validates JSON shape, nesting, size, event names, and version ownership. It exposes no generic host command.
 
-1. The chat pipeline adds Studio conversation guidance and exposes two focused tools: `studio_render` for an optional custom message body, and `studio_theme` for the surrounding chat atmosphere.
-2. Text and reasoning stream through the normal assistant message immediately.
-3. A tool call creates a message-local working state while its arguments are parsed and validated.
-4. Valid source becomes a new message-owned revision and loads into a networkless sandboxed iframe.
-5. A sizing bridge reports document height so compact messages fit their content; unusually large messages remain bounded and can be expanded.
-6. Invalid custom source leaves the conversational answer usable, preserves the last valid revision, and allows one repair attempt per assistant run.
+Script errors and unhandled promise rejections are reported to Veyra. During a foreground tool round, Veyra waits briefly for the exact originating version's feedback, releasing immediately on cancellation. One runtime repair is allowed per assistant job; another failure stops automatic view generation for that job. Invalid source also has one bounded repair opportunity.
 
-`studio_theme` requires only a short `vibe`, keeping the default call inexpensive for smaller models. It also supports progressive disclosure: the assistant may optionally author a partial or complete palette, typography, intensity, ambient effect, and scoped CSS declaration blocks for the window, header, transcript, assistant messages, user messages, and composer. Veyra derives only the values the assistant omits.
+Background or unmounted conversations save source without claiming successful display. Late errors remain available to the next prompt and the **Repair** action. A view that does not initialize within six seconds offers retry or repair. The previous usable view remains available throughout recovery.
 
-Custom declarations are attached to fixed chat regions, so the assistant can create its own borders, gradients, shadows, spacing, typography, and other treatments without writing selectors or escaping into navigation and other host UI. Network URLs, rule injection, hidden or disabled interaction surfaces, and viewport-positioned overlays are rejected. Unthemed turns preserve the latest theme, and the vibe `default` explicitly restores Veyra's standard appearance.
+## Storage and compatibility
 
-## Key files
+Generated source remains on `assistantMessage.studioResponse`, with at most eight revisions per message. Environment history is derived from those revisions in creation order, including regenerated older messages. It does not duplicate their source in a separate workspace snapshot.
 
-| File | Responsibility |
-|------|----------------|
-| `src/modules/chat/studio/` | Types, prompt context, tool contract, validator, document builder, runtime, theme, export, workspace, and custom-message UI |
-| `src/modules/chat/studio/studio-theme-tool.ts` | `studio_theme` tool definition, vibe parsing, palette and CSS style validation |
-| `src/modules/chat/studio/studio-theme.ts` | Theme derivation from vibe, preset matching, CSS variable generation, scoped region styling |
-| `src/modules/chat/studio/components/studio-workspace.tsx` | Full-workspace scene viewer with history, navigation, source view, and export |
-| `src/modules/chat/components/message-bubble.tsx` | Studio-aware conversational and working states |
-| `src/app/components/chat-panel.tsx` | Keeps Studio in the standard transcript flow |
-| `src/stores/chat-store.ts` | Message-owned revision commit, selection, undo, fork, and hydration; workspace state |
-| `src/lib/tool-registry.ts` | Conditionally registers `studio_render` and `studio_theme` |
-| `src/modules/chat/chat-provider-options.ts` | Eligibility and tool availability |
-| `src/components/settings/studio-settings-section.tsx` | Global availability and local diagnostics copy |
+`conversation.studioEnvironment` stores only selection, interaction state, latest event, and runtime feedback in the existing encrypted conversation snapshot. State and event payloads are limited to 16 KB; revision facts are limited to 32 KB. Unsafe keys, non-JSON values, excessive depth, and oversized payloads are rejected. State changes are coalesced by the frame and use the existing debounced encrypted persistence.
 
-## Diagnostics and storage threshold
+Existing message-owned Studio responses remain usable, including previously selected revisions. Forks copy state and remap selected message identities. Stale selection/feedback references are discarded during normalization. The old `presentationMode` and `studioArtifact` fields remain unsupported. No development-data reset is required.
 
-Local counters track render attempts, repairs, final failures, validation issue codes, validation time, HTML/CSS/JavaScript byte totals, and serialized response size. They never record generated source.
+## Isolation and preferences
 
-If a Studio response snapshot approaches **5 MB**, that is the migration trigger to reconsider separate encrypted response storage. Use **Copy for feedback** in Studio settings to share redacted counters when reporting issues.
+Frames have an opaque origin with `sandbox="allow-scripts"` and restrictive CSP. There are no network connections, remote libraries/fonts/images/media, child frames, workers, form submissions, or filesystem/Tauri/clipboard/device permissions. Inline SVG, CSS, DOM interaction, and the narrow local bridge are supported. External data still comes through Veyra's existing provider tools and their permission flows.
+
+**Presentation** offers Automatic, Calm, and Expressive. Automatic follows the task; Calm asks for restrained styling and disables CSS motion; Expressive invites distinctive art direction. System reduced-motion preferences are observed. Generated JavaScript must also honor reduced motion; arbitrary script animation cannot be mechanically rewritten.
+
+## Verification and key files
+
+- `studio-environment.ts`: timeline, bounded JSON, bridge parsing, and state normalization
+- `components/studio-environment-view.tsx`: primary surface, staged rendering, history, recovery, source, and export
+- `studio-bridge.ts`: frame-local state, controls, charts, readiness, and runtime feedback
+- `studio-runtime.ts`: validated commits and bounded feedback/repair handling
+- `studio-update-tool.ts`: targeted updates with base-version checks
+- `studio-context.ts`: environment-first instructions and continuity
+- `chat-panel.tsx`: Studio surface, conversation drawer, attention handling, and existing composer
+- `chat-store.ts`: message-owned source, encrypted environment state, selection, and forks
+
+Focused unit tests cover continuity, normalization, limits, ownership, forks, and cancellation. Browser tests run the real ChatPanel in an isolated Vite/Playwright fixture with synthetic data and mocked Tauri storage. They cover frame transitions, controls, chart selections, recovery, questions, targeted validation, spoofed messages, responsive layout, portable export, and bounded repair. The browser test requires Playwright Chromium or installed Microsoft Edge.
+
+Local diagnostics remain source-free. The existing 5 MB response snapshot threshold remains a signal to reconsider separate encrypted source storage.
 
 ---
 
@@ -775,7 +751,7 @@ If a Studio response snapshot approaches **5 MB**, that is the migration trigger
 
 # Chat Module
 
-Core AI chat pipeline with streaming, tool calls, memory injection, and context window management.
+Core AI chat pipeline with streaming, tool calls, and context window management.
 
 ## Contents
 
@@ -786,402 +762,6 @@ Core AI chat pipeline with streaming, tool calls, memory injection, and context 
 - [05-storage.md](05-storage.md) — Conversation encryption and persistence
 - [06-types.md](06-types.md) — Key type definitions
 - [07-studio-mode.md](07-studio-mode.md) — Studio presentation, artifacts, and export
-
----
-
-# memory > 01-modes
-
-> Source: `docs/memory/01-modes.md`
-
-# Memory Modes
-
-The memory system operates in one of 5 modes, controlling the balance between automatic capture and user control.
-
-| Mode | Behavior |
-|------|----------|
-| `off` | No extraction or retrieval |
-| `manual_only` | Only explicit "remember this" saves |
-| `safe_auto_save` | Auto-save high-confidence extractions |
-| `review_all` | Extract everything, require manual approval |
-| `aggressive_project_memory` | Maximum extraction with project scoping |
-
-## Mode Selection
-
-- Mode is set globally in settings and can be overridden per project
-- `off` is useful for sensitive or transient conversations
-- `aggressive_project_memory` is designed for long-running project work where maximum context capture is desired
-
----
-
-# memory > 02-node-types
-
-> Source: `docs/memory/02-node-types.md`
-
-# Memory Node Types
-
-## Node Types
-
-| Type | Description |
-|------|-------------|
-| `preference` | User preferences and habits |
-| `project` | Project-level information |
-| `project_fact` | Factual project details |
-| `decision` | Decisions made during conversation |
-| `instruction` | User instructions for the AI |
-| `summary` | Conversation summaries |
-| `task` | Tasks and to-dos |
-| `idea` | Ideas and brainstorming |
-| `file_reference` | References to files |
-| `temporary_context` | Short-lived contextual info |
-
-## Priorities
-
-| Priority | Description |
-|----------|-------------|
-| `permanent` | Never auto-archived |
-| `high` | Rarely evicted |
-| `medium` | Standard retention |
-| `low` | Evicted when over capacity |
-| `ephemeral` | 7-day TTL, first to be evicted |
-
-## Scopes
-
-| Scope | Description |
-|-------|-------------|
-| `global` | Available across all conversations |
-| `project` | Scoped to a specific project |
-| `conversation` | Scoped to a single conversation |
-| `session` | Ephemeral, current session only |
-
-## Protected Memories
-
-The following are never auto-archived:
-- Pinned memories
-- Permanent priority
-- Importance >= 5
-- Explicit user saves
-- Manual edits
-- Profile setup nodes
-
----
-
-# memory > 03-extraction
-
-> Source: `docs/memory/03-extraction.md`
-
-# Memory Extraction
-
-Extraction happens post-chat, using the LLM to identify memory-worthy content from the conversation transcript.
-
-## Pipeline
-
-1. `shouldExtractMemoryBatch()` checks if enough new messages exist (min 4 messages, 2 exchanges)
-2. `runMemoryExtractionBatch()` sends the transcript to the LLM
-3. LLM outputs JSON with memory candidates
-4. Deduplication: text similarity + optional vector similarity against existing memories
-5. High-confidence items are auto-saved; others require review
-6. Batch size capped at 16 messages; 90-second pending threshold
-
-## Extraction Modes
-
-The extraction behavior varies by memory mode:
-- **safe_auto_save**: Only high-confidence extractions are saved automatically
-- **review_all**: All extractions are saved but require manual review
-- **aggressive_project_memory**: Maximum batch size and lower confidence thresholds
-
-## AI Job Scheduling
-
-Memory extraction runs as a background job (priority 3) via the AI job scheduler, ensuring it never blocks user chat.
-
----
-
-# memory > 04-retrieval
-
-> Source: `docs/memory/04-retrieval.md`
-
-# Memory Retrieval
-
-Retrieval runs pre-chat to find relevant memories for the current conversation context.
-
-## Pipeline
-
-1. `memory-router.ts` detects if memory retrieval is needed (looks for cues like "remember", "my name", etc.)
-2. Skips greetings, trivial math, and very short messages
-3. `buildMemoryPackWithInfo()` searches for candidates:
-   - **Durable seeds**: High-priority pinned/permanent memories
-   - **Vector search**: Optional semantic similarity (requires external endpoint)
-   - **Keyword search**: BM25-style keyword matching
-4. Multi-factor scoring:
-   - Keyword match score
-   - Importance and confidence ratings
-   - Pinned boost
-   - Recency and use-count boosts
-   - Project and category alignment
-   - Profile-aware boosting
-5. Noise floor filtering removes low-relevance candidates
-6. Binary search trims results to fit within the token budget
-
-## Scoring Factors
-
-Each candidate memory receives a composite score considering:
-- Text similarity to the user's message
-- Memory importance and confidence
-- Whether the memory is pinned
-- Recency of the memory
-- Project and category alignment with current context
-
----
-
-# memory > 05-retention
-
-> Source: `docs/memory/05-retention.md`
-
-# Memory Retention
-
-Periodic cleanup and eviction keep the memory system from growing unbounded.
-
-## Eviction Thresholds
-
-| Scope | Max Nodes |
-|-------|-----------|
-| Global | 200 |
-| Per project | 100 |
-| Per conversation | 30 |
-
-## Eviction Strategy
-
-1. Expired ephemeral nodes (7-day TTL) are archived first
-2. Low-priority nodes are evicted next
-3. Least recently accessed nodes within the same priority band are removed
-
-## Protected Memories
-
-See `02-node-types.md` for the full protected memory list. Key protections:
-- Pinned and permanent memories are never evicted
-- Importance >= 5 is immune
-- User-explicit saves and manual edits are preserved
-
-## Scheduling
-
-Retention runs as a maintenance job (priority 4) during idle scheduler time.
-
----
-
-# memory > 06-profile
-
-> Source: `docs/memory/06-profile.md`
-
-# Profile Setup
-
-The user profile system captures personal context through 7 categories and 21 questions.
-
-## Categories (from `src/modules/memory/profile-config.ts`)
-
-| Category | Label | Focus |
-|----------|-------|-------|
-| `identity` | Identity | What to call you, pronouns, preferred name |
-| `communication` | Communication Style | Preferred tone, formality level |
-| `expertise` | Expertise | Technical skills, domains |
-| `interests` | Interests | Hobbies, topics of interest |
-| `work` | Work Context | Job role, projects |
-| `learning` | Learning Style | How you prefer explanations to be structured |
-| `preferences` | Preferences | UI, AI behavior preferences |
-
-## How It Works
-
-1. User answers profile questions through the settings UI
-2. Profile responses become structured memory nodes with origin `profile_setup`
-3. These nodes receive a retrieval boost for relevant queries
-4. Profile memories are protected from eviction (origin check in `isProtectedMemory`)
-5. The profile config is stored in `src/modules/memory/profile-config.ts`
-
-## Profile-Aware Boosting
-
-During memory retrieval, profile-aligned nodes receive extra scoring weight, helping the AI personalize responses based on user context.
-
----
-
-# memory > 07-types
-
-> Source: `docs/memory/07-types.md`
-
-# Memory Key Types
-
-Accurate as of the current source code (`src/modules/memory/memory-types.ts`).
-
-## Core Types
-
-```typescript
-type MemoryMode =
-  | "off" | "manual_only" | "safe_auto_save"
-  | "review_all" | "aggressive_project_memory";
-
-type MemoryScope = "global" | "project" | "conversation" | "session";
-
-type MemoryPriority = "permanent" | "high" | "medium" | "low" | "ephemeral";
-
-type MemoryStatus =
-  | "active" | "needs_review" | "approved" | "rejected" | "archived";
-
-type MemoryRetrievalStatus = "disabled" | "skipped" | "empty" | "used";
-```
-
-## MemoryNode
-
-```typescript
-interface MemoryNode {
-  id: string;
-  folderId: string;
-  fileId?: string;
-  projectId?: string;
-  conversationId?: string;
-  title: string;
-  content: string;
-  summary: string;
-  type:
-    | "preference" | "project" | "project_fact" | "decision"
-    | "instruction" | "summary" | "task" | "idea"
-    | "file_reference" | "temporary_context";
-  scope: MemoryScope;
-  tags: string[];
-  importance: 1 | 2 | 3 | 4 | 5;
-  confidence: number;
-  priority: MemoryPriority;
-  expiresAt?: string;
-  sourceMessageIds: string[];
-  extractionBatchId?: string;
-  duplicateOf?: string;
-  contradictionOf?: string;
-  origin:
-    | "explicit_user_save" | "auto_extracted"
-    | "manual_user_edit" | "imported" | "profile_setup";
-  status: MemoryStatus;
-  isPinned: boolean;
-  userEditable: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastUsedAt?: string;
-  useCount: number;
-  relevanceScore?: number;
-  vectorScore?: number;
-  bm25Score?: number;
-  embeddingDim?: number;
-}
-```
-
-## MemoryFolder / MemoryFile
-
-```typescript
-interface MemoryFolder {
-  id: string;
-  name: string;
-  parentId?: string;
-  projectId?: string;
-  type: "manual" | "project" | "system" | "smart";
-  description?: string;
-  summary?: string;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface MemoryFile {
-  id: string;
-  folderId: string;
-  projectId?: string;
-  title: string;
-  slug: string;
-  summary: string;
-  purpose: string;
-  keyPoints: string[];
-  status: "active" | "draft" | "needs_review" | "archived";
-  tags: string[];
-  importance: 1 | 2 | 3 | 4 | 5;
-  confidence: number;
-  createdAt: string;
-  updatedAt: string;
-  nodeCount: number;
-  chunkCount: number;
-}
-```
-
-## Retrieval & CRUD
-
-```typescript
-interface MemoryPack {
-  content: string;
-  sourceNodeIds: string[];
-  sourceFileIds: string[];
-  sourceFolderIds: string[];
-  tokenCount: number;
-  budgetUsed: number;
-  reasons: Record<string, string>;
-}
-
-interface MemoryRetrievalInfo {
-  status: MemoryRetrievalStatus;
-  detail: string;
-  pack?: MemoryPack;
-}
-
-interface MemoryNodeFilter {
-  status?: MemoryStatus[];
-  scope?: MemoryScope[];
-  type?: MemoryNode["type"][];
-  folderId?: string;
-  fileId?: string;
-  projectId?: string;
-  isPinned?: boolean;
-  origin?: MemoryNode["origin"][];
-  query?: string;
-  limit?: number;
-}
-
-interface CreateMemoryNode { /* mirrors MemoryNode omitting id */ }
-
-interface UpdateMemoryNode {
-  id: string;
-  /* all MemoryNode fields optional except id */
-}
-
-interface MemorySearchOptions {
-  limit?: number;
-  projectId?: string;
-}
-```
-
-## Protected Memory
-
-```typescript
-function isProtectedMemory(node: {
-  isPinned: boolean;
-  priority: MemoryPriority;
-  importance: number;
-  origin: MemoryNode["origin"];
-}): boolean
-```
-
-Returns `true` for pinned, permanent, importance >= 5, explicit user saves, manual edits, or profile setup nodes.
-
----
-
-# memory > README
-
-> Source: `docs/memory/README.md`
-
-# Memory Module
-
-Local-first memory system with 5 modes, 10 node types, and AI-powered extraction/retrieval.
-
-## Contents
-
-- [01-modes.md](01-modes.md) — Memory modes (off, manual, auto, etc.)
-- [02-node-types.md](02-node-types.md) — Node types, priorities, scopes, protections
-- [03-extraction.md](03-extraction.md) — Post-chat memory extraction pipeline
-- [04-retrieval.md](04-retrieval.md) — Pre-chat memory retrieval and scoring
-- [05-retention.md](05-retention.md) — Eviction and cleanup policies
-- [06-profile.md](06-profile.md) — User profile setup (7 categories)
-- [07-types.md](07-types.md) — Key type definitions
 
 ---
 
@@ -1198,7 +778,7 @@ React hooks used across Veyra's frontend for chat, scheduling, and UI interactio
 | Hook | File | Purpose |
 |------|------|---------|
 | `useChatSend` | `src/hooks/use-chat-send.ts` | Message send logic |
-| `useChatPipeline` | `src/hooks/use-chat-pipeline.ts` | Pipeline lifecycle — returns `handleSend`, `handleStopStreaming`, `handleEdit*`, `handleRegenerate`, `handleCopyMessage`, `handleForkMessage`, `handleDeleteMessage`, `handleTriggerMemoryExtraction`, streaming state, and provider info |
+| `useChatPipeline` | `src/hooks/use-chat-pipeline.ts` | Pipeline lifecycle — returns `handleSend`, `handleStopStreaming`, `handleEdit*`, `handleRegenerate`, `handleCopyMessage`, `handleForkMessage`, `handleDeleteMessage`, streaming state, and provider info |
 | `useChatAttachments` | `src/hooks/use-chat-attachments.ts` | File attachment management |
 | `useChatEditing` | `src/hooks/use-chat-editing.ts` | Message editing |
 | `useChatRegeneration` | `src/hooks/use-chat-regeneration.ts` | Response regeneration |
@@ -1660,266 +1240,6 @@ MCP (Model Context Protocol) server integration and local SKILL.md instruction p
 
 ---
 
-# documents > 01-overview
-
-> Source: `docs/documents/01-overview.md`
-
-# Documents Overview
-
-Markdown document editor with versioning, AI-assisted creation/update, and export. Documents can be scoped to conversations, projects, or be global.
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/modules/documents/document-types.ts` | Type definitions |
-| `src/modules/documents/document-store.ts` | Zustand store with auto-save and versioning |
-| `src/modules/documents/document-runtime.ts` | AI document operations |
-| `src/modules/documents/document-markdown.ts` | Markdown section manipulation |
-| `src/modules/documents/document-export.ts` | Export to markdown/txt |
-
-## Document Types
-
-| Type | Description |
-|------|-------------|
-| `document` | General document |
-| `technical_spec` | Technical specification |
-| `essay` | Essay or article |
-| `report` | Report with structure |
-| `proposal` | Project proposal |
-| `readme` | Readme file |
-| `notes` | Quick notes |
-| `prompt` | AI prompt template |
-| `project_plan` | Project planning doc |
-| `meeting_notes` | Meeting notes |
-| `research_brief` | Research summary |
-| `agent_instruction` | Agent instruction set |
-
-## Document Statuses
-
-| Status | Description |
-|--------|-------------|
-| `draft` | Work in progress |
-| `review` | Under review |
-| `final` | Completed |
-| `archived` | No longer active |
-
-## Storage
-
-Documents are stored in SQLite via Tauri IPC. Each document has:
-- `id`, `title`, `content`, `type`, `status`
-- `conversationId` or `projectId` for scoping
-- `versionCount` for version history
-- `createdAt`, `updatedAt` timestamps
-
-## Auto-Sync
-
-- Documents sync with the active conversation context
-- Documents sync with the active project context
-- When switching conversations/projects, the document list updates accordingly
-
----
-
-# documents > 02-editor
-
-> Source: `docs/documents/02-editor.md`
-
-# Document Editor
-
-## Active Document Draft
-
-- The active document maintains an in-memory draft to avoid remapping on every keystroke
-- Draft content is separate from the persisted version
-- Draft is reconciled to persistent storage on save
-
-## Auto-Save
-
-- Debounced save (configurable delay) avoids excessive writes
-- Each save creates a version snapshot
-- Version snapshots track change source: `user`, `assistant`, or `system`
-
-## Export
-
-- Export to **Markdown** (.md) or **Plain Text** (.txt)
-- Uses Tauri save dialog for file location selection
-- Document content is written directly to the selected file
-
-## Inline AI
-
-The `use-inline-ai.ts` hook provides AI-assisted editing within the document editor, enabling AI completion and suggestions while editing.
-
----
-
-# documents > 03-tools
-
-> Source: `docs/documents/03-tools.md`
-
-# Document AI Tools
-
-Documents are accessible via 3 chat tools. These tools allow the AI to programmatically read, create, and update documents.
-
-## `doc_read`
-
-Reads a document by ID.
-
-```json
-{
-  "documentId": "string"
-}
-```
-
-## `doc_create`
-
-Creates a new document.
-
-```json
-{
-  "title": "string",
-  "documentType": "document",
-  "contentMarkdown": "string"
-}
-```
-
-## `inline_edit`
-
-Updates an existing document with selective mutation modes.
-
-```json
-{
-  "documentId": "string",
-  "mode": "replace_all | replace_section | insert_after_section | replace_text",
-  "target": "optional heading or exact text",
-  "contentMarkdown": "string",
-  "explanation": "optional summary"
-}
-```
-
-## Update Modes
-
-| Mode | Description |
-|------|-------------|
-| `replace_all` | Replace entire document content |
-| `replace_section` | Replace a section by heading |
-| `insert_after_section` | Insert content after a section |
-| `replace_text` | Replace specific text |
-
-`doc_update` remains a runtime-only alias for compatibility with older model calls. It is not advertised in the tool schema.
-
----
-
-# documents > 04-versioning
-
-> Source: `docs/documents/04-versioning.md`
-
-# Document Versioning
-
-Each document maintains a version history that provides undo capability and change tracking.
-
-## Version Snapshots
-
-- Pre/post version snapshots are created for each AI mutation
-- Each save creates a new version entry
-- Change source is tracked: `user`, `assistant`, or `system`
-
-## Version Record
-
-```typescript
-interface DocumentVersion {
-  id: string
-  documentId: string
-  content: string
-  changeSource: 'user' | 'assistant' | 'system'
-  createdAt: number
-}
-```
-
-## Undo
-
-The version history enables undo capability for AI edits, allowing users to roll back to previous versions of a document.
-
----
-
-# documents > 05-types
-
-> Source: `docs/documents/05-types.md`
-
-# Document Key Types
-
-From `src/modules/documents/document-types.ts`:
-
-```typescript
-type DocumentType =
-  | "document" | "technical_spec" | "essay" | "report"
-  | "proposal" | "readme" | "notes" | "prompt"
-  | "project_plan" | "meeting_notes" | "research_brief"
-  | "agent_instruction";
-
-type DocumentStatus = "draft" | "review" | "final" | "archived";
-
-type UpdateMode =
-  | "replace_all" | "replace_section"
-  | "insert_after_section" | "replace_text";
-
-type ChangeSource = "user" | "assistant" | "system";
-
-interface DocumentRecord {
-  id: string;
-  projectId?: string;
-  conversationId?: string;
-  isGlobal: boolean;
-  title: string;
-  type: DocumentType;
-  status: DocumentStatus;
-  editorFormat: string;
-  contentMarkdown: string;
-  tags: string[];
-  folderId?: string;
-  createdAt: string;
-  updatedAt: string;
-  lastExportedAt?: string;
-}
-
-interface DocumentVersion {
-  id: string;
-  documentId: string;
-  versionNumber: number;
-  contentMarkdown: string;
-  changeSource: ChangeSource;
-  changeSummary: string;
-  sourceConversationId?: string;
-  sourceMessageId?: string;
-  createdAt: string;
-}
-
-interface DocumentFolder {
-  id: string;
-  name: string;
-  parentId?: string;
-  projectId?: string;
-  sortOrder: number;
-}
-```
-
----
-
-# documents > README
-
-> Source: `docs/documents/README.md`
-
-# Documents Module
-
-Markdown document editor with versioning, AI-assisted creation/update, and export.
-
-## Contents
-
-- [01-overview.md](01-overview.md) — Document types, statuses, storage, and sync
-- [02-editor.md](02-editor.md) — Editor features, auto-save, export
-- [03-tools.md](03-tools.md) — AI document tools (doc_read, doc_create, inline_edit)
-- [04-versioning.md](04-versioning.md) — Version history and change tracking
-- [05-types.md](05-types.md) — Key type definitions
-
----
-
 # characters > 01-overview
 
 > Source: `docs/characters/01-overview.md`
@@ -2282,7 +1602,7 @@ Searches for contextual snippets before the plan phase, providing the LLM with p
 
 ### Phase 9: Finalize
 - Saves the report and sets status to `completed`
-- Optional export to Documents or Memory modules
+- Optional export to a markdown/text file
 
 The `ResumePhase` type in `research-runtime.ts` tracks: `"background" | "plan" | "search" | "read" | "validate" | "extract" | "verify" | "gap" | "synthesize"`.
 
@@ -2397,15 +1717,13 @@ Sources are scored on credibility using `src/modules/research/source-credibility
 
 # Research Report Export
 
-Reports can be exported to multiple destinations after the research pipeline completes.
+Reports can be exported to a file after the research pipeline completes.
 
 ## Export Targets
 
 | Target | Description |
 |--------|-------------|
-| Documents | Creates a new document with the synthesized report |
-| Memory | Extracts key findings as memory nodes |
-| File | Direct markdown/text export via the document export system |
+| File | Direct markdown/text file export |
 
 ## Citation Maps
 
@@ -2521,7 +1839,7 @@ Deep research pipeline with 9 phases, multi-depth presets, source scoring, and c
 - [02-depth-presets.md](02-depth-presets.md) — Research depth configurations
 - [03-source-types.md](03-source-types.md) — Source types and credibility scoring
 - [04-pause-resume.md](04-pause-resume.md) — Pause/resume and lifecycle handling
-- [05-report-export.md](05-report-export.md) — Report export to documents, memory, files
+- [05-report-export.md](05-report-export.md) — Report export to files
 - [06-types.md](06-types.md) — Key type definitions
 
 ---
@@ -2969,7 +2287,7 @@ Optional web search via SearXNG (Docker), ArXiv, and Wikipedia APIs.
 
 # Projects Overview
 
-Persistent local containers that scope chats, documents, memories, tools, and settings around a goal or workstream.
+Persistent local containers that scope chats, tools, and settings around a goal or workstream.
 
 ## Key Files
 
@@ -3024,8 +2342,6 @@ Per-project settings that override global defaults when the project is active. A
 
 | Setting | Type | Description |
 |---------|------|-------------|
-| `memoryEnabled` | `boolean` | Enable/disable memory for this project |
-| `memoryMode` | `MemoryMode` | Override memory mode |
 | `webSearchEnabled` | `boolean` | Enable/disable web search |
 | `webSearchMode` | `"auto" \| "always" \| "off"` | Override web search mode |
 | `webSearchFetchEnabled` | `boolean` | Enable content fetching for search results |
@@ -3033,7 +2349,7 @@ Per-project settings that override global defaults when the project is active. A
 | `webSearchPerPageTimeoutSecs` | `number` | Per-page fetch timeout |
 | `webSearchFetchMaxCharsPerSource` | `number` | Max characters extracted per source |
 | `webSearchContextTokenLimit` | `number` | Token budget for search context |
-| `enabledTools` | `{ documents: boolean; webSearch: boolean }` | Which tools are available |
+| `enabledTools` | `{ webSearch: boolean }` | Which tools are available |
 | `modelId` | `string` | Project-specific model selection |
 | `temperature` | `number` | Model temperature override |
 | `contextLength` | `number` | Context window override |
@@ -3072,8 +2388,6 @@ When a project is active, the system prompt includes:
 
 The following resources can be scoped to a project:
 - **Conversations**: Chat threads belong to a project
-- **Documents**: Documents can be project-specific
-- **Memory**: Memory nodes can be project-scoped
 
 ## Project Tracking
 
@@ -3114,8 +2428,6 @@ interface ProjectRecord {
 }
 
 interface ProjectSettings {
-  memoryEnabled?: boolean;
-  memoryMode?: MemoryMode;
   webSearchEnabled?: boolean;
   webSearchMode?: "auto" | "always" | "off";
   webSearchFetchEnabled?: boolean;
@@ -3124,7 +2436,6 @@ interface ProjectSettings {
   webSearchFetchMaxCharsPerSource?: number;
   webSearchContextTokenLimit?: number;
   enabledTools?: {
-    documents: boolean;
     webSearch: boolean;
   };
   modelId?: string;
@@ -3145,7 +2456,7 @@ All `ProjectSettings` fields are optional — they override global defaults only
 
 # Projects Module
 
-Persistent local containers that scope chats, documents, memories, tools, and settings.
+Persistent local containers that scope chats, tools, and settings.
 
 ## Contents
 
@@ -3212,27 +2523,31 @@ Agent runs have a **2-hour timeout**. If the agent doesn't complete within this 
 
 > Source: `docs/agents/02-session-management.md`
 
-# Agent Session Management
+# Agent session management
 
 ## Persistence
 
-- Sessions are persisted to localStorage (excluding running sessions)
-- Running sessions are not persisted (they can't survive app restart)
+Sessions and opened project paths are stored in the existing local agent store. Running sessions are excluded from persistence because their processes cannot survive app restart. Composer drafts stay in memory while the workspace is mounted.
 
-## Concurrency
+## Scheduling and navigation
 
-- Max **1 running session per project path**
-- `chainedStart` prevents concurrent starts for the same workspace
-- Starting a new session in the same project stops the previous one
+The shared AI scheduler queues agent runs, and the store serializes starts. A project with a running session does not start a second run. The composer shows queued/model-preparation state and supports cancellation before the runtime starts.
+
+Switching projects or creating a fresh draft does not stop running work. A selected session restores its project and mode. A fresh session stays empty when project sessions refresh. Queued tasks capture their intended session at dispatch, so subsequent navigation cannot redirect a follow-up or pull the user into another project when work begins.
+
+## Follow-ups
+
+Completed sessions can receive another task. The runtime continues to use ephemeral Pi runs; Veyra supplies a bounded transcript of previous user tasks and agent responses as context for the next task. The recent transcript is capped according to the model context setting and does not create a second on-disk transcript. Tool output and reasoning are not replayed. The agent can inspect files again for current state.
 
 ## Operations
 
 | Operation | Description |
 |-----------|-------------|
-| Start | Create and run a new session |
-| Stop | Abort a running session |
-| Delete | Remove a session |
-| Clear | Clear all sessions |
+| Open project | Remember a local folder and start a fresh task draft |
+| New session | Clear the active session selection without deleting history |
+| Run | Create a session or continue the captured selected session |
+| Stop | Cancel queued preparation or abort the current project run |
+| Delete | Remove a session after confirmation |
 
 ---
 
@@ -3274,31 +2589,30 @@ Events are streamed from Pi CLI via Tauri events.
 
 > Source: `docs/agents/04-ui.md`
 
-# Agent UI Components
+# Agent workspace
 
-## Agents Panel
+Agents has a dedicated project workspace, entered from the Agents navigation item. It uses a compact app rail and does not show the chat header, chat options, or chat context sidebar.
 
-- Mode selector (Plan/Build)
-- Workspace path input with folder browser
-- Runtime status pill (available/unavailable)
-- Session list sidebar
-- Output view with live streaming
+## Layout
 
-## Output View
+- The left sidebar remembers opened project folders, groups sessions under their project, and searches project names and session titles. Opening a folder creates a fresh session draft. Switching projects preserves running work.
+- The center shows the project/session breadcrumb and a work log. Tasks use an inset block; agent responses use plain markdown. Reasoning and tool output are expandable. Auto-scroll follows output until the user scrolls up.
+- The bottom composer contains Plan/Build, provider and model selection, reasoning, and Run/Stop. Drafts survive project/session navigation while the workspace remains mounted. Enter runs a task; Shift+Enter adds a line. Escape in the composer cancels queued or running work.
+- The optional inspector offers Files and Activity. Files supports folder navigation and read-only text previews. Activity shows session status, mode, context tokens, and expandable tool details.
 
-- Typewriter-style markdown rendering
-- Expandable reasoning blocks
-- Tool call indicators
-- Error display
-
-## Key Components
+## Components
 
 | Component | Purpose |
 |-----------|---------|
-| `agents-panel.tsx` | Main agents panel with mode selection and session management |
-| `agent-output-view.tsx` | Live streaming output display |
-| `agent-session-list.tsx` | Session sidebar with history |
-| `typewriter-markdown.tsx` | Typewriter markdown rendering |
+| `agents-panel.tsx` | Project/session navigation, workspace shell, task starters |
+| `agent-composer.tsx` | Task drafts, mode controls, scheduler state and cancellation |
+| `agent-output-view.tsx` | Streaming work log and expandable activity |
+| `agent-chat-turn.tsx` | Task and agent response rendering |
+| `agent-inspector.tsx` | Project file browser, text preview and tool activity |
+| `agent-workspace.css` | Workspace layout, responsive styles and app rail |
+| `typewriter-markdown.tsx` | Streaming markdown rendering |
+
+The inspector reads project files through `inspect_agent_workspace`. Directory listings are limited to 300 entries and text previews to 64 KiB. Canonical paths must remain inside the project, binary files are rejected, and filesystem work runs off the Tauri command thread. The inspector does not edit files or run commands.
 
 ---
 
@@ -3313,6 +2627,8 @@ Events are streamed from Pi CLI via Tauri events.
 | `check_pi_available` | Check if Pi CLI is on PATH |
 | `stop_pi_agent` | Stop a running agent |
 | `run_pi_agent` | Start an agent run (streams events) |
+| `inspect_agent_workspace` | List a project directory or read a bounded text preview within the project |
+| `inspect_agent_reasoning` | Read exact model/provider reasoning capabilities from the installed Pi registry |
 
 ---
 
@@ -3376,6 +2692,42 @@ interface PiSession {
 
 ---
 
+# agents > 07-reasoning
+
+> Source: `docs/agents/07-reasoning.md`
+
+# Model-specific agent reasoning
+
+Veyra reads the installed Pi SDK's model registry, including the user's `.pi/agent/models.json`, and uses Pi's `getSupportedThinkingLevels` and `clampThinkingLevel`. No provider requests, auth-file reads, model-name heuristics, or additional SDK installation are needed for the lookup. Registry access uses an in-memory credential store, and the bridge returns only provider/model identity and reasoning capabilities.
+
+The installed SDK inspected during implementation was Pi 0.80.6. Its catalogs already distinguish models with extra-high effort from models with max effort. Pi's `thinkingLevelMap` can set an unsupported level to `null`; this also handles models whose reasoning cannot be turned off.
+
+## Controls and synchronization
+
+- Effort-capable models show only the levels Pi advertises for that exact model.
+- Boolean thinking adapters such as Qwen and Together show on/off rather than imply they can apply several effort levels.
+- Models without reasoning support show a disabled No reasoning control.
+- Compatible endpoints declaring `supportsReasoningEffort: false` without another thinking transport show Model managed.
+- Unknown or ambiguous model routes show Reasoning unknown. Veyra does not guess capabilities from a model's name.
+
+Selections are remembered per provider, model, and endpoint. A model switch immediately discards stale capability results. Refresh reloads Pi metadata after a configuration change. Runs recheck the registry and clamp the requested level with Pi's own helper. The CLI receives separate `--provider`, `--model`, and `--thinking` arguments, preserving slash-containing model IDs.
+
+Provider IDs are matched first. A custom provider name can resolve through a unique exact endpoint/model match. A different endpoint or an ambiguous match is rejected instead of silently routing to another provider. Custom endpoints still need to be configured and authenticated in Pi.
+
+LM Studio setup adds missing models to `models.json` while preserving existing providers, models, compatibility options, and thinking mappings. New local models default to unverified reasoning support instead of being marked reasoning-capable because the user selected a level. Configure verified capabilities in Pi before enabling their controls. Reasoning metadata describes what Pi can request; the endpoint remains responsible for honoring it.
+
+Lookup subprocesses are cached in the UI, run off the Tauri command thread, and have a deadline. Stop also cancels startup during capability inspection so a cancelled task cannot subsequently launch the agent.
+
+## References
+
+- [Pi model configuration](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md)
+- [Pi AI model helpers](https://github.com/earendil-works/pi/blob/main/packages/ai/src/models.ts)
+- [Pi RPC integration](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc.md)
+
+The installed version's source and exports take precedence over newer online documentation.
+
+---
+
 # agents > README
 
 > Source: `docs/agents/README.md`
@@ -3392,6 +2744,7 @@ Optional Pi CLI integration for plan and build modes with streaming event output
 - [04-ui.md](04-ui.md) — UI components and panels
 - [05-tauri-commands.md](05-tauri-commands.md) — Tauri IPC commands
 - [06-types.md](06-types.md) — Key type definitions
+- [07-reasoning.md](07-reasoning.md) — Model-specific reasoning controls and Pi routing
 
 ---
 
@@ -3520,24 +2873,22 @@ Cross-cutting architecture patterns for state management.
 | File | Purpose |
 |------|---------|
 | `src/stores/chat-store.ts` | Central conversation state |
-| `src/stores/settings-store.ts` | Combined settings (12 slices) |
+| `src/stores/settings-store.ts` | Combined settings (9 slices) |
 | `src/stores/provider-store.ts` | Provider and model management |
 | `src/stores/connectivity-store.ts` | Connectivity state |
 | `src/stores/update-store.ts` | App update state |
 
-## Zustand Stores (13 total)
+## Zustand Stores (11 total)
 
 Stores live in both `src/stores/` and `src/modules/<feature>/`:
 
 | Store Hook | Location | Purpose |
 |------------|----------|---------|
 | `useChatStore` | `src/stores/chat-store.ts` | Conversations, streaming buffer, messages |
-| `useSettingsStore` | `src/stores/settings-store.ts` | All app settings (12 slices) |
+| `useSettingsStore` | `src/stores/settings-store.ts` | All app settings (9 slices) |
 | `useProviderStore` | `src/stores/provider-store.ts` | Provider connection, model listing |
 | `useConnectivityStore` | `src/stores/connectivity-store.ts` | Online/offline/local-only state |
 | `useUpdateStore` | `src/stores/update-store.ts` | App update state |
-| `useMemoryStore` | `src/modules/memory/memory-store.ts` | Memory nodes, folders, files |
-| `useDocumentStore` | `src/modules/documents/document-store.ts` | Documents with auto-save |
 | `useCharacterStore` | `src/modules/characters/character-store.ts` | Character records |
 | `useCharacterGroupStore` | `src/modules/characters/character-group-store.ts` | Character groups |
 | `useCharacterAssistStore` | `src/modules/characters/ai-assist/ai-assist-store.ts` | AI-assisted creation state |
@@ -3545,17 +2896,15 @@ Stores live in both `src/stores/` and `src/modules/<feature>/`:
 | `useResearchStore` | `src/modules/research/research-store.ts` | Research runs and reports |
 | `useAgentStore` | `src/modules/agents/agent-store.ts` | Agent sessions |
 
-## Settings Store (11 Slices)
+## Settings Store (9 Slices)
 
-The settings store is composed from 11 slices in `src/stores/slices/`:
+The settings store is composed from 9 slices in `src/stores/slices/`:
 
 | Slice | File | Purpose |
 |-------|------|---------|
 | `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, panel collapsed state, visible tool settings |
 | `model-slice` | `model-slice.ts` | Default model, temperature, context length |
-| `memory-slice` | `memory-slice.ts` | Memory mode, scope limits |
 | `web-search-slice` | `web-search-slice.ts` | SearXNG URL, provider settings |
-| `document-slice` | `document-slice.ts` | Auto-save delay, default type |
 | `character-slice` | `character-slice.ts` | AI assist model, max tokens, tone settings |
 | `research-slice` | `research-slice.ts` | Default depth, approval requirements |
 | `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |
@@ -3575,7 +2924,7 @@ All settings persist to localStorage under `veyra.settings.v1`.
 
 Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority-based queueing.
 
-## Job Types (9 total)
+## Job Types (8 total)
 
 | Type | Priority | Description |
 |------|----------|-------------|
@@ -3585,7 +2934,6 @@ Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority
 | `auto_name_chat` | 2 | Auto-generate conversation titles |
 | `character_ai_assist` | 2 | AI-assisted character creation |
 | `summarize_chat` | 3 | Conversation summarization |
-| `extract_memory` | 3 | Memory extraction from chat |
 | `compress_context` | 3 | Context compression |
 | `maintenance` | 4 (lowest) | Background cleanup |
 
@@ -3622,10 +2970,8 @@ Veyra core          — Base AI identity and behavior
 <veyra_project>     — Active project context
 <veyra_character>   — Character persona
 <veyra_context>     — Date, time, platform
-<veyra_documents>   — Document tool instructions
 
 Non-system reference message:
-<veyra_memory>      — Retrieved memory nodes
 <veyra_conversation_summary>  — Summary of older turns
 <veyra_web_search>  — Untrusted web evidence from tool calls
 ```
@@ -3721,9 +3067,6 @@ under `veyra.provider.v1`.
 | Tool | Condition | Description |
 |------|-----------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG. Parallel execution with up to 2 retries. |
-| `doc_create` | `documentToolsEnabled` | Create a new document. |
-| `doc_read` | `documentToolsEnabled` | Read a document by ID. |
-| `inline_edit` | `documentToolsEnabled` | Edit a document (replace_all, replace_section, insert_after_section, replace_text). Retries up to 2 times with LLM re-prompt. |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds. |
 | `ask_question` | `enhancedMode` | Pause execution to ask the user a question. |
 | `studio_render` | `studioEnabled` | Render a validated HTML/CSS Studio response in an isolated iframe. |
@@ -3732,8 +3075,6 @@ under `veyra.provider.v1`.
 Each tool has a JSON schema defining its parameters. Tool calls execute in rounds:
 - Standard mode: up to **6 rounds**
 - Enhanced mode: up to **10 rounds**
-
-`doc_update` is a legacy constant kept for backward-compatible runtime handling; it has been replaced by `inline_edit`.
 
 Native `code_execution` is disabled and is not included in provider tool definitions. Legacy calls return a disabled error until an OS-enforced sandbox exists.
 
@@ -3778,7 +3119,6 @@ Native `code_execution` is disabled and is not included in provider tool definit
 | File | Purpose |
 |------|---------|
 | `src/lib/conversation-storage.ts` | Encrypted conversation persistence |
-| `src/lib/document-storage.ts` | Document storage abstraction |
 
 ---
 
@@ -3788,7 +3128,7 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 # Tauri Backend
 
-## Rust Modules (13 total)
+## Rust Modules (10 total)
 
 | Module | Purpose |
 |--------|---------|
@@ -3796,11 +3136,8 @@ Native `code_execution` is disabled and is not included in provider tool definit
 | `app_update` | Application auto-update download, validation, installer launch |
 | `characters/` | Character and group CRUD, I/O commands, avatar management |
 | `connectivity/` | Network connectivity probe |
-| `document_extraction` | Document text extraction utility |
-| `documents/` | Document CRUD, versions, export, folders |
 | `extensions/` | MCP server discovery and invocation |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
-| `memory/` | Memory CRUD, BM25 + vector search, embeddings |
 | `projects/` | Project CRUD, manifest export |
 | `research/` | Research run, step, source, evidence, claim, contradiction, report CRUD |
 | `shared/` | SQLite connection, migrations, encryption keys |
@@ -3808,13 +3145,11 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 ## Command Count
 
-**~105 Tauri commands** registered across all modules. Key counts:
+**~78 Tauri commands** registered across all modules. Key counts:
 - Agents: 3 commands
 - App update: 1 command
-- Memory: 12 commands
 - Connectivity: 1 command
 - Web search: 14 commands
-- Documents: 15 commands
 - Projects: 5 commands
 - Research: 15 commands
 - Characters: 17 commands
@@ -3834,7 +3169,7 @@ Native `code_execution` is disabled and is not included in provider tool definit
 1. Initialize Tauri IPC
 2. Load settings from localStorage
 3. Connect to LM Studio
-4. Load characters, projects, documents
+4. Load characters and projects
 5. Check Pi CLI availability
 6. Initialize web search (check Docker/SearXNG)
 

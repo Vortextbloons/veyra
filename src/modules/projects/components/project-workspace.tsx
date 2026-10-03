@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   Folder,
   MessageSquare,
-  FileText,
   BookOpen,
   Clock,
 } from "lucide-react";
@@ -10,7 +9,6 @@ import type { ProjectRecord } from "@/modules/projects/project-types";
 import { PROJECT_KIND_LABELS } from "@/modules/projects/project-types";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useChatStore } from "@/stores/chat-store";
-import { useDocumentStore } from "@/modules/documents/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 import { ProjectSettingsPanel } from "./project-settings-panel";
@@ -27,13 +25,11 @@ function StudioListBadge() {
   );
 }
 
-type Tab = "overview" | "chats" | "documents" | "memory" | "instructions" | "settings";
+type Tab = "overview" | "chats" | "instructions" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "chats", label: "Chats" },
-  { id: "documents", label: "Documents" },
-  { id: "memory", label: "Memory" },
   { id: "instructions", label: "Instructions" },
   { id: "settings", label: "Settings" },
 ];
@@ -83,8 +79,6 @@ export function ProjectWorkspace({ project }: { project: ProjectRecord }) {
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {activeTab === "overview" && <OverviewTab project={project} />}
         {activeTab === "chats" && <ChatsTab project={project} />}
-        {activeTab === "documents" && <DocumentsTab project={project} />}
-        {activeTab === "memory" && <MemoryTab project={project} />}
         {activeTab === "instructions" && <InstructionsTab project={project} />}
         {activeTab === "settings" && <SettingsTab project={project} />}
       </div>
@@ -94,15 +88,10 @@ export function ProjectWorkspace({ project }: { project: ProjectRecord }) {
 
 function OverviewTab({ project }: { project: ProjectRecord }) {
   const conversations = useChatStore((s) => s.conversations);
-  const documents = useDocumentStore((s) => s.documents);
 
   const projectChats = useMemo(
     () => conversations.filter((c) => c.projectId === project.id),
     [conversations, project.id],
-  );
-  const projectDocs = useMemo(
-    () => documents.filter((d) => d.projectId === project.id),
-    [documents, project.id],
   );
 
   const lastActivity = projectChats.length > 0
@@ -114,10 +103,8 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
   return (
     <div className="flex h-full w-full flex-col gap-3 p-4">
       {/* Stats */}
-      <div className="grid w-full grid-cols-4 gap-3">
+      <div className="grid w-full grid-cols-2 gap-3">
         <StatCard label="Chats" value={projectChats.length} />
-        <StatCard label="Documents" value={projectDocs.length} />
-        <StatCard label="Memory" value="—" />
         <StatCard label="Last activity" value={lastActivity} isDate />
       </div>
 
@@ -128,10 +115,6 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
         <InfoCard
           title="System prompt"
           value={project.systemPrompt ? `${project.systemPrompt.slice(0, 80)}...` : "Not set"}
-        />
-        <InfoCard
-          title="Memory"
-          value={project.settings?.memoryEnabled !== false ? "Enabled" : "Disabled"}
         />
       </div>
 
@@ -231,88 +214,6 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function DocumentsTab({ project }: { project: ProjectRecord }) {
-  const documents = useDocumentStore((s) => s.documents);
-  const projectDocs = useMemo(
-    () => documents.filter((d) => d.projectId === project.id),
-    [documents, project.id],
-  );
-
-  return (
-    <div className="flex h-full w-full flex-col p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[13px] font-medium text-[var(--color-text)]">
-          Project Documents ({projectDocs.length})
-        </h3>
-      </div>
-
-      {projectDocs.length === 0 ? (
-        <EmptyState
-          icon={<FileText className="size-6" />}
-          title="No documents yet"
-          description="Documents created in this project's chats will appear here."
-        />
-      ) : (
-        <div className="w-full flex-1 space-y-1">
-          {projectDocs.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium text-[var(--color-text)]">
-                  {doc.title}
-                </div>
-                <div className="text-[11px] text-[var(--color-text-dim)]">
-                  {doc.type} · {doc.status}
-                </div>
-              </div>
-              <div className="text-[10px] text-[var(--color-text-dim)]">
-                {new Date(doc.updatedAt).toLocaleDateString()}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MemoryTab({ project }: { project: ProjectRecord }) {
-  const memoryEnabled = project.settings?.memoryEnabled !== false;
-  const memoryMode = project.settings?.memoryMode ?? "global default";
-
-  return (
-    <div className="flex h-full w-full flex-col p-4">
-      <h3 className="mb-3 text-[13px] font-medium text-[var(--color-text)]">Project Memory</h3>
-
-      <div className="grid w-full grid-cols-2 gap-3">
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
-            Status
-          </div>
-          <div className="mt-1 text-[14px] font-semibold text-[var(--color-text)]">
-            {memoryEnabled ? "Enabled" : "Disabled"}
-          </div>
-        </div>
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
-            Mode
-          </div>
-          <div className="mt-1 text-[14px] font-semibold text-[var(--color-text)]">
-            {memoryMode}
-          </div>
-        </div>
-      </div>
-
-      <p className="mt-4 text-[12px] text-[var(--color-text-dim)]">
-        Memories extracted from project chats are automatically scoped to this project.
-        They are used when the project is active to provide relevant context.
-      </p>
     </div>
   );
 }

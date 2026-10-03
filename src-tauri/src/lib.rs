@@ -37,10 +37,8 @@ mod app_update;
 mod characters;
 mod connectivity;
 mod document_extraction;
-mod documents;
 mod extensions;
 mod file_extraction;
-mod memory;
 mod projects;
 mod research;
 mod shared;
@@ -334,18 +332,6 @@ pub fn run() {
             agents::workspace::inspect_agent_workspace,
             agents::commands::run_pi_agent,
             agents::commands::stop_pi_agent,
-            memory::commands::list_memory_folders,
-            memory::commands::list_memory_nodes,
-            memory::commands::create_memory_node,
-            memory::commands::update_memory_node,
-            memory::commands::delete_memory_node,
-            memory::commands::archive_memory_node,
-            memory::commands::pin_memory_node,
-            memory::commands::search_memory,
-            memory::commands::vector_search_memory,
-            memory::commands::compute_all_embeddings,
-            memory::commands::get_embedding_memory_status,
-            memory::commands::find_duplicate_memory_nodes,
             connectivity::commands::probe_internet_connectivity,
             web_search::commands::web_search_searxng,
             web_search::commands::get_searxng_capabilities,
@@ -359,21 +345,6 @@ pub fn run() {
             web_search::searxng_setup::start_searxng_container,
             web_search::searxng_setup::stop_searxng_container,
             shared::lm_studio_setup::start_lm_studio_server,
-            documents::commands::create_document,
-            documents::commands::get_document,
-            documents::commands::update_document,
-            documents::commands::list_documents,
-            documents::commands::delete_document,
-            documents::commands::create_document_version,
-            documents::commands::list_document_versions,
-            documents::commands::restore_document_version,
-            documents::commands::export_document_markdown,
-            documents::commands::export_document_txt,
-            documents::commands::create_document_folder,
-            documents::commands::list_document_folders,
-            documents::commands::update_document_folder,
-            documents::commands::delete_document_folder,
-            documents::commands::move_document_to_folder,
             projects::commands::create_project,
             projects::commands::update_project,
             projects::commands::list_projects,
@@ -425,14 +396,6 @@ pub fn run() {
             extensions::commands::call_stdio_mcp,
         ])
         .setup(|app| {
-            let db_state = memory::db::MemoryDbState::new(app.handle().clone());
-            db_state.spawn_background_init();
-            app.manage(db_state);
-
-            let doc_db_state = documents::db::DocumentDbState::new(app.handle().clone());
-            doc_db_state.spawn_background_init();
-            app.manage(doc_db_state);
-
             let project_db_state = projects::db::ProjectDbState::new(app.handle().clone());
             project_db_state.spawn_background_init();
             app.manage(project_db_state);

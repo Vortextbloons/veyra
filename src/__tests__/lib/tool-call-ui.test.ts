@@ -22,7 +22,7 @@ describe("tool-call-ui", () => {
     });
 
     it("returns metadata for all registered tools", () => {
-      for (const name of ["web_search", "code_execution", "doc_create", "doc_update", "doc_read", "scratchpad_write", "ask_question"]) {
+      for (const name of ["web_search", "code_execution", "scratchpad_write", "ask_question"]) {
         const meta = getToolCallUi(name);
         expect(meta.label).toBeTruthy();
         expect(meta.icon).toBeDefined();

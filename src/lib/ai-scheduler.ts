@@ -5,7 +5,6 @@ export type AiJobType =
   | "agent_pi"
   | "auto_name_chat"
   | "summarize_chat"
-  | "extract_memory"
   | "compress_context"
   | "maintenance"
   | "research_run"
@@ -314,7 +313,6 @@ export const JOB_LABELS: Record<AiJobType, string> = {
   agent_pi: "Pi agent",
   auto_name_chat: "Naming chat",
   summarize_chat: "Summarizing chat",
-  extract_memory: "Extracting memories",
   compress_context: "Compressing context",
   maintenance: "Maintenance",
   research_run: "Research run",

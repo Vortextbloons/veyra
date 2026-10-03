@@ -2,7 +2,7 @@
 
 Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority-based queueing.
 
-## Job Types (9 total)
+## Job Types (8 total)
 
 | Type | Priority | Description |
 |------|----------|-------------|
@@ -12,7 +12,6 @@ Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority
 | `auto_name_chat` | 2 | Auto-generate conversation titles |
 | `character_ai_assist` | 2 | AI-assisted character creation |
 | `summarize_chat` | 3 | Conversation summarization |
-| `extract_memory` | 3 | Memory extraction from chat |
 | `compress_context` | 3 | Context compression |
 | `maintenance` | 4 (lowest) | Background cleanup |
 

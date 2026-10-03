@@ -1,12 +1,11 @@
 import type { LucideIcon } from "lucide-react";
-import { FileText, Globe, PanelsTopLeft, TerminalSquare } from "lucide-react";
+import { Globe, PanelsTopLeft, TerminalSquare } from "lucide-react";
 import { CodeExecutionSettings } from "./code-execution-settings";
 import { WebSearchSettings } from "./web-search-settings";
-import { DocumentSettings } from "./document-settings";
 import { StudioSettingsSection } from "./studio-settings-section";
 import { useToolsSettingsSearch } from "./tools-settings-search-context";
 
-export type ToolSettingsSectionId = "webSearch" | "documents" | "codeExecution" | "studio";
+export type ToolSettingsSectionId = "webSearch" | "codeExecution" | "studio";
 
 export type ToolSettingsSection = {
   id: ToolSettingsSectionId;
@@ -59,24 +58,6 @@ export const TOOL_SETTINGS_SECTIONS: ToolSettingsSection[] = [
     defaultVisible: true,
   },
   {
-    id: "documents",
-    label: "Documents",
-    description: "Document panel, editor behavior, defaults, and formatting.",
-    icon: FileText,
-    keywords: [
-      "document",
-      "editor",
-      "markdown",
-      "auto-save",
-      "font",
-      "spell",
-      "wrap",
-      "panel",
-    ],
-    component: DocumentSettings,
-    defaultVisible: true,
-  },
-  {
     id: "studio",
     label: "Studio Mode",
     description: "Custom visual and interactive messages with isolated HTML, CSS, and JavaScript.",
@@ -99,7 +80,6 @@ export const TOOL_SETTINGS_SECTIONS: ToolSettingsSection[] = [
 export const DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS: Record<ToolSettingsSectionId, boolean> = {
   codeExecution: true,
   webSearch: true,
-  documents: true,
   studio: true,
 };
 
@@ -114,12 +94,6 @@ export const TOOL_SETTINGS_SUBSECTIONS: Record<
     { title: "Search Mode", keywords: ["auto"] },
     { title: "Search Parameters", keywords: ["results", "time", "category", "safe"] },
     { title: "Content Extraction", keywords: ["fetch", "cache", "readability"] },
-  ],
-  documents: [
-    { title: "Documents", keywords: ["panel", "enable"] },
-    { title: "Behavior", keywords: ["auto-save", "open"] },
-    { title: "Defaults", keywords: ["type"] },
-    { title: "Editor", keywords: ["font", "tab", "wrap", "spell"] },
   ],
   codeExecution: [
     { title: "Execution", keywords: ["python", "enable", "workspace"] },

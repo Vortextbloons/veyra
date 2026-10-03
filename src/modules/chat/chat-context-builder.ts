@@ -1,18 +1,15 @@
 import type { ChatMessage, Conversation } from "@/modules/chat/chat-types";
 import type { ProviderChatOptions, ProviderToolDefinition } from "@/lib/providers/types";
-import type { MemoryPack } from "@/modules/memory/memory-types";
 import { buildChatContext } from "@/lib/context";
 import { resolveCharacterBlock } from "@/lib/resolve-character-block";
 import type { ResolvedModelSettings } from "@/modules/chat/chat-provider-options";
 
 export type RoundMessagesContext = {
-  memoryPack: MemoryPack | null;
   conversation?: Conversation;
   resolvedUserPrompt: string | undefined;
   resolvedReservedOutputTokens: number;
   activeModelName?: string;
   activeProviderName?: string;
-  documentInstructionsBlock?: string;
   contextAnchoringBlock?: string;
   projectPromptBlock?: string;
   skillContextBlock?: string;
@@ -41,14 +38,12 @@ export function buildRoundMessages(
   return buildChatContext(
     chainMessages,
     {
-      memoryPack: context.memoryPack ?? null,
       conversationSummary: context.conversation?.conversationSummary,
       summaryCoversMessageCount: context.conversation?.summaryCoversMessageCount,
       webSearchContextBlock:
         webSearchContextBlocks.length > 0
           ? webSearchContextBlocks.join("\n\n")
           : undefined,
-      documentInstructionsBlock: context.documentInstructionsBlock,
       contextAnchoringBlock: context.contextAnchoringBlock,
       projectPromptBlock: context.projectPromptBlock,
       skillContextBlock: context.skillContextBlock,

@@ -7,7 +7,6 @@ import {
   Loader2,
   MessageSquare,
   Wrench,
-  Brain,
   FileText,
   Zap,
   Bot,
@@ -88,8 +87,6 @@ export function jobTypeIcon(type: AiJobType): ReactNode {
     case "auto_name_chat":
     case "summarize_chat":
       return <FileText className="size-3.5" />;
-    case "extract_memory":
-      return <Brain className="size-3.5" />;
     case "compress_context":
       return <Zap className="size-3.5" />;
     case "maintenance":

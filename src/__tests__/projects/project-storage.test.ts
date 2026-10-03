@@ -31,7 +31,7 @@ describe("project-storage", () => {
 
     await createProject({
       name: "New Project",
-      settings: { memoryEnabled: true },
+      settings: { webSearchEnabled: true },
     });
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -51,7 +51,7 @@ describe("project-storage", () => {
       color: "indigo",
       icon: "folder",
       systemPrompt: "",
-      settingsJson: '{"memoryEnabled":true}',
+      settingsJson: '{"webSearchEnabled":true}',
       createdAt: "2026-06-18T12:00:00.000Z",
       updatedAt: "2026-06-18T12:00:00.000Z",
     });

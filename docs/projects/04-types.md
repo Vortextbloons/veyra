@@ -25,8 +25,6 @@ interface ProjectRecord {
 }
 
 interface ProjectSettings {
-  memoryEnabled?: boolean;
-  memoryMode?: MemoryMode;
   webSearchEnabled?: boolean;
   webSearchMode?: "auto" | "always" | "off";
   webSearchFetchEnabled?: boolean;
@@ -35,7 +33,6 @@ interface ProjectSettings {
   webSearchFetchMaxCharsPerSource?: number;
   webSearchContextTokenLimit?: number;
   enabledTools?: {
-    documents: boolean;
     webSearch: boolean;
   };
   modelId?: string;

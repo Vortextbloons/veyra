@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 import type { MessageAttachment } from "@/lib/message-attachments";
-import type { MemoryPack, MemoryRetrievalInfo } from "@/modules/memory/memory-types";
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult } from "@/modules/web-search/types";
 import type { FetchStatus } from "@/lib/fetch-status";
@@ -87,10 +86,6 @@ export interface ChatMessage {
   reasoning?: string;
   timestamp: number;
   performance?: MessagePerformance;
-  /** Memory pack injected into context for this turn (only when chat Memory toggle was on) */
-  memoryPack?: MemoryPack;
-  /** Outcome of memory retrieval for this turn (toggle on). */
-  memoryRetrieval?: MemoryRetrievalInfo;
   /** Sources used from web search for this turn. */
   webSearchSources?: WebSearchSource[];
   /** Live web search state for rendering tool call UI during/after search. */
@@ -159,10 +154,6 @@ export interface Conversation {
   conversationSummary?: string;
   /** Number of leading messages folded into `conversationSummary` */
   summaryCoversMessageCount?: number;
-  /** Number of leading messages processed by batched memory extraction. */
-  memoryLastProcessedMessageCount?: number;
-  /** Timestamp when this conversation first became pending for memory extraction. */
-  memoryPendingSince?: number;
 }
 
 export interface CharacterConversationSnapshot {
@@ -193,12 +184,10 @@ export type ContextBlockCategory =
   | "system_core"
   | "model_identity"
   | "user_prompt"
-  | "memory"
   | "character"
   | "project"
   | "summary"
   | "context_anchor"
-  | "documents_instructions"
   | "tool_definitions"
   | "web_search_results"
   | "user_message"
@@ -209,12 +198,10 @@ export const CONTEXT_BLOCK_ACCENTS: Record<ContextBlockCategory, string> = {
   system_core: "var(--color-text-dim)",
   model_identity: "var(--color-text-dim)",
   user_prompt: "var(--color-accent)",
-  memory: "#818cf8",
   character: "#c084fc",
   project: "#60a5fa",
   summary: "#2dd4bf",
   context_anchor: "#64748b",
-  documents_instructions: "#34d399",
   tool_definitions: "#22d3ee",
   web_search_results: "#22d3ee",
   user_message: "#4ade80",
@@ -280,10 +267,8 @@ export interface ChatPanelProps {
   onSend?: (
     text: string,
     attachments?: MessageAttachment[],
-    options?: { memoryEnabled: boolean },
   ) => void;
   supportsImages?: boolean;
-  defaultMemoryEnabled?: boolean;
   isStreaming?: boolean;
   streamingMessageId?: string | null;
   providers?: ProviderInfo[];
@@ -311,7 +296,6 @@ export interface ChatPanelProps {
   codeExecutionDisabled?: boolean;
   codeExecutionDisabledReason?: string;
   onStop?: () => void;
-  onTriggerMemoryExtraction?: () => void;
   modelLoadProgress?: ModelLoadProgress;
   mode?: ChatMode;
   defaultMode?: ChatMode;

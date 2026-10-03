@@ -148,8 +148,6 @@ export function CharacterChatView({
         favoriteModels={pipeline.favoriteModels}
         onToggleFavorite={(id) => useSettingsStore.getState().toggleFavoriteModel(id)}
         supportsImages={pipeline.supportsImages}
-        defaultMemoryEnabled={useSettingsStore.getState().defaultMemoryEnabled}
-        onTriggerMemoryExtraction={pipeline.handleTriggerMemoryExtraction}
         sidebarsCollapsed={pipeline.sidebarsCollapsed}
         modelLoadProgress={pipeline.modelLoadProgress}
         mode="characters"

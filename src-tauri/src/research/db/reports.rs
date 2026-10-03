@@ -13,13 +13,12 @@ use super::types::{
     UpdateResearchReportInput,
 };
 
-const REPORT_SELECT_COLS: &str = "id, run_id, title, content_markdown, citation_map, source_ids, evidence_ids, word_count, format, exported_to_document_id, exported_to_memory_ids, created_at, updated_at";
+const REPORT_SELECT_COLS: &str = "id, run_id, title, content_markdown, citation_map, source_ids, evidence_ids, word_count, format, created_at, updated_at";
 
 fn row_to_report(row: &rusqlite::Row) -> rusqlite::Result<ResearchReportRow> {
     let citation_map_str: String = row.get("citation_map")?;
     let source_ids_str: String = row.get("source_ids")?;
     let evidence_ids_str: String = row.get("evidence_ids")?;
-    let exported_to_memory_ids_str: String = row.get("exported_to_memory_ids")?;
     let citation_map: std::collections::HashMap<String, String> =
         serde_json::from_str(&citation_map_str).unwrap_or_default();
     Ok(ResearchReportRow {
@@ -32,8 +31,6 @@ fn row_to_report(row: &rusqlite::Row) -> rusqlite::Result<ResearchReportRow> {
         evidence_ids: parse_json_array(&evidence_ids_str),
         word_count: row.get("word_count")?,
         format: row.get("format")?,
-        exported_to_document_id: row.get("exported_to_document_id")?,
-        exported_to_memory_ids: parse_json_array(&exported_to_memory_ids_str),
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -56,8 +53,6 @@ pub fn create_report(conn: &Connection, input_json: String) -> Result<ResearchRe
         .map_err(|e| format!("failed to serialize source_ids: {}", e))?;
     let evidence_ids_json = serde_json::to_string(&input.evidence_ids)
         .map_err(|e| format!("failed to serialize evidence_ids: {}", e))?;
-    let exported_to_memory_ids_json = serde_json::to_string(&Vec::<String>::new())
-        .map_err(|e| format!("failed to serialize exported_to_memory_ids: {}", e))?;
 
     let tx = conn
         .unchecked_transaction()
@@ -71,9 +66,9 @@ pub fn create_report(conn: &Connection, input_json: String) -> Result<ResearchRe
 
     tx.execute(
         "INSERT INTO research_reports
-           (id, run_id, title, content_markdown, citation_map, source_ids, evidence_ids, word_count, format, exported_to_memory_ids, created_at, updated_at)
+           (id, run_id, title, content_markdown, citation_map, source_ids, evidence_ids, word_count, format, created_at, updated_at)
          VALUES
-           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+           (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         rusqlite::params![
             id,
             input.run_id,
@@ -84,7 +79,6 @@ pub fn create_report(conn: &Connection, input_json: String) -> Result<ResearchRe
             evidence_ids_json,
             input.word_count,
             input.format,
-            exported_to_memory_ids_json,
             created_at,
             updated_at,
         ],
@@ -147,16 +141,6 @@ pub fn update_report(conn: &Connection, input_json: String) -> Result<ResearchRe
     if let Some(v) = input.word_count {
         sets.push(format!("word_count = ?{}", params.len() + 1));
         params.push(Value::Integer(v));
-    }
-    if let Some(v) = input.exported_to_document_id {
-        sets.push(format!("exported_to_document_id = ?{}", params.len() + 1));
-        params.push(Value::Text(v));
-    }
-    if let Some(v) = input.exported_to_memory_ids {
-        let json = serde_json::to_string(&v)
-            .map_err(|e| format!("failed to serialize exported_to_memory_ids: {}", e))?;
-        sets.push(format!("exported_to_memory_ids = ?{}", params.len() + 1));
-        params.push(Value::Text(json));
     }
     if let Some(v) = input.updated_at {
         sets.push(format!("updated_at = ?{}", params.len() + 1));

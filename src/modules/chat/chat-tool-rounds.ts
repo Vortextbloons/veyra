@@ -2,13 +2,9 @@ import type { ProviderToolCall } from "@/lib/providers/types";
 import type { WebSearchSource } from "@/modules/chat/chat-types";
 import {
   WEB_SEARCH_TOOL_NAME,
-  DOC_READ_TOOL_NAME,
   CODE_EXEC_TOOL_NAME,
-  DOC_CREATE_TOOL_NAME,
-  DOC_UPDATE_TOOL_NAME,
   SCRATCHPAD_TOOL_NAME,
   ASK_QUESTION_TOOL_NAME,
-  INLINE_EDIT_TOOL_NAME,
   STUDIO_RENDER_TOOL_NAME,
   STUDIO_THEME_TOOL_NAME,
   STUDIO_UPDATE_TOOL_NAME,
@@ -21,7 +17,6 @@ import {
 } from "@/modules/chat/chat-tool-utils";
 import { useChatStore } from "@/stores/chat-store";
 import { executeWebSearchCall } from "@/modules/chat/tools/web-search-tool";
-import { executeDocReadCall, executeDocMutationCalls, executeInlineEditCall } from "@/modules/chat/tools/document-tool";
 import {
   executeCodeExecutionCall,
   type CodeExecutionSettings,
@@ -37,7 +32,6 @@ export type ToolRoundResult = {
   webSearchSources: WebSearchSource[];
   webSearchContextBlocks: string[];
   streamedChunks: string[];
-  lastCreatedDocumentId?: string;
 };
 
 type ToolRoundContext = {
@@ -49,25 +43,10 @@ type ToolRoundContext = {
   studioMode?: import("@/modules/chat/studio/studio-types").StudioContextMode;
   webSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
-  retryDocMutationWithLLM: (
-    assistantContent: string,
-    errorMessage: string,
-  ) => Promise<ProviderToolCall[]>;
-  docMutationConversationId?: string;
   codeExecution: CodeExecutionSettings;
-  preferredDocumentId?: string;
-  completedDocumentCreations?: Map<string, { documentId: string; title: string }>;
   /** Shared across tool rounds for one assistant response. */
   studioThemeCallAttempted?: { value: boolean };
 };
-
-function documentCreationKey(call: ProviderToolCall): string {
-  return JSON.stringify({
-    title: stringArg(call.arguments, "title"),
-    documentType: stringArg(call.arguments, "documentType"),
-    contentMarkdown: stringArg(call.arguments, "contentMarkdown"),
-  });
-}
 
 export async function executeToolRound(
   toolCalls: ProviderToolCall[],
@@ -77,9 +56,6 @@ export async function executeToolRound(
   const codeExecutionCalls = toolCalls.filter((call) => call.name === CODE_EXEC_TOOL_NAME);
   const scratchpadCalls = toolCalls.filter((call) => call.name === SCRATCHPAD_TOOL_NAME);
   const askQuestionCalls = toolCalls.filter((call) => call.name === ASK_QUESTION_TOOL_NAME);
-  const documentCalls = toolCalls.filter((call) =>
-    [DOC_READ_TOOL_NAME, INLINE_EDIT_TOOL_NAME, DOC_CREATE_TOOL_NAME, DOC_UPDATE_TOOL_NAME].includes(call.name),
-  );
   const mcpCalls = toolCalls.filter((call) => call.name.startsWith("mcp_"));
   const studioCalls = toolCalls.filter((call) => call.name === STUDIO_RENDER_TOOL_NAME || call.name === STUDIO_UPDATE_TOOL_NAME);
   const studioThemeCalls = toolCalls.filter((call) => call.name === STUDIO_THEME_TOOL_NAME);
@@ -89,9 +65,8 @@ export async function executeToolRound(
     if (call.name === CODE_EXEC_TOOL_NAME) {
       return summarizeCodeSnippet(stripPythonCodeFence(stringArg(call.arguments, "code")));
     }
-    if (call.name === INLINE_EDIT_TOOL_NAME) return stringArg(call.arguments, "documentId");
     if (call.name === STUDIO_THEME_TOOL_NAME) return stringArg(call.arguments, "vibe");
-    return stringArg(call.arguments, "title") || stringArg(call.arguments, "documentId");
+    return stringArg(call.arguments, "title");
   });
 
   const toolResultSections: string[] = [];
@@ -164,51 +139,6 @@ export async function executeToolRound(
     if (result.contextBlock) webSearchContextBlocks.push(result.contextBlock);
   }
 
-  let preferredDocumentId = ctx.preferredDocumentId;
-  for (const call of documentCalls) {
-    if (call.name === DOC_READ_TOOL_NAME) {
-      toolResultSections.push(await executeDocReadCall(call, preferredDocumentId));
-      continue;
-    }
-    if (call.name === INLINE_EDIT_TOOL_NAME) {
-      toolResultSections.push(
-        await executeInlineEditCall(call, ctx.docMutationConversationId, preferredDocumentId),
-      );
-      continue;
-    }
-
-    if (call.name === DOC_CREATE_TOOL_NAME) {
-      const creationKey = documentCreationKey(call);
-      const completedCreation = ctx.completedDocumentCreations?.get(creationKey);
-      if (completedCreation) {
-        toolResultSections.push(
-          `Tool result for ${DOC_CREATE_TOOL_NAME}(${JSON.stringify({ title: completedCreation.title })}):\n\nDocument "${completedCreation.title}" was already created in this tool run; skipped the duplicate create request.\nDocument id: ${completedCreation.documentId}`,
-        );
-        preferredDocumentId = completedCreation.documentId;
-        continue;
-      }
-    }
-
-    const mutationResult = await executeDocMutationCalls([call], {
-      retryWithLLM: ctx.retryDocMutationWithLLM,
-      conversationId: ctx.docMutationConversationId,
-      preferredDocumentId,
-    });
-    toolResultSections.push(...mutationResult.sections);
-    streamedChunks.push(...mutationResult.streamedChunks);
-    preferredDocumentId = mutationResult.lastCreatedDocumentId ?? preferredDocumentId;
-    if (
-      call.name === DOC_CREATE_TOOL_NAME &&
-      mutationResult.lastCreatedDocumentId &&
-      ctx.completedDocumentCreations
-    ) {
-      ctx.completedDocumentCreations.set(documentCreationKey(call), {
-        documentId: mutationResult.lastCreatedDocumentId,
-        title: stringArg(call.arguments, "title"),
-      });
-    }
-  }
-
   for (const call of codeExecutionCalls) {
     toolResultSections.push(await executeCodeExecutionCall(call, ctx.codeExecution));
   }
@@ -260,7 +190,6 @@ export async function executeToolRound(
     webSearchSources,
     webSearchContextBlocks,
     streamedChunks,
-    lastCreatedDocumentId: preferredDocumentId,
   };
 }
 

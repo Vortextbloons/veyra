@@ -10,10 +10,6 @@ export function GeneralSettings() {
   const toggleFavoriteModel = useSettingsStore((s) => s.toggleFavoriteModel);
   const autoNameEnabled = useSettingsStore((s) => s.autoNameEnabled);
   const setAutoNameEnabled = useSettingsStore((s) => s.setAutoNameEnabled);
-  const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
-  const setDefaultMemoryEnabled = useSettingsStore((s) => s.setDefaultMemoryEnabled);
-  const memoryExtractionEnabled = useSettingsStore((s) => s.memoryExtractionEnabled);
-  const setMemoryExtractionEnabled = useSettingsStore((s) => s.setMemoryExtractionEnabled);
 
   const models = useProviderStore((s) => s.models);
   const selectedProvider = useProviderStore((s) => s.selectedProvider);
@@ -94,29 +90,6 @@ export function GeneralSettings() {
             on={autoNameEnabled}
             onChange={setAutoNameEnabled}
           />
-          <Toggle
-            label="Default memory"
-            on={defaultMemoryEnabled}
-            onChange={setDefaultMemoryEnabled}
-          />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Memory Extraction
-        </h2>
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Toggle
-              label="Extract memories in background"
-              on={memoryExtractionEnabled}
-              onChange={setMemoryExtractionEnabled}
-            />
-          </div>
-          <p className="text-[11px] text-[var(--color-text-dim)]">
-            When enabled, the scheduler automatically extracts and stores memories from conversations.
-          </p>
         </div>
       </section>
 

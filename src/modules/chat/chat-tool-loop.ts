@@ -160,16 +160,9 @@ export function createExecuteToolRoundLocal(params: {
   conversationId?: string;
   effectiveWebSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
-  retryDocMutationWithLLM: (assistantContent: string, errorMessage: string) => Promise<ProviderToolCall[]>;
-  conversationIdForDocMutation?: string;
   studioMode?: StudioContextMode;
 }) {
   const settings = useSettingsStore.getState();
-  let preferredDocumentId: string | undefined;
-  const completedDocumentCreations = new Map<
-    string,
-    { documentId: string; title: string }
-  >();
   const studioThemeCallAttempted = { value: false };
   return async (toolCalls: ProviderToolCall[]) => {
     const buffer = useChatStore.getState().streamingBuffer;
@@ -183,18 +176,13 @@ export function createExecuteToolRoundLocal(params: {
       studioMode: params.studioMode,
       webSearchEnabled: params.effectiveWebSearchEnabled,
       webSearchAvailability: params.webSearchAvailability,
-      retryDocMutationWithLLM: params.retryDocMutationWithLLM,
-      docMutationConversationId: params.conversationIdForDocMutation,
       codeExecution: {
         timeoutSecs: settings.codeExecutionTimeoutSecs,
         pythonPath: settings.customPythonPath.trim() || null,
         workspaceRoot,
       },
-      preferredDocumentId,
-      completedDocumentCreations,
       studioThemeCallAttempted,
     });
-    preferredDocumentId = result.lastCreatedDocumentId ?? preferredDocumentId;
     return result;
   };
 }

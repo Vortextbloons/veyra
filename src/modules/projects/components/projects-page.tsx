@@ -160,7 +160,7 @@ export function ProjectsPage() {
                 No projects yet
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-text-dim)]">
-                Create your first project to group chats, memories, documents, and settings together.
+                Create your first project to group chats, instructions, and settings together.
               </p>
             </div>
           )}
@@ -271,7 +271,7 @@ function ProjectOnboarding({ onCreateClick }: { onCreateClick: () => void }) {
           Keep related work in one place.
         </h2>
         <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-[var(--color-text-dim)]">
-          Group conversations, documents, memory, and instructions around a product, client, class, or creative goal.
+          Group conversations and instructions around a product, client, class, or creative goal.
         </p>
         <div className="mt-7">
           <button

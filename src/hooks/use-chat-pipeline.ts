@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiScheduler } from "@/lib/ai-scheduler";
-import { triggerMemoryExtractionNow } from "@/modules/chat/chat-actions";
 import type { RequestStatus } from "@/modules/chat/chat-types";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
@@ -53,7 +52,6 @@ export function useChatPipeline({
   const defaultContextLength = useSettingsStore((state) => state.defaultContextLength);
   const defaultReservedOutputTokens = useSettingsStore((state) => state.defaultReservedOutputTokens);
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
-  const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
   const defaultCodeExecutionEnabled = useSettingsStore((s) => s.codeExecutionEnabled);
   const codeExecutionEnabled = controlledCodeExecutionEnabled ?? defaultCodeExecutionEnabled;
   const enhancedModeEnabled = useSettingsStore((s) => s.enhancedModeEnabled);
@@ -148,7 +146,6 @@ export function useChatPipeline({
     projectId,
     selectedModel,
     selectedProvider,
-    defaultMemoryEnabled,
     effectiveWebSearchEnabled,
     effectiveCodeExecutionEnabled,
     enhancedModeEnabled,
@@ -209,18 +206,6 @@ export function useChatPipeline({
     [activeConversationId, deleteMessage],
   );
 
-  const handleTriggerMemoryExtraction = useCallback(() => {
-    if (!activeConversationId) return;
-    const chatModel = useProviderStore.getState().selectedModel.trim();
-    const providerId = useProviderStore.getState().selectedProvider;
-    if (!chatModel) return;
-    void triggerMemoryExtractionNow({
-      conversationId: activeConversationId,
-      chatModel,
-      providerId,
-    });
-  }, [activeConversationId]);
-
   const editInitialValue = useMemo(() => {
     if (!editingMessageId) return "";
     return activeConversation?.messages.find((m) => m.id === editingMessageId)?.content ?? "";
@@ -261,7 +246,6 @@ export function useChatPipeline({
     handleCopyMessage,
     handleForkMessage,
     handleDeleteMessage,
-    handleTriggerMemoryExtraction,
     handleStopStreaming,
     editingMessageId,
     editInitialValue,

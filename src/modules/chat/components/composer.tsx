@@ -145,9 +145,6 @@ export function IconButton({
 }
 
 type ComposerProps = {
-  memory: boolean;
-  onMemoryChange: (on: boolean) => void;
-  onTriggerMemoryExtraction?: () => void;
   reasoningEnabled: boolean;
   onReasoningEnabledChange: (on: boolean) => void;
   enhancedMode: boolean;
@@ -170,7 +167,6 @@ type ComposerProps = {
   onSend?: (
     text: string,
     attachments?: MessageAttachment[],
-    options?: { memoryEnabled: boolean },
   ) => void;
   onStop?: () => void;
   disabled?: boolean;
@@ -185,9 +181,6 @@ type ComposerProps = {
 };
 
 export function Composer({
-  memory,
-  onMemoryChange,
-  onTriggerMemoryExtraction,
   reasoningEnabled,
   onReasoningEnabledChange,
   enhancedMode,
@@ -322,7 +315,6 @@ export function Composer({
     onSend?.(
       text,
       activeAttachments.length > 0 ? activeAttachments : undefined,
-      { memoryEnabled: memory },
     );
     setValue("");
     setAttachments([]);
@@ -514,9 +506,6 @@ export function Composer({
                   <ChatOptionsMenu
                     open={optionsOpen}
                     onClose={() => setOptionsOpen(false)}
-                    memory={memory}
-                    onMemoryChange={onMemoryChange}
-                    onTriggerMemoryExtraction={onTriggerMemoryExtraction}
                     reasoningEnabled={reasoningEnabled}
                     onReasoningEnabledChange={onReasoningEnabledChange}
                     enhancedMode={enhancedMode}

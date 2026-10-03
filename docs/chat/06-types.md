@@ -19,8 +19,6 @@ interface ChatMessage {
   reasoning?: string;
   timestamp: number;
   performance?: MessagePerformance;
-  memoryPack?: MemoryPack;
-  memoryRetrieval?: MemoryRetrievalInfo;
   webSearchSources?: WebSearchSource[];
   webSearchState?: WebSearchState;
   toolStates?: ToolCallState[];
@@ -84,8 +82,6 @@ interface Conversation {
   lmResponseId?: string;
   conversationSummary?: string;
   summaryCoversMessageCount?: number;
-  memoryLastProcessedMessageCount?: number;
-  memoryPendingSince?: number;
 }
 ```
 
@@ -94,8 +90,8 @@ interface Conversation {
 ```typescript
 type ContextBlockCategory =
   | "system_core" | "model_identity" | "user_prompt"
-  | "memory" | "character" | "project" | "summary"
-  | "context_anchor" | "documents_instructions"
+  | "character" | "project" | "summary"
+  | "context_anchor"
   | "tool_definitions" | "web_search_results"
   | "user_message" | "assistant_message" | "system_message";
 
@@ -143,7 +139,7 @@ interface ModelInfo {
 ```typescript
 interface ChatPanelProps {
   messages?: ChatMessage[];
-  onSend?: (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => void;
+  onSend?: (text: string, attachments?: MessageAttachment[]) => void;
   onStop?: () => void;
   onEditMessage?: (messageId: string) => void;
   onEditCancel?: () => void;
@@ -153,13 +149,11 @@ interface ChatPanelProps {
   onCopyMessage?: (messageId: string) => void;
   onForkMessage?: (messageId: string) => void;
   onDeleteMessage?: (messageId: string) => void;
-  onTriggerMemoryExtraction?: () => void;
   isStreaming?: boolean;
   streamingMessageId?: string | null;
   editingMessageId?: string | null;
   editInitialValue?: string;
   supportsImages?: boolean;
-  defaultMemoryEnabled?: boolean;
   providers?: ProviderInfo[];
   models?: ModelInfo[];
   mode?: ChatMode;

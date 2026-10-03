@@ -1,14 +1,12 @@
 # Research Report Export
 
-Reports can be exported to multiple destinations after the research pipeline completes.
+Reports can be exported to a file after the research pipeline completes.
 
 ## Export Targets
 
 | Target | Description |
 |--------|-------------|
-| Documents | Creates a new document with the synthesized report |
-| Memory | Extracts key findings as memory nodes |
-| File | Direct markdown/text export via the document export system |
+| File | Direct markdown/text file export |
 
 ## Citation Maps
 

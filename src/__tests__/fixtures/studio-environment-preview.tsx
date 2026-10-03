@@ -42,7 +42,7 @@ window.studioTest = harness;
 export function Preview() {
   const conversation = useChatStore((state) => state.conversations[0]);
   const buffer = useChatStore((state) => state.streamingBuffer);
-  const messages = conversation?.messages.map((message) => message.id === buffer?.messageId ? { ...message, content: buffer.content, toolStates: buffer.toolStates } : message);
+  const messages = conversation?.messages.map((message) => message.id === buffer?.messageId ? { ...message, content: buffer.content, reasoning: buffer.reasoning, toolStates: buffer.toolStates } : message);
   return <div style={{ height: "100vh", display: "flex" }}><ChatPanel title="Studio" messages={messages} experience="studio" isStreaming={Boolean(buffer)} streamingMessageId={buffer?.messageId} onSend={() => {}} onStop={() => useChatStore.getState().clearStreamingBuffer()} /></div>;
 }
 createRoot(document.getElementById("root") as HTMLElement).render(<Preview />);

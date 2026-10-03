@@ -212,11 +212,9 @@ export type PostChatPipelineOptions = {
   providerId?: string;
   willTitle: boolean;
   willSummarize: boolean;
-  willExtractMemory?: boolean;
   signal?: AbortSignal;
   runTitle: () => Promise<{ prompt?: string; output?: string } | string | void>;
   runSummary: () => Promise<{ prompt?: string; output?: string } | string | void>;
-  runMemoryExtraction?: () => Promise<{ prompt?: string; output?: string } | string | void>;
 };
 
 /**
@@ -248,11 +246,9 @@ export async function runPostChatModelPipeline(
     providerId,
     willTitle,
     willSummarize,
-    willExtractMemory,
     signal,
     runTitle,
     runSummary,
-    runMemoryExtraction,
   } = options;
 
   if (signal?.aborted) return;
@@ -280,18 +276,6 @@ export async function runPostChatModelPipeline(
         if (result.output) outputs.push(`Summary: ${result.output.slice(0, 120)}${result.output.length > 120 ? "..." : ""}`);
       } else {
         outputs.push(`Summary: ${result.slice(0, 120)}${result.length > 120 ? "..." : ""}`);
-      }
-    }
-  }
-
-  if (willExtractMemory && runMemoryExtraction) {
-    const result = await runWithPipelineModel(providerId, summaryModel, runMemoryExtraction, signal);
-    if (result) {
-      if (typeof result === "object") {
-        if (result.prompt) prompts.push(`[Memory]\n${result.prompt}`);
-        if (result.output) outputs.push(result.output);
-      } else {
-        outputs.push(result);
       }
     }
   }

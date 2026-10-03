@@ -235,8 +235,6 @@ export interface ResearchReport {
   evidenceIds: string[];
   wordCount: number;
   format: ResearchReportFormat;
-  exportedToDocumentId?: string;
-  exportedToMemoryIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -366,8 +364,6 @@ export interface UpdateResearchReportInput {
   sourceIds?: string[];
   evidenceIds?: string[];
   wordCount?: number;
-  exportedToDocumentId?: string;
-  exportedToMemoryIds?: string[];
 }
 
 // Filter / list types

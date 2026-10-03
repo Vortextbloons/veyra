@@ -2,12 +2,10 @@ import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { BuildChatContextOptions } from "@/lib/context";
 import {
   buildContextAnchoringBlock,
-  buildDocumentInstructionsBlock,
   buildProjectContextBlock,
 } from "@/lib/prompts";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProjectStore } from "@/modules/projects/project-store";
-import { useDocumentStore, selectActiveDocumentMeta } from "@/modules/documents/document-store";
 import { resolveCharacterBlock } from "@/lib/resolve-character-block";
 
 export function buildContextPanelOptions(input: {
@@ -41,18 +39,12 @@ export function buildContextPanelOptions(input: {
       })
     : undefined;
 
-  const activeDocument = selectActiveDocumentMeta(useDocumentStore.getState());
-  const documentInstructionsBlock = settings.documentPanelEnabled
-    ? buildDocumentInstructionsBlock(activeDocument)
-    : undefined;
-
   const userPrompt = settings.getModelSettings(input.modelId).systemPrompt || undefined;
 
   return {
     conversationSummary: input.conversation.conversationSummary,
     summaryCoversMessageCount: input.conversation.summaryCoversMessageCount,
     contextAnchoringBlock,
-    documentInstructionsBlock,
     projectPromptBlock,
     userPrompt: userPrompt || undefined,
     reservedOutputTokens: input.reservedOutputTokens,

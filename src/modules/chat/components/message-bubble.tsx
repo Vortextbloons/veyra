@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useRef, useState } from "react";
+import { lazy, memo, Suspense, useState } from "react";
 import {
   Brain,
   ChevronDown,
@@ -6,14 +6,12 @@ import {
 } from "lucide-react";
 import type { ChatMessage, MessagePerformance } from "@/modules/chat/chat-types";
 import { hasWebSearchActivity } from "@/lib/web-search-state";
-import type { MemoryPack, MemoryRetrievalInfo } from "@/modules/memory/memory-types";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
 import { MessageAttachmentsPreview } from "@/modules/chat/components/composer";
 import { MessageToolbar } from "@/modules/chat/components/message-toolbar";
 import { ToolCallList } from "@/modules/chat/components/tool-call-list";
 import { ThinkingIndicator } from "@/modules/chat/components/thinking-indicator";
 import { useProviderStore } from "@/stores/provider-store";
-import { useClickOutside } from "@/hooks/use-click-outside";
 import { type MessageAttachment } from "@/lib/message-attachments";
 import { FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
 import { StudioResponseView } from "@/modules/chat/studio/components/studio-response";
@@ -138,7 +136,7 @@ export const MessageBubble = memo(function MessageBubble({
   return (
       <div className="studio-theme-assistant-message group/message flex items-start gap-3">
       <div className="min-w-0 flex-1">
-        <div className="max-w-3xl">
+        <div className="w-full max-w-none">
         <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
           <span className="truncate font-medium text-white">{resolvedModelName}</span>
           <span className="size-1 rounded-full bg-[var(--color-text-dim)]/50" />
@@ -199,12 +197,6 @@ export const MessageBubble = memo(function MessageBubble({
         )}
         {!isStreaming && message.performance && (
           <MessagePerformanceBar performance={message.performance} />
-        )}
-        {!isStreaming && (message.memoryPack || message.memoryRetrieval) && (
-          <MemoryRetrievalBadge
-            memoryPack={message.memoryPack}
-            memoryRetrieval={message.memoryRetrieval}
-          />
         )}
       </div>
     </div>
@@ -358,181 +350,6 @@ function MessagePerformanceBar({
           </span>
         ))}
       </div>
-    </div>
-  );
-}
-
-type MemoryRetrievalBadgeProps = {
-  memoryPack?: MemoryPack;
-  memoryRetrieval?: MemoryRetrievalInfo;
-  nodeTitleLookup?: (id: string) => string | undefined;
-};
-
-function MemoryRetrievalBadge({
-  memoryPack,
-  memoryRetrieval,
-  nodeTitleLookup,
-}: MemoryRetrievalBadgeProps) {
-  if (memoryRetrieval?.status === "used" && memoryPack) {
-    return (
-      <MemoryUsedBadge memoryPack={memoryPack} nodeTitleLookup={nodeTitleLookup} />
-    );
-  }
-
-  const detail = memoryRetrieval?.detail ?? "Memory enabled";
-  const status = memoryRetrieval?.status ?? "empty";
-  const label =
-    status === "skipped"
-      ? "Memory skipped"
-      : status === "empty"
-        ? "No memory matched"
-        : status === "disabled"
-          ? "Memory off"
-          : "Memory";
-
-  return (
-    <div className="mt-1.5 px-1">
-      <span
-        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-0.5 text-[11px] text-[var(--color-text-dim)]"
-        title={detail}
-      >
-        <Brain className="size-3 shrink-0" />
-        <span>
-          {label} · {detail}
-        </span>
-      </span>
-    </div>
-  );
-}
-
-type MemoryUsedBadgeProps = {
-  memoryPack: MemoryPack;
-  nodeTitleLookup?: (id: string) => string | undefined;
-};
-
-function MemoryUsedBadge({
-  memoryPack,
-  nodeTitleLookup,
-}: MemoryUsedBadgeProps) {
-  const [open, setOpen] = useState(false);
-  const [reasonsOpen, setReasonsOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useClickOutside(ref, open, () => setOpen(false));
-
-  const nodeCount = memoryPack.sourceNodeIds.length;
-  const tokenCount = memoryPack.tokenCount;
-  const reasonEntries = Object.entries(memoryPack.reasons ?? {});
-
-  const formatId = (id: string) =>
-    id.length > 14 ? `${id.slice(0, 12)}…` : id;
-
-  return (
-    <div ref={ref} className="relative mt-1.5 px-1">
-      <button
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] transition-colors ${
-          open
-            ? "border-[var(--color-border-strong)] bg-white/[0.04] text-white"
-            : "border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:bg-white/[0.03] hover:text-white"
-        }`}
-      >
-        <Brain className="size-3" />
-        <span>
-          Memory used · {nodeCount} {nodeCount === 1 ? "node" : "nodes"} ·{" "}
-          {tokenCount} tokens
-        </span>
-        <ChevronDown
-          className={`size-3 transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Memory pack details"
-          className="absolute left-0 top-full z-20 mt-1.5 w-[28rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-xl shadow-black/40"
-        >
-          <div className="border-b border-[var(--color-border)] p-3">
-            <div className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
-              Content
-            </div>
-            <pre className="m-0 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/70 p-2 font-mono text-[11px] leading-relaxed text-[var(--color-text)]">
-              {memoryPack.content}
-            </pre>
-          </div>
-
-          <div className="border-b border-[var(--color-border)] p-3">
-            <div className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
-              Sources
-            </div>
-            {nodeCount === 0 ? (
-              <p className="m-0 font-mono text-[11.5px] text-[var(--color-text-dim)]">
-                No source nodes
-              </p>
-            ) : (
-              <ul className="m-0 list-none space-y-0.5 p-0">
-                {memoryPack.sourceNodeIds.map((id) => {
-                  const title = nodeTitleLookup?.(id);
-                  return (
-                    <li
-                      key={id}
-                      className="truncate font-mono text-[11.5px] text-[var(--color-text-dim)]"
-                      title={title ?? id}
-                    >
-                      {title ?? formatId(id)}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          <div className="border-b border-[var(--color-border)] px-3 py-2 text-[12px] text-[var(--color-text-dim)]">
-            tokens: {memoryPack.tokenCount} · budget used:{" "}
-            {memoryPack.budgetUsed}
-          </div>
-
-          <div className="p-3">
-            <button
-              type="button"
-              onClick={() => setReasonsOpen((v) => !v)}
-              className="flex w-full items-center justify-between text-left text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)] hover:text-white"
-            >
-              <span>Reasons</span>
-              <ChevronDown
-                className={`size-3 transition-transform ${
-                  reasonsOpen ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-            {reasonsOpen && (
-              <ul className="m-0 mt-1.5 list-none space-y-1 p-0">
-                {reasonEntries.length === 0 ? (
-                  <li className="font-mono text-[11.5px] text-[var(--color-text-dim)]">
-                    No reasons recorded
-                  </li>
-                ) : (
-                  reasonEntries.map(([key, value]) => (
-                    <li
-                      key={key}
-                      className="text-[11.5px] leading-snug"
-                    >
-                      <span className="font-mono text-[var(--color-text-dim)]">
-                        {key}:
-                      </span>{" "}
-                      <span className="text-[var(--color-text)]">{value}</span>
-                    </li>
-                  ))
-                )}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

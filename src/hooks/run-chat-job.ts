@@ -12,7 +12,6 @@ export interface RunChatJobParams {
   previousResponseId: string | undefined;
   selectedProvider: string;
   selectedModel: string;
-  memoryEnabled: boolean;
   effectiveWebSearchEnabled: boolean;
   effectiveCodeExecutionEnabled: boolean;
   enhancedModeEnabled: boolean;
@@ -30,7 +29,6 @@ export function runChatJob({
   previousResponseId,
   selectedProvider,
   selectedModel,
-  memoryEnabled,
   effectiveWebSearchEnabled,
   effectiveCodeExecutionEnabled,
   enhancedModeEnabled,
@@ -71,7 +69,6 @@ export function runChatJob({
           previousResponseId,
           selectedProvider,
           selectedModel,
-          memoryEnabled,
           webSearchEnabled: effectiveWebSearchEnabled,
           codeExecutionEnabled: effectiveCodeExecutionEnabled,
           enhancedMode: enhancedModeEnabled,
@@ -100,15 +97,11 @@ export function runChatJob({
           onComplete: (result, context) => {
             if (useChatStore.getState().isBufferClearSkipped()) return;
             setModelLoadProgress(null);
-            const memoryPack = context?.memoryPack ?? null;
-            const memoryRetrieval = context?.memoryRetrieval;
             const webSearchSources = context?.webSearchSources;
             const scratchpadContent = context?.scratchpadContent;
             commitAssistantMessage(conversationId, assistantMessage.id, {
               performance: result.performance,
               lmResponseId: result.responseId,
-              ...(memoryPack ? { memoryPack } : {}),
-              ...(memoryEnabled && memoryRetrieval ? { memoryRetrieval } : {}),
               ...(webSearchSources ? { webSearchSources } : {}),
               ...(scratchpadContent ? { scratchpadContent } : {}),
             });

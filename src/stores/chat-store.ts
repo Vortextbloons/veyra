@@ -97,8 +97,6 @@ type ChatStore = {
     summary: string,
     coversMessageCount: number,
   ) => void;
-  markMemoryPending: (id: string, pendingSince?: number) => void;
-  setMemoryProcessed: (id: string, processedMessageCount: number) => void;
   updateMessage: (conversationId: string, messageId: string, content: string) => void;
   truncateAfterMessage: (conversationId: string, messageId: string) => void;
   removeLastMessagePair: (conversationId: string) => void;
@@ -750,36 +748,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               ...conversation,
               conversationSummary: trimmed,
               summaryCoversMessageCount: coversMessageCount,
-              updatedAt: Date.now(),
-            }
-          : conversation,
-      );
-      void saveConversationSnapshot(conversations);
-      return { conversations };
-    });
-  },
-  markMemoryPending: (id, pendingSince = Date.now()) => {
-    set((state) => {
-      const conversations = state.conversations.map((conversation) =>
-        conversation.id === id
-          ? {
-              ...conversation,
-              memoryPendingSince: conversation.memoryPendingSince ?? pendingSince,
-            }
-          : conversation,
-      );
-      void saveConversationSnapshot(conversations);
-      return { conversations };
-    });
-  },
-  setMemoryProcessed: (id, processedMessageCount) => {
-    set((state) => {
-      const conversations = state.conversations.map((conversation) =>
-        conversation.id === id
-          ? {
-              ...conversation,
-              memoryLastProcessedMessageCount: processedMessageCount,
-              memoryPendingSince: undefined,
               updatedAt: Date.now(),
             }
           : conversation,

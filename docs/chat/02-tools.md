@@ -7,9 +7,6 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG with intent routing, time range, language, safe search, and pagination parameters |
-| `doc_create` | `documentToolsEnabled` | Create a new document |
-| `doc_read` | `documentToolsEnabled` | Read a document |
-| `inline_edit` | `documentToolsEnabled` | Edit a document with section/heading targeting |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
 | `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
 | `studio_render` | `studioModeEnabled` + conversation `experience: "studio"` | Render a validated HTML/CSS Studio response |
@@ -34,9 +31,6 @@ When enhanced mode is enabled (`enhancedModeEnabled` setting):
 ## Retry Logic
 
 - Web searches retry up to 2 times on failure (`TOOL_RETRY_LIMIT = 2`)
-- Document mutations retry up to 2 times with LLM-based re-prompting for corrections
-- `doc_create` calls are deduplicated within a single tool round — repeated create requests with identical arguments are skipped
-- `doc_update` is a legacy constant kept for backward-compatible runtime handling; it has been replaced by `inline_edit`
 
 Native `code_execution` is not offered to models. Legacy calls fail closed until an OS-enforced sandbox is implemented.
 

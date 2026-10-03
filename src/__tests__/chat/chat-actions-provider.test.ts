@@ -17,10 +17,6 @@ vi.mock("@/modules/chat/chat-orchestrator", () => ({
   sendChatRequest: mocks.sendChatRequest,
 }));
 
-vi.mock("@/lib/explicit-memory", () => ({
-  trySaveExplicitMemory: vi.fn(),
-}));
-
 vi.mock("@/lib/post-chat-jobs", () => ({
   handoffAfterUserChat: vi.fn(),
   queuePostChatJobs: vi.fn(),
@@ -51,7 +47,6 @@ describe("chat provider preparation", () => {
       trimmed: "hello",
       selectedProvider: "nvidia-nim",
       selectedModel: "deepseek-ai/deepseek-v4-flash",
-      memoryEnabled: false,
       webSearchEnabled: false,
       codeExecutionEnabled: false,
       enhancedMode: false,

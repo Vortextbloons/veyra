@@ -1,6 +1,6 @@
 # Tauri Backend
 
-## Rust Modules (13 total)
+## Rust Modules (10 total)
 
 | Module | Purpose |
 |--------|---------|
@@ -8,11 +8,8 @@
 | `app_update` | Application auto-update download, validation, installer launch |
 | `characters/` | Character and group CRUD, I/O commands, avatar management |
 | `connectivity/` | Network connectivity probe |
-| `document_extraction` | Document text extraction utility |
-| `documents/` | Document CRUD, versions, export, folders |
 | `extensions/` | MCP server discovery and invocation |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
-| `memory/` | Memory CRUD, BM25 + vector search, embeddings |
 | `projects/` | Project CRUD, manifest export |
 | `research/` | Research run, step, source, evidence, claim, contradiction, report CRUD |
 | `shared/` | SQLite connection, migrations, encryption keys |
@@ -20,13 +17,11 @@
 
 ## Command Count
 
-**~105 Tauri commands** registered across all modules. Key counts:
+**~78 Tauri commands** registered across all modules. Key counts:
 - Agents: 3 commands
 - App update: 1 command
-- Memory: 12 commands
 - Connectivity: 1 command
 - Web search: 14 commands
-- Documents: 15 commands
 - Projects: 5 commands
 - Research: 15 commands
 - Characters: 17 commands
@@ -46,7 +41,7 @@
 1. Initialize Tauri IPC
 2. Load settings from localStorage
 3. Connect to LM Studio
-4. Load characters, projects, documents
+4. Load characters and projects
 5. Check Pi CLI availability
 6. Initialize web search (check Docker/SearXNG)
 

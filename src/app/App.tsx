@@ -3,7 +3,6 @@ import { TitleBar } from "@/app/components/title-bar";
 import { PrimarySidebar } from "@/app/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/app/components/chat-panel";
-import { DocEditorPanel } from "@/modules/documents/components/doc-editor-panel";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { ensureProviderReady } from "@/modules/chat/chat-actions";
 import type { ContextStats, RecentChatsItem } from "@/modules/chat/chat-types";
@@ -18,7 +17,6 @@ import {
   markStartup,
 } from "@/lib/startup";
 import { useChatStore } from "@/stores/chat-store";
-import { useDocumentStore } from "@/modules/documents/document-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { ConnectivityToastHost } from "@/components/connectivity/connectivity-toast";
@@ -41,12 +39,10 @@ import { resolveConversationExperience } from "@/modules/chat/studio/studio-norm
 import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
 import { useAgentDispatch } from "@/hooks/use-agent-dispatch";
 
-const MemoryPage = lazy(() => import("@/modules/memory/components/memory-page").then(m => ({ default: m.MemoryPage })));
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
 const ProjectsPage = lazy(() => import("@/modules/projects/components/projects-page").then(m => ({ default: m.ProjectsPage })));
 const ResearchPage = lazy(() => import("@/modules/research/components/ResearchPage").then(m => ({ default: m.ResearchPage })));
 const CharacterPage = lazy(() => import("@/modules/characters/components/CharacterPage").then(m => ({ default: m.CharacterPage })));
-const DocumentsPage = lazy(() => import("@/modules/documents/components/DocumentsPage").then(m => ({ default: m.DocumentsPage })));
 
 function ChatHydrationSkeleton() {
   return (
@@ -94,7 +90,6 @@ function App() {
 
   const webSearchAvailability = useIsFeatureAvailable("webSearch");
   const codeExecutionAvailability = useIsFeatureAvailable("codeExecution");
-  const defaultMemoryEnabled = useSettingsStore((s) => s.defaultMemoryEnabled);
 
   const isChatMode = isChatModeNav(activeNav);
 
@@ -121,7 +116,6 @@ function App() {
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
       setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
       await useChatStore.getState().hydrateConversations();
-      void useDocumentStore.getState().hydrateDocuments();
       void useProjectStore.getState().hydrateProjects();
       void useResearchStore.getState().hydrateRuns();
       void useCharacterStore.getState().hydrateCharacters();
@@ -345,9 +339,7 @@ function App() {
         </PrimarySidebar>
         <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
           <Suspense fallback={null}>
-            {activeNav === "memory" && <MemoryPage />}
             {activeNav === "projects" && <ProjectsPage />}
-            {activeNav === "documents" && <DocumentsPage />}
             {activeNav === "research" && <ResearchPage />}
             {activeNav === "characters" && <CharacterPage />}
             {activeNav === "settings" && <SettingsPage />}
@@ -374,9 +366,7 @@ function App() {
             favoriteModels={pipelineRest.favoriteModels}
             onToggleFavorite={(id) => useSettingsStore.getState().toggleFavoriteModel(id)}
             supportsImages={supportsImages}
-            defaultMemoryEnabled={defaultMemoryEnabled}
             onStop={pipelineHandleStopStreaming}
-            onTriggerMemoryExtraction={pipelineRest.handleTriggerMemoryExtraction}
             sidebarsCollapsed={sidebarsCollapsed}
             contextStats={composerContextStats}
             contextBreakdown={displayContextBreakdown}
@@ -417,7 +407,6 @@ function App() {
             onEditSave={pipelineRest.handleEditSave}
           />
         )}
-        {isChatMode && workspaceChatMode !== "agents" && activeNav !== "projects" && activeNav !== "characters" && <DocEditorPanel />}
       </div>
     </div>
   );

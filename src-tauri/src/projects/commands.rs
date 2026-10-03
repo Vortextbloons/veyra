@@ -11,8 +11,6 @@ pub struct ProjectExportManifest {
     pub exported_at: String,
     pub project: project_db::ProjectRow,
     pub chat_ids: Vec<String>,
-    pub document_ids: Vec<String>,
-    pub memory_node_ids: Vec<String>,
 }
 
 #[tauri::command]
@@ -61,8 +59,6 @@ pub async fn export_project_manifest(
     project_id: String,
     target_path: String,
     chat_ids: Vec<String>,
-    document_ids: Vec<String>,
-    memory_node_ids: Vec<String>,
     state: State<'_, ProjectDbState>,
 ) -> Result<(), String> {
     let manifest = run_db_command(state.inner(), "project", move |conn| {
@@ -73,8 +69,6 @@ pub async fn export_project_manifest(
             exported_at: now,
             project,
             chat_ids,
-            document_ids,
-            memory_node_ids,
         })
     })
     .await?;

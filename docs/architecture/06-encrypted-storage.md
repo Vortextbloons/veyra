@@ -21,4 +21,3 @@
 | File | Purpose |
 |------|---------|
 | `src/lib/conversation-storage.ts` | Encrypted conversation persistence |
-| `src/lib/document-storage.ts` | Document storage abstraction |

@@ -61,6 +61,6 @@ Searches for contextual snippets before the plan phase, providing the LLM with p
 
 ### Phase 9: Finalize
 - Saves the report and sets status to `completed`
-- Optional export to Documents or Memory modules
+- Optional export to a markdown/text file
 
 The `ResumePhase` type in `research-runtime.ts` tracks: `"background" | "plan" | "search" | "read" | "validate" | "extract" | "verify" | "gap" | "synthesize"`.

@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { ProjectRecord, ProjectSettings } from "@/modules/projects/project-types";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import type { MemoryMode } from "@/modules/memory/memory-types";
 import { Toggle } from "@/components/toggle";
 import { ProjectSkillsSettings } from "@/modules/extensions/components/project-skills-settings";
 
@@ -32,31 +31,6 @@ export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
       <p className="text-[10.5px] text-[var(--color-text-dim)]">
         These override global defaults when this project is active. Leave blank to use global settings.
       </p>
-
-      {/* Memory */}
-      <SettingGroup label="Memory">
-        <ToggleRow
-          label="Enable memory retrieval"
-          value={settings.memoryEnabled}
-          onChange={(v) => update("memoryEnabled", v)}
-          globalLabel={`Global: ${globalSettings.defaultMemoryEnabled ? "on" : "off"}`}
-        />
-        {settings.memoryEnabled !== false && (
-          <SelectRow
-            label="Memory mode"
-            value={settings.memoryMode ?? ""}
-            onChange={(v) => update("memoryMode", (v || undefined) as MemoryMode | undefined)}
-            options={[
-              { value: "", label: "Use global default" },
-              { value: "safe_auto_save", label: "Safe auto-save" },
-              { value: "review_all", label: "Review all" },
-              { value: "aggressive_project_memory", label: "Aggressive project memory" },
-              { value: "manual_only", label: "Manual only" },
-              { value: "off", label: "Off" },
-            ]}
-          />
-        )}
-      </SettingGroup>
 
       {/* Web Search */}
       <SettingGroup label="Web Search">
@@ -117,21 +91,10 @@ export function ProjectSettingsPanel({ project }: { project: ProjectRecord }) {
       {/* Tools */}
       <SettingGroup label="Tools">
         <ToggleRow
-          label="Document tools"
-          value={settings.enabledTools?.documents}
-          onChange={(v) =>
-            update("enabledTools", {
-              documents: v,
-              webSearch: settings.enabledTools?.webSearch ?? true,
-            })
-          }
-        />
-        <ToggleRow
           label="Web search tool"
           value={settings.enabledTools?.webSearch}
           onChange={(v) =>
             update("enabledTools", {
-              documents: settings.enabledTools?.documents ?? true,
               webSearch: v,
             })
           }

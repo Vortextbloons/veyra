@@ -6,9 +6,6 @@ import { FileText, BookOpen } from "lucide-react";
 import { MARKDOWN_COMPONENTS } from "@/components/markdown-components";
 import type { Components } from "react-markdown";
 import type { ResearchReport, ResearchSource, ResearchEvidence } from "../research-types";
-import { useDocumentStore } from "@/modules/documents/document-store";
-import { useMemoryStore } from "@/modules/memory/memory-store";
-import { useResearchStore } from "../research-store";
 import { CitationInspector } from "./CitationInspector";
 import { sanitizeReportSection, stripCitationAuditSection } from "../report-sanitize";
 
@@ -24,16 +21,11 @@ type Props = {
   projectId?: string;
 };
 
-export function ResearchReportViewer({ report, sources, evidence, projectId }: Props) {
+export function ResearchReportViewer({ report, sources, evidence }: Props) {
   const [activeCitation, setActiveCitation] = useState<{
     number: string;
     sourceId?: string;
   } | null>(null);
-  const [exportStatus, setExportStatus] = useState<string | null>(null);
-
-  const createDocument = useDocumentStore((s) => s.createDocument);
-  const createMemoryNode = useMemoryStore((s) => s.createNode);
-  const updateReport = useResearchStore((s) => s.updateReport);
 
   // Pre-processed markdown with citation links (strip internal audit appendix / leaked planning)
   const processedMarkdown = useMemo(() => {
@@ -55,79 +47,6 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
   const handleCitationClick = useCallback((number: string, sourceId?: string) => {
     setActiveCitation({ number, sourceId });
   }, []);
-
-  const handleExportToDocument = async () => {
-    try {
-      setExportStatus(null);
-      const exportMarkdown = sanitizeReportSection(stripCitationAuditSection(report.contentMarkdown));
-      const doc = await createDocument({
-        title: report.title,
-        type: "report",
-        contentMarkdown: exportMarkdown,
-        projectId,
-      });
-      await updateReport({
-        id: report.id,
-        exportedToDocumentId: doc.id,
-      });
-      setExportStatus("Exported to Documents.");
-    } catch (err) {
-      console.error("Failed to export report to document:", err);
-      setExportStatus(err instanceof Error ? err.message : "Failed to export report to document.");
-    }
-  };
-
-  const handleExportToMemory = async () => {
-    try {
-      setExportStatus(null);
-      // Ensure memory folders are loaded and find the first available folder
-      const memoryStore = useMemoryStore.getState();
-      if (memoryStore.folders.length === 0) {
-        await memoryStore.hydrateMemory();
-      }
-      const firstFolder = memoryStore.folders[0];
-      if (!firstFolder) {
-        console.error("No memory folders available for export");
-        setExportStatus("No memory folder is available for export.");
-        return;
-      }
-
-      const memoryId = crypto.randomUUID();
-      const summaryText = `Research report: ${report.title} (${report.wordCount} words, ${report.sourceIds.length} sources)`;
-      const sanitizedMarkdown = sanitizeReportSection(stripCitationAuditSection(report.contentMarkdown));
-      const contentText =
-        sanitizedMarkdown.length > 20000
-          ? sanitizedMarkdown.slice(0, 20000) + "\n\n[Content truncated for memory storage]"
-          : sanitizedMarkdown;
-
-      await createMemoryNode({
-        id: memoryId,
-        folderId: firstFolder.id,
-        title: report.title,
-        content: contentText,
-        summary: summaryText,
-        type: "project_fact",
-        scope: projectId ? "project" : "global",
-        projectId,
-        tags: ["research", "report"],
-        importance: 4,
-        confidence: 0.9,
-        sourceMessageIds: [],
-        origin: "auto_extracted",
-        status: "active",
-      });
-
-      const currentMemoryIds = report.exportedToMemoryIds ?? [];
-      await updateReport({
-        id: report.id,
-        exportedToMemoryIds: [...currentMemoryIds, memoryId],
-      });
-      setExportStatus("Exported to Memory.");
-    } catch (err) {
-      console.error("Failed to export report to memory:", err);
-      setExportStatus(err instanceof Error ? err.message : "Failed to export report to memory.");
-    }
-  };
 
   // Custom components for markdown rendering with citation support
   const components: Components = useMemo(() => {
@@ -184,26 +103,6 @@ export function ResearchReportViewer({ report, sources, evidence, projectId }: P
               </span>
             </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          {exportStatus && (
-            <span className="text-[11px] text-[var(--color-text-dim)]">{exportStatus}</span>
-          )}
-          <button
-            type="button"
-            onClick={handleExportToDocument}
-            className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] text-[var(--color-text)] transition-colors hover:bg-white/[0.03]"
-          >
-            Export to Document
-          </button>
-          <button
-            type="button"
-            onClick={handleExportToMemory}
-            className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] text-[var(--color-text)] transition-colors hover:bg-white/[0.03]"
-          >
-            Export to Memory
-          </button>
         </div>
       </div>
 

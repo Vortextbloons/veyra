@@ -33,7 +33,6 @@ export function ProjectExportPanel({ project }: { project: ProjectRecord }) {
         targetPath: path,
         chatIds: projectChats.map((c) => c.id),
         documentIds: [], // Will be populated when document filtering by project is wired
-        memoryNodeIds: [], // Will be populated when memory filtering by project is wired
       });
 
       setSuccess(true);

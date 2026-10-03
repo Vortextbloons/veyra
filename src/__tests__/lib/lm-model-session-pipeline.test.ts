@@ -68,28 +68,6 @@ describe("runPostChatModelPipeline provider routing", () => {
     expect(result).toEqual({ prompt: undefined, output: "Title: Cloud title" });
   });
 
-  it("routes memory extraction through the provider identity as well", async () => {
-    await runPostChatModelPipeline({
-      chatModel: "gpt-x",
-      titleModel: "gpt-mini",
-      summaryModel: "gpt-mini",
-      providerId: "openai-cloud",
-      willTitle: false,
-      willSummarize: false,
-      willExtractMemory: true,
-      runTitle: vi.fn(async () => undefined),
-      runSummary: vi.fn(async () => undefined),
-      runMemoryExtraction: vi.fn(async () => "memory facts"),
-    });
-
-    expect(mocks.prepareProviderModel).toHaveBeenCalledWith(
-      "openai-cloud",
-      "gpt-mini",
-      { signal: undefined },
-    );
-    expect(mocks.fetchLoadedLmStudioModelInstancesDirect).not.toHaveBeenCalled();
-  });
-
   it("falls back to LM Studio preparation when no provider identity is given", async () => {
     await runPostChatModelPipeline({
       chatModel: "local-model",

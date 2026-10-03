@@ -8,7 +8,6 @@ interface UseChatEditingOptions {
   projectId?: string;
   selectedModel: string;
   selectedProvider: string;
-  defaultMemoryEnabled: boolean;
   effectiveWebSearchEnabled: boolean;
   effectiveCodeExecutionEnabled: boolean;
   enhancedModeEnabled: boolean;
@@ -23,7 +22,6 @@ export function useChatEditing({
   projectId,
   selectedModel,
   selectedProvider,
-  defaultMemoryEnabled,
   effectiveWebSearchEnabled,
   effectiveCodeExecutionEnabled,
   enhancedModeEnabled,
@@ -84,7 +82,6 @@ export function useChatEditing({
         previousResponseId: undefined,
         selectedProvider,
         selectedModel,
-        memoryEnabled: defaultMemoryEnabled,
         effectiveWebSearchEnabled,
         effectiveCodeExecutionEnabled,
         enhancedModeEnabled,
@@ -98,7 +95,6 @@ export function useChatEditing({
       activeConversationId,
       activeChatJobIdRef,
       appendAssistantMessage,
-      defaultMemoryEnabled,
       effectiveWebSearchEnabled,
       effectiveCodeExecutionEnabled,
       enhancedModeEnabled,

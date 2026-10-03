@@ -31,7 +31,6 @@ describe("formatToolResultsMessage", () => {
 
 describe("buildRoundMessages", () => {
   const baseContext: RoundMessagesContext = {
-    memoryPack: null,
     resolvedUserPrompt: undefined,
     resolvedReservedOutputTokens: 1024,
     resolvedContextLength: 8192,

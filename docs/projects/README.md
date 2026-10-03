@@ -1,6 +1,6 @@
 # Projects Module
 
-Persistent local containers that scope chats, documents, memories, tools, and settings.
+Persistent local containers that scope chats, tools, and settings.
 
 ## Contents
 

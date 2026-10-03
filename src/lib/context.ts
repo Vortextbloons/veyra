@@ -1,7 +1,5 @@
 import type { ChatMessage, ContextStats } from "@/modules/chat/chat-types";
-import type { MemoryPack } from "@/modules/memory/memory-types";
 import {
-  buildMemoryContextBlock,
   buildSummaryContextBlock,
   composeMainSystemPrompt,
   composeReferenceContext,
@@ -16,8 +14,6 @@ const TOKENS_PER_IMAGE = 512; // rough vision patch budget
  * Options for buildChatContext.
  */
 export interface BuildChatContextOptions {
-  /** Optional memory pack to inject as non-system reference context. */
-  memoryPack?: MemoryPack | null;
   /** Rolling summary of older messages (auto-summarize). */
   conversationSummary?: string | null;
   /** How many leading messages are represented by the summary. */
@@ -28,8 +24,6 @@ export interface BuildChatContextOptions {
   webSearchContextBlock?: string | null;
   /** Context anchoring block for first message (date/time, platform). */
   contextAnchoringBlock?: string | null;
-  /** Document creation instructions when the feature is enabled. */
-  documentInstructionsBlock?: string | null;
   /** Project-level instructions and context. */
   projectPromptBlock?: string | null;
   /** One explicitly selected local Skill. */
@@ -44,7 +38,7 @@ export interface BuildChatContextOptions {
   /** Active provider display name — paired with `modelName`. */
   providerName?: string | null;
   /** Character context block (persona, lorebook, examples) for roleplay
-   *  chats. Injected after the core prompt and before the memory block. */
+   *  chats. Injected after the core prompt alongside other context blocks. */
   characterBlock?: string | null;
 }
 
@@ -71,11 +65,6 @@ function buildContextContents(options: BuildChatContextOptions): {
   systemContent: string;
   referenceContent: string;
 } {
-  const memoryBlock =
-    options.memoryPack && options.memoryPack.content.trim().length > 0
-      ? buildMemoryContextBlock(options.memoryPack.content)
-      : undefined;
-
   const summaryText = options.conversationSummary?.trim() ?? "";
   const summaryCovers = Math.max(0, options.summaryCoversMessageCount ?? 0);
   const summaryBlock =
@@ -88,7 +77,6 @@ function buildContextContents(options: BuildChatContextOptions): {
     || undefined;
 
   const contextAnchoringBlock = options.contextAnchoringBlock?.trim() || undefined;
-  const documentInstructionsBlock = options.documentInstructionsBlock?.trim() || undefined;
   const projectPromptBlock = options.projectPromptBlock?.trim() || undefined;
   const skillContextBlock = options.skillContextBlock?.trim() || undefined;
   const userPrompt = options.userPrompt?.trim() || undefined;
@@ -101,12 +89,10 @@ function buildContextContents(options: BuildChatContextOptions): {
     skillContextBlock,
     characterBlock,
     contextAnchoringBlock,
-    documentInstructionsBlock,
     modelName: options.modelName ?? undefined,
     providerName: options.providerName ?? undefined,
   });
   const referenceContent = composeReferenceContext({
-    memoryBlock,
     summaryBlock,
     toolsBlock: webSearchBlock,
   });
@@ -119,7 +105,7 @@ function buildContextContents(options: BuildChatContextOptions): {
  * recent messages as fit within the token budget (context limit minus reserved
  * output tokens).
  *
- * Memory, conversation summaries, and web evidence are sent as non-system
+ * Conversation summaries and web evidence are sent as non-system
  * reference context when they fit after the authoritative instructions and
  * active conversation. The latest conversation turn is always preserved.
  */
@@ -183,9 +169,7 @@ export function buildChatContext(
 
 /**
  * Calculates context usage statistics for the current conversation.
- * Does NOT account for an injected memory pack — it is an estimate of the
- * raw conversation length. The caller can add pack token count to the result
- * if they need budget visibility for memory.
+ * This is an estimate of the raw conversation length.
  */
 export function getContextStats(
   messages: ChatMessage[],

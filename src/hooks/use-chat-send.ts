@@ -18,7 +18,6 @@ interface UseChatSendOptions {
   selectedModel: string;
   selectedProvider: string;
   supportsImages: boolean;
-  defaultMemoryEnabled: boolean;
   effectiveWebSearchEnabled: boolean;
   effectiveCodeExecutionEnabled: boolean;
   enhancedModeEnabled: boolean;
@@ -35,7 +34,6 @@ export function useChatSend({
   selectedModel,
   selectedProvider,
   supportsImages,
-  defaultMemoryEnabled,
   effectiveWebSearchEnabled,
   effectiveCodeExecutionEnabled,
   enhancedModeEnabled,
@@ -49,8 +47,7 @@ export function useChatSend({
   const setModelLoadProgress = useChatStore((state) => state.setModelLoadProgress);
 
   const handleSend = useCallback(
-    (text: string, attachments?: MessageAttachment[], options?: { memoryEnabled: boolean }) => {
-      const memoryEnabled = options?.memoryEnabled ?? defaultMemoryEnabled;
+    (text: string, attachments?: MessageAttachment[]) => {
       const trimmed = text.trim();
       const { effectiveAttachments, blocked } = filterAttachments(attachments, supportsImages, trimmed);
       const allAttachments = attachments ?? [];
@@ -172,7 +169,6 @@ export function useChatSend({
         previousResponseId,
         selectedProvider,
         selectedModel,
-        memoryEnabled,
         effectiveWebSearchEnabled,
         effectiveCodeExecutionEnabled,
         enhancedModeEnabled,
@@ -187,7 +183,6 @@ export function useChatSend({
       activeChatJobIdRef,
       addMessagePair,
       createConversation,
-      defaultMemoryEnabled,
       effectiveWebSearchEnabled,
       effectiveCodeExecutionEnabled,
       enhancedModeEnabled,

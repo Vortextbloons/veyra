@@ -1,6 +1,5 @@
 import type { ChatMessage, ModelInfo } from "@/modules/chat/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
-import type { MemoryPack } from "@/modules/memory/memory-types";
 
 export type ProviderToolCall = {
   id: string;
@@ -17,9 +16,7 @@ export type ProviderToolDefinition = {
   };
 };
 
-export interface ProviderCompleteContext {
-  memoryPack?: MemoryPack | null;
-}
+export type ProviderCompleteContext = Record<string, never>;
 
 export type ProviderChatOptions = {
   messages: ChatMessage[];

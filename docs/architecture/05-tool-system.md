@@ -5,9 +5,6 @@
 | Tool | Condition | Description |
 |------|-----------|-------------|
 | `web_search` | `webSearchEnabled` | Search the web via SearXNG. Parallel execution with up to 2 retries. |
-| `doc_create` | `documentToolsEnabled` | Create a new document. |
-| `doc_read` | `documentToolsEnabled` | Read a document by ID. |
-| `inline_edit` | `documentToolsEnabled` | Edit a document (replace_all, replace_section, insert_after_section, replace_text). Retries up to 2 times with LLM re-prompt. |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds. |
 | `ask_question` | `enhancedMode` | Pause execution to ask the user a question. |
 | `studio_render` | `studioEnabled` | Render a validated HTML/CSS Studio response in an isolated iframe. |
@@ -16,8 +13,6 @@
 Each tool has a JSON schema defining its parameters. Tool calls execute in rounds:
 - Standard mode: up to **6 rounds**
 - Enhanced mode: up to **10 rounds**
-
-`doc_update` is a legacy constant kept for backward-compatible runtime handling; it has been replaced by `inline_edit`.
 
 Native `code_execution` is disabled and is not included in provider tool definitions. Legacy calls return a disabled error until an OS-enforced sandbox exists.
 

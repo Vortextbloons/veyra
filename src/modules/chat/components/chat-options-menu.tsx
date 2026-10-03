@@ -1,14 +1,11 @@
 import type { ReactNode } from "react";
-import { Brain, FileText, Globe, Sparkles, TerminalSquare, X, Zap } from "lucide-react";
+import { Globe, Sparkles, TerminalSquare, X, Zap } from "lucide-react";
 import { DialogSurface } from "@/components/dialog-surface";
 import { useSettingsStore } from "@/stores/settings-store";
 
 export type ChatOptionsMenuProps = {
   open: boolean;
   onClose: () => void;
-  memory: boolean;
-  onMemoryChange: (on: boolean) => void;
-  onTriggerMemoryExtraction?: () => void;
   reasoningEnabled: boolean;
   onReasoningEnabledChange: (on: boolean) => void;
   enhancedMode: boolean;
@@ -147,9 +144,6 @@ function SectionLabel({ children }: { children: ReactNode }) {
 export function ChatOptionsMenu({
   open,
   onClose,
-  memory,
-  onMemoryChange,
-  onTriggerMemoryExtraction,
   reasoningEnabled,
   onReasoningEnabledChange,
   enhancedMode,
@@ -163,10 +157,7 @@ export function ChatOptionsMenu({
   codeExecutionDisabled = false,
   codeExecutionDisabledReason,
 }: ChatOptionsMenuProps) {
-  const documentPanelEnabled = useSettingsStore((s) => s.documentPanelEnabled);
-  const setDocumentPanelEnabled = useSettingsStore((s) => s.setDocumentPanelEnabled);
   const speedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
-
   const webSearchOn = webSearchEnabled && !webSearchDisabled;
   const webSearchIconClass = speedPreset === "fast" ? "text-cyan-300" : "text-emerald-300";
 
@@ -196,15 +187,6 @@ export function ChatOptionsMenu({
 
       <div className="overflow-y-auto p-2 scrollbar-thin">
         <SectionLabel>Conversation</SectionLabel>
-        <SettingRow
-          icon={<Brain className="size-4" />}
-          label="Memory"
-          description="Use saved context"
-          active={memory}
-          onToggle={onMemoryChange}
-          onDoubleClick={onTriggerMemoryExtraction}
-          title="Double-click to extract memories now"
-        />
         <SettingRow
           icon={<Sparkles className="size-4" />}
           label="Reasoning"
@@ -250,14 +232,6 @@ export function ChatOptionsMenu({
             disabledReason={codeExecutionDisabledReason}
           />
         )}
-        <SettingRow
-          icon={<FileText className="size-4" />}
-          label="Documents"
-          description="Create and edit documents with the AI"
-          active={documentPanelEnabled}
-          onToggle={setDocumentPanelEnabled}
-          iconActiveClass="text-blue-300"
-        />
       </div>
     </DialogSurface>
   );

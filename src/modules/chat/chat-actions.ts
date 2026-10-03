@@ -17,7 +17,6 @@ type ChatSendParams = {
   previousResponseId?: string;
   selectedProvider: string;
   selectedModel: string;
-  memoryEnabled: boolean;
   webSearchEnabled: boolean;
   codeExecutionEnabled: boolean;
   enhancedMode: boolean;
@@ -34,12 +33,10 @@ type ChatSendParams = {
 export async function executeChatSend(params: ChatSendParams): Promise<string | undefined> {
   const [
     { sendChatRequest },
-    { trySaveExplicitMemory },
     { handoffAfterUserChat, queuePostChatJobs },
     { prepareProviderModel },
   ] = await Promise.all([
     import("@/modules/chat/chat-orchestrator"),
-    import("@/lib/explicit-memory"),
     import("@/lib/post-chat-jobs"),
     import("@/lib/providers"),
   ]);
@@ -52,7 +49,6 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     previousResponseId,
     selectedProvider,
     selectedModel,
-    memoryEnabled,
     webSearchEnabled,
     codeExecutionEnabled,
     enhancedMode,
@@ -64,10 +60,6 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     onError,
     onComplete,
   } = params;
-
-  if (memoryEnabled) {
-    void trySaveExplicitMemory(trimmed, { conversationId, projectId });
-  }
 
   await prepareProviderModel(selectedProvider, selectedModel, {
     signal,
@@ -95,7 +87,6 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     model: selectedModel,
     previousResponseId,
     signal,
-    memoryEnabled,
     webSearchEnabled,
     codeExecutionEnabled,
     enhancedMode,
@@ -135,15 +126,6 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
   }
 
   return assistantText || undefined;
-}
-
-export async function triggerMemoryExtractionNow(options: {
-  conversationId: string;
-  chatModel: string;
-  providerId: string;
-}): Promise<void> {
-  const { queueMemoryExtractionNow } = await import("@/lib/post-chat-jobs");
-  queueMemoryExtractionNow(options);
 }
 
 export async function ensureProviderReady(): Promise<void> {

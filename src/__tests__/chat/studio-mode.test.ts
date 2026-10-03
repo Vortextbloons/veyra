@@ -60,7 +60,7 @@ describe("Studio Mode containment", () => {
   });
 
   it("registers Studio environment tools only when enabled", () => {
-    const base = { webSearchEnabled: false, documentToolsEnabled: false, codeExecutionEnabled: false };
+    const base = { webSearchEnabled: false, codeExecutionEnabled: false };
     expect(buildProviderTools(base).filter((tool) => tool.function.name.startsWith("studio_"))).toHaveLength(0);
     expect(buildProviderTools({ ...base, studioEnabled: true }).filter((tool) => tool.function.name.startsWith("studio_")).map((tool) => tool.function.name)).toEqual([STUDIO_RENDER_TOOL_NAME, "studio_update", STUDIO_THEME_TOOL_NAME]);
   });

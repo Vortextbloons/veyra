@@ -1,8 +1,6 @@
 // ── Project types for Veyra ─────────────────────────────────────────────────
-// A Project is a persistent local container that scopes chats, documents,
-// memories, tools, and settings around a goal or workstream.
-
-import type { MemoryMode } from "@/modules/memory/memory-types";
+// A Project is a persistent local container that scopes chats, tools,
+// and settings around a goal or workstream.
 
 export type ProjectKind =
   | "app"
@@ -16,8 +14,6 @@ export type ProjectKind =
 export type ProjectStatus = "active" | "paused" | "archived";
 
 export interface ProjectSettings {
-  memoryEnabled?: boolean;
-  memoryMode?: MemoryMode;
   webSearchEnabled?: boolean;
   webSearchMode?: "auto" | "always" | "off";
   webSearchFetchEnabled?: boolean | null;
@@ -26,7 +22,6 @@ export interface ProjectSettings {
   webSearchFetchMaxCharsPerSource?: number | null;
   webSearchContextTokenLimit?: number | null;
   enabledTools?: {
-    documents: boolean;
     webSearch: boolean;
   };
   modelId?: string;

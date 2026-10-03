@@ -43,7 +43,7 @@ export type McpServerRecord = ExtensionRecord & {
   capabilities?: { tools: unknown[]; resources: unknown[]; prompts: unknown[] };
 };
 
-export type PermissionCategory = "read_local_files" | "write_local_files" | "execute_external_processes" | "access_internet" | "read_documents" | "modify_documents" | "read_memory" | "modify_memory" | "access_credentials" | "external_mutation" | "destructive";
+export type PermissionCategory = "read_local_files" | "write_local_files" | "execute_external_processes" | "access_internet" | "access_credentials" | "external_mutation" | "destructive";
 export type CapabilityGrant = { id: string; serverId: string; capabilityId: string; projectId?: string; chatId?: string; category: PermissionCategory; decision: "allow" | "deny"; expiresAt?: string; usesRemaining?: number; createdAt: string; revokedAt?: string; capabilityFingerprint?: string };
 export type ExtensionDiagnostic = { id: string; source: string; severity: "info" | "warning" | "error"; code: string; message: string; remediation?: string; createdAt: string };
 

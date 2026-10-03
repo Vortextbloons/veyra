@@ -1,22 +1,17 @@
 import type { ChatMessage, WebSearchSource } from "@/modules/chat/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
 import type { ProviderChatOptions, ProviderToolCall } from "@/lib/providers/types";
-import type { MemoryPack } from "@/modules/memory/memory-types";
-import type { MemoryRetrievalInfo } from "@/modules/memory/memory-types";
 import { getProviderAdapter } from "@/lib/providers";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { buildChatContext } from "@/lib/context";
 import { resolveCharacterBlock } from "@/lib/resolve-character-block";
-import { buildMemoryPackWithInfo } from "@/modules/memory/memory-retrieval";
-import { buildContextAnchoringBlock, buildDocumentInstructionsBlock, buildProjectContextBlock } from "@/lib/prompts";
-import { useDocumentStore, selectActiveDocumentMeta } from "@/modules/documents/document-store";
+import { buildContextAnchoringBlock, buildProjectContextBlock } from "@/lib/prompts";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { registerStreamingToolCall } from "@/modules/chat/chat-tool-utils";
 import { resolveModelSettings, resolveProviderTooling } from "@/modules/chat/chat-provider-options";
 import {
-  buildRoundMessages,
   providerChatBase as buildProviderChatBase,
   formatToolResultsMessage,
   stripImageAttachments,
@@ -28,8 +23,6 @@ import { getStudioSystemInstruction, buildStudioEnvironmentContextBlock, buildSt
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 export interface SendChatCompleteContext {
-  memoryPack: MemoryPack | null;
-  memoryRetrieval: MemoryRetrievalInfo;
   webSearchSources?: WebSearchSource[];
   scratchpadContent?: string;
 }
@@ -37,7 +30,6 @@ export interface SendChatCompleteContext {
 type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
   providerId: string;
   messages: ChatMessage[];
-  memoryEnabled: boolean;
   webSearchEnabled: boolean;
   codeExecutionEnabled: boolean;
   enhancedMode: boolean;
@@ -49,17 +41,9 @@ type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
   ) => void;
 };
 
-function latestUserMessageText(messages: ChatMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === "user") return messages[i].content;
-  }
-  return "";
-}
-
 export async function sendChatRequest({
   providerId,
   messages,
-  memoryEnabled,
   webSearchEnabled,
   codeExecutionEnabled,
   enhancedMode,
@@ -74,16 +58,6 @@ export async function sendChatRequest({
   }
 
   const settings = useSettingsStore.getState();
-
-  const { pack: memoryPack, info: memoryRetrieval } = await buildMemoryPackWithInfo({
-    enabled: memoryEnabled,
-    mode: settings.memoryMode,
-    query: latestUserMessageText(messages),
-    messages,
-    projectId,
-    budget: settings.maxMemoryTokens,
-    maxNodes: settings.maxMemoryNodes,
-  });
 
   const userOnComplete = options.onComplete;
 
@@ -153,11 +127,6 @@ export async function sendChatRequest({
     ? buildContextAnchoringBlock()
     : undefined;
 
-  const activeDocument = selectActiveDocumentMeta(useDocumentStore.getState());
-  const documentInstructionsBlock = settings.documentPanelEnabled
-    ? buildDocumentInstructionsBlock(activeDocument)
-    : undefined;
-
   const { providerTools, webSearchEnabled: effectiveWebSearchEnabled, webSearchAvailability } = resolveProviderTooling({
     webSearchEnabled,
     codeExecutionEnabled,
@@ -174,13 +143,11 @@ export async function sendChatRequest({
   const activeProviderName = activeProviderInfo?.name;
 
   const roundMessagesContext = {
-    memoryPack: memoryPack ?? null,
     conversation,
     resolvedUserPrompt: resolved.userPrompt,
     resolvedReservedOutputTokens: resolved.reservedOutputTokens,
     activeModelName,
     activeProviderName,
-    documentInstructionsBlock,
     contextAnchoringBlock,
     projectPromptBlock,
     skillContextBlock,
@@ -217,8 +184,6 @@ export async function sendChatRequest({
     }
     chatStore.clearStreamingBufferUnlessSkipped();
     userOnComplete?.(result, {
-      memoryPack,
-      memoryRetrieval,
       webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
       scratchpadContent: bufferScratchpad,
     });
@@ -233,48 +198,10 @@ export async function sendChatRequest({
       skillContextBlock: studioEnabled ? [baseSkillContextBlock, studioInstruction, modeContextBlock, current ? buildStudioThemeContextBlock(current.messages) : undefined, refreshedStudio].filter(Boolean).join("\n\n") : skillContextBlock,
     };
   };
-  const buildRoundMessagesBound = (chainMessages: ChatMessage[], webSearchContextBlocks: string[]) => buildRoundMessages(chainMessages, webSearchContextBlocks, getRoundMessagesContext());
-
   const providerChatBaseBound = () =>
     buildProviderChatBase(options, resolved, providerTools, handleToolCallDetected);
 
   const modelSupportsImages = activeModelInfo?.supportsImages ?? false;
-
-  const retryDocMutationWithLLM = async (
-    assistantContent: string,
-    errorMessage: string,
-  ): Promise<ProviderToolCall[]> => {
-    let retryToolCalls: ProviderToolCall[] = [];
-    const retryMessages = buildRoundMessagesBound(
-      [
-        ...messages,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: assistantContent || accumulatedContent,
-          timestamp: Date.now(),
-          modelId: options.model,
-        },
-        {
-          id: crypto.randomUUID(),
-          role: "user",
-          content: `Your previous document tool call failed. Failure reason: ${errorMessage}. Retry by calling exactly one corrected document tool. Do not answer in prose.`,
-          timestamp: Date.now(),
-        },
-      ],
-      [],
-    );
-    await provider.sendChat({
-      ...providerChatBaseBound(),
-      onChunk: () => {},
-      onReasoningChunk: () => {},
-      onComplete: (nextResult) => {
-        retryToolCalls = nextResult.toolCalls ?? [];
-      },
-      messages: modelSupportsImages ? retryMessages : stripImageAttachments(retryMessages),
-    });
-    return retryToolCalls;
-  };
 
   const executeToolRoundLocal = createExecuteToolRoundLocal({
     signal: options.signal,
@@ -283,8 +210,6 @@ export async function sendChatRequest({
     studioMode: studioContextMode,
     effectiveWebSearchEnabled,
     webSearchAvailability,
-    retryDocMutationWithLLM,
-    conversationIdForDocMutation: conversationId,
   });
 
   const rePromptWithToolsBound = (
@@ -317,7 +242,7 @@ export async function sendChatRequest({
   const wrappedOnComplete: ProviderChatOptions["onComplete"] = (result) => {
     const toolCalls = result.toolCalls ?? [];
     if (toolCalls.length === 0) {
-      userOnComplete?.(result, { memoryPack, memoryRetrieval });
+      userOnComplete?.(result, {});
       return;
     }
 
@@ -362,7 +287,7 @@ export async function sendChatRequest({
         const message = error instanceof Error ? error.message : String(error);
         options.onError(message);
         useChatStore.getState().clearStreamingBufferUnlessSkipped();
-        userOnComplete?.(result, { memoryPack, memoryRetrieval });
+        userOnComplete?.(result, {});
         useChatStore.getState().resetAfterRePrompt();
       }
     })();
@@ -371,11 +296,9 @@ export async function sendChatRequest({
   const contextMessages = buildChatContext(
     messages,
     {
-      memoryPack: memoryPack ?? null,
       conversationSummary: conversation?.conversationSummary,
       summaryCoversMessageCount: conversation?.summaryCoversMessageCount,
       contextAnchoringBlock,
-      documentInstructionsBlock,
       projectPromptBlock,
       skillContextBlock,
       userPrompt: resolved.userPrompt,

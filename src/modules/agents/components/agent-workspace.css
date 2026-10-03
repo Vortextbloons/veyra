@@ -42,7 +42,7 @@
 .agent-breadcrumb > span { max-width:30%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .agent-breadcrumb strong { font-weight:500; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .agent-start { display:flex; align-items:center; justify-content:center; min-height:0; flex:1; overflow:auto; padding:36px 24px; }
-.agent-start-content { width:100%; max-width:620px; }
+.agent-start-content { width:100%; max-width:1052px; }
 .agent-start-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; margin-bottom:24px; border:1px solid var(--color-border); background:var(--color-panel); color:var(--color-accent); border-radius:12px; }
 .agent-eyebrow { color:var(--color-muted); font-family:var(--font-mono, monospace); font-size:11px; margin-bottom:8px; }
 .agent-start h1 { font-size:clamp(24px, 2.7vw, 34px); font-weight:500; letter-spacing:-.045em; line-height:1.25; }
@@ -52,7 +52,7 @@
 .agent-starters button:hover { background:var(--color-panel); border-color:var(--color-border-strong); color:var(--color-text); }
 .agent-starters button svg { flex-shrink:0; }
 .agent-starters button svg:last-child { margin-left:auto; opacity:.5; }
-.agent-compose-wrap { flex-shrink:0; width:100%; max-width:900px; margin:0 auto; padding:16px 28px 15px; }
+.agent-compose-wrap { flex-shrink:0; width:100%; max-width:1100px; margin:0 auto; padding:16px 28px 15px; }
 .agent-composer { border:1px solid var(--color-border-strong); background:var(--color-panel); border-radius:12px; padding:12px; box-shadow:0 6px 24px rgb(0 0 0 / .08); }
 .agent-composer:focus-within { border-color:color-mix(in srgb, var(--color-accent) 55%, var(--color-border)); }
 .agent-composer textarea { display:block; background:transparent; padding:5px 5px 14px; width:100%; resize:none; outline:none; font-size:14px; line-height:1.6; min-height:64px; max-height:180px; }
@@ -83,7 +83,7 @@
 .agent-file-list button > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .agent-file-preview { font-size:11px; font-family:monospace; line-height:1.7; white-space:pre; }
 .agent-inline-error { color:#eaa3a3; font-size:12px; padding:12px 16px; }
-.agent-work-log { width:100%; max-width:840px; margin:0 auto; padding:28px 30px; display:flex; flex-direction:column; gap:24px; }
+.agent-work-log { width:100%; max-width:1100px; margin:0 auto; padding:28px 30px; display:flex; flex-direction:column; gap:24px; }
 .agent-user-task { padding:14px 18px; border-left:2px solid var(--color-accent); background:var(--color-surface); font-size:13px; border-radius:0 7px 7px 0; }
 .agent-turn-label { font-size:10px; font-weight:500; color:var(--color-muted); margin-bottom:10px; }
 .agent-response { font-size:13px; line-height:1.8; padding:0 2px; }

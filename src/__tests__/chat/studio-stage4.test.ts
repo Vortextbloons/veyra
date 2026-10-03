@@ -42,12 +42,6 @@ vi.mock("@/stores/connectivity-store", () => ({
   },
 }));
 
-vi.mock("@/modules/documents/document-store", () => ({
-  useDocumentStore: {
-    getState: () => ({ activeDocumentId: null }),
-  },
-}));
-
 vi.mock("@/modules/extensions/extensions-store", () => ({
   useExtensionsStore: {
     getState: () => ({

@@ -77,8 +77,6 @@ export function ChatPanel({
   onCodeExecutionChange,
   codeExecutionDisabled = false,
   codeExecutionDisabledReason,
-  defaultMemoryEnabled = true,
-  onTriggerMemoryExtraction,
   sidebarsCollapsed = 0,
   modelLoadProgress,
   mode: controlledMode,
@@ -110,7 +108,6 @@ export function ChatPanel({
   onEditSave,
   onStop,
 }: ChatPanelProps) {
-  const [memory, setMemory] = useState(defaultMemoryEnabled);
   const reasoningEnabled = useSettingsStore((s) => s.reasoningEnabled);
   const setReasoningEnabled = useSettingsStore((s) => s.setReasoningEnabled);
   const enhancedModeEnabled = useSettingsStore((s) => s.enhancedModeEnabled);
@@ -369,7 +366,7 @@ export function ChatPanel({
         conversationOpen={conversationOpen}
         onConversation={() => setConversationDrawerId(conversationOpen ? null : drawerKey)}
         onStop={onStop}
-        onRepair={!isStreaming && onSend ? (prompt) => onSend(prompt, undefined, { memoryEnabled: memory }) : undefined}
+        onRepair={!isStreaming && onSend ? (prompt) => onSend(prompt, undefined) : undefined}
         onSuggestion={setSuggestedPrompt}
       />}
       {(!isStudioEnvironment || conversationOpen) && <div
@@ -386,7 +383,7 @@ export function ChatPanel({
           </div>
         ) : (
           <div
-            className={`relative z-10 mx-auto flex w-full max-w-[860px] flex-col gap-7 pb-8 pt-6 transition-[padding] duration-200 ease-out ${layout.messagesPx}`}
+            className={`relative z-10 mx-auto flex w-full max-w-[1100px] flex-col gap-7 pb-8 pt-6 transition-[padding] duration-200 ease-out ${layout.messagesPx}`}
           >
             {visibleMessageWindow.before > 0 && (
               <div aria-hidden style={{ height: visibleMessageWindow.before }} />
@@ -421,7 +418,7 @@ export function ChatPanel({
       </div>
 
       <div
-        className={`studio-theme-composer mx-auto w-full max-w-[860px] shrink-0 bg-[var(--color-bg)] pb-3 pt-2 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
+        className={`studio-theme-composer mx-auto w-full max-w-[1100px] shrink-0 bg-[var(--color-bg)] pb-3 pt-2 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
         style={activeStudioTheme ? { "--color-panel": activeStudioTheme.composer } as CSSProperties : undefined}
       >
         {modelLoadProgress && modelLoadProgress.phase !== "ready" && (
@@ -430,9 +427,6 @@ export function ChatPanel({
           </div>
         )}
         <Composer
-          memory={memory}
-          onMemoryChange={setMemory}
-          onTriggerMemoryExtraction={onTriggerMemoryExtraction}
           reasoningEnabled={reasoningEnabled}
           onReasoningEnabledChange={setReasoningEnabled}
           enhancedMode={enhancedModeEnabled}
@@ -515,7 +509,7 @@ function EmptyChat({
     { icon: PencilLine, text: "Turn my notes into a clear first draft" },
   ];
   return (
-    <div className="mx-auto w-full max-w-[812px]">
+    <div className="mx-auto w-full max-w-[1052px]">
         <div className="flex flex-col items-start gap-1">
           {suggestions.map((s) => (
             <button

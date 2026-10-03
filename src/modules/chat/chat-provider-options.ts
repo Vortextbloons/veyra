@@ -1,7 +1,6 @@
 import type { ProviderToolDefinition } from "@/lib/providers/types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
-import { useDocumentStore } from "@/modules/documents/document-store";
 import { buildProviderTools } from "@/lib/tool-registry";
 import { STUDIO_RENDER_TOOL_NAME } from "@/modules/chat/studio/studio-tool";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
@@ -95,7 +94,6 @@ export function resolveProviderTooling({
   conversationId?: string;
   studioEnabled?: boolean;
 }): ProviderTooling {
-  const settings = useSettingsStore.getState();
   const effectiveConnectivity = useConnectivityStore.getState().effectiveConnectivity;
   const localServiceReady = useProviderStore.getState().providers.some(
     (provider) =>
@@ -118,14 +116,10 @@ export function resolveProviderTooling({
   const effectiveCodeExecutionEnabled =
     codeExecutionEnabled && codeExecutionAvailability.available;
 
-  const docState = useDocumentStore.getState();
-
   const extensions = useExtensionsStore.getState();
   const providerTools = [...buildProviderTools({
     webSearchEnabled: effectiveWebSearchEnabled,
-    documentToolsEnabled: settings.documentPanelEnabled,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
-    activeDocumentId: docState.activeDocumentId ?? undefined,
     enhancedMode,
     studioEnabled,
   }), ...buildMcpProviderTools(extensions.mcpServers, projectId, extensions.featureFlags, disabledMcpServersForChat(extensions.mcpServers, conversationId ? extensions.chatDisabledMcpServerIds[conversationId] : undefined), conversationId ? extensions.chatEnabledMcpServerIds[conversationId] ?? [] : [])];

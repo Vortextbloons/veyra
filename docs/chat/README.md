@@ -1,6 +1,6 @@
 # Chat Module
 
-Core AI chat pipeline with streaming, tool calls, memory injection, and context window management.
+Core AI chat pipeline with streaming, tool calls, and context window management.
 
 ## Contents
 

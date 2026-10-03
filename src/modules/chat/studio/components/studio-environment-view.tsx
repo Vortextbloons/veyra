@@ -7,6 +7,8 @@ import { buildStudioDocument } from "../studio-document-builder";
 import { exportStudioRevisionToFile } from "../studio-export";
 import { parseStudioBridgeMessage, studioEnvironmentEntries, type StudioEnvironmentEntry } from "../studio-environment";
 import type { StudioJsonObject } from "../studio-types";
+import { StudioGenerationProgress } from "./studio-generation-progress";
+import { studioProgressLabel } from "../studio-progress";
 
 const actionClass = "flex min-h-9 items-center justify-center gap-2 rounded-lg px-2.5 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:opacity-30 disabled:pointer-events-none";
 const permissions = "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; display-capture 'none'; fullscreen 'none'; payment 'none'; usb 'none'; serial 'none'; bluetooth 'none'";
@@ -126,10 +128,8 @@ export function StudioEnvironmentView({ conversation, messages, isStreaming, str
   const selectedIndex = entries.findIndex((entry) => entry.key === displayed?.key);
   const assistant = [...messages].reverse().find((message) => message.role === "assistant");
   const streaming = messages.find((message) => message.id === streamingMessageId);
-  const tools = streaming?.toolStates ?? [];
-  const pendingTool = [...tools].reverse().find((tool) => tool.phase === "pending" || tool.phase === "running" || tool.phase === "retrying");
   const rejection = assistant?.studioResponse?.status === "rejected" ? assistant.studioResponse.error?.[0]?.message : undefined;
-  const progress = pendingTool?.detail === "Opening the view" ? "Opening the view" : pendingTool?.name === "studio_update" ? "Updating the view" : pendingTool?.name === "studio_render" ? "Shaping the environment" : pendingTool?.name === "web_search" ? "Gathering sources" : pendingTool ? pendingTool.label : "Working on your request";
+  const progress = studioProgressLabel(streaming);
   const select = (entry?: StudioEnvironmentEntry) => {
     if (conversation) useChatStore.getState().selectStudioEnvironment(conversation.id, entry ? { messageId: entry.messageId, revision: entry.revision.revision } : undefined);
   };
@@ -171,7 +171,11 @@ export function StudioEnvironmentView({ conversation, messages, isStreaming, str
     </div>
     <div className="relative min-h-0 flex-1 overflow-hidden">
       {frames.map((entry) => conversation && <EnvironmentFrame key={`${entry.key}:${stage.reload}`} entry={entry} conversationId={conversation.id} active={entry.key === displayed?.key} reducedMotion={reducedMotion} onReady={(ready) => dispatch({ type: "ready", entry: ready })} onError={(broken, message) => dispatch({ type: "error", entry: broken, message })} />)}
-      {!displayed && <div className="absolute inset-0 overflow-y-auto px-8 py-10 sm:px-12">
+      {isStreaming && <div className={displayed ? "absolute inset-x-4 bottom-4 z-20" : "absolute inset-0 z-20 flex flex-col gap-5 overflow-y-auto px-6 py-8 sm:px-10"}>
+        <div className={`mx-auto w-full ${displayed ? "max-w-xl" : "my-auto max-w-2xl"}`}><StudioGenerationProgress key={streamingMessageId ?? "starting"} message={streaming} compact={Boolean(displayed)} onConversation={() => { if (!conversationOpen) onConversation(); }} />
+        {!displayed && streaming?.content.trim() && <div className="mt-5 text-sm leading-7 text-zinc-300"><Suspense><MarkdownRenderer>{streaming.content}</MarkdownRenderer></Suspense></div>}</div>
+      </div>}
+      {!isStreaming && !displayed && <div className="absolute inset-0 overflow-y-auto px-8 py-10 sm:px-12">
         {assistant?.content.trim() ? <div className="mx-auto max-w-3xl text-[15px] leading-7 text-zinc-200"><Suspense><MarkdownRenderer>{assistant.content}</MarkdownRenderer></Suspense></div> : <div className="mx-auto flex h-full max-w-2xl flex-col justify-center">
           <p className="mb-4 text-[11px] uppercase tracking-[0.2em] text-violet-300/70">A space for your ideas</p>
           <h2 className="text-[clamp(28px,4vw,44px)] font-normal leading-tight tracking-tight text-zinc-100">What would you like<br />to see, understand, or try?</h2>
@@ -179,7 +183,7 @@ export function StudioEnvironmentView({ conversation, messages, isStreaming, str
           <div className="mt-8 flex flex-wrap gap-2">{["Explain an idea with an interactive visual", "Compare options in a dashboard", "Build a playful solar system simulation"].map((prompt) => <button key={prompt} disabled={isStreaming} onClick={() => onSuggestion(prompt)} className="rounded-full border border-white/10 px-4 py-2 text-xs text-zinc-400 hover:border-violet-300/30 hover:text-zinc-100 disabled:opacity-40">{prompt}</button>)}</div>
         </div>}
       </div>}
-      {selected && !displayed && !failed && <div role="status" className="absolute bottom-5 left-5 z-20 flex items-center gap-2 rounded-lg border border-white/10 bg-[#111218]/95 px-3 py-2 text-xs text-zinc-300"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Opening the view</div>}
+      {selected && !displayed && !failed && !isStreaming && <div role="status" className="absolute bottom-5 left-5 z-20 flex items-center gap-2 rounded-lg border border-white/10 bg-[#111218]/95 px-3 py-2 text-xs text-zinc-300"><Loader2 size={14} className="animate-spin motion-reduce:animate-none" />Opening the view</div>}
     </div>
     <div aria-live="polite" className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-t border-white/[0.06] px-4 py-2 text-xs text-zinc-500">
       {isStreaming ? <><Loader2 size={13} className="animate-spin text-violet-300 motion-reduce:animate-none" /><span>{progress}</span><button className={`${actionClass} ml-auto min-h-6`} aria-label="Stop Studio generation" onClick={onStop}>Stop</button></> : error ? <><span className="min-w-0 flex-1 text-amber-200/80">{error}</span>{failed && <button className={actionClass} onClick={() => dispatch({ type: "retry" })}>Retry view</button>}<button className={actionClass} disabled={!onRepair} onClick={() => onRepair?.(`Repair the Studio environment that failed to render. Runtime or validation feedback: ${error}. Preserve its data and interaction state.`)}>Repair</button></> : <span className="truncate">{actionMessage || (conversation?.studioEnvironment?.lastEvent ? `${selectionLabel ? `Selected ${selectionLabel}.` : "Selection saved."} Ask a follow-up to explore it.` : displayed?.revision.summary || "Direct Studio with the prompt below.")}</span>}

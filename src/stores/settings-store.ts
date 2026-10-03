@@ -5,9 +5,7 @@ import { DEFAULT_RESEARCH_CONFIG } from "@/modules/research/research-config";
 
 import { createUiLayoutSlice, DEFAULT_UI_LAYOUT_STATE } from "./slices/ui-layout-slice";
 import { createModelSlice, DEFAULT_MODEL_STATE } from "./slices/model-slice";
-import { createMemorySlice, DEFAULT_MEMORY_STATE } from "./slices/memory-slice";
 import { createWebSearchSlice, DEFAULT_WEB_SEARCH_STATE } from "./slices/web-search-slice";
-import { createDocumentSlice, DEFAULT_DOCUMENT_STATE } from "./slices/document-slice";
 import { createCharacterSlice, DEFAULT_CHARACTER_STATE } from "./slices/character-slice";
 import { createResearchSlice, DEFAULT_RESEARCH_SLICE_STATE } from "./slices/research-slice";
 import { createCodeExecutionSlice, DEFAULT_CODE_EXECUTION_STATE } from "./slices/code-execution-slice";
@@ -24,9 +22,7 @@ const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 
 export type SettingsStoreState = UiLayoutSliceState
   & ModelSliceState
-  & MemorySliceState
   & WebSearchSliceState
-  & DocumentSliceState
   & CharacterSliceState
   & ResearchSliceState
   & CodeExecutionSliceState
@@ -37,9 +33,7 @@ export type SettingsStoreState = UiLayoutSliceState
 export type SettingsStore = SettingsStoreState
   & UiLayoutSliceActions
   & ModelSliceActions
-  & MemorySliceActions
   & WebSearchSliceActions
-  & DocumentSliceActions
   & CharacterSliceActions
   & ResearchSliceActions
   & ConnectivitySliceActions
@@ -49,9 +43,7 @@ export type SettingsStore = SettingsStoreState
 // Re-import state types for the combined type above.
 import type { UiLayoutSliceState, UiLayoutSliceActions } from "./slices/ui-layout-slice";
 import type { ModelSliceState, ModelSliceActions } from "./slices/model-slice";
-import type { MemorySliceState, MemorySliceActions } from "./slices/memory-slice";
 import type { WebSearchSliceState, WebSearchSliceActions } from "./slices/web-search-slice";
-import type { DocumentSliceState, DocumentSliceActions } from "./slices/document-slice";
 import type { CharacterSliceState, CharacterSliceActions } from "./slices/character-slice";
 import type { ResearchSliceState, ResearchSliceActions } from "./slices/research-slice";
 import type { CodeExecutionSliceState } from "./slices/code-execution-slice";
@@ -64,9 +56,7 @@ import type { UpdateSliceState, UpdateSliceActions } from "./slices/update-slice
 const DEFAULT_STATE: SettingsStoreState = {
   ...DEFAULT_UI_LAYOUT_STATE,
   ...DEFAULT_MODEL_STATE,
-  ...DEFAULT_MEMORY_STATE,
   ...DEFAULT_WEB_SEARCH_STATE,
-  ...DEFAULT_DOCUMENT_STATE,
   ...DEFAULT_CHARACTER_STATE,
   ...DEFAULT_RESEARCH_SLICE_STATE,
   ...DEFAULT_CODE_EXECUTION_STATE,
@@ -99,21 +89,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     backgroundJobsEnabled: state.backgroundJobsEnabled,
     autoSummarizeChats: state.autoSummarizeChats,
     summaryModel: state.summaryModel,
-    memoryMode: state.memoryMode,
-    maxMemoryTokens: state.maxMemoryTokens,
-    maxMemoryNodes: state.maxMemoryNodes,
-    maxMemoryFiles: state.maxMemoryFiles,
-    maxGraphDepth: state.maxGraphDepth,
-    defaultMemoryEnabled: state.defaultMemoryEnabled,
-    memoryExtractionEnabled: state.memoryExtractionEnabled,
-    memoryExtractionModel: state.memoryExtractionModel,
-    vectorSearchEnabled: state.vectorSearchEnabled,
-    vectorSearchEndpointUrl: state.vectorSearchEndpointUrl,
-    vectorSearchModel: state.vectorSearchModel,
-    vectorWeight: state.vectorWeight,
-    bm25Weight: state.bm25Weight,
-    metaWeight: state.metaWeight,
-    vectorDuplicateThreshold: state.vectorDuplicateThreshold,
     defaultWebSearchEnabled: state.defaultWebSearchEnabled,
     webSearchSearxngUrl: state.webSearchSearxngUrl,
     webSearchDefaultMode: state.webSearchDefaultMode,
@@ -141,18 +116,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     bundleArxivSearch: state.bundleArxivSearch,
     bundleWikipediaSearch: state.bundleWikipediaSearch,
     searxngSetupError: state.searxngSetupError,
-    documentPanelEnabled: state.documentPanelEnabled,
-    documentAutoSaveEnabled: state.documentAutoSaveEnabled,
-    documentAutoSaveDelay: state.documentAutoSaveDelay,
-    documentDefaultType: state.documentDefaultType,
-    documentWordWrap: state.documentWordWrap,
-    documentFontSize: state.documentFontSize,
-    documentTabSize: state.documentTabSize,
-    documentSpellCheck: state.documentSpellCheck,
-    documentAutoOpenOnCreate: state.documentAutoOpenOnCreate,
-    documentDefaultViewMode: state.documentDefaultViewMode,
-    documentAiPanelAutoShow: state.documentAiPanelAutoShow,
-    documentListDensity: state.documentListDensity,
     characterAssistModel: state.characterAssistModel,
     characterAssistMaxTokens: state.characterAssistMaxTokens,
     characterAssistSendContext: state.characterAssistSendContext,
@@ -193,9 +156,7 @@ export const useSettingsStore = create<SettingsStore>()(
     (...a) => ({
       ...createUiLayoutSlice(...a),
       ...createModelSlice(...a),
-      ...createMemorySlice(...a),
       ...createWebSearchSlice(...a),
-      ...createDocumentSlice(...a),
       ...createCharacterSlice(...a),
       ...createResearchSlice(...a),
       ...createCodeExecutionSlice(...a),

@@ -161,8 +161,6 @@ pub struct ResearchReportRow {
     pub evidence_ids: Vec<String>,
     pub word_count: i64,
     pub format: String,
-    pub exported_to_document_id: Option<String>,
-    pub exported_to_memory_ids: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -349,8 +347,6 @@ pub struct UpdateResearchReportInput {
     pub source_ids: Option<Vec<String>>,
     pub evidence_ids: Option<Vec<String>>,
     pub word_count: Option<i64>,
-    pub exported_to_document_id: Option<String>,
-    pub exported_to_memory_ids: Option<Vec<String>>,
     pub updated_at: Option<String>,
 }
 

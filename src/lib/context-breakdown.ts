@@ -2,7 +2,6 @@ import type { ChatMessage, ContextBlock, ContextBreakdown, ContextStats } from "
 import { estimateTokens, buildChatContext, type BuildChatContextOptions } from "@/lib/context";
 import {
   VEYRA_CORE_SYSTEM,
-  buildMemoryContextBlock,
   buildSummaryContextBlock,
   buildModelIdentityBlock,
 } from "@/lib/prompts";
@@ -65,27 +64,6 @@ function buildSystemBlocks(options: BuildChatContextOptions): {
       label: "Context Anchoring",
       tokenCount: estimateTokens(options.contextAnchoringBlock.trim()),
       dropped: false,
-    });
-  }
-
-  if (options.documentInstructionsBlock?.trim()) {
-    blocks.push({
-      category: "documents_instructions",
-      label: "Document Instructions",
-      tokenCount: estimateTokens(options.documentInstructionsBlock.trim()),
-      dropped: false,
-    });
-  }
-
-  if (options.memoryPack && options.memoryPack.content.trim().length > 0) {
-    const blockText = buildMemoryContextBlock(options.memoryPack.content);
-    const memoryNodeCount = options.memoryPack.sourceNodeIds.length;
-    blocks.push({
-      category: "memory",
-      label: "Memory",
-      tokenCount: estimateTokens(blockText),
-      dropped: false,
-      detail: memoryNodeCount > 0 ? `${memoryNodeCount} node${memoryNodeCount !== 1 ? "s" : ""}` : undefined,
     });
   }
 

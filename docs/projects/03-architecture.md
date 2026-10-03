@@ -24,8 +24,6 @@ When a project is active, the system prompt includes:
 
 The following resources can be scoped to a project:
 - **Conversations**: Chat threads belong to a project
-- **Documents**: Documents can be project-specific
-- **Memory**: Memory nodes can be project-scoped
 
 ## Project Tracking
 

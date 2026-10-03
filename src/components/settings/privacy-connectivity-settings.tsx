@@ -62,7 +62,7 @@ export function PrivacyConnectivitySettings() {
         </h2>
         <p className="mb-4 max-w-xl text-[12px] leading-relaxed text-[var(--color-text-dim)]">
           Local AI via LM Studio never sends your conversations to the cloud. Offline mode blocks
-          web search and cloud models while keeping chat, memory, and documents on your machine.
+          web search and cloud models while keeping chat on your machine.
         </p>
 
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
