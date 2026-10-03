@@ -4,6 +4,8 @@ import type { ChatMessage, RequestStatus } from "@/modules/chat/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { useChatStore } from "@/stores/chat-store";
 import { useAgentStore } from "@/modules/agents/agent-store";
+import { useProviderStore } from "@/stores/provider-store";
+import { reasoningModelKey } from "@/modules/agents/agent-reasoning";
 import { useSettingsStore } from "@/stores/settings-store";
 import { filterAttachments } from "@/hooks/use-chat-attachments";
 import { runChatJob } from "@/hooks/run-chat-job";
@@ -58,6 +60,8 @@ export function useChatSend({
       if (agentModeEnabled) {
         if (!trimmed) return;
         const agentState = useAgentStore.getState();
+        const agentProviderBaseUrl = useProviderStore.getState().cloudProviders.find((provider) => provider.id === selectedProvider)?.baseUrl;
+        const agentReasoningLevel = agentState.reasoningLevelByModel[reasoningModelKey(selectedProvider, selectedModel, agentProviderBaseUrl)] ?? agentState.reasoningLevel;
         if (agentState.runtimeAvailable !== true) return;
         const agentProjectKey = agentState.projectPath.trim();
         const runningAgentSession = agentState.sessions.some(
@@ -68,6 +72,7 @@ export function useChatSend({
         aiScheduler.abortActiveBackgroundJob();
         aiScheduler.enqueueAiJob({
           type: "agent_pi",
+          conversationId: `agent:${agentProjectKey}`,
           priority: 0,
           title: "Running Pi agent",
           description: trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed,
@@ -88,17 +93,33 @@ export function useChatSend({
                 },
               );
             }
-            const { startSession } = useAgentStore.getState();
-            const sessionId = await startSession({
-              mode: agentState.mode,
-              projectPath: agentState.projectPath,
-              prompt: trimmed,
-              model: selectedModel,
-              contextLength: selectedModelContextSettings.contextLength,
-              reservedOutputTokens: selectedModelContextSettings.reservedOutputTokens,
-              providerId: selectedProvider,
-              reasoningEnabled: useSettingsStore.getState().reasoningEnabled,
-            });
+            if (signal.aborted) throw new DOMException("Agent job aborted", "AbortError");
+            const onAbort = () => {
+              const state = useAgentStore.getState();
+              for (const session of state.sessions) {
+                if (session.status === "running" && session.projectPath.trim() === agentProjectKey) state.stopSession(session.id);
+              }
+            };
+            signal.addEventListener("abort", onAbort, { once: true });
+            let sessionId: string;
+            try {
+              const { startSession } = useAgentStore.getState();
+              sessionId = await startSession({
+                continueSessionId: agentState.activeSessionId,
+                mode: agentState.mode,
+                projectPath: agentState.projectPath,
+                prompt: trimmed,
+                model: selectedModel,
+                contextLength: selectedModelContextSettings.contextLength,
+                reservedOutputTokens: selectedModelContextSettings.reservedOutputTokens,
+                providerId: selectedProvider,
+                providerBaseUrl: agentProviderBaseUrl,
+                reasoningEnabled: agentReasoningLevel !== "off",
+                reasoningLevel: agentReasoningLevel,
+              });
+            } finally {
+              signal.removeEventListener("abort", onAbort);
+            }
             const session = useAgentStore.getState().sessions.find(
               (item: { id: string }) => item.id === sessionId,
             );

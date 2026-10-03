@@ -27,12 +27,12 @@ function MemoryPageInner() {
 
   return (
     <>
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
+      <header className="flex h-16 shrink-0 items-center justify-between bg-[var(--color-bg)] px-6">
         <div className="flex items-center gap-2.5">
           <div className="grid size-7 place-items-center text-[var(--color-text-dim)]">
             <Database className="size-4" />
           </div>
-          <h1 className="text-[14px] font-semibold tracking-tight">Memory</h1>
+          <h1 className="text-[18px] font-medium tracking-tight">Memory</h1>
           {!showProfile && (
             <span className="ml-2 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10.5px] font-mono uppercase tracking-wide text-[var(--color-text-dim)]">
               {nodes.length} total

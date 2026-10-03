@@ -161,9 +161,9 @@ export function CharacterPage() {
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
+      <header className="flex h-16 shrink-0 items-center justify-between bg-[var(--color-bg)] px-6">
         <div className="flex items-center gap-2.5">
-          <h1 className="text-[14px] font-semibold tracking-tight">Characters</h1>
+          <h1 className="text-[18px] font-medium tracking-tight">Characters</h1>
           <div className="ml-3 flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5 text-[11px]">
             <button
               type="button"

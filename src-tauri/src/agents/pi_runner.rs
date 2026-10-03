@@ -84,6 +84,23 @@ pub(crate) fn pi_agent_dir() -> Result<PathBuf, String> {
 const AGENT_PROCESS_TIMEOUT: Duration = Duration::from_secs(2 * 60 * 60);
 const AGENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
+pub(crate) fn resolve_thinking_level(
+    level: Option<&str>,
+    enabled: Option<bool>,
+) -> Result<&str, String> {
+    match level {
+        Some(level @ ("off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max")) => {
+            Ok(level)
+        }
+        Some(_) => Err("Invalid agent reasoning level".into()),
+        None => Ok(if enabled == Some(false) {
+            "off"
+        } else {
+            "medium"
+        }),
+    }
+}
+
 /// Spawn `pi --mode rpc`, send the prompt, stream stdout events, and wait for
 /// the process to finish (or time out).
 pub(crate) fn run_pi_agent_blocking(
@@ -92,14 +109,18 @@ pub(crate) fn run_pi_agent_blocking(
     cwd: &Path,
     model: &str,
     prompt: &str,
-    route_to_lm_studio: bool,
+    provider: &str,
     mode: &str,
+    thinking_level: &str,
+    cancelled: &AtomicBool,
 ) -> Result<PiAgentOutput, String> {
     let mut args = vec![
         "--mode".to_string(),
         "rpc".to_string(),
         "--no-session".to_string(),
         "--no-context-files".to_string(),
+        "--thinking".to_string(),
+        thinking_level.to_string(),
     ];
 
     // Restrict tools based on mode
@@ -108,18 +129,14 @@ pub(crate) fn run_pi_agent_blocking(
         args.push("read,grep,find,ls".to_string());
     }
 
-    if route_to_lm_studio {
-        // Model string for Pi: lmstudio/<model>
-        let pi_model = if model.contains('/') {
-            format!("lmstudio/{}", model.trim_start_matches("lmstudio/"))
-        } else {
-            format!("lmstudio/{model}")
-        };
-        args.push("--model".to_string());
-        args.push(pi_model);
-    } else if !model.is_empty() {
-        args.push("--model".to_string());
-        args.push(model.to_string());
+    args.extend([
+        "--provider".to_string(),
+        provider.to_string(),
+        "--model".to_string(),
+        model.to_string(),
+    ]);
+    if cancelled.load(Ordering::Relaxed) {
+        return Err("Agent run cancelled".into());
     }
 
     let mut last_error = String::new();
@@ -151,6 +168,12 @@ pub(crate) fn run_pi_agent_blocking(
     })?;
 
     register_agent_process(session_id, child.id());
+    if cancelled.load(Ordering::Relaxed) {
+        let _ = child.kill();
+        let _ = child.wait();
+        unregister_agent_process(session_id);
+        return Err("Agent run cancelled".into());
+    }
 
     let stdin = child.stdin.take();
     let stdout = child.stdout.take();
@@ -323,7 +346,6 @@ pub(crate) fn generate_pi_models_json(
     model: &str,
     context_length: Option<u32>,
     reserved_output_tokens: Option<u32>,
-    reasoning_enabled: bool,
 ) -> Result<(), String> {
     let model_id = model.trim().trim_end_matches('/').trim_end_matches('\\');
     if model_id.is_empty() {
@@ -352,7 +374,7 @@ pub(crate) fn generate_pi_models_json(
                     {
                         "id": model_id,
                         "name": model_id,
-                        "reasoning": reasoning_enabled,
+                        "reasoning": false,
                         "input": ["text"],
                         "contextWindow": context_limit,
                         "maxTokens": output_limit,
@@ -369,8 +391,84 @@ pub(crate) fn generate_pi_models_json(
     });
 
     let path = models_dir.join("models.json");
-    let content = serde_json::to_string_pretty(&models_json).map_err(|e| e.to_string())?;
+    let existing = if path.exists() {
+        serde_json::from_str(&fs::read_to_string(&path).map_err(|_| "Cannot read Pi models.json")?)
+            .map_err(|_| "Pi models.json is invalid; refusing to overwrite it")?
+    } else {
+        json!({})
+    };
+    let merged = merge_lm_studio_config(existing, &models_json)?;
+    let content = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
     fs::write(&path, content).map_err(|e| format!("failed to write models.json: {e}"))?;
 
     Ok(())
+}
+
+fn merge_lm_studio_config(
+    mut config: serde_json::Value,
+    defaults: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let root = config
+        .as_object_mut()
+        .ok_or("Pi models.json must be an object")?;
+    let providers = root
+        .entry("providers")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or("Pi providers must be an object")?;
+    let provider = providers
+        .entry("lmstudio")
+        .or_insert_with(|| defaults["providers"]["lmstudio"].clone());
+    let object = provider
+        .as_object_mut()
+        .ok_or("Pi LM Studio provider must be an object")?;
+    let models = object
+        .entry("models")
+        .or_insert_with(|| json!([]))
+        .as_array_mut()
+        .ok_or("Pi LM Studio models must be an array")?;
+    let new_model = &defaults["providers"]["lmstudio"]["models"][0];
+    if !models.iter().any(|model| model["id"] == new_model["id"]) {
+        models.push(new_model.clone());
+    }
+    Ok(config)
+}
+
+#[cfg(test)]
+mod reasoning_tests {
+    use super::*;
+    #[test]
+    fn validates_levels_and_legacy_toggle() {
+        assert_eq!(resolve_thinking_level(None, Some(false)).unwrap(), "off");
+        assert_eq!(resolve_thinking_level(None, Some(true)).unwrap(), "medium");
+        assert_eq!(
+            resolve_thinking_level(Some("max"), Some(false)).unwrap(),
+            "max"
+        );
+        assert!(resolve_thinking_level(Some("invalid"), None).is_err());
+    }
+    #[test]
+    fn preserves_custom_pi_provider_and_reasoning_metadata() {
+        let existing = json!({"providers":{"custom":{"baseUrl":"https://example.invalid"},"lmstudio":{"compat":{"thinkingFormat":"qwen"},"models":[{"id":"model","reasoning":true,"thinkingLevelMap":{"minimal":null}}]}}});
+        let defaults =
+            json!({"providers":{"lmstudio":{"models":[{"id":"model","reasoning":false}]}}});
+        assert_eq!(
+            merge_lm_studio_config(existing.clone(), &defaults).unwrap(),
+            existing
+        );
+        let new_defaults =
+            json!({"providers":{"lmstudio":{"models":[{"id":"second","reasoning":false}]}}});
+        let merged = merge_lm_studio_config(existing.clone(), &new_defaults).unwrap();
+        assert_eq!(
+            merged["providers"]["custom"],
+            existing["providers"]["custom"]
+        );
+        assert_eq!(
+            merged["providers"]["lmstudio"]["models"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+    }
 }

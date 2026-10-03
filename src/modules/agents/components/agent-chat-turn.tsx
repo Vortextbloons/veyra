@@ -18,9 +18,10 @@ export function AgentChatTurn({
 }) {
   if (turn.role === "user") {
     return (
-      <div className="flex flex-row-reverse gap-3">
-        <div className="flex min-w-0 max-w-[85%] flex-col items-end">
-          <div className="rounded-2xl rounded-tr-md border border-indigo-400/15 bg-[var(--color-accent-soft)] px-4 py-2.5 text-[13px] text-white shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]">
+      <div className="agent-user-task">
+        <div className="min-w-0">
+          <div>
+            <div className="agent-turn-label">Task</div>
             <Suspense>
               <MarkdownRenderer className="leading-snug">{turn.content}</MarkdownRenderer>
             </Suspense>
@@ -41,7 +42,7 @@ export function AgentChatTurn({
   return (
     <div className="flex items-start gap-3">
       <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
+        <div className="agent-turn-label flex items-center gap-2">
           <span className="truncate font-medium text-white">{assistantLabel}</span>
           <span className="size-1 rounded-full bg-[var(--color-text-dim)]/50" />
           <span className="text-[var(--color-text-dim)]">{mode}</span>
@@ -53,10 +54,10 @@ export function AgentChatTurn({
           )}
         </div>
         <div
-          className={`rounded-2xl rounded-tl-md border px-4 py-2.5 text-[13px] shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] ${
+          className={`agent-response ${
             isError
               ? "border-red-500/20 bg-red-500/[0.06] text-red-300"
-              : "border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-text)]"
+              : "text-[var(--color-text)]"
           }`}
         >
           {turn.pending ? (

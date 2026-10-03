@@ -11,6 +11,7 @@ import type {
   StudioResponse,
   StudioTheme,
   StudioWorkspace,
+  StudioEnvironment,
 } from "@/modules/chat/studio/studio-types";
 
 export type ChatRole = "user" | "assistant" | "system";
@@ -128,6 +129,7 @@ export interface Conversation {
   experience?: ConversationExperience;
   /** Conversation-owned dynamic Studio stage. */
   studioWorkspace?: StudioWorkspace;
+  studioEnvironment?: StudioEnvironment;
   /** Project this conversation belongs to. undefined = no project (global chat). */
   projectId?: string;
   /** Character this conversation is bound to. undefined = plain (non-character) chat. */
@@ -296,8 +298,18 @@ export interface ChatPanelProps {
   onModelChange?: (id: string) => void;
   favoriteModels?: string[];
   onToggleFavorite?: (id: string) => void;
-  /** 0 = both side panels open, 1 = one collapsed, 2 = both collapsed */
+  /** 0 = all side panels open, 1 = recent chats collapsed */
   sidebarsCollapsed?: number;
+  contextStats?: ContextStats;
+  contextBreakdown?: ContextBreakdown;
+  webSearchEnabled?: boolean;
+  onWebSearchChange?: (enabled: boolean) => void;
+  webSearchDisabled?: boolean;
+  webSearchDisabledReason?: string;
+  codeExecutionEnabled?: boolean;
+  onCodeExecutionChange?: (enabled: boolean) => void;
+  codeExecutionDisabled?: boolean;
+  codeExecutionDisabledReason?: string;
   onStop?: () => void;
   onTriggerMemoryExtraction?: () => void;
   modelLoadProgress?: ModelLoadProgress;
@@ -328,26 +340,6 @@ export interface ChatPanelProps {
   editInitialValue?: string;
   onEditCancel?: () => void;
   onEditSave?: (messageId: string, newContent: string) => void;
-}
-
-export interface RightPanelProps {
-  contextStats?: ContextStats;
-  contextBreakdown?: ContextBreakdown;
-  collapsed?: boolean;
-  onCollapsedChange?: (collapsed: boolean) => void;
-  hidden?: boolean;
-  webSearchEnabled?: boolean;
-  onWebSearchChange?: (enabled: boolean) => void;
-  webSearchDisabled?: boolean;
-  webSearchDisabledReason?: string;
-  codeExecutionEnabled?: boolean;
-  onCodeExecutionChange?: (enabled: boolean) => void;
-  codeExecutionDisabled?: boolean;
-  codeExecutionDisabledReason?: string;
-  isAgentsMode?: boolean;
-  agentSessionCount?: number;
-  agentActiveCount?: number;
-  onAgentClearSessions?: () => void;
 }
 
 export interface RecentChatsItem {

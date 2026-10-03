@@ -10,6 +10,7 @@ import type {
   StudioWorkspaceStatus,
 } from "./studio-types";
 import { normalizeStudioTheme } from "./studio-theme";
+import { normalizeStudioEnvironment, studioJsonObject, STUDIO_DATA_MAX_BYTES } from "./studio-environment";
 
 /** Message-owned Studio response revision retention. */
 export const STUDIO_MAX_RESPONSE_REVISIONS = 8;
@@ -140,6 +141,8 @@ export function normalizeStudioResponse(
       html: revision.html,
       css: revision.css,
       javascript: typeof revision.javascript === "string" ? revision.javascript : undefined,
+      summary: typeof revision.summary === "string" ? revision.summary.slice(0, 1000) : undefined,
+      data: studioJsonObject(revision.data, STUDIO_DATA_MAX_BYTES),
       theme: normalizeStudioTheme(revision.theme),
       createdAt: revision.createdAt,
     });
@@ -219,17 +222,12 @@ export function normalizeConversationStudio(conversation: Conversation): Convers
     }
     return { ...normalizedMessage, studioResponse: normalized };
   });
-  let studioWorkspace = normalizeStudioWorkspace(conversation.studioWorkspace, new Set(messages.map((message) => message.id)));
-  // Development cutover: lift valid legacy message-owned revisions into one conversation timeline.
-  if (experience === "studio" && !studioWorkspace) {
-    const scenes: StudioScene[] = [];
-    for (const message of messages) {
-      if (message.role !== "assistant" || !message.studioResponse) continue;
-      for (const revision of message.studioResponse.revisions) scenes.push({ id: crypto.randomUUID(), assistantMessageId: message.id, title: revision.title, html: revision.html, css: revision.css, javascript: revision.javascript, transition: "fade", lineageId: message.studioResponse.id, revision: revision.revision, createdAt: revision.createdAt });
-    }
-    if (scenes.length) { const latest = scenes[scenes.length - 1]!; studioWorkspace = { id: crypto.randomUUID(), scenes: trimStudioScenes(scenes, latest.id), currentSceneId: latest.id, latestSceneId: latest.id, status: "idle", createdAt: scenes[0]!.createdAt, updatedAt: latest.createdAt }; }
-  }
-  return { ...conversation, experience, messages, studioWorkspace };
+  const studioWorkspace = normalizeStudioWorkspace(conversation.studioWorkspace, new Set(messages.map((message) => message.id)));
+  const latestResponseMessage = [...messages].reverse().find((message) => message.role === "assistant" && message.studioResponse);
+  const response = latestResponseMessage?.studioResponse;
+  const priorSelection = !conversation.studioEnvironment && latestResponseMessage && response && response.currentRevision !== response.latestRevision
+    ? { state: {}, selection: { messageId: latestResponseMessage.id, revision: response.currentRevision } } : undefined;
+  return { ...conversation, experience, messages, studioWorkspace, studioEnvironment: normalizeStudioEnvironment(conversation.studioEnvironment ?? priorSelection, messages) };
 }
 
 export function previousStudioResponseRevision(response: StudioResponse): StudioResponseRevision | null {

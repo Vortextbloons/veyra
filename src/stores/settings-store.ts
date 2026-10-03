@@ -81,7 +81,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
   return {
     activeNav: state.activeNav,
     recentChatsCollapsed: state.recentChatsCollapsed,
-    rightPanelCollapsed: state.rightPanelCollapsed,
     visibleToolSettingsSections: state.visibleToolSettingsSections,
     toolSettingsSubsectionsExpanded: state.toolSettingsSubsectionsExpanded,
     favoriteModels: state.favoriteModels,
@@ -163,6 +162,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     enhancedModeEnabled: state.enhancedModeEnabled,
     studioModeEnabled: state.studioModeEnabled,
+    studioPresentation: state.studioPresentation,
     studioModeAvailabilityDefaultOn: state.studioModeAvailabilityDefaultOn,
     research: state.research,
     researchAdvancedOpen: state.researchAdvancedOpen,

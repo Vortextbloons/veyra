@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { ChevronRight, Bot, Sparkles, TerminalSquare } from "lucide-react";
+import { useEffect, useRef, useMemo } from "react";
+import { ChevronRight, Sparkles, TerminalSquare } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { AgentChatTurn } from "@/modules/agents/components/agent-chat-turn";
 import { buildAgentChatTurns, type AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
@@ -13,26 +13,27 @@ export function AgentOutputView({
   onStop: (id: string) => void;
 }) {
   const outputRef = useRef<HTMLDivElement>(null);
+  const followOutput = useRef(true);
   const isRunning = session.status === "running";
 
   useEffect(() => {
     const el = outputRef.current;
-    if (el) {
+    if (el && followOutput.current) {
       el.scrollTop = el.scrollHeight;
     }
   }, [session.events]);
 
-  const turns = buildAgentChatTurns(session.events, session.model);
+  const turns = useMemo(() => buildAgentChatTurns(session.events, session.model), [session.events, session.model]);
   const hasAssistantAfterLastPrompt = turns.at(-1)?.role === "assistant";
   const showWorkingTurn = isRunning && !hasAssistantAfterLastPrompt;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
+      <div className="agent-work-status">
         <div className="flex min-w-0 items-center gap-2">
           <StatusDot status={session.status} />
           <span className="truncate text-[12.5px] font-medium text-white">
-            {session.title}
+            {session.status === "running" ? "Working" : session.status === "completed" ? "Task completed" : session.status}
           </span>
           <span className="shrink-0 rounded-md bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
             {session.mode}
@@ -49,8 +50,8 @@ export function AgentOutputView({
         )}
       </div>
 
-      <div ref={outputRef} className="flex-1 overflow-y-auto">
-        <div className="flex w-full flex-col gap-5 px-5 pb-6 pt-5">
+      <div ref={outputRef} onScroll={() => { const el = outputRef.current; if (el) followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="agent-work-log">
           {turns.map((turn) => (
             <AgentChatTurn key={turn.id} turn={turn} mode={session.mode} />
           ))}
@@ -83,7 +84,8 @@ export function AgentActivityCard({ turn }: { turn: AgentChatTurnModel }) {
   const isTool = turn.kind === "tool";
   const isReasoning = turn.kind === "reasoning";
   return (
-    <div className="ml-10 mr-6 flex items-start gap-2 rounded-lg border border-white/[0.07] bg-[#11121a]/80 px-3 py-2 shadow-[0_1px_0_rgba(255,255,255,0.035)_inset]">
+    <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+      <summary className="flex cursor-pointer items-center gap-2 text-[11px] text-[var(--color-text-dim)]">
       <div
         className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-md ${
           isTool
@@ -101,29 +103,9 @@ export function AgentActivityCard({ turn }: { turn: AgentChatTurnModel }) {
           {isTool && <span className="rounded bg-cyan-400/10 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wide text-cyan-300">tool</span>}
           {isReasoning && <span className="rounded bg-violet-400/10 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wide text-violet-300">thinking</span>}
         </div>
-        {turn.content && (
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-[var(--color-text-dim)]">
-            {turn.content}
-          </p>
-        )}
       </div>
-    </div>
-  );
-}
-
-export function AgentEmptyState() {
-  return (
-    <div className="flex flex-1 items-center justify-center">
-      <div className="max-w-sm px-6 text-center">
-        <div className="mx-auto mb-4 flex size-10 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
-          <Bot className="size-5 text-[var(--color-text-dim)]" />
-        </div>
-        <h3 className="text-[14px] font-semibold text-white">Agent workspace</h3>
-        <p className="mt-1.5 text-[12px] leading-relaxed text-[var(--color-text-dim)]">
-          Agents can research, write, code, manage files, and run commands on your machine.
-          Choose a mode above, then send a task from the composer below.
-        </p>
-      </div>
-    </div>
+      </summary>
+      {turn.content && <pre className="mt-3 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[var(--color-text-dim)]">{turn.content}</pre>}
+    </details>
   );
 }

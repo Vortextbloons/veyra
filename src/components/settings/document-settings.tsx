@@ -35,18 +35,19 @@ export function DocumentSettings() {
       <CollapsibleSettingsSection
         subsectionKey="documents:general"
         title="Documents"
-        description="Enable the side document panel and AI document tools."
+        description="Enable the document editor and AI document tools."
         keywords={["panel", "enable", "markdown"]}
         defaultExpanded
       >
         <Toggle
-          label="Enable document panel"
+          label="Enable documents"
           on={documentPanelEnabled}
           onChange={setDocumentPanelEnabled}
         />
         <p className="text-[11px] text-[var(--color-text-dim)]">
-          The document panel lets you and the AI create, edit, and manage
-          markdown documents in a side editor.
+          Documents let you and the AI create, edit, and manage markdown files
+          in the side editor. Toggle access per chat from the chat settings
+          menu in the composer.
         </p>
 
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">

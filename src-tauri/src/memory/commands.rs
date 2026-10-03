@@ -60,6 +60,21 @@ pub async fn create_memory_node(
     Ok(node)
 }
 
+/// True when the update payload carries fields that feed the embedding
+/// (title/content/summary/tags). The db layer clears the stored embedding for
+/// those, so only then does the embedding need to be recomputed. Metadata-only
+/// updates (usage counters, archive status, pins) must not trigger inference.
+fn update_touches_embedding_inputs(input_json: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(input_json)
+        .map(|value| {
+            value.get("title").is_some()
+                || value.get("content").is_some()
+                || value.get("summary").is_some()
+                || value.get("tags").is_some()
+        })
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 pub async fn update_memory_node(
     input: String,
@@ -68,12 +83,13 @@ pub async fn update_memory_node(
     model: Option<String>,
     state: State<'_, MemoryDbState>,
 ) -> Result<memory_db::MemoryNodeRow, String> {
+    let touches_embedding_inputs = update_touches_embedding_inputs(&input);
     let node = run_db_command(state.inner(), "memory", move |conn| {
         memory_db::update_node(conn, input)
     })
     .await?;
 
-    if vector_search_enabled {
+    if vector_search_enabled && touches_embedding_inputs {
         if let Some(config) = embedding::resolve_embedding_config(endpoint_url, model).await {
             let text = format!(
                 "{} {} {} {}",

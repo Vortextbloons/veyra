@@ -3,11 +3,10 @@ import { TitleBar } from "@/app/components/title-bar";
 import { PrimarySidebar } from "@/app/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/app/components/chat-panel";
-import { RightPanel } from "@/app/components/right-panel";
 import { DocEditorPanel } from "@/modules/documents/components/doc-editor-panel";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { ensureProviderReady } from "@/modules/chat/chat-actions";
-import type { RecentChatsItem } from "@/modules/chat/chat-types";
+import type { ContextStats, RecentChatsItem } from "@/modules/chat/chat-types";
 import { isChatModeNav } from "@/modules/chat/chat-types";
 import { useWorkspaceModeChange } from "@/lib/workspace-mode";
 import { ShutdownOverlay } from "@/app/components/shutdown-overlay";
@@ -81,12 +80,10 @@ function App() {
 
   const activeNav = useSettingsStore((state) => state.activeNav);
   const recentChatsCollapsed = useSettingsStore((state) => state.recentChatsCollapsed);
-  const rightPanelCollapsed = useSettingsStore((state) => state.rightPanelCollapsed);
   const codeExecutionDefaultEnabled = useSettingsStore((state) => state.codeExecutionEnabled);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
   const workspaceChatMode = useSettingsStore((state) => state.workspaceChatMode);
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
-  const setRightPanelCollapsed = useSettingsStore((state) => state.setRightPanelCollapsed);
   const defaultWebSearchEnabled = useSettingsStore(
     (state) => state.defaultWebSearchEnabled,
   );
@@ -216,8 +213,27 @@ function App() {
     workspaceChatMode,
   });
 
-  const { displayContextStats, displayContextBreakdown, supportsImages } =
-    useChatContextPanel({ workspaceChatMode, activeAgentSession: agent.activeAgentSession });
+  const {
+    displayContextStats,
+    displayContextBreakdown,
+    resolvedContextLength,
+    resolvedReservedOutputTokens,
+    supportsImages,
+  } = useChatContextPanel({ workspaceChatMode, activeAgentSession: agent.activeAgentSession });
+
+  // New chats have no conversation yet — still show the context meter at 0%.
+  const composerContextStats: ContextStats = useMemo(
+    () =>
+      displayContextStats ?? {
+        estimatedTokens: 0,
+        contextLimit: resolvedContextLength,
+        percentUsed: 0,
+        includedMessages: 0,
+        droppedMessages: 0,
+        reservedOutputTokens: resolvedReservedOutputTokens,
+      },
+    [displayContextStats, resolvedContextLength, resolvedReservedOutputTokens],
+  );
 
   const pipeline = useChatPipeline({
     projectId: activeProjectId ?? undefined,
@@ -253,8 +269,7 @@ function App() {
       ? "Code execution is only available in chat and characters mode."
       : codeExecutionAvailability.reason;
 
-  const sidebarsCollapsed =
-    (recentChatsCollapsed ? 1 : 0) + (rightPanelCollapsed ? 1 : 0);
+  const sidebarsCollapsed = recentChatsCollapsed ? 1 : 0;
 
   const {
     handleNewChat: pipelineHandleNewChat,
@@ -294,7 +309,7 @@ function App() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--color-bg)]">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--color-bg)]">
       <ShutdownOverlay />
       <ConnectivityToastHost />
       <UpdateAvailableBanner />
@@ -307,20 +322,27 @@ function App() {
       />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <PrimarySidebar
-          activeNav={activeNav}
-          onNavChange={setActiveNav}
-          onNewChat={handleNewChat}
-        />
-        <RecentChats
-          chats={recentChats}
-          activeId={activeConversationId ?? undefined}
-          onSelect={setActiveConversationId}
-          onDelete={pipelineHandleDeleteChat}
-          onDeleteAll={handleDeleteAllChats}
-          collapsed={recentChatsCollapsed}
-          onCollapsedChange={setRecentChatsCollapsed}
-          hidden={!isChatMode || activeNav === "projects" || workspaceChatMode === "agents"}
-        />
+          compact={isChatMode && workspaceChatMode === "agents"}
+          activeNav={isChatMode && workspaceChatMode === "agents" ? "agents" : activeNav}
+          onNavChange={(nav) => {
+            if (nav === "agents" || nav === "chat") {
+              handleModeChange(nav === "agents" ? "agents" : "chat");
+              setActiveNav("chat");
+            } else setActiveNav(nav);
+          }}
+          onNewChat={isChatMode && workspaceChatMode === "agents" ? agent.newAgentSession : handleNewChat}
+        >
+          <RecentChats
+            chats={recentChats}
+            activeId={activeConversationId ?? undefined}
+            onSelect={setActiveConversationId}
+            onDelete={pipelineHandleDeleteChat}
+            onDeleteAll={handleDeleteAllChats}
+            collapsed={recentChatsCollapsed}
+            onCollapsedChange={setRecentChatsCollapsed}
+            hidden={!isChatMode || activeNav === "projects" || workspaceChatMode === "agents"}
+          />
+        </PrimarySidebar>
         <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
           <Suspense fallback={null}>
             {activeNav === "memory" && <MemoryPage />}
@@ -356,13 +378,23 @@ function App() {
             onStop={pipelineHandleStopStreaming}
             onTriggerMemoryExtraction={pipelineRest.handleTriggerMemoryExtraction}
             sidebarsCollapsed={sidebarsCollapsed}
+            contextStats={composerContextStats}
+            contextBreakdown={displayContextBreakdown}
+            webSearchEnabled={webSearchEnabled}
+            onWebSearchChange={setWebSearchEnabled}
+            webSearchDisabled={!webSearchAvailability.available}
+            webSearchDisabledReason={webSearchAvailability.reason}
+            codeExecutionEnabled={codeExecutionActive}
+            onCodeExecutionChange={setCodeExecutionActive}
+            codeExecutionDisabled={codeExecutionPanelDisabled}
+            codeExecutionDisabledReason={codeExecutionPanelDisabledReason}
             modelLoadProgress={pipelineRest.modelLoadProgress}
             mode={workspaceChatMode}
             onModeChange={handleModeChange}
             experience={resolveConversationExperience(activeConversation ?? {})}
             onExperienceChange={handleExperienceChange}
-            agentSessions={agent.visibleAgentSessions}
-            activeAgentSessionId={agent.activeAgentSession?.id ?? null}
+            agentSessions={agent.agentSessions}
+            activeAgentSessionId={agent.activeAgentSessionId}
             agentRuntimeAvailable={agent.agentRuntimeAvailable}
             agentMode={agent.agentMode}
             agentProjectPath={agent.agentProjectPath}
@@ -385,26 +417,7 @@ function App() {
             onEditSave={pipelineRest.handleEditSave}
           />
         )}
-        {isChatMode && activeNav !== "projects" && activeNav !== "characters" && <DocEditorPanel />}
-        <RightPanel
-          contextStats={displayContextStats}
-          contextBreakdown={displayContextBreakdown}
-          collapsed={rightPanelCollapsed}
-          onCollapsedChange={setRightPanelCollapsed}
-          hidden={!isChatMode}
-          webSearchEnabled={webSearchEnabled}
-          onWebSearchChange={setWebSearchEnabled}
-          webSearchDisabled={!webSearchAvailability.available}
-          webSearchDisabledReason={webSearchAvailability.reason}
-          codeExecutionEnabled={codeExecutionActive}
-          onCodeExecutionChange={setCodeExecutionActive}
-          codeExecutionDisabled={codeExecutionPanelDisabled}
-          codeExecutionDisabledReason={codeExecutionPanelDisabledReason}
-          isAgentsMode={workspaceChatMode === "agents"}
-          agentSessionCount={agent.visibleAgentSessions.length}
-          agentActiveCount={agent.visibleAgentSessions.filter((s) => s.status === "running").length}
-          onAgentClearSessions={agent.clearAgentSessions}
-        />
+        {isChatMode && workspaceChatMode !== "agents" && activeNav !== "projects" && activeNav !== "characters" && <DocEditorPanel />}
       </div>
     </div>
   );

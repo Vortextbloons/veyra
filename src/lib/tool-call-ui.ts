@@ -62,7 +62,12 @@ export const TOOL_CALL_UI: Record<string, ToolCallUiMeta> = {
     accent: "emerald",
   },
   studio_render: {
-    label: "Studio Message",
+    label: "Shape environment",
+    icon: Palette,
+    accent: "violet",
+  },
+  studio_update: {
+    label: "Update environment",
     icon: Palette,
     accent: "violet",
   },

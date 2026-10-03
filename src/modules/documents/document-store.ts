@@ -47,6 +47,8 @@ type DocumentStore = {
   saveStatus: SaveStatus;
   _debounceTimer: ReturnType<typeof setTimeout> | null;
   _lastSavedContent: string | null;
+  /** In-flight save settlement signal; serializes saveNow calls so persisted content never goes stale out of order. */
+  _savePromise: Promise<unknown> | null;
 
   /** Documents tab standalone state */
   viewMode: ViewMode;
@@ -82,7 +84,8 @@ type DocumentStore = {
   closeDocument: () => Promise<void>;
 
   setContent: (content: string) => void;
-  saveNow: () => Promise<void>;
+  /** Persists the active draft. Resolves false when the write failed (failure is surfaced via saveStatus). */
+  saveNow: () => Promise<boolean>;
 
   loadVersions: (documentId: string) => Promise<void>;
   restoreVersion: (versionId: string) => Promise<void>;
@@ -214,6 +217,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   saveStatus: "idle",
   _debounceTimer: null,
   _lastSavedContent: null,
+  _savePromise: null,
 
   viewMode: "split",
   searchQuery: "",
@@ -326,11 +330,16 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       const doc = await ipcUpdateDocument(input);
       set((state) => ({
         documents: replaceDocument(state.documents, doc),
-        activeDraftContent:
-          state.activeDocumentId === doc.id ? doc.contentMarkdown : state.activeDraftContent,
-        _lastSavedContent:
-          state.activeDocumentId === doc.id ? doc.contentMarkdown : state._lastSavedContent,
-        saveStatus: "saved",
+        // Only sync the draft/last-saved when this update actually carried
+        // content — metadata-only updates (rename, flags, tags) must not
+        // clobber a dirty draft with the persisted content.
+        ...(input.contentMarkdown !== undefined && state.activeDocumentId === doc.id
+          ? {
+              activeDraftContent: doc.contentMarkdown,
+              _lastSavedContent: doc.contentMarkdown,
+              saveStatus: "saved",
+            }
+          : {}),
       }));
     } catch (error) {
       set({ error: String(error), saveStatus: "error" });
@@ -367,6 +376,21 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   },
 
   openDocument: async (id) => {
+    // Flush any unsaved draft of the currently open document before switching,
+    // so document switches never mix content between documents.
+    const previous = get();
+    if (
+      previous.activeDocumentId !== null &&
+      previous.activeDraftContent !== null &&
+      previous.activeDraftContent !== previous._lastSavedContent
+    ) {
+      const flushed = await get().saveNow();
+      if (!flushed) {
+        // The previous draft could not be persisted; stay on it so nothing is lost.
+        return;
+      }
+    }
+
     set({ activeDocumentId: id, activeDraftContent: null, versions: [], isLoading: true });
     try {
       const [doc, versions] = await Promise.all([
@@ -375,13 +399,21 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
       ]);
       set((state) => ({
         documents: replaceDocument(state.documents, doc),
-        activeDraftContent: doc.contentMarkdown,
-        versions,
-        isLoading: false,
-        _lastSavedContent: doc.contentMarkdown,
-        saveStatus: "idle",
+        // Guard stale completions: another openDocument may have been started
+        // while this request was in flight; it owns the active-document state.
+        ...(state.activeDocumentId === id
+          ? {
+              activeDraftContent: doc.contentMarkdown,
+              versions,
+              _lastSavedContent: doc.contentMarkdown,
+              saveStatus: "idle",
+            }
+          : {}),
+        isLoading: state.activeDocumentId === id ? false : state.isLoading,
       }));
     } catch (error) {
+      // A newer openDocument owns the store state — leave it alone.
+      if (get().activeDocumentId !== id) return;
       set({
         error: String(error),
         isLoading: false,
@@ -397,8 +429,12 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     const state = get();
     if (state._debounceTimer) {
       clearTimeout(state._debounceTimer);
+      set({ _debounceTimer: null });
     }
-    await get().saveNow();
+    // Close only after a successful save — a failed write keeps the document
+    // open with its draft intact (failure is surfaced via saveStatus/error).
+    const saved = await get().saveNow();
+    if (!saved) return;
     set({
       activeDocumentId: null,
       activeDraftContent: null,
@@ -431,44 +467,81 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
   },
 
   saveNow: async () => {
+    // Serialize with any in-flight save so persisted content is never written
+    // out of order and completion handlers cannot regress a newer draft.
+    while (true) {
+      const pending = get()._savePromise;
+      if (!pending) break;
+      await pending.catch(() => undefined);
+    }
+
     const state = get();
     const activeId = state.activeDocumentId;
-    if (!activeId) return;
+    if (!activeId) return true;
 
     const doc = state.documents.find((d) => d.id === activeId);
-    if (!doc) return;
+    if (!doc) return true;
 
     const content = state.activeDraftContent ?? doc.contentMarkdown;
     if (content === state._lastSavedContent) {
       set({ saveStatus: "saved" });
-      return;
+      return true;
     }
 
-    try {
-      if (state._debounceTimer) {
-        clearTimeout(state._debounceTimer);
-        set({ _debounceTimer: null });
-      }
-      const saved = await ipcUpdateDocument({
-        id: activeId,
-        contentMarkdown: content,
-      });
-      const version = await ipcCreateVersion({
-        documentId: activeId,
-        contentMarkdown: saved.contentMarkdown,
-        changeSource: "user",
-        changeSummary: "Manual edit",
-      });
-      set((current) => ({
-        documents: replaceDocument(current.documents, saved),
-        activeDraftContent: saved.contentMarkdown,
-        versions: current.activeDocumentId === activeId ? [version, ...current.versions] : current.versions,
-        _lastSavedContent: saved.contentMarkdown,
-        saveStatus: "saved",
-      }));
-    } catch (error) {
-      set({ error: String(error), saveStatus: "error" });
+    if (state._debounceTimer) {
+      clearTimeout(state._debounceTimer);
+      set({ _debounceTimer: null });
     }
+
+    const run = (async (): Promise<boolean> => {
+      try {
+        const saved = await ipcUpdateDocument({
+          id: activeId,
+          contentMarkdown: content,
+        });
+        const version = await ipcCreateVersion({
+          documentId: activeId,
+          contentMarkdown: saved.contentMarkdown,
+          changeSource: "user",
+          changeSummary: "Manual edit",
+        });
+        set((current) => {
+          // The user may have typed while the write was in flight; only reset
+          // the draft when it still matches the content we submitted. If the
+          // active document changed meanwhile, leave its state untouched.
+          const isActive = current.activeDocumentId === activeId;
+          const draftUnchanged = isActive && current.activeDraftContent === content;
+          return {
+            documents: replaceDocument(current.documents, saved),
+            ...(isActive
+              ? {
+                  activeDraftContent: draftUnchanged
+                    ? saved.contentMarkdown
+                    : current.activeDraftContent,
+                  versions: [version, ...current.versions],
+                  _lastSavedContent: saved.contentMarkdown,
+                  saveStatus: draftUnchanged
+                    ? ("saved" as const)
+                    : current._debounceTimer
+                      ? ("saving" as const)
+                      : ("idle" as const),
+                }
+              : {}),
+          };
+        });
+        return true;
+      } catch (error) {
+        set({ error: String(error), saveStatus: "error" });
+        return false;
+      }
+    })();
+
+    set({
+      _savePromise: run.catch(() => undefined).finally(() => {
+        set({ _savePromise: null });
+      }),
+    });
+    return run;
   },
 
   loadVersions: async (documentId) => {
@@ -528,7 +601,8 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     const doc = state.documents.find((d) => d.id === activeId);
     if (!doc) return null;
 
-    await get().saveNow();
+    const saved = await get().saveNow();
+    if (!saved) return null;
 
     const safeName = doc.title.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "document";
     return ipcExportMarkdown(activeId, `${safeName}.md`);
@@ -541,7 +615,8 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     const doc = state.documents.find((d) => d.id === activeId);
     if (!doc) return null;
 
-    await get().saveNow();
+    const saved = await get().saveNow();
+    if (!saved) return null;
 
     const safeName = doc.title.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "document";
     return ipcExportTxt(activeId, `${safeName}.txt`);

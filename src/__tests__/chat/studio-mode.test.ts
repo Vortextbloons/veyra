@@ -59,10 +59,10 @@ describe("Studio Mode containment", () => {
     resetStudioRepairGuard("conversation-1", "assistant-1");
   });
 
-  it("registers both focused Studio tools only when enabled", () => {
+  it("registers Studio environment tools only when enabled", () => {
     const base = { webSearchEnabled: false, documentToolsEnabled: false, codeExecutionEnabled: false };
     expect(buildProviderTools(base).filter((tool) => tool.function.name.startsWith("studio_"))).toHaveLength(0);
-    expect(buildProviderTools({ ...base, studioEnabled: true }).filter((tool) => tool.function.name.startsWith("studio_")).map((tool) => tool.function.name)).toEqual([STUDIO_RENDER_TOOL_NAME, STUDIO_THEME_TOOL_NAME]);
+    expect(buildProviderTools({ ...base, studioEnabled: true }).filter((tool) => tool.function.name.startsWith("studio_")).map((tool) => tool.function.name)).toEqual([STUDIO_RENDER_TOOL_NAME, "studio_update", STUDIO_THEME_TOOL_NAME]);
   });
 
   it("parses exact arguments and trims the title", () => {

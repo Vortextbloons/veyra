@@ -50,7 +50,6 @@ export function useChatPipeline({
 
   const favoriteModels = useSettingsStore((state) => state.favoriteModels);
   const recentChatsCollapsed = useSettingsStore((state) => state.recentChatsCollapsed);
-  const rightPanelCollapsed = useSettingsStore((state) => state.rightPanelCollapsed);
   const defaultContextLength = useSettingsStore((state) => state.defaultContextLength);
   const defaultReservedOutputTokens = useSettingsStore((state) => state.defaultReservedOutputTokens);
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
@@ -82,8 +81,7 @@ export function useChatPipeline({
     }
   }, [effectiveConnectivity, setWebSearchEnabled]);
 
-  const sidebarsCollapsed =
-    (recentChatsCollapsed ? 1 : 0) + (rightPanelCollapsed ? 1 : 0);
+  const sidebarsCollapsed = recentChatsCollapsed ? 1 : 0;
 
   const activeConversation = useMemo(
     () => conversations.find((c) => c.id === activeConversationId) ?? null,

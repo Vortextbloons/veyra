@@ -26,7 +26,7 @@ function loadZoom(): number {
 function applyZoom(zoom: number) {
   const z = String(zoom);
   document.documentElement.style.zoom = z;
-  document.body.style.zoom = z;
+  document.body.style.removeProperty("zoom");
   document.documentElement.style.setProperty("--ui-zoom", z);
 }
 

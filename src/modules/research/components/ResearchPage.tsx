@@ -169,9 +169,9 @@ export function ResearchPage() {
       )}
 
       {/* Page header */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)] px-5">
+      <header className="flex h-16 shrink-0 items-center justify-between bg-[var(--color-bg)] px-6">
         <div className="flex items-center gap-2.5">
-          <h1 className="text-[14px] font-semibold tracking-tight">Research</h1>
+          <h1 className="text-[18px] font-medium tracking-tight">Research</h1>
           <span className="text-[12px] text-[var(--color-text-dim)]">
             {runs.length} {runs.length === 1 ? "run" : "runs"}
           </span>

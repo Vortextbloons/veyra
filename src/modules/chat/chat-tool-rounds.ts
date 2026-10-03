@@ -11,6 +11,7 @@ import {
   INLINE_EDIT_TOOL_NAME,
   STUDIO_RENDER_TOOL_NAME,
   STUDIO_THEME_TOOL_NAME,
+  STUDIO_UPDATE_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
@@ -29,7 +30,7 @@ import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
 import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
 import { disabledMcpServersForChat, findCapabilityGrant, isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
-import { executeStudioCall, executeStudioThemeCall } from "@/modules/chat/studio/studio-runtime";
+import { executeStudioCallWithFeedback, executeStudioThemeCall } from "@/modules/chat/studio/studio-runtime";
 
 export type ToolRoundResult = {
   toolResultSections: string[];
@@ -80,7 +81,7 @@ export async function executeToolRound(
     [DOC_READ_TOOL_NAME, INLINE_EDIT_TOOL_NAME, DOC_CREATE_TOOL_NAME, DOC_UPDATE_TOOL_NAME].includes(call.name),
   );
   const mcpCalls = toolCalls.filter((call) => call.name.startsWith("mcp_"));
-  const studioCalls = toolCalls.filter((call) => call.name === STUDIO_RENDER_TOOL_NAME);
+  const studioCalls = toolCalls.filter((call) => call.name === STUDIO_RENDER_TOOL_NAME || call.name === STUDIO_UPDATE_TOOL_NAME);
   const studioThemeCalls = toolCalls.filter((call) => call.name === STUDIO_THEME_TOOL_NAME);
 
   registerStreamingToolCalls(toolCalls, "running", (call) => {
@@ -98,12 +99,10 @@ export async function executeToolRound(
   const webSearchContextBlocks: string[] = [];
   const streamedChunks: string[] = [];
 
-  for (const call of studioCalls.slice(0, -1)) {
-    useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio message", phase: "done", detail: "Used the final custom message" });
-    toolResultSections.push(`Tool result for ${STUDIO_RENDER_TOOL_NAME}: skipped because only the last Studio call in a batch is committed.`);
+  for (const call of studioCalls) {
+    if (ctx.signal?.aborted) break;
+    toolResultSections.push(await executeStudioCallWithFeedback(call, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId, mode: ctx.studioMode, signal: ctx.signal }));
   }
-  const studioCall = studioCalls.at(-1);
-  if (studioCall) toolResultSections.push(executeStudioCall(studioCall, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId, mode: ctx.studioMode }));
   if (studioThemeCalls.length > 0 && ctx.studioThemeCallAttempted?.value) {
     for (const call of studioThemeCalls) {
       useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio theme", phase: "done", detail: "Kept the theme already chosen for this response" });

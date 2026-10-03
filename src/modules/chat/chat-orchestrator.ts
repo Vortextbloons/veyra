@@ -24,7 +24,7 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { getStudioSystemInstruction, buildStudioResponseContextBlock, buildStudioThemeContextBlock, buildModeContextBlock, findLatestReadyStudioResponse, inferStudioContextMode, shouldIncludeStudioResponseContext } from "@/modules/chat/studio/studio-context";
+import { getStudioSystemInstruction, buildStudioEnvironmentContextBlock, buildStudioThemeContextBlock, buildModeContextBlock, inferStudioContextMode } from "@/modules/chat/studio/studio-context";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 export interface SendChatCompleteContext {
@@ -131,16 +131,7 @@ export async function sendChatRequest({
     groupId: conversation?.groupId,
     projectId: conversation?.projectId,
   }) : undefined;
-  const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
-  const currentStudioResponse = studioEnabled && conversation ? findLatestReadyStudioResponse(conversation.messages) : undefined;
-  const studioResponseBlock =
-    studioEnabled &&
-    studioContextMode &&
-    lastUserMessage?.content &&
-    shouldIncludeStudioResponseContext(lastUserMessage.content) &&
-    currentStudioResponse
-      ? buildStudioResponseContextBlock(currentStudioResponse)
-      : undefined;
+  const studioResponseBlock = studioEnabled && conversation ? buildStudioEnvironmentContextBlock(conversation) : undefined;
   const studioThemeBlock = studioEnabled && conversation
     ? buildStudioThemeContextBlock(conversation.messages)
     : undefined;
@@ -154,7 +145,7 @@ export async function sendChatRequest({
         projectDescription: projectRecord?.description,
       })
     : undefined;
-  const studioInstruction = studioContextMode ? getStudioSystemInstruction(studioContextMode) : undefined;
+  const studioInstruction = studioContextMode ? getStudioSystemInstruction(studioContextMode, settings.studioPresentation) : undefined;
   const skillContextBlock = [baseSkillContextBlock, studioInstruction, modeContextBlock, studioThemeBlock, studioResponseBlock]
     .filter(Boolean).join("\n\n") || undefined;
 
@@ -234,10 +225,15 @@ export async function sendChatRequest({
     chatStore.resetAfterRePrompt();
   };
 
-  const buildRoundMessagesBound = (
-    chainMessages: ChatMessage[],
-    webSearchContextBlocks: string[],
-  ) => buildRoundMessages(chainMessages, webSearchContextBlocks, roundMessagesContext);
+  const getRoundMessagesContext = () => {
+    const current = useChatStore.getState().conversations.find((item) => item.id === conversationId);
+    const refreshedStudio = studioEnabled && current ? buildStudioEnvironmentContextBlock(current) : undefined;
+    return {
+      ...roundMessagesContext,
+      skillContextBlock: studioEnabled ? [baseSkillContextBlock, studioInstruction, modeContextBlock, current ? buildStudioThemeContextBlock(current.messages) : undefined, refreshedStudio].filter(Boolean).join("\n\n") : skillContextBlock,
+    };
+  };
+  const buildRoundMessagesBound = (chainMessages: ChatMessage[], webSearchContextBlocks: string[]) => buildRoundMessages(chainMessages, webSearchContextBlocks, getRoundMessagesContext());
 
   const providerChatBaseBound = () =>
     buildProviderChatBase(options, resolved, providerTools, handleToolCallDetected);
@@ -314,6 +310,7 @@ export async function sendChatRequest({
       onError: options.onError,
       finalizeToUser,
       roundMessagesContext,
+      getRoundMessagesContext,
       executeToolRoundLocal,
     });
 

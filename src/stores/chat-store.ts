@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { normalizeStudioEnvironment, studioJsonObject } from "@/modules/chat/studio/studio-environment";
+import type { StudioEnvironment } from "@/modules/chat/studio/studio-types";
 import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchRound, WebSearchState } from "@/modules/chat/chat-types";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { normalizeAttachment } from "@/lib/message-attachments";
@@ -56,6 +58,8 @@ type ChatStore = {
   selectStudioScene: (conversationId: string, sceneId: string) => boolean;
   commitStudioResponseRevision: (conversationId: string, assistantMessageId: string, revision: Omit<StudioResponseRevision, "revision" | "createdAt" | "assistantMessageId">, options?: { pointerRevisionAtStart?: number }) => StudioResponseRevision | null;
   setStudioResponseStatus: (conversationId: string, assistantMessageId: string, status: StudioResponseStatus, error?: StudioValidationIssue[]) => boolean;
+  selectStudioEnvironment: (conversationId: string, selection?: StudioEnvironment["selection"]) => void;
+  updateStudioEnvironment: (conversationId: string, origin: { messageId: string; revision: number }, patch: Partial<Pick<StudioEnvironment, "state" | "lastEvent" | "feedback">>) => void;
   selectStudioResponseRevision: (conversationId: string, assistantMessageId: string, revision: number) => boolean;
   undoStudioResponseRevision: (conversationId: string, assistantMessageId: string) => boolean;
   deleteConversation: (id: string) => void;
@@ -336,6 +340,32 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
     return selected;
   },
+  selectStudioEnvironment: (conversationId, selection) => {
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId || resolveConversationExperience(conversation) !== "studio") return conversation;
+        if (selection && !conversation.messages.some((message) => message.id === selection.messageId && message.studioResponse?.revisions.some((revision) => revision.revision === selection.revision))) return conversation;
+        return { ...conversation, studioEnvironment: { ...conversation.studioEnvironment, state: conversation.studioEnvironment?.state ?? {}, selection } };
+      });
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+  },
+  updateStudioEnvironment: (conversationId, origin, patch) => {
+    set((state) => {
+      let changed = false;
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId || resolveConversationExperience(conversation) !== "studio") return conversation;
+        if (!conversation.messages.some((message) => message.id === origin.messageId && message.studioResponse?.revisions.some((revision) => revision.revision === origin.revision))) return conversation;
+        const environment = normalizeStudioEnvironment({ ...conversation.studioEnvironment, state: conversation.studioEnvironment?.state ?? {}, ...patch }, conversation.messages);
+        if (JSON.stringify(environment) === JSON.stringify(conversation.studioEnvironment)) return conversation;
+        changed = true;
+        return { ...conversation, studioEnvironment: environment };
+      });
+      if (changed) void saveConversationSnapshot(conversations);
+      return changed ? { conversations } : state;
+    });
+  },
   commitStudioResponseRevision: (conversationId, assistantMessageId, input, options) => {
     let committed: StudioResponseRevision | null = null;
     set((state) => {
@@ -358,9 +388,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         const pointerAtStart = options?.pointerRevisionAtStart ?? previous?.currentRevision ?? 0;
         const currentPointer = previous?.currentRevision ?? 0;
         const desiredPointer = currentPointer === pointerAtStart ? nextNumber : currentPointer;
+        const environmentSelection = conversation.studioEnvironment?.selection;
+        const retainedPointer = environmentSelection?.messageId === assistantMessageId ? environmentSelection.revision : desiredPointer;
         const revisions = trimStudioResponseRevisions(
           [...(previous?.revisions ?? []), committed],
-          desiredPointer,
+          retainedPointer,
         );
         const currentRevision = revisions.some((item) => item.revision === desiredPointer)
           ? desiredPointer
@@ -370,6 +402,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         return {
           ...conversation,
           updatedAt: now,
+          studioEnvironment: {
+            ...conversation.studioEnvironment,
+            state: studioJsonObject(conversation.studioEnvironment?.state) ?? {},
+            feedback: undefined,
+          },
           messages: conversation.messages.map((message) => message.id === assistantMessageId
             ? {
                 ...message,
@@ -848,6 +885,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         updatedAt: now,
         projectId: source.projectId,
         experience: resolveConversationExperience(source),
+        studioEnvironment: source.studioEnvironment ? normalizeStudioEnvironment({
+          ...source.studioEnvironment,
+          selection: source.studioEnvironment.selection ? {
+            ...source.studioEnvironment.selection,
+            messageId: messageIdMap.get(source.studioEnvironment.selection.messageId),
+          } : undefined,
+          feedback: undefined,
+        }, remappedMessages) : undefined,
         studioWorkspace: source.studioWorkspace ? (() => {
           const scenes = source.studioWorkspace.scenes.filter((scene) => messageIdMap.has(scene.assistantMessageId)).map((scene) => ({ ...scene, id: crypto.randomUUID(), assistantMessageId: messageIdMap.get(scene.assistantMessageId)!, lineageId: crypto.randomUUID() }));
           const latest = scenes[scenes.length - 1];

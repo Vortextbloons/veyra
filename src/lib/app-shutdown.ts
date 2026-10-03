@@ -123,7 +123,6 @@ async function withTimeout(promise: Promise<void>, label: string): Promise<void>
 
 async function persistConversations(): Promise<void> {
   const {
-    conversations,
     streamingBuffer,
     activeConversationId,
     commitAssistantMessage,
@@ -137,6 +136,9 @@ async function persistConversations(): Promise<void> {
     commitAssistantMessage(activeConversationId, streamingBuffer.messageId, {});
   }
 
+  // Read conversations AFTER committing buffered assistant text so the
+  // snapshot cannot lag behind the freshly committed state.
+  const { conversations } = useChatStore.getState();
   void saveConversationSnapshot(conversations);
   await flushConversationSave();
 }

@@ -1,12 +1,18 @@
 use serde::Deserialize;
 use std::process::{Command, Stdio};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tauri::Emitter;
 
 use super::pi_runner::{
-    generate_pi_models_json, pi_candidates, run_pi_agent_blocking, validate_pi_agent_input,
-    PiRunFinishedEvent, PiRunResult,
+    generate_pi_models_json, pi_candidates, resolve_thinking_level, run_pi_agent_blocking,
+    validate_pi_agent_input, PiRunFinishedEvent, PiRunResult,
 };
+use super::process::AGENT_CANCELLATION;
 use super::process::{kill_agent_process, kill_pid, RUNNING_AGENT_PIDS, RUNNING_AGENT_STDIN};
+use super::reasoning::inspect_model;
 use super::sessions::resolve_workspace_path;
 
 // ---------------------------------------------------------------------------
@@ -25,7 +31,9 @@ pub struct StartPiAgentInput {
     pub context_length: Option<u32>,
     pub reserved_output_tokens: Option<u32>,
     pub provider_id: Option<String>,
+    pub provider_base_url: Option<String>,
     pub reasoning_enabled: Option<bool>,
+    pub reasoning_level: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -65,35 +73,62 @@ pub async fn run_pi_agent(
 
     let model = input.model.trim().to_string();
     let prompt = input.prompt.trim().to_string();
-    let provider_id = input.provider_id.as_deref().unwrap_or_default().trim();
-    let reasoning_enabled = input.reasoning_enabled.unwrap_or(true);
+    let provider_id = input
+        .provider_id
+        .as_deref()
+        .unwrap_or("lm-studio")
+        .trim()
+        .to_string();
+    let thinking_level =
+        resolve_thinking_level(input.reasoning_level.as_deref(), input.reasoning_enabled)?
+            .to_string();
     let context_length = input.context_length;
     let reserved_output_tokens = input.reserved_output_tokens;
 
     // Generate models.json if routing to LM Studio
-    let route_to_lm_studio = provider_id == "lm-studio" && !model.is_empty();
-    if route_to_lm_studio {
-        generate_pi_models_json(
-            &model,
-            context_length,
-            reserved_output_tokens,
-            reasoning_enabled,
-        )?;
-    }
-
     let sid = session_id.clone();
     let app_clone = app.clone();
+    let cancelled = Arc::new(AtomicBool::new(false));
+    AGENT_CANCELLATION
+        .lock()
+        .insert(sid.clone(), cancelled.clone());
 
     std::thread::spawn(move || {
-        let result = run_pi_agent_blocking(
-            &app_clone,
-            &sid,
-            &cwd,
-            &model,
-            &prompt,
-            route_to_lm_studio,
-            &input.mode,
-        );
+        let result = (|| {
+            if provider_id == "lm-studio" {
+                generate_pi_models_json(&model, context_length, reserved_output_tokens)?;
+            }
+            let capability = inspect_model(
+                &provider_id,
+                &model,
+                input.provider_base_url.as_deref().unwrap_or(""),
+                &thinking_level,
+            )?;
+            if !capability.known {
+                return Err(capability.message);
+            }
+            if cancelled.load(Ordering::Relaxed) {
+                return Err("Agent run cancelled".into());
+            }
+            run_pi_agent_blocking(
+                &app_clone,
+                &sid,
+                &cwd,
+                capability
+                    .model
+                    .as_deref()
+                    .ok_or("Pi model route is unavailable")?,
+                &prompt,
+                capability
+                    .provider
+                    .as_deref()
+                    .ok_or("Pi provider route is unavailable")?,
+                &input.mode,
+                capability.effective_level.as_deref().unwrap_or("off"),
+                &cancelled,
+            )
+        })();
+        AGENT_CANCELLATION.lock().remove(&sid);
 
         let finished_event = match result {
             Ok(output) => PiRunFinishedEvent {
@@ -135,6 +170,9 @@ pub async fn stop_pi_agent(session_id: String) -> Result<(), String> {
 }
 
 pub fn stop_all_pi_agents() {
+    for flag in AGENT_CANCELLATION.lock().values() {
+        flag.store(true, Ordering::Relaxed);
+    }
     let pids = RUNNING_AGENT_PIDS
         .lock()
         .drain()

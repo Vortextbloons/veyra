@@ -54,7 +54,7 @@ export function WebSearchSettings() {
         </div>
         <p className="text-[11px] text-[var(--color-text-dim)]">
           When on, new chats start with web search enabled. You can still turn
-          web search on or off per chat from the tools panel.
+          web search on or off per chat from the composer toolbar.
         </p>
       </CollapsibleSettingsSection>
 
@@ -122,8 +122,8 @@ export function WebSearchSettings() {
           </div>
           <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">
             When web search is on for a chat, the AI decides when a search is
-            needed. Use the right-panel toggle to enable or disable search for
-            the current chat without changing this default.
+            needed. Use the web search button in the composer to enable or
+            disable search for the current chat without changing this default.
           </p>
           <div className="mt-2 inline-block rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[10.5px] text-[var(--color-text-dim)]">
             Current: {settings.webSearchDefaultMode}

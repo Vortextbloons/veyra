@@ -30,7 +30,7 @@ export function TitleBar({
 
   return (
     <div
-      className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4"
+      className="flex h-9 shrink-0 items-center justify-between bg-[var(--color-bg)] px-4"
     >
       <div className="flex flex-1 items-center justify-center gap-2 self-stretch">
         <Suspense fallback={<span className="size-5" aria-hidden="true" />}>

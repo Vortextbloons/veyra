@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Brain, Cpu, FlaskConical, MessageCircle, Puzzle, Settings, Shield, Users, Wrench, type LucideIcon } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
 import { ChatSettings } from "./chat-settings";
@@ -19,16 +20,16 @@ type SettingsTab =
   | "research"
   | "extensions";
 
-const TABS: { id: SettingsTab; label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "privacy", label: "Privacy" },
-  { id: "chat", label: "Chat" },
-  { id: "memories", label: "Memories" },
-  { id: "models", label: "Models" },
-  { id: "tools", label: "Tools" },
-  { id: "research", label: "Research" },
-  { id: "characters", label: "Characters" },
-  { id: "extensions", label: "Extensions" },
+const TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
+  { id: "general", label: "General", icon: Settings },
+  { id: "privacy", label: "Privacy", icon: Shield },
+  { id: "chat", label: "Chat", icon: MessageCircle },
+  { id: "memories", label: "Memories", icon: Brain },
+  { id: "models", label: "Models", icon: Cpu },
+  { id: "tools", label: "Tools", icon: Wrench },
+  { id: "research", label: "Research", icon: FlaskConical },
+  { id: "characters", label: "Characters", icon: Users },
+  { id: "extensions", label: "Extensions", icon: Puzzle },
 ];
 
 export function SettingsPage() {
@@ -36,8 +37,8 @@ export function SettingsPage() {
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--color-border)] px-5">
-        <h1 className="text-[13px] font-semibold text-white">Settings</h1>
+      <header className="flex h-16 shrink-0 items-center gap-3 px-6">
+        <h1 className="text-[18px] font-medium tracking-tight text-white">Settings</h1>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -49,12 +50,13 @@ export function SettingsPage() {
               aria-current={activeTab === tab.id ? "page" : undefined}
               aria-label={tab.label}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors max-[900px]:justify-center max-[900px]:px-2 ${
+              className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-[13px] transition-colors max-[900px]:justify-center max-[900px]:px-2 ${
                 activeTab === tab.id
                   ? "bg-[var(--color-accent-soft)] font-medium text-white"
                   : "text-[var(--color-text-dim)] hover:bg-white/[0.03] hover:text-white"
               }`}
             >
+              <tab.icon className="size-4 shrink-0" />
               <span className="max-[900px]:hidden">{tab.label}</span>
             </button>
           ))}

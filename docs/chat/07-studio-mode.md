@@ -1,75 +1,87 @@
-# Studio Mode
+# Studio
 
-Studio Mode is a conversation experience that lets the assistant respond naturally while optionally giving an individual assistant message a custom visual or interactive body. A Studio turn can remain formatted text, or use self-contained HTML, CSS, inline SVG, and JavaScript when bespoke presentation makes the answer clearer. Independently, a turn may apply a validated chat-panel theme so the transcript, header, and composer share the response's atmosphere without requiring a custom message body.
+Studio is a persistent environment that the assistant shapes around a task. The main surface can become a visual explanation, chart, comparison, simulation, creative scene, or readable HTML. The conversation remains available in a drawer, and the normal composer, model selection, Stop, and host permissions remain under Veyra's control.
 
-Veyra owns validation, isolation, persistence, revisions, sizing, and host controls. The model owns the content and styling inside the custom message. Studio is currently available for plain chat conversations; character and group chats remain Standard.
+Studio is available for plain chat and project conversations. Character and group chats remain Standard. Enable it in **Settings → Chat → Studio Mode**, then choose **Studio** when starting an empty conversation. Disabling the global setting restores the transcript view without deleting existing responses or interaction state.
 
-## User guidance
+## Core experience
 
-### Enable Studio
+- The current view stays usable while a replacement loads in a separate sandboxed frame.
+- A replacement becomes visible after its script initializes and reports ready. This verifies initialization, not visual quality or factual accuracy.
+- If initialization fails, Veyra retains the previous usable view. Reopening a failed latest version tries earlier versions until a usable view is found.
+- The footer reports gathering sources, shaping the environment, updating a view, or opening it. Stop remains accessible.
+- **Conversation** opens the transcript without running duplicate copies of generated frames. Tool questions, pending MCP approvals, and message editing expose the drawer when attention is needed.
+- **Undo** selects the previous version, skipping versions known to have failed in the current session. History retains failed versions for inspection or retry. **View latest** returns to the latest version.
+- Source, copy, and export live in the environment options menu. Exports include selected facts and interaction state, and work without a Veyra connection.
+- Text-only replies remain readable before the first environment exists; **Read response** exposes accompanying prose once a view exists.
 
-1. Open **Settings → Chat → Studio Mode** and enable Studio Mode.
-2. Choose **Studio Chat** when starting an empty plain chat.
-3. Talk normally. You can explicitly request a diagram, comparison, visual explanation, or interactive control, but you do not have to choose a format for every turn.
+## Model behavior and tools
 
-Turning the global setting off hides the experience choice and stops advertising the Studio tool. Existing encrypted custom messages remain stored and reappear if Studio is enabled again.
+The system instruction treats the environment as the primary answer. It does not require a prose preamble. Substantial text can itself be presented as readable HTML; acknowledgements and clarifying questions can remain conversational.
 
-### Conversational behavior
+Three Studio tools are advertised only when Studio is enabled:
 
-Studio keeps the normal transcript visible. Text begins streaming in the assistant message while the model decides whether a custom presentation adds value. Short answers and follow-ups can remain text-only. When a custom message is appropriate, it appears on the originating assistant turn rather than replacing the conversation with a workspace.
+| Tool | Purpose |
+|------|---------|
+| `studio_render` | Create or transform a view with complete HTML, CSS, optional JavaScript, a concise summary, and optional JSON facts |
+| `studio_update` | Replace the inner HTML of one unique `data-studio-region`, preserving surrounding content and omitted stylesheet, script, and facts |
+| `studio_theme` | Adjust the surrounding atmosphere using a short vibe, or optional palette, font, and scoped declarations |
 
-### Revise a custom message
+Region updates require the exact current environment base key. Veyra rejects stale keys, missing or ambiguous regions, invalid arguments, and unsafe merged source. Each update becomes a complete immutable revision; partial source is never executed.
 
-Ask for visual, interaction, or content changes in the same conversation. Veyra includes the latest validated Studio response for likely revision requests. Successful regenerations create immutable message-owned revisions; the previous valid revision remains recoverable through undo and history.
+Every follow-up includes the active version's summary, region names, bounded source, facts, interaction state, latest interaction, and runtime feedback. Tool rounds refresh that context. This applies to ordinary prompts such as “remove that” and “what if we double it,” rather than relying on revision keywords. Large context sections are explicitly truncated; the full validated source remains local.
 
-### View source, copy, and export
+## Local interaction API
 
-The Studio message toolbar can show HTML, CSS, and JavaScript source, copy the complete self-contained document, export it, expand the message, or navigate its revision history. Source viewing is read-only Veyra UI rather than generated iframe content.
+Generated JavaScript runs after state initialization. The frame provides:
 
-Exports are regenerated from the selected validated revision and include its self-contained JavaScript. They do not load remote scripts, styles, fonts, images, or other network resources.
+| API | Behavior |
+|-----|----------|
+| `studio.data` | JSON facts supplied with the revision, separate from appearance |
+| `studio.getState()` | A copy of persistent interaction state |
+| `studio.setState(object)` | Merge a small JSON state patch |
+| `studio.emit(name, payload)` | Record a selection or other interaction for the next prompt |
+| `studio.chart(element, options)` | Local SVG bar or line chart with labels, numeric values, optional color/title, and optional `onSelect` callback |
 
-## JavaScript capability and isolation
+Charts support pointer and keyboard selection, expose accessible values, and restore their saved selection. Chart options use `type: "bar" | "line"`, `labels`, and `values` (1–200 finite numbers). No external chart dependency is loaded.
 
-JavaScript is optional and runs only inside an iframe with `allow-scripts` and an opaque origin. The generated document uses a restrictive content security policy:
+Inputs, selects, and textareas with stable `name` or `data-studio-key` attributes automatically preserve values. Password, file, and hidden inputs are excluded. Scroll position is retained. Custom controls use `studio.setState`. Form-control values and scroll position use reserved `$controls` and `$scroll` state keys.
 
-- No network connections, remote resources, child frames, workers, plugins, or form submissions
-- No filesystem, Tauri, host-store, device, payment, or clipboard permissions
-- No same-origin access to Veyra and no privileged host API bridge
-- No `eval` or dynamically compiled code
-- Self-contained DOM interaction, CSS animation, inline SVG, and native controls are supported
+Events do not automatically start a model request or execute a host action. Local controls respond immediately; the user sends a prompt when interpretation or new information is needed. The last selected chart category is surfaced in the footer and included in follow-up context.
 
-Transient interaction state is not persisted unless the assistant produces a new revision that encodes it.
+## Runtime feedback and repair
 
-## How it works
+The bridge supports initialization, readiness, state, interaction, and error messages. Veyra verifies the originating frame window and a per-frame channel, then validates JSON shape, nesting, size, event names, and version ownership. It exposes no generic host command.
 
-1. The chat pipeline adds Studio conversation guidance and exposes two focused tools: `studio_render` for an optional custom message body, and `studio_theme` for the surrounding chat atmosphere.
-2. Text and reasoning stream through the normal assistant message immediately.
-3. A tool call creates a message-local working state while its arguments are parsed and validated.
-4. Valid source becomes a new message-owned revision and loads into a networkless sandboxed iframe.
-5. A sizing bridge reports document height so compact messages fit their content; unusually large messages remain bounded and can be expanded.
-6. Invalid custom source leaves the conversational answer usable, preserves the last valid revision, and allows one repair attempt per assistant run.
+Script errors and unhandled promise rejections are reported to Veyra. During a foreground tool round, Veyra waits briefly for the exact originating version's feedback, releasing immediately on cancellation. One runtime repair is allowed per assistant job; another failure stops automatic view generation for that job. Invalid source also has one bounded repair opportunity.
 
-`studio_theme` requires only a short `vibe`, keeping the default call inexpensive for smaller models. It also supports progressive disclosure: the assistant may optionally author a partial or complete palette, typography, intensity, ambient effect, and scoped CSS declaration blocks for the window, header, transcript, assistant messages, user messages, and composer. Veyra derives only the values the assistant omits.
+Background or unmounted conversations save source without claiming successful display. Late errors remain available to the next prompt and the **Repair** action. A view that does not initialize within six seconds offers retry or repair. The previous usable view remains available throughout recovery.
 
-Custom declarations are attached to fixed chat regions, so the assistant can create its own borders, gradients, shadows, spacing, typography, and other treatments without writing selectors or escaping into navigation and other host UI. Network URLs, rule injection, hidden or disabled interaction surfaces, and viewport-positioned overlays are rejected. Unthemed turns preserve the latest theme, and the vibe `default` explicitly restores Veyra's standard appearance.
+## Storage and compatibility
 
-## Key files
+Generated source remains on `assistantMessage.studioResponse`, with at most eight revisions per message. Environment history is derived from those revisions in creation order, including regenerated older messages. It does not duplicate their source in a separate workspace snapshot.
 
-| File | Responsibility |
-|------|----------------|
-| `src/modules/chat/studio/` | Types, prompt context, tool contract, validator, document builder, runtime, theme, export, workspace, and custom-message UI |
-| `src/modules/chat/studio/studio-theme-tool.ts` | `studio_theme` tool definition, vibe parsing, palette and CSS style validation |
-| `src/modules/chat/studio/studio-theme.ts` | Theme derivation from vibe, preset matching, CSS variable generation, scoped region styling |
-| `src/modules/chat/studio/components/studio-workspace.tsx` | Full-workspace scene viewer with history, navigation, source view, and export |
-| `src/modules/chat/components/message-bubble.tsx` | Studio-aware conversational and working states |
-| `src/app/components/chat-panel.tsx` | Keeps Studio in the standard transcript flow |
-| `src/stores/chat-store.ts` | Message-owned revision commit, selection, undo, fork, and hydration; workspace state |
-| `src/lib/tool-registry.ts` | Conditionally registers `studio_render` and `studio_theme` |
-| `src/modules/chat/chat-provider-options.ts` | Eligibility and tool availability |
-| `src/components/settings/studio-settings-section.tsx` | Global availability and local diagnostics copy |
+`conversation.studioEnvironment` stores only selection, interaction state, latest event, and runtime feedback in the existing encrypted conversation snapshot. State and event payloads are limited to 16 KB; revision facts are limited to 32 KB. Unsafe keys, non-JSON values, excessive depth, and oversized payloads are rejected. State changes are coalesced by the frame and use the existing debounced encrypted persistence.
 
-## Diagnostics and storage threshold
+Existing message-owned Studio responses remain usable, including previously selected revisions. Forks copy state and remap selected message identities. Stale selection/feedback references are discarded during normalization. The old `presentationMode` and `studioArtifact` fields remain unsupported. No development-data reset is required.
 
-Local counters track render attempts, repairs, final failures, validation issue codes, validation time, HTML/CSS/JavaScript byte totals, and serialized response size. They never record generated source.
+## Isolation and preferences
 
-If a Studio response snapshot approaches **5 MB**, that is the migration trigger to reconsider separate encrypted response storage. Use **Copy for feedback** in Studio settings to share redacted counters when reporting issues.
+Frames have an opaque origin with `sandbox="allow-scripts"` and restrictive CSP. There are no network connections, remote libraries/fonts/images/media, child frames, workers, form submissions, or filesystem/Tauri/clipboard/device permissions. Inline SVG, CSS, DOM interaction, and the narrow local bridge are supported. External data still comes through Veyra's existing provider tools and their permission flows.
+
+**Presentation** offers Automatic, Calm, and Expressive. Automatic follows the task; Calm asks for restrained styling and disables CSS motion; Expressive invites distinctive art direction. System reduced-motion preferences are observed. Generated JavaScript must also honor reduced motion; arbitrary script animation cannot be mechanically rewritten.
+
+## Verification and key files
+
+- `studio-environment.ts`: timeline, bounded JSON, bridge parsing, and state normalization
+- `components/studio-environment-view.tsx`: primary surface, staged rendering, history, recovery, source, and export
+- `studio-bridge.ts`: frame-local state, controls, charts, readiness, and runtime feedback
+- `studio-runtime.ts`: validated commits and bounded feedback/repair handling
+- `studio-update-tool.ts`: targeted updates with base-version checks
+- `studio-context.ts`: environment-first instructions and continuity
+- `chat-panel.tsx`: Studio surface, conversation drawer, attention handling, and existing composer
+- `chat-store.ts`: message-owned source, encrypted environment state, selection, and forks
+
+Focused unit tests cover continuity, normalization, limits, ownership, forks, and cancellation. Browser tests run the real ChatPanel in an isolated Vite/Playwright fixture with synthetic data and mocked Tauri storage. They cover frame transitions, controls, chart selections, recovery, questions, targeted validation, spoofed messages, responsive layout, portable export, and bounded repair. The browser test requires Playwright Chromium or installed Microsoft Edge.
+
+Local diagnostics remain source-free. The existing 5 MB response snapshot threshold remains a signal to reconsider separate encrypted source storage.

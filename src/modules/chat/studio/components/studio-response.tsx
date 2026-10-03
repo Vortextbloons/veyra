@@ -69,6 +69,7 @@ export function StudioResponseView({
         html: revision.html,
         css: revision.css,
         javascript: revision.javascript,
+        data: revision.data,
         reducedMotion,
       })
     : "", [reducedMotion, response.id, revision]);

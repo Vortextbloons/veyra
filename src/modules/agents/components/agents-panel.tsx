@@ -1,237 +1,91 @@
-import { useState } from "react";
-import {
-  AlertTriangle,
-  Bot,
-  CheckCircle2,
-  Folder,
-  FolderOpen,
-  PanelLeftClose,
-  PanelLeftOpen,
-  TerminalSquare,
-} from "lucide-react";
-import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
-import { AGENT_MODES } from "@/modules/agents/agent-mode-options";
-import { AgentEmptyState, AgentOutputView } from "@/modules/agents/components/agent-output-view";
-import { AgentSessionList } from "@/modules/agents/components/agent-session-list";
+import { useState, type ReactNode } from "react";
+import { Bot, FolderOpen, Plus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Search, ChevronRight, Folder, ArrowUpRight, RefreshCw, TerminalSquare, ListTodo, Code2, Square, Trash2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
+import type { AgentMode, AgentSession } from "../agent-types";
+import { useAgentStore } from "../agent-store";
+import { AgentOutputView } from "./agent-output-view";
+import { StatusDot } from "../agent-status-dot";
+import { AgentInspector } from "./agent-inspector";
+import "./agent-workspace.css";
+
+function projectName(path: string) {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) || "Default workspace";
+}
 
 type AgentsPanelProps = {
-  sessions: AgentSession[];
-  activeSessionId: string | null;
-  runtimeAvailable: boolean | null;
-  mode: AgentMode;
-  projectPath: string;
-  onModeChange: (mode: AgentMode) => void;
-  onProjectPathChange: (path: string) => void;
-  onCheckRuntime: () => void;
-  onNewSession: () => void;
-  onSelectSession: (id: string) => void;
-  onStopSession: (id: string) => void;
-  onDeleteSession: (id: string) => void;
+  sessions: AgentSession[]; activeSessionId: string | null; runtimeAvailable: boolean | null;
+  mode: AgentMode; projectPath: string; onProjectPathChange: (path: string) => void;
+  onCheckRuntime: () => void; onNewSession: () => void; onSelectSession: (id: string) => void;
+  onStopSession: (id: string) => void; onDeleteSession: (id: string) => void;
+  composer: ReactNode; connection: ReactNode; onSuggestion: (text: string) => void;
 };
 
-export function AgentsPanel({
-  sessions,
-  activeSessionId,
-  runtimeAvailable,
-  mode,
-  projectPath,
-  onModeChange,
-  onProjectPathChange,
-  onCheckRuntime,
-  onNewSession,
-  onSelectSession,
-  onStopSession,
-  onDeleteSession,
-}: AgentsPanelProps) {
-  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
-  const runningSession = sessions.find((s) => s.status === "running") ?? null;
-  const [sessionsOpen, setSessionsOpen] = useState(true);
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--color-bg)]">
-      <AgentHeader
-        mode={mode}
-        onModeChange={onModeChange}
-        projectPath={projectPath}
-        onProjectPathChange={onProjectPathChange}
-        runtimeAvailable={runtimeAvailable}
-        running={Boolean(runningSession)}
-        onCheckRuntime={onCheckRuntime}
-        sessionsOpen={sessionsOpen}
-        onToggleSessions={() => setSessionsOpen((o) => !o)}
-      />
-
-      <div className="flex min-h-0 flex-1">
-        <div
-          className={`shrink-0 overflow-hidden transition-[width] duration-200 ease-out ${
-            sessionsOpen ? "w-72" : "w-0"
-          }`}
-        >
-          <AgentSessionList
-            sessions={sessions}
-            activeSessionId={activeSession?.id ?? null}
-            onNew={onNewSession}
-            onSelect={onSelectSession}
-            onStop={onStopSession}
-            onDelete={onDeleteSession}
-          />
-        </div>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          {activeSession ? (
-            <AgentOutputView session={activeSession} onStop={onStopSession} />
-          ) : runningSession ? (
-            <AgentOutputView session={runningSession} onStop={onStopSession} />
-          ) : (
-            <AgentEmptyState />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AgentHeader({
-  mode,
-  onModeChange,
-  projectPath,
-  onProjectPathChange,
-  runtimeAvailable,
-  running,
-  onCheckRuntime,
-  sessionsOpen,
-  onToggleSessions,
-}: {
-  mode: AgentMode;
-  onModeChange: (m: AgentMode) => void;
-  projectPath: string;
-  onProjectPathChange: (p: string) => void;
-  runtimeAvailable: boolean | null;
-  running: boolean;
-  onCheckRuntime: () => void;
-  sessionsOpen: boolean;
-  onToggleSessions: () => void;
-}) {
-  const handleBrowse = async () => {
+export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, projectPath, onProjectPathChange, onCheckRuntime, onNewSession, onSelectSession, onStopSession, onDeleteSession, composer, connection, onSuggestion }: AgentsPanelProps) {
+  const savedProjects = useAgentStore((state) => state.projects);
+  const projects = [...new Set([...savedProjects, ...sessions.map((session) => session.projectPath), projectPath])];
+  const active = sessions.find((session) => session.id === activeSessionId) ?? null;
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
+  const addProject = async () => {
     try {
-      const selected = await open({ directory: true, title: "Select workspace folder" });
-      if (selected) {
-        onProjectPathChange(selected);
-      }
-    } catch {
-      // dialog cancelled or unavailable
-    }
+      const path = await open({ directory: true, title: "Open agent project" });
+      if (typeof path === "string") { onProjectPathChange(path); onNewSession(); setError(""); }
+    } catch (cause) { setError(`Could not open a folder: ${String(cause)}`); }
   };
-
-  return (
-    <header className="flex shrink-0 flex-col gap-2.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onToggleSessions}
-            className="grid size-7 shrink-0 place-items-center rounded-lg text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.06] hover:text-white"
-            title={sessionsOpen ? "Collapse sessions" : "Expand sessions"}
-          >
-            {sessionsOpen ? <PanelLeftClose className="size-3.5" /> : <PanelLeftOpen className="size-3.5" />}
-          </button>
-          <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500/20 to-violet-500/15 ring-1 ring-inset ring-indigo-400/15">
-            <Bot className="size-3.5 text-indigo-300" />
-          </div>
-          <div>
-            <h2 className="text-[13px] font-semibold tracking-tight text-white">Agent</h2>
-          </div>
-          <RuntimePill available={runtimeAvailable} onCheck={onCheckRuntime} />
+  return <main className="agent-workspace">
+    {sidebarOpen && <aside className="agent-projects">
+      <div className="agent-sidebar-heading"><span><Bot size={16} />Agents</span><button className="agent-icon-button" onClick={() => setSidebarOpen(false)} aria-label="Collapse projects"><PanelLeftClose size={16} /></button></div>
+      <button className="agent-new-task" onClick={onNewSession}><Plus size={15} />New session<span aria-hidden="true">↗</span></button>
+      <label className="agent-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a project or session" aria-label="Find a project or session" /></label>
+      <div className="agent-section-label">Projects<button className="agent-icon-button" onClick={() => void addProject()} aria-label="Add project"><Plus size={14} /></button></div>
+      <nav className="agent-project-tree" aria-label="Agent projects">
+        {projects.map((path) => {
+          const projectSessions = sessions.filter((session) => session.projectPath === path);
+          const match = projectName(path).toLowerCase().includes(query.toLowerCase());
+          const visible = projectSessions.filter((session) => match || session.title.toLowerCase().includes(query.toLowerCase()));
+          if (!match && visible.length === 0) return null;
+          return <div key={path} className="agent-project-group">
+            <button className={`agent-project-row ${path === projectPath ? "is-selected" : ""}`} title={path || "Default workspace"} onClick={() => onProjectPathChange(path)}>
+              <ChevronRight size={12} className={path === projectPath || query ? "is-expanded" : ""} /><Folder size={15} /><span>{projectName(path)}</span>
+              {projectSessions.some((session) => session.status === "running") && <StatusDot status="running" />}
+            </button>
+            {(path === projectPath || query) && <div className="agent-project-sessions">
+              {visible.length === 0 && <p className="agent-no-sessions">Your sessions will appear here</p>}
+              {visible.map((session) => <div key={session.id} className={`agent-session-row ${session.id === activeSessionId ? "is-selected" : ""}`}>
+                <button className="agent-session-select" onClick={() => onSelectSession(session.id)} title={session.title}><StatusDot status={session.status} /><span>{session.title}</span></button>
+                <button className="agent-session-action agent-icon-button" aria-label={session.status === "running" ? `Stop ${session.title}` : `Delete ${session.title}`} onClick={() => {
+                  if (session.status === "running") onStopSession(session.id);
+                  else if (window.confirm(`Delete session "${session.title}"? This cannot be undone.`)) onDeleteSession(session.id);
+                }}>{session.status === "running" ? <Square size={12} /> : <Trash2 size={12} />}</button>
+              </div>)}
+            </div>}
+          </div>;
+        })}
+      </nav>
+      <div className="agent-sidebar-footer"><button onClick={() => void addProject()}><FolderOpen size={15} />Open project</button><button onClick={onCheckRuntime} title="Check agent runtime"><span className={`agent-runtime-dot ${runtimeAvailable ? "is-ready" : ""}`} />{runtimeAvailable === true ? "Runtime ready" : runtimeAvailable === false ? "Runtime unavailable" : "Check runtime"}<RefreshCw size={12} /></button></div>
+    </aside>}
+    <section className="agent-main">
+      <header className="agent-workspace-header">
+        {!sidebarOpen && <button className="agent-icon-button" onClick={() => setSidebarOpen(true)} aria-label="Expand projects"><PanelLeftOpen size={16} /></button>}
+        <div className="agent-breadcrumb"><span title={projectPath}>{projectName(projectPath)}</span><ChevronRight size={12} /><strong>{active?.title || "New session"}</strong></div>
+        <button className="agent-icon-button" onClick={() => setInspectorOpen(!inspectorOpen)} aria-label={inspectorOpen ? "Close inspector" : "Open project inspector"} aria-expanded={inspectorOpen}>{inspectorOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}</button>
+      </header>
+      {connection}
+      {error && <div className="agent-inline-error" role="alert">{error}</div>}
+      {active ? <AgentOutputView key={active.id} session={active} onStop={onStopSession} /> : <div className="agent-start">
+        <div className="agent-start-content"><div className="agent-start-icon"><TerminalSquare size={25} strokeWidth={1.4} /></div>
+          <p className="agent-eyebrow">{projectName(projectPath)}</p><h1>What should we work on?</h1><p className="agent-start-description">Explore the code. Make a plan. Build something better.</p>
+          <div className="agent-starters">{[
+            { icon: Code2, title: "Explore this project", text: "Inspect this project and explain its architecture, entry points, and development commands." },
+            { icon: ListTodo, title: "Plan a change", text: "Help me plan a change to this project. First inspect the code, then ask what I want to build." },
+            { icon: TerminalSquare, title: "Review the code", text: "Review this project for correctness issues and missing tests. Report concrete findings with file references." },
+          ].map((item) => <button key={item.title} onClick={() => onSuggestion(item.text)}><item.icon size={16} /><span>{item.title}</span><ArrowUpRight size={13} /></button>)}</div>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <div
-          role="radiogroup"
-          aria-label="Agent mode"
-          className="flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-0.5"
-        >
-          {AGENT_MODES.map((item) => {
-            const active = item.id === mode;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => onModeChange(item.id)}
-                title={item.detail}
-                className={`flex h-7 items-center gap-1.5 rounded-md px-3 text-[11.5px] font-medium transition-all ${
-                  active
-                    ? "bg-[var(--color-accent)] text-white shadow-[0_1px_3px_rgba(99,102,241,0.3)]"
-                    : "text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white"
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mx-1 h-4 w-px bg-[var(--color-border)]" />
-
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-2.5 py-1.5 transition-colors focus-within:border-[var(--color-accent)]/30">
-            <Folder className="size-3.5 shrink-0 text-[var(--color-text-dim)]" />
-            <input
-              value={projectPath}
-              onChange={(e) => onProjectPathChange(e.target.value)}
-              disabled={running}
-              placeholder="Workspace path (leave empty for default)"
-              className="min-w-0 flex-1 bg-transparent font-mono text-[11.5px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-dim)]/50 disabled:cursor-not-allowed disabled:opacity-60"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void handleBrowse()}
-            disabled={running}
-            title="Browse for folder"
-            className="grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-white/[0.04] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-[var(--color-border)] disabled:hover:bg-[var(--color-panel)] disabled:hover:text-[var(--color-text-dim)]"
-          >
-            <FolderOpen className="size-3.5" />
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function RuntimePill({
-  available,
-  onCheck,
-}: {
-  available: boolean | null;
-  onCheck: () => void;
-}) {
-  const isReady = available === true;
-  const isMissing = available === false;
-
-  return (
-    <button
-      type="button"
-      onClick={onCheck}
-      className={`flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10.5px] font-medium transition-colors ${
-        isReady
-          ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-inset ring-emerald-500/15"
-          : isMissing
-            ? "bg-red-500/10 text-red-400 ring-1 ring-inset ring-red-500/15 hover:bg-red-500/15"
-            : "bg-white/[0.04] text-[var(--color-text-dim)] ring-1 ring-inset ring-[var(--color-border)] hover:bg-white/[0.06]"
-      }`}
-    >
-      {isReady ? (
-        <CheckCircle2 className="size-3" />
-      ) : isMissing ? (
-        <AlertTriangle className="size-3" />
-      ) : (
-        <TerminalSquare className="size-3" />
-      )}
-      {isReady ? "Ready" : isMissing ? "Missing" : "Check"}
-    </button>
-  );
+      </div>}
+      {composer}
+    </section>
+    {inspectorOpen && <AgentInspector projectPath={projectPath} session={active} />}
+  </main>;
 }

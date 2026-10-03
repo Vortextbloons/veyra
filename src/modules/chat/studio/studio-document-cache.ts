@@ -1,4 +1,5 @@
 import { buildStudioDocument } from "./studio-document-builder";
+import type { StudioJsonObject } from "./studio-types";
 
 const cache = new Map<string, string>();
 
@@ -9,6 +10,7 @@ export function getCachedStudioDocument(input: {
   html: string;
   css: string;
   javascript?: string;
+  data?: StudioJsonObject;
   reducedMotion: boolean;
 }): string {
   const key = `${input.artifactId}:${input.revision}:${input.reducedMotion ? "rm" : "full"}`;
@@ -19,6 +21,7 @@ export function getCachedStudioDocument(input: {
     html: input.html,
     css: input.css,
     javascript: input.javascript,
+    data: input.data,
     reducedMotion: input.reducedMotion,
   });
   cache.set(key, document);

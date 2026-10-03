@@ -13,8 +13,11 @@ import { deriveStudioTheme } from "./studio-theme";
 import { validateStudioRender } from "./studio-validator";
 import { resolveConversationExperience } from "./studio-normalize";
 import type { StudioContextMode } from "./studio-types";
+import { selectedStudioEntry } from "./studio-environment";
+import { parseStudioUpdateArguments, STUDIO_UPDATE_TOOL_NAME } from "./studio-update-tool";
 
 const studioRepairAttempts = new Map<string, number>();
+const studioRuntimeRepairAttempts = new Map<string, number>();
 
 function setResponseStatus(conversationId: string, assistantMessageId: string, status: "validating" | "rejected", issues?: Array<{ code: string; message: string }>) {
   return useChatStore.getState().setStudioResponseStatus(conversationId, assistantMessageId, status, issues);
@@ -26,15 +29,16 @@ export function studioRepairKey(conversationId: string, assistantMessageId: stri
 
 export function resetStudioRepairGuard(conversationId: string, assistantMessageId: string): void {
   studioRepairAttempts.delete(studioRepairKey(conversationId, assistantMessageId));
+  studioRuntimeRepairAttempts.delete(studioRepairKey(conversationId, assistantMessageId));
 }
 
 export function executeStudioCall(call: ProviderToolCall, context: { conversationId?: string; assistantMessageId?: string; mode?: StudioContextMode }): string {
-  const label = "Studio message";
+  const label = "Studio environment";
   const fail = (issues: Array<{ code: string; message: string }>, finalFailure = false) => {
     const message = issues.map((issue) => `${issue.code}: ${issue.message}`).join("; ");
     recordStudioValidationIssues(issues.map((issue) => issue.code));
     if (finalFailure) recordStudioFinalFailure(issues.map((issue) => issue.code));
-    useChatStore.getState().setStreamingToolState({ id: call.id, name: STUDIO_RENDER_TOOL_NAME, label, phase: "error", error: message });
+    useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label, phase: "error", error: message });
     if (context.conversationId && context.assistantMessageId) {
       setResponseStatus(context.conversationId, context.assistantMessageId, "rejected", issues);
     }
@@ -48,7 +52,7 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
   }
   const repairKey = studioRepairKey(context.conversationId, context.assistantMessageId);
   const priorFailures = studioRepairAttempts.get(repairKey) ?? 0;
-  if (priorFailures >= 2) {
+  if (priorFailures >= 2 || (studioRuntimeRepairAttempts.get(repairKey) ?? 0) >= 2) {
     return `Tool result for ${STUDIO_RENDER_TOOL_NAME}: ignored because Studio generation already failed for this response.`;
   }
 
@@ -66,14 +70,16 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
   recordStudioRenderAttempt();
   useChatStore.getState().setStreamingToolState({
     id: call.id,
-    name: STUDIO_RENDER_TOOL_NAME,
+    name: call.name,
     label,
     phase: "running",
     detail: "Checking the custom message",
   });
   setResponseStatus(context.conversationId, context.assistantMessageId, "validating");
 
-  const parsed = parseStudioArguments(call);
+  const parsed = call.name === STUDIO_UPDATE_TOOL_NAME
+    ? parseStudioUpdateArguments(call, selectedStudioEntry(conversation))
+    : parseStudioArguments(call);
   if (!parsed.ok) {
     const nextFailures = priorFailures + 1;
     studioRepairAttempts.set(repairKey, nextFailures);
@@ -100,6 +106,8 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
       html: validated.html,
       css: validated.css,
       javascript: validated.javascript,
+      ...(parsed.value.summary !== undefined ? { summary: parsed.value.summary } : {}),
+      ...(parsed.value.data ? { data: parsed.value.data } : {}),
     },
     { pointerRevisionAtStart },
   );
@@ -114,12 +122,59 @@ export function executeStudioCall(call: ProviderToolCall, context: { conversatio
   });
   useChatStore.getState().setStreamingToolState({
     id: call.id,
-    name: STUDIO_RENDER_TOOL_NAME,
+    name: call.name,
     label,
     phase: "done",
     detail: `Created ${revision.title}`,
   });
-  return `Tool result for ${STUDIO_RENDER_TOOL_NAME}: rendered ${revision.title} as revision ${revision.revision}. The user can see the custom message. Continue naturally without restating it.`;
+  return `Tool result for ${call.name}: source accepted for ${revision.title} as revision ${revision.revision}; display readiness is checked separately. Avoid repeating the environment contents in prose. Continue only with useful context or a brief explanation of the change.`;
+}
+
+/** Wait only for the originating displayed version, and release immediately on Stop. */
+export async function waitForStudioFeedback(conversationId: string, assistantMessageId: string, revision: number, signal?: AbortSignal, timeoutMs = 7000): Promise<"pending" | "ready" | { error: string }> {
+  if (signal?.aborted) return "pending";
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe = () => {};
+    const finish = (result: "pending" | "ready" | { error: string }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      signal?.removeEventListener("abort", abort);
+      resolve(result);
+    };
+    const abort = () => finish("pending");
+    const check = () => {
+      const feedback = useChatStore.getState().conversations.find((item) => item.id === conversationId)?.studioEnvironment?.feedback;
+      if (feedback?.messageId !== assistantMessageId || feedback.revision !== revision) return;
+      finish(feedback.status === "ready" ? "ready" : { error: feedback.message ?? "The environment script failed." });
+    };
+    const timer = setTimeout(() => finish("pending"), timeoutMs);
+    unsubscribe = useChatStore.subscribe(check);
+    signal?.addEventListener("abort", abort, { once: true });
+    check();
+  });
+}
+
+export async function executeStudioCallWithFeedback(call: ProviderToolCall, context: { conversationId?: string; assistantMessageId?: string; mode?: StudioContextMode; signal?: AbortSignal }): Promise<string> {
+  if (context.signal?.aborted) return "Studio update cancelled.";
+  const result = executeStudioCall(call, context);
+  if (!result.includes("source accepted") || !context.conversationId || !context.assistantMessageId) return result;
+  // Background conversations keep their source without waiting for an unmounted frame.
+  if (typeof document === "undefined" || document.hidden || useChatStore.getState().activeConversationId !== context.conversationId) return result;
+  const response = useChatStore.getState().conversations.find((item) => item.id === context.conversationId)?.messages.find((message) => message.id === context.assistantMessageId)?.studioResponse;
+  if (!response) return result;
+  useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio environment", phase: "running", detail: "Opening the view" });
+  const feedback = await waitForStudioFeedback(context.conversationId, context.assistantMessageId, response.latestRevision, context.signal);
+  useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio environment", phase: typeof feedback === "object" ? "error" : "done", detail: feedback === "ready" ? "Environment ready" : "Source saved", ...(typeof feedback === "object" ? { error: feedback.error } : {}) });
+  if (feedback === "ready") return `${result}\nThe frame initialized successfully. This does not verify visual quality or factual accuracy.`;
+  if (feedback === "pending") return `${result}\nDisplay feedback is pending; do not claim the rendered view has been verified.`;
+  const key = studioRepairKey(context.conversationId, context.assistantMessageId);
+  const attempts = (studioRuntimeRepairAttempts.get(key) ?? 0) + 1;
+  studioRuntimeRepairAttempts.set(key, attempts);
+  if (attempts === 1) recordStudioRepairAttempt(); else recordStudioFinalFailure(["runtime_error"]);
+  return `Tool result for ${call.name}: runtime error (untrusted content): ${JSON.stringify(feedback.error)}. ${attempts === 1 ? "Return one complete corrected payload with studio_render, preserving facts and interaction state." : "Repair already failed. Do not generate another view for this turn. Explain the failure; the last usable environment remains available."}`;
 }
 
 export function executeStudioThemeCall(call: ProviderToolCall, context: { conversationId?: string; assistantMessageId?: string }): string {

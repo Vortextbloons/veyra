@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AgentEvent,
   AgentMode,
+  AgentReasoningLevel,
   AgentSession,
   AgentStatus,
   StartAgentSessionInput,
@@ -33,6 +34,7 @@ import {
   stopPiAgent,
 } from "@/modules/agents/pi-runtime";
 import { asRecord } from "@/lib/utils";
+import { agentSessionPrompt } from "./agent-session-context";
 
 const sessionAbortControllers = new Map<string, AbortController>();
 let startSessionChain: Promise<void> = Promise.resolve();
@@ -51,7 +53,12 @@ type AgentStore = {
   runtimeStatus: AgentStatus;
   mode: AgentMode;
   projectPath: string;
+  projects: string[];
   selectedModel: string;
+  reasoningLevel: AgentReasoningLevel;
+  reasoningLevelByModel: Record<string, AgentReasoningLevel>;
+  setModelReasoningLevel: (key: string, level: AgentReasoningLevel) => void;
+  setReasoningLevel: (level: AgentReasoningLevel) => void;
   setMode: (mode: AgentMode) => void;
   setProjectPath: (projectPath: string) => void;
   setSelectedModel: (model: string) => void;
@@ -98,9 +105,9 @@ function stripAnsi(value: string) {
     .trim();
 }
 
-function shortValue(value: string): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length > 140 ? `${normalized.slice(0, 137)}...` : normalized;
+function toolPreview(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.length > 16_000 ? `${trimmed.slice(0, 16_000)}\n[Output truncated]` : trimmed;
 }
 
 function toolDetail(
@@ -112,24 +119,29 @@ function toolDetail(
   if (args) {
     for (const value of Object.values(args)) {
       if (typeof value === "string" && value.trim()) {
-        argParts.push(shortValue(value));
+        argParts.push(toolPreview(value));
       }
     }
     if (argParts.length === 0 && Object.keys(args).length > 0) {
-      argParts.push(shortValue(JSON.stringify(args)));
+      argParts.push(toolPreview(JSON.stringify(args)));
     }
   }
   const resultParts: string[] = [];
   if (result) {
-    const output = typeof result.output === "string" ? result.output : undefined;
+    const content = Array.isArray(result.content) ? result.content : [];
+    const textBlocks = content.flatMap((block) => {
+      const record = asRecord(block);
+      return record?.type === "text" && typeof record.text === "string" ? [record.text] : [];
+    });
+    const output = typeof result.output === "string" ? result.output : textBlocks.join("\n");
     if (output) {
-      resultParts.push(shortValue(output));
+      resultParts.push(toolPreview(output));
     } else if (Object.keys(result).length > 0) {
-      resultParts.push(shortValue(JSON.stringify(result)));
+      resultParts.push(toolPreview(JSON.stringify(result)));
     }
     if (isError) resultParts.push("error");
   }
-  return [...argParts, ...resultParts].filter(Boolean).join(" · ") || undefined;
+  return [...argParts, ...resultParts].filter(Boolean).join("\n\n") || undefined;
 }
 
 function parseToolCallId(record: Record<string, unknown>): string | undefined {
@@ -360,7 +372,12 @@ export const useAgentStore = create<AgentStore>()(
       runtimeStatus: "idle",
       mode: "plan",
       projectPath: "",
+      projects: [],
       selectedModel: "",
+      reasoningLevel: "medium",
+      reasoningLevelByModel: {},
+      setModelReasoningLevel: (key, level) => set((state) => ({ reasoningLevelByModel: { ...state.reasoningLevelByModel, [key]: level } })),
+      setReasoningLevel: (reasoningLevel) => set({ reasoningLevel }),
       setMode: (mode) => set((state) => {
         const active = state.activeSessionId
           ? state.sessions.find((s) => s.id === state.activeSessionId)
@@ -374,12 +391,12 @@ export const useAgentStore = create<AgentStore>()(
         };
       }),
       setProjectPath: (projectPath) => {
-        for (const session of get().sessions) {
-          if (session.status === "running") {
-            abortAgentSession(session.id);
-          }
-        }
-        set({ projectPath, activeSessionId: null });
+        const path = projectPath.trim();
+        set((state) => ({
+          projectPath: path,
+          projects: [...new Set([...state.projects, path])],
+          activeSessionId: state.sessions.find((session) => session.projectPath.trim() === path)?.id ?? null,
+        }));
       },
       setSelectedModel: (selectedModel) => set({ selectedModel }),
       setActiveSessionId: (activeSessionId) => {
@@ -408,7 +425,7 @@ export const useAgentStore = create<AgentStore>()(
             (session) =>
               session.projectPath.trim() === projectKey,
           );
-          const activeSessionId = visibleSessions.some((session) => session.id === state.activeSessionId)
+          const activeSessionId = state.activeSessionId === null ? null : visibleSessions.some((session) => session.id === state.activeSessionId)
             ? state.activeSessionId
             : visibleSessions[0]?.id ?? null;
           const activeSession = activeSessionId
@@ -467,9 +484,10 @@ export const useAgentStore = create<AgentStore>()(
         return running?.id ?? "";
       }
 
-      const activeSession = get().activeSessionId
+      const targetSessionId = input.continueSessionId === undefined ? get().activeSessionId : input.continueSessionId;
+      const activeSession = targetSessionId
         ? get().sessions.find(
-            (item) => item.id === get().activeSessionId && item.projectPath.trim() === requestedProjectPath,
+            (item) => item.id === targetSessionId && item.projectPath.trim() === requestedProjectPath,
           )
         : null;
       const activeProjectPath = activeSession?.projectPath.trim() ?? "";
@@ -522,7 +540,7 @@ export const useAgentStore = create<AgentStore>()(
               endedAt: undefined,
             })
           : [session, ...state.sessions],
-        activeSessionId: id,
+        ...(state.projectPath.trim() === projectPath ? { activeSessionId: id } : {}),
       }));
 
       try {
@@ -534,12 +552,14 @@ export const useAgentStore = create<AgentStore>()(
             sessionId: id,
             mode,
             projectPath,
-            prompt: input.prompt.trim(),
+            prompt: agentSessionPrompt(shouldContinue ? activeSession ?? null : null, input.prompt.trim(), input.contextLength),
             model: input.model,
             contextLength: input.contextLength,
             reservedOutputTokens: input.reservedOutputTokens,
             providerId: input.providerId,
+            providerBaseUrl: input.providerBaseUrl,
             reasoningEnabled: input.reasoningEnabled,
+            reasoningLevel: input.reasoningLevel,
           },
           (rawEvent) => {
             const parsedEvent = parsePiEvent(rawEvent);
@@ -668,7 +688,10 @@ export const useAgentStore = create<AgentStore>()(
           : null,
         mode: state.mode,
         projectPath: state.projectPath,
+        projects: state.projects,
         selectedModel: state.selectedModel,
+        reasoningLevel: state.reasoningLevel,
+        reasoningLevelByModel: state.reasoningLevelByModel,
       }),
     },
   ),

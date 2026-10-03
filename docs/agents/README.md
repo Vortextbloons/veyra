@@ -10,3 +10,4 @@ Optional Pi CLI integration for plan and build modes with streaming event output
 - [04-ui.md](04-ui.md) — UI components and panels
 - [05-tauri-commands.md](05-tauri-commands.md) — Tauri IPC commands
 - [06-types.md](06-types.md) — Key type definitions
+- [07-reasoning.md](07-reasoning.md) — Model-specific reasoning controls and Pi routing

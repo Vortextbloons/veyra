@@ -33,6 +33,7 @@ export async function rePromptWithTools(params: {
   onError: (error: string) => void;
   finalizeToUser: (result: LmChatCompleteResult, webSearchSources: WebSearchSource[]) => void;
   roundMessagesContext: RoundMessagesContext;
+  getRoundMessagesContext?: () => RoundMessagesContext;
   executeToolRoundLocal: (toolCalls: ProviderToolCall[]) => Promise<{
     toolResultSections: string[];
     webSearchSources: WebSearchSource[];
@@ -145,8 +146,8 @@ export async function rePromptWithTools(params: {
         })();
       },
       messages: params.modelSupportsImages
-        ? buildRoundMessages(chainMessages, accumulatedContextBlocks, roundMessagesContext)
-        : stripImageAttachments(buildRoundMessages(chainMessages, accumulatedContextBlocks, roundMessagesContext)),
+        ? buildRoundMessages(chainMessages, accumulatedContextBlocks, params.getRoundMessagesContext?.() ?? roundMessagesContext)
+        : stripImageAttachments(buildRoundMessages(chainMessages, accumulatedContextBlocks, params.getRoundMessagesContext?.() ?? roundMessagesContext)),
     }).catch(reject);
   });
 }

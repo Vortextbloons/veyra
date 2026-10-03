@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AgentMode, PiRunResult } from "@/modules/agents/agent-types";
+import type { AgentMode, AgentReasoningLevel, PiRunResult } from "@/modules/agents/agent-types";
 
 type StartPiAgentInput = {
   sessionId: string;
@@ -11,7 +11,9 @@ type StartPiAgentInput = {
   contextLength?: number;
   reservedOutputTokens?: number;
   providerId?: string;
+  providerBaseUrl?: string;
   reasoningEnabled?: boolean;
+  reasoningLevel?: AgentReasoningLevel;
 };
 
 type PiRunFinishedEvent = {

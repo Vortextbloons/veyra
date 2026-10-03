@@ -1,6 +1,8 @@
 import type { ProviderToolDefinition } from "@/lib/providers/types";
 import { STUDIO_RENDER_TOOL } from "@/modules/chat/studio/studio-tool";
 import { STUDIO_THEME_TOOL } from "@/modules/chat/studio/studio-theme-tool";
+import { STUDIO_UPDATE_TOOL } from "@/modules/chat/studio/studio-update-tool";
+export { STUDIO_UPDATE_TOOL_NAME } from "@/modules/chat/studio/studio-update-tool";
 export { STUDIO_RENDER_TOOL_NAME } from "@/modules/chat/studio/studio-tool";
 export { STUDIO_THEME_TOOL_NAME } from "@/modules/chat/studio/studio-theme-tool";
 
@@ -37,7 +39,7 @@ export function buildProviderTools(options: {
   studioEnabled?: boolean;
 }): ProviderToolDefinition[] {
   const tools: ProviderToolDefinition[] = [];
-  if (options.studioEnabled) tools.push(STUDIO_RENDER_TOOL, STUDIO_THEME_TOOL);
+  if (options.studioEnabled) tools.push(STUDIO_RENDER_TOOL, STUDIO_UPDATE_TOOL, STUDIO_THEME_TOOL);
 
   if (options.webSearchEnabled) {
     tools.push({

@@ -28,20 +28,20 @@
   --font-sans: "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --color-bg: #0c0d0f;
-  --color-surface: #111316;
-  --color-panel: #15181c;
-  --color-border: #24282e;
-  --color-border-strong: #343a43;
-  --color-muted: #737b86;
-  --color-text: #edf0f2;
-  --color-text-dim: #9ca4ad;
-  --color-accent: #6f899f;
-  --color-accent-soft: #1c242b;
+  --color-bg: #080808;
+  --color-surface: #0c0c0c;
+  --color-panel: #1c1c1c;
+  --color-border: #252525;
+  --color-border-strong: #3b3b3b;
+  --color-muted: #858585;
+  --color-text: #eeeeee;
+  --color-text-dim: #aeaeae;
+  --color-accent: #8669c9;
+  --color-accent-soft: #242424;
   --color-success: #34d399;
-  --color-scrollbar: #1f2230;
-  --color-scrollbar-hover: #2a2e3f;
-  --color-focus: #a9bdcf;
+  --color-scrollbar: #2b2b2b;
+  --color-scrollbar-hover: #424242;
+  --color-focus: #c3b4ec;
   --color-danger: #f87171;
   --color-warning: #fbbf24;
 
@@ -144,6 +144,15 @@ body,
 html,
 body {
   overflow: hidden;
+}
+
+#root {
+  width: calc(100vw / var(--ui-zoom, 1));
+  height: calc(100vh / var(--ui-zoom, 1));
+}
+
+.group\/composer textarea:focus-visible {
+  outline: none;
 }
 
 * {

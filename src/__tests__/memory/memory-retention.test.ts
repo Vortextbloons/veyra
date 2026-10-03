@@ -3,12 +3,12 @@ import type { MemoryNode } from "../../modules/memory/memory-types";
 
 const mocks = vi.hoisted(() => ({
   listMemoryNodes: vi.fn(),
-  updateMemoryNode: vi.fn(),
+  archiveMemoryNode: vi.fn(),
 }));
 
 vi.mock("@/modules/memory/memory-storage", () => ({
   listMemoryNodes: mocks.listMemoryNodes,
-  updateMemoryNode: mocks.updateMemoryNode,
+  archiveMemoryNode: mocks.archiveMemoryNode,
 }));
 
 import { runMemoryRetentionCleanup } from "../../modules/memory/memory-retention";
@@ -49,7 +49,7 @@ function daysFromNow(days: number): string {
 describe("memory-retention", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.updateMemoryNode.mockResolvedValue(undefined);
+    mocks.archiveMemoryNode.mockResolvedValue(undefined);
   });
 
   describe("expired node archival", () => {
@@ -61,8 +61,8 @@ describe("memory-retention", () => {
 
       const result = await runMemoryRetentionCleanup();
       expect(result.archivedExpired).toBe(1);
-      expect(mocks.updateMemoryNode).toHaveBeenCalledWith({ id: "expired-1", status: "archived" });
-      expect(mocks.updateMemoryNode).not.toHaveBeenCalledWith({ id: "valid-1", status: "archived" });
+      expect(mocks.archiveMemoryNode).toHaveBeenCalledWith("expired-1");
+      expect(mocks.archiveMemoryNode).not.toHaveBeenCalledWith("valid-1");
     });
 
     it("archives ephemeral nodes older than 7 days", async () => {
@@ -73,7 +73,7 @@ describe("memory-retention", () => {
 
       const result = await runMemoryRetentionCleanup();
       expect(result.archivedExpired).toBe(1);
-      expect(mocks.updateMemoryNode).toHaveBeenCalledWith({ id: "old-ephemeral", status: "archived" });
+      expect(mocks.archiveMemoryNode).toHaveBeenCalledWith("old-ephemeral");
     });
 
     it("archives temporary_context nodes older than 7 days", async () => {
@@ -199,7 +199,7 @@ describe("memory-retention", () => {
 
       const result = await runMemoryRetentionCleanup();
       expect(result.archivedOverflow).toBeGreaterThanOrEqual(1);
-      expect(mocks.updateMemoryNode).toHaveBeenCalledWith({ id: "rejected-1", status: "archived" });
+      expect(mocks.archiveMemoryNode).toHaveBeenCalledWith("rejected-1");
     });
   });
 

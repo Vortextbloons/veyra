@@ -33,7 +33,6 @@ export function useAgentDispatch({
   const activeAgentSession = useMemo(
     () =>
       visibleAgentSessions.find((session) => session.id === activeAgentSessionId) ??
-      visibleAgentSessions[0] ??
       null,
     [activeAgentSessionId, visibleAgentSessions],
   );

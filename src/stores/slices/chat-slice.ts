@@ -1,11 +1,13 @@
 import type { StateCreator } from "zustand";
 import type { WorkspaceChatMode } from "@/modules/chat/chat-types";
+import type { StudioPresentation } from "@/modules/chat/studio/studio-types";
 
 export type ChatSliceState = {
   workspaceChatMode: WorkspaceChatMode;
   contextAnchoringEnabled: boolean;
   enhancedModeEnabled: boolean;
   studioModeEnabled: boolean;
+  studioPresentation: StudioPresentation;
   /** Marks that Studio availability was rolled out to default-on (MVP). */
   studioModeAvailabilityDefaultOn: boolean;
 };
@@ -15,6 +17,7 @@ export type ChatSliceActions = {
   setContextAnchoringEnabled: (enabled: boolean) => void;
   setEnhancedModeEnabled: (enabled: boolean) => void;
   setStudioModeEnabled: (enabled: boolean) => void;
+  setStudioPresentation: (presentation: StudioPresentation) => void;
 };
 
 export const DEFAULT_CHAT_STATE: ChatSliceState = {
@@ -22,6 +25,7 @@ export const DEFAULT_CHAT_STATE: ChatSliceState = {
   contextAnchoringEnabled: true,
   enhancedModeEnabled: false,
   studioModeEnabled: true,
+  studioPresentation: "auto",
   studioModeAvailabilityDefaultOn: true,
 };
 
@@ -33,4 +37,5 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   setContextAnchoringEnabled: (contextAnchoringEnabled) => set({ contextAnchoringEnabled }),
   setEnhancedModeEnabled: (enhancedModeEnabled) => set({ enhancedModeEnabled }),
   setStudioModeEnabled: (studioModeEnabled) => set({ studioModeEnabled }),
+  setStudioPresentation: (studioPresentation) => set({ studioPresentation }),
 });

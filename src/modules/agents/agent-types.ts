@@ -1,4 +1,6 @@
 export type AgentMode = "plan" | "build";
+export const AGENT_REASONING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type AgentReasoningLevel = typeof AGENT_REASONING_LEVELS[number];
 
 export type AgentStatus =
   | "idle"
@@ -42,6 +44,8 @@ export type AgentSession = {
 };
 
 export type StartAgentSessionInput = {
+  /** Captured at dispatch, so navigation cannot redirect a queued follow-up. */
+  continueSessionId?: string | null;
   mode: AgentMode;
   projectPath: string;
   prompt: string;
@@ -49,8 +53,10 @@ export type StartAgentSessionInput = {
   contextLength?: number;
   reservedOutputTokens?: number;
   providerId?: string;
+  providerBaseUrl?: string;
   piSessionId?: string;
   reasoningEnabled?: boolean;
+  reasoningLevel?: AgentReasoningLevel;
 };
 
 export type PiRunResult = {

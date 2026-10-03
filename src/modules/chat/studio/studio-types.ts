@@ -68,9 +68,25 @@ export type StudioResponseRevision = {
   css: string;
   /** Optional interaction code executed only inside the sandboxed Studio frame. */
   javascript?: string;
+  /** Concise description used for continuity without including all source. */
+  summary?: string;
+  /** Facts kept separate from presentation and available as studio.data. */
+  data?: StudioJsonObject;
   /** Optional scoped chat-window theme activated by this revision. */
   theme?: StudioTheme;
   createdAt: number;
+};
+
+export type StudioJsonValue = null | boolean | number | string | StudioJsonValue[] | { [key: string]: StudioJsonValue };
+export type StudioJsonObject = { [key: string]: StudioJsonValue };
+export type StudioPresentation = "auto" | "calm" | "expressive";
+
+/** Small, encrypted conversation state; generated source remains message-owned. */
+export type StudioEnvironment = {
+  selection?: { messageId: string; revision: number };
+  state: StudioJsonObject;
+  lastEvent?: { name: string; payload: StudioJsonValue };
+  feedback?: { messageId: string; revision: number; status: "ready" | "error"; message?: string };
 };
 
 /** Studio response owned by a single assistant message. */

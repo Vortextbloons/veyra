@@ -110,7 +110,7 @@ export function ContextBreakdownPanel({
   const totalContextTokens = totalSystemTokens + totalMessageTokens;
 
   return (
-    <div className="mt-3 space-y-3 border-t border-[var(--color-border)] pt-3">
+    <div className="space-y-3 pt-2">
       <div className="max-h-[320px] overflow-y-auto scrollbar-thin">
         <ContextBlockSection label="System" count={systemBlocks.length}>
           {systemBlocks.map((block, i) => (

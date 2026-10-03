@@ -1,24 +1,28 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import type { CSSProperties } from "react";
-import { Palette } from "lucide-react";
+import { FileText, Folder, Palette, PencilLine, X } from "lucide-react";
 import type { ChatMode, ChatPanelProps } from "@/modules/chat/chat-types";
 import { ProviderConnectionBanner } from "@/components/provider-connection-banner";
 import { ProviderSelector } from "@/components/provider-selector";
 import { ModelSelector, type Model } from "@/components/model-selector";
 import { ModelLoadingBar } from "@/components/model-loading-bar";
+import { AgentComposer } from "@/modules/agents/components/agent-composer";
 import { AgentsPanel } from "@/modules/agents/components/agents-panel";
 import { Composer } from "@/modules/chat/components/composer";
+import { ContextMeterButton } from "@/modules/chat/components/context-meter";
 import { MessageBubble } from "@/modules/chat/components/message-bubble";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { resolvePendingQuestion } from "@/modules/chat/tools/ask-question-tool";
 import { StudioExperienceChoice } from "@/modules/chat/studio/components/studio-experience-choice";
+import { StudioEnvironmentView } from "@/modules/chat/studio/components/studio-environment-view";
 import { resolveStudioToolAvailability } from "@/modules/chat/chat-provider-options";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
@@ -34,12 +38,11 @@ const MESSAGE_OVERSCAN = 8;
 
 function chatLayoutClasses(sidebarsCollapsed: number) {
   const wide = sidebarsCollapsed >= 1;
-  const widest = sidebarsCollapsed >= 2;
   return {
-    messagesPx: widest ? "px-3" : wide ? "px-4" : "px-5",
-    messageText: widest ? "text-[14.5px]" : wide ? "text-[14px]" : "text-[13px]",
-    userMaxW: widest ? "max-w-[92%]" : wide ? "max-w-[88%]" : "max-w-[85%]",
-    composerText: widest ? "text-[15px]" : wide ? "text-[14.5px]" : "text-[14px]",
+    messagesPx: wide ? "px-4" : "px-5",
+    messageText: "text-[15px]",
+    userMaxW: wide ? "max-w-[88%]" : "max-w-[85%]",
+    composerText: wide ? "text-[14.5px]" : "text-[14px]",
     footerPx: wide ? "px-3" : "px-4",
   };
 }
@@ -64,6 +67,16 @@ export function ChatPanel({
   onModelChange,
   favoriteModels = [],
   onToggleFavorite,
+  contextStats,
+  contextBreakdown,
+  webSearchEnabled = false,
+  onWebSearchChange,
+  webSearchDisabled = false,
+  webSearchDisabledReason,
+  codeExecutionEnabled = false,
+  onCodeExecutionChange,
+  codeExecutionDisabled = false,
+  codeExecutionDisabledReason,
   defaultMemoryEnabled = true,
   onTriggerMemoryExtraction,
   sidebarsCollapsed = 0,
@@ -145,8 +158,22 @@ export function ChatPanel({
   );
   const [internalMode, setInternalMode] = useState<ChatMode>(defaultMode);
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
+  const [agentSuggestion, setAgentSuggestion] = useState({ text: "", id: "" });
   const mode = controlledMode ?? internalMode;
-  const agentSessionRunning = mode === "agents" && agentSessions.some((session) => session.status === "running");
+  const isStudioEnvironment = studioModeEnabled && experience === "studio" && mode !== "agents" && !activeConversation?.characterId && !activeConversation?.groupId;
+  const [conversationDrawerId, setConversationDrawerId] = useState<string | null>(null);
+  const drawerKey = activeConversationId ?? "new-studio";
+  const needsStudioAttention = Boolean(streamingBuffer?.pendingQuestion || editingMessageId || streamingBuffer?.toolStates?.some((tool) => tool.mcpApproval && tool.phase === "pending"));
+  const conversationOpen = conversationDrawerId === drawerKey || needsStudioAttention;
+  useEffect(() => {
+    if (!isStudioEnvironment || !conversationOpen || needsStudioAttention) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector("dialog[open]")) setConversationDrawerId(null);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [conversationOpen, isStudioEnvironment, needsStudioAttention]);
+  const agentSessionRunning = mode === "agents" && agentSessions.some((session) => session.status === "running" && session.projectPath === agentProjectPath);
   const agentComposerInputDisabled =
     mode === "agents" &&
     (agentRuntimeAvailable !== true || agentSessionRunning);
@@ -180,7 +207,7 @@ export function ChatPanel({
     const el = messagesScrollRef.current;
     if (!el) return;
     setScrollState({ top: el.scrollTop, height: el.clientHeight });
-  }, [messages.length, mode]);
+  }, [messages.length, mode, conversationOpen]);
 
   useLayoutEffect(() => {
     if (isStreaming) {
@@ -265,6 +292,29 @@ export function ChatPanel({
     [onExperienceChange],
   );
 
+  if (mode === "agents") {
+    const running = agentSessions.find((session) => session.projectPath === agentProjectPath && session.status === "running");
+    return <AgentsPanel
+      sessions={agentSessions} activeSessionId={activeAgentSessionId}
+      runtimeAvailable={agentRuntimeAvailable} mode={agentMode} projectPath={agentProjectPath}
+      onProjectPathChange={(path) => onAgentProjectPathChange?.(path)}
+      onCheckRuntime={() => onAgentRuntimeCheck?.()} onNewSession={() => onAgentNewSession?.()}
+      onSelectSession={(id) => onAgentSessionSelect?.(id)} onStopSession={(id) => onAgentSessionStop?.(id)}
+      onDeleteSession={(id) => onAgentSessionDelete?.(id)} onSuggestion={(text) => setAgentSuggestion({ text, id: crypto.randomUUID() })}
+      connection={<ProviderConnectionBanner provider={currentProvider ?? null} phase={providerConnectionPhase} error={providerConnectionError} onReconnect={() => onProviderReconnect?.()} onStartServer={() => onProviderStartServer?.()} />}
+      composer={<>
+        {modelLoadProgress && modelLoadProgress.phase !== "ready" && <div className="px-6 pt-2"><ModelLoadingBar progress={modelLoadProgress} /></div>}
+        <AgentComposer projectPath={agentProjectPath} draftKey={agentProjectPath + ":" + (activeAgentSessionId ?? "new")}
+          mode={agentMode} onModeChange={(next) => onAgentModeChange?.(next)}
+          onSend={onSend} onStop={() => { if (running) onAgentSessionStop?.(running.id); }}
+          busy={Boolean(running)} unavailable={agentRuntimeAvailable !== true || !selectedModel}
+          suggestion={agentSuggestion}
+          controls={<><ProviderSelector value={selectedProvider} providers={providers} onChange={onProviderChange} connectionPhase={providerConnectionPhase} onReconnect={(id) => onProviderReconnect?.(id)} onStartServer={(id) => onProviderStartServer?.(id)} /><ModelSelector value={selectedModel} models={selectorModels} onChange={onModelChange} onToggleFavorite={onToggleFavorite} /></>}
+        />
+      </>}
+    />;
+  }
+
   return (
     <main
       className="studio-themed-chat flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-bg)] transition-colors duration-500"
@@ -273,11 +323,15 @@ export function ChatPanel({
       data-studio-effect={activeStudioTheme?.effect === "none" ? undefined : activeStudioTheme?.effect}
     >
       {activeStudioThemeCss && <style>{activeStudioThemeCss}</style>}
-      {!isEmptyChat && <header className="studio-theme-header flex h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
+      {isEmptyChat && <header className="flex h-16 shrink-0 items-center justify-center px-4">
+        {canChangeExperience && <StudioExperienceChoice compact value={experience} onChange={handleExperienceChange} disabled={isStreaming} studioAvailable={studioModeEnabled} />}
+        {titleAccessory}
+      </header>}
+      {!isEmptyChat && <header className="studio-theme-header flex h-14 shrink-0 items-center gap-2 bg-[var(--color-bg)] px-6">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[13px] font-medium tracking-tight text-[var(--color-text-dim)]">{title}</h1>
         </div>
-        {studioModeEnabled && experience === "studio" && mode !== "agents" && (
+        {studioModeEnabled && experience === "studio" && (
           <span
             className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-violet-200"
             aria-label="Studio conversation"
@@ -285,7 +339,7 @@ export function ChatPanel({
             Studio
           </span>
         )}
-        {activeStudioTheme && mode !== "agents" && (
+        {activeStudioTheme && (
           <span
             className="flex max-w-40 shrink-0 items-center gap-1.5 truncate rounded-full border border-[var(--color-border)] bg-[var(--color-accent-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-accent)]"
             title={`Studio theme: ${activeStudioTheme.name}`}
@@ -305,39 +359,34 @@ export function ChatPanel({
         onStartServer={() => onProviderStartServer?.()}
       />
 
-      <div
+      <div className="relative flex min-h-0 flex-1">
+      {isStudioEnvironment && <StudioEnvironmentView
+        key={drawerKey}
+        conversation={activeConversation}
+        messages={messages}
+        isStreaming={isStreaming}
+        streamingMessageId={streamingMessageId}
+        conversationOpen={conversationOpen}
+        onConversation={() => setConversationDrawerId(conversationOpen ? null : drawerKey)}
+        onStop={onStop}
+        onRepair={!isStreaming && onSend ? (prompt) => onSend(prompt, undefined, { memoryEnabled: memory }) : undefined}
+        onSuggestion={setSuggestedPrompt}
+      />}
+      {(!isStudioEnvironment || conversationOpen) && <div
+          id={isStudioEnvironment ? "studio-conversation" : undefined}
+          aria-label={isStudioEnvironment ? "Studio conversation" : undefined}
           ref={messagesScrollRef}
           onScroll={handleMessagesScroll}
-          className="studio-theme-messages relative flex flex-1 flex-col overflow-y-auto"
+          className={`studio-theme-messages flex min-h-0 flex-col overflow-y-auto ${isStudioEnvironment ? "absolute inset-y-0 right-0 z-30 w-[min(480px,100%)] border-l border-white/10 bg-[var(--color-bg)] shadow-[-20px_0_60px_rgba(0,0,0,0.4)]" : "relative flex-1"} ${isEmptyChat ? "justify-end" : ""}`}
         >
-          {mode === "agents" ? (
-          <AgentsPanel
-            sessions={agentSessions}
-            activeSessionId={activeAgentSessionId}
-            runtimeAvailable={agentRuntimeAvailable}
-            mode={agentMode}
-            projectPath={agentProjectPath}
-            onModeChange={(nextMode) => onAgentModeChange?.(nextMode)}
-            onProjectPathChange={(path) => onAgentProjectPathChange?.(path)}
-            onCheckRuntime={() => onAgentRuntimeCheck?.()}
-            onNewSession={() => onAgentNewSession?.()}
-            onSelectSession={(id) => onAgentSessionSelect?.(id)}
-            onStopSession={(id) => onAgentSessionStop?.(id)}
-            onDeleteSession={(id) => onAgentSessionDelete?.(id)}
-          />
-        ) : messages.length === 0 ? (
-          <div className="relative z-10 flex flex-1 items-center justify-center px-10">
-            <EmptyChat
-              disabled={isStreaming || !onSend}
-              onSuggestion={(suggestion) => setSuggestedPrompt(suggestion)}
-              experience={experience}
-              onExperienceChange={canChangeExperience ? handleExperienceChange : undefined}
-              studioAvailable={studioModeEnabled && canChangeExperience}
-            />
+          {isStudioEnvironment && <div className="sticky top-0 z-20 flex min-h-11 shrink-0 items-center gap-2 border-b border-white/10 bg-[var(--color-bg)] px-4"><span className="flex-1 text-xs text-zinc-400">Conversation</span>{isStreaming && <button onClick={onStop} className="rounded-lg px-3 py-2 text-xs text-zinc-300 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-violet-300">Stop</button>}<button disabled={needsStudioAttention} onClick={() => setConversationDrawerId(null)} aria-label="Close conversation" className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-violet-300 disabled:opacity-30"><X size={16} /></button></div>}
+          {messages.length === 0 ? (
+          <div className="relative z-10 px-6 pb-8 pt-8 text-center">
+            <h2 className="text-[clamp(24px,3vw,32px)] font-normal leading-tight tracking-tight text-[var(--color-text)]">What’s on your mind today?</h2>
           </div>
         ) : (
           <div
-            className={`relative z-10 flex w-full flex-col gap-5 pb-6 pt-5 transition-[padding] duration-200 ease-out ${layout.messagesPx}`}
+            className={`relative z-10 mx-auto flex w-full max-w-[860px] flex-col gap-7 pb-8 pt-6 transition-[padding] duration-200 ease-out ${layout.messagesPx}`}
           >
             {visibleMessageWindow.before > 0 && (
               <div aria-hidden style={{ height: visibleMessageWindow.before }} />
@@ -351,6 +400,7 @@ export function ChatPanel({
                   layout={layout}
                   isLastAssistant={m.id === lastAssistantId}
                   isStudio={experience === "studio"}
+                  showStudioResponse={!isStudioEnvironment}
                   pendingQuestion={m.id === streamingMessageId ? streamingBuffer?.pendingQuestion : undefined}
                   onResolveQuestion={m.id === streamingMessageId ? resolvePendingQuestion : undefined}
                   onEdit={onEditMessage}
@@ -367,10 +417,11 @@ export function ChatPanel({
             )}
           </div>
         )}
+      </div>}
       </div>
 
       <div
-        className={`studio-theme-composer shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)] pb-3 pt-2.5 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
+        className={`studio-theme-composer mx-auto w-full max-w-[860px] shrink-0 bg-[var(--color-bg)] pb-3 pt-2 transition-[padding] duration-200 ease-out ${layout.footerPx}`}
         style={activeStudioTheme ? { "--color-panel": activeStudioTheme.composer } as CSSProperties : undefined}
       >
         {modelLoadProgress && modelLoadProgress.phase !== "ready" && (
@@ -409,6 +460,19 @@ export function ChatPanel({
               />
             </>
           }
+          contextIndicator={
+            contextStats || contextBreakdown ? (
+              <ContextMeterButton stats={contextStats} breakdown={contextBreakdown} />
+            ) : undefined
+          }
+          webSearchEnabled={webSearchEnabled}
+          onWebSearchChange={onWebSearchChange}
+          webSearchDisabled={webSearchDisabled}
+          webSearchDisabledReason={webSearchDisabledReason}
+          codeExecutionEnabled={codeExecutionEnabled}
+          onCodeExecutionChange={onCodeExecutionChange}
+          codeExecutionDisabled={codeExecutionDisabled}
+          codeExecutionDisabledReason={codeExecutionDisabledReason}
           onSend={onSend}
           onStop={onStop}
           disabled={isStreaming || agentComposerInputDisabled}
@@ -421,7 +485,7 @@ export function ChatPanel({
           onEditCancel={onEditCancel}
           onEditSave={onEditSave}
         />
-        <div className="mt-2.5 flex items-center justify-center gap-4 text-[11px] text-[var(--color-text-dim)]">
+        {!isEmptyChat && <div className="mt-2.5 flex items-center justify-center gap-4 text-[11px] text-[var(--color-muted)]">
           <span>
             <span className="font-mono">↵</span> to send
           </span>
@@ -429,8 +493,11 @@ export function ChatPanel({
             <span className="font-mono">⇧</span> +{" "}
             <span className="font-mono">↵</span> for new line
           </span>
-        </div>
+        </div>}
       </div>
+      {isEmptyChat && !isStudioEnvironment && <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5">
+        <EmptyChat disabled={isStreaming || !onSend} onSuggestion={setSuggestedPrompt} />
+      </div>}
     </main>
   );
 }
@@ -438,59 +505,32 @@ export function ChatPanel({
 function EmptyChat({
   disabled,
   onSuggestion,
-  experience = "standard",
-  onExperienceChange,
-  studioAvailable = false,
 }: {
   disabled: boolean;
   onSuggestion: (suggestion: string) => void;
-  experience?: ConversationExperience;
-  onExperienceChange?: (experience: ConversationExperience) => void;
-  studioAvailable?: boolean;
 }) {
   const suggestions = [
-    "Summarize the document I am working on",
-    "Help me plan my next project milestone",
-    "Turn my notes into a clear first draft",
-    "Compare options and explain the tradeoffs",
+    { icon: FileText, text: "Summarize the document I’m working on" },
+    { icon: Folder, text: "Help me plan my next project milestone" },
+    { icon: PencilLine, text: "Turn my notes into a clear first draft" },
   ];
   return (
-    <div className="w-full max-w-2xl">
-      <div>
-        <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-accent)]">
-          Local workspace
-        </p>
-        <h2 className="max-w-xl text-[30px] font-semibold leading-tight tracking-[-0.035em] text-white">
-          What are we working through?
-        </h2>
-        <p className="mt-3 max-w-lg text-[14px] leading-relaxed text-[var(--color-text-dim)]">
-          Ask directly, bring in a document, or use memory and tools when the work needs more context.
-        </p>
-        {onExperienceChange && (
-          <div className="mt-6 max-w-lg">
-            <StudioExperienceChoice
-              value={experience}
-              onChange={onExperienceChange}
-              disabled={disabled}
-              studioAvailable={studioAvailable}
-            />
-          </div>
-        )}
-        <div className="mt-8 grid w-full grid-cols-2 gap-x-6 gap-y-1">
+    <div className="mx-auto w-full max-w-[812px]">
+        <div className="flex flex-col items-start gap-1">
           {suggestions.map((s) => (
             <button
-              key={s}
+              key={s.text}
               type="button"
               disabled={disabled}
-              onClick={() => onSuggestion(s)}
-              className="group flex min-h-12 items-center justify-between border-b border-[var(--color-border)] px-1 text-left text-[13px] leading-snug text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-strong)] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+              onClick={() => onSuggestion(s.text)}
+              className="group flex min-h-12 max-w-full items-center gap-4 rounded-xl px-4 py-2 text-left text-[14px] leading-snug text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.04] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <span>{s}</span>
+              <s.icon className="size-[18px] shrink-0 text-[var(--color-muted)]" />
+              <span>{s.text}</span>
 
             </button>
           ))}
         </div>
-      </div>
     </div>
   );
 }

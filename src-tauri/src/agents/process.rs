@@ -1,7 +1,13 @@
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::process::{Command, Stdio};
-use std::sync::LazyLock;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, LazyLock,
+};
+
+pub(crate) static AGENT_CANCELLATION: LazyLock<Mutex<HashMap<String, Arc<AtomicBool>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub(crate) static RUNNING_AGENT_PIDS: LazyLock<Mutex<HashMap<String, u32>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -27,6 +33,9 @@ pub(crate) fn unregister_agent_process(session_id: &str) {
 }
 
 pub(crate) fn kill_agent_process(session_id: &str) {
+    if let Some(flag) = AGENT_CANCELLATION.lock().get(session_id) {
+        flag.store(true, Ordering::Relaxed);
+    }
     if let Some(pid) = RUNNING_AGENT_PIDS.lock().remove(session_id) {
         kill_pid(pid);
     }

@@ -404,7 +404,17 @@ export async function extractPhase(
     (typeof s.sourceQuality?.quality !== "number" || s.sourceQuality.quality >= config.minSourceQuality)
   );
 
-  if (config.perSourceRead && activeSources.length > 0 && !(resumeFromPhase && evidenceList.length > 0)) {
+  // Phases after extraction assume extraction already finished; resuming from
+  // them must not re-run it. Resuming from extract (or earlier) should fill in
+  // sources that have no persisted evidence yet instead of skipping them all.
+  const resumeAfterExtract =
+    resumeFromPhase === "verify" || resumeFromPhase === "gap" || resumeFromPhase === "synthesize";
+  const sourcesWithEvidence = new Set(evidenceList.map((item) => item.sourceId));
+  const pendingSources = resumeAfterExtract
+    ? []
+    : activeSources.filter((s) => !sourcesWithEvidence.has(s.id));
+
+  if (config.perSourceRead && activeSources.length > 0 && pendingSources.length > 0) {
     ctx.checkAbort();
     const extractStep = await ctx.createStep("extract", "Deep evidence extraction");
     onEvent({ type: "phase_start", phase: "extract", stepId: extractStep.id });
@@ -415,7 +425,7 @@ export async function extractPhase(
     let filteredOut = 0;
 
     ctx.checkAbort();
-    const extractResult = await extractFromSourcesBatch(ctx, activeSources, extractStep.id, false);
+    const extractResult = await extractFromSourcesBatch(ctx, pendingSources, extractStep.id, false);
     skippedEmpty += extractResult.skippedEmpty;
     parseFailed += extractResult.parseFailed;
     filteredOut += extractResult.filteredOut;

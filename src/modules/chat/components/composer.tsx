@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   Check,
   Eye,
+  Globe,
   Loader2,
-  Paperclip,
-  Send,
+  Plus,
+  ArrowUp,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -19,8 +20,11 @@ import {
 } from "@/lib/message-attachments";
 import { ModeSelector } from "@/modules/chat/components/mode-selector";
 import { FileTypeIcon, FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
+import { ChatOptionsMenu } from "@/modules/chat/components/chat-options-menu";
 import { SkillSelector } from "@/modules/extensions/components/skill-selector";
 import { McpChatToggle } from "@/modules/extensions/components/mcp-chat-toggle";
+import { useClickOutside } from "@/hooks/use-click-outside";
+import { useSettingsStore } from "@/stores/settings-store";
 
 type FileAttachmentPreviewProps = {
   attachment: MessageAttachment;
@@ -140,44 +144,6 @@ export function IconButton({
   );
 }
 
-function OptionRow({
-  label,
-  description,
-  active,
-  onClick,
-  onDoubleClick,
-}: {
-  label: string;
-  description: string;
-  active: boolean;
-  onClick: () => void;
-  onDoubleClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={active}
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/5"
-    >
-      <span className="min-w-0 flex-1">
-        <span className="block text-[12px] font-medium text-white">{label}</span>
-        <span className="block text-[10.5px] text-[var(--color-text-dim)]">{description}</span>
-      </span>
-      <span
-        aria-hidden
-        className={`h-4 w-7 rounded-full p-0.5 transition-colors ${
-          active ? "bg-[var(--color-accent)]" : "bg-white/10"
-        }`}
-      >
-        <span className={`block size-3 rounded-full bg-white transition-transform ${active ? "translate-x-3" : ""}`} />
-      </span>
-    </button>
-  );
-}
-
 type ComposerProps = {
   memory: boolean;
   onMemoryChange: (on: boolean) => void;
@@ -191,6 +157,15 @@ type ComposerProps = {
   experience?: ConversationExperience;
   studioToolAvailable?: boolean;
   selectorControls?: React.ReactNode;
+  contextIndicator?: React.ReactNode;
+  webSearchEnabled?: boolean;
+  onWebSearchChange?: (on: boolean) => void;
+  webSearchDisabled?: boolean;
+  webSearchDisabledReason?: string;
+  codeExecutionEnabled?: boolean;
+  onCodeExecutionChange?: (on: boolean) => void;
+  codeExecutionDisabled?: boolean;
+  codeExecutionDisabledReason?: string;
   suggestedPrompt?: string;
   onSend?: (
     text: string,
@@ -222,6 +197,15 @@ export function Composer({
   experience = "standard",
   studioToolAvailable = true,
   selectorControls,
+  contextIndicator,
+  webSearchEnabled = false,
+  onWebSearchChange,
+  webSearchDisabled = false,
+  webSearchDisabledReason,
+  codeExecutionEnabled = false,
+  onCodeExecutionChange,
+  codeExecutionDisabled = false,
+  codeExecutionDisabledReason,
   suggestedPrompt,
   onSend,
   onStop,
@@ -243,6 +227,10 @@ export function Composer({
   const [optionsOpen, setOptionsOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
+  const webSearchSpeedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
+
+  useClickOutside(optionsRef, optionsOpen, () => setOptionsOpen(false));
 
   const isEditMode = Boolean(editMessageId);
 
@@ -273,6 +261,13 @@ export function Composer({
   }, [disabled]);
 
   useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+  }, [value]);
+
+  useEffect(() => {
     if (editMessageId && editInitialValue != null) {
       const timer = window.setTimeout(() => {
         setValue(editInitialValue);
@@ -297,6 +292,11 @@ export function Composer({
   const activeAttachError = attachError;
   const isInputBlocked = Boolean(disabled || busy);
   const isControlsBlocked = Boolean(controlsDisabled);
+  const webSearchActive = webSearchEnabled && !webSearchDisabled;
+  const webSearchToggleClass =
+    webSearchSpeedPreset === "fast"
+      ? "bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/15 hover:text-cyan-200"
+      : "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15 hover:text-emerald-200";
 
   const canSend =
     (value.trim().length > 0 || activeAttachments.length > 0) && !isInputBlocked;
@@ -384,7 +384,7 @@ export function Composer({
   };
 
   return (
-    <div className={`group/composer relative rounded-2xl border bg-[var(--color-panel)] p-2 transition-all focus-within:ring-1 focus-within:ring-[var(--color-accent)]/25 ${
+    <div className={`group/composer relative rounded-[28px] border bg-[var(--color-panel)] p-3 transition-colors focus-within:ring-1 focus-within:ring-[var(--color-accent)]/25 ${
       isEditMode
         ? "border-amber-400/40 focus-within:border-amber-400/60"
         : "border-[var(--color-border)] focus-within:border-[var(--color-accent)]/40"
@@ -443,15 +443,16 @@ export function Composer({
         )}
         <textarea
           ref={textareaRef}
-          rows={2}
+          rows={1}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={isEditMode ? "Edit your message..." : mode === "agents" ? "Describe a task for the agent..." : "Ask anything..."}
-          className={`block w-full resize-none rounded-md bg-transparent px-2 py-1.5 font-medium leading-snug tracking-[-0.005em] text-white transition-[font-size] duration-200 ease-out placeholder:font-normal placeholder:tracking-normal placeholder:text-[var(--color-text-dim)]/70 focus:outline-none disabled:opacity-50 ${composerTextClass}`}
+          aria-label={isEditMode ? "Edit message" : "Message"}
+          className={`block w-full resize-none rounded-md bg-transparent px-3 py-2 font-normal leading-relaxed text-white transition-[font-size] duration-200 ease-out placeholder:text-[var(--color-text-dim)] focus:outline-none disabled:opacity-50 ${composerTextClass}`}
         />
-        <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)]/50 pt-1.5">
-          <div className="flex items-center gap-0.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-0.5">
             {!isEditMode && (
               <>
                 <IconButton
@@ -460,14 +461,13 @@ export function Composer({
                   disabled={isInputBlocked}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Paperclip className="size-3.5" />
+                  <Plus className="size-5" />
                 </IconButton>
               </>
             )}
             {!isEditMode && selectorControls && (
               <>
-                <div className="mx-1.5 h-4 w-px bg-[var(--color-border)]" />
-                <div className="flex min-w-0 items-center gap-1">{selectorControls}</div>
+                <div className="flex min-w-0 flex-wrap items-center gap-1">{selectorControls}</div>
               </>
             )}
             {!isEditMode && <SkillSelector />}
@@ -478,41 +478,58 @@ export function Composer({
             {!isEditMode && (
               <>
                 <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
-                <div className="relative">
+                {contextIndicator}
+                {onWebSearchChange && (
+                  <button
+                    type="button"
+                    aria-label={`Web search: ${webSearchActive ? "on" : "off"}`}
+                    aria-pressed={webSearchActive}
+                    title={
+                      webSearchDisabled
+                        ? webSearchDisabledReason ?? "Web search is unavailable"
+                        : webSearchActive
+                          ? `Web search: on${webSearchSpeedPreset === "fast" ? " (fast)" : ""}`
+                          : "Web search: off"
+                    }
+                    disabled={isControlsBlocked || webSearchDisabled}
+                    onClick={() => onWebSearchChange(!webSearchEnabled)}
+                    className={`grid size-7 place-items-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+                      webSearchActive
+                        ? webSearchToggleClass
+                        : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <Globe className="size-3.5" />
+                  </button>
+                )}
+                <div ref={optionsRef} className="relative">
                   <IconButton
                     aria-label="Chat options"
-                    title="Chat options"
+                    title="Chat settings"
                     disabled={isControlsBlocked}
                     onClick={() => setOptionsOpen((open) => !open)}
                   >
                     <SlidersHorizontal className="size-3.5" />
                   </IconButton>
-                  {optionsOpen && (
-                    <div className="absolute bottom-full right-0 z-50 mb-2 w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-1.5 shadow-xl shadow-black/40">
-                      <p className="px-2 pb-1.5 pt-1 text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--color-text-dim)]">
-                        Chat options
-                      </p>
-                      <OptionRow
-                        label="Memory"
-                        description="Use saved context"
-                        active={memory}
-                        onClick={() => onMemoryChange(!memory)}
-                        onDoubleClick={onTriggerMemoryExtraction}
-                      />
-                      <OptionRow
-                        label="Reasoning"
-                        description="Show deeper analysis"
-                        active={reasoningEnabled}
-                        onClick={() => onReasoningEnabledChange(!reasoningEnabled)}
-                      />
-                      <OptionRow
-                        label="Enhanced"
-                        description="Use the extended workflow"
-                        active={enhancedMode}
-                        onClick={() => onEnhancedModeChange(!enhancedMode)}
-                      />
-                    </div>
-                  )}
+                  <ChatOptionsMenu
+                    open={optionsOpen}
+                    onClose={() => setOptionsOpen(false)}
+                    memory={memory}
+                    onMemoryChange={onMemoryChange}
+                    onTriggerMemoryExtraction={onTriggerMemoryExtraction}
+                    reasoningEnabled={reasoningEnabled}
+                    onReasoningEnabledChange={onReasoningEnabledChange}
+                    enhancedMode={enhancedMode}
+                    onEnhancedModeChange={onEnhancedModeChange}
+                    webSearchEnabled={webSearchEnabled}
+                    onWebSearchChange={onWebSearchChange}
+                    webSearchDisabled={webSearchDisabled}
+                    webSearchDisabledReason={webSearchDisabledReason}
+                    codeExecutionEnabled={codeExecutionEnabled}
+                    onCodeExecutionChange={onCodeExecutionChange}
+                    codeExecutionDisabled={codeExecutionDisabled}
+                    codeExecutionDisabledReason={codeExecutionDisabledReason}
+                  />
                 </div>
               </>
             )}
@@ -520,14 +537,14 @@ export function Composer({
               aria-label={isEditMode ? "Save edit" : "Send"}
               disabled={!canSend}
               onClick={handleSend}
-              className="group/send grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-accent)] text-white shadow-[0_0_0_1px_rgba(99,102,241,0.3)] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:hover:brightness-100 disabled:active:scale-100"
+              className="group/send grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-text)] text-[var(--color-bg)] transition-all hover:brightness-90 active:scale-95 disabled:opacity-30 disabled:hover:brightness-100 disabled:active:scale-100"
             >
               {busy ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : isEditMode ? (
                 <Check className="size-4" />
               ) : (
-                <Send className="size-4 transition-transform group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5" />
+                <ArrowUp className="size-5" />
               )}
             </button>
           </div>

@@ -60,23 +60,30 @@ async function unloadDirect(instanceId: string): Promise<void> {
   loadedContextLength = null;
 }
 
+/**
+ * Unload every model instance without acquiring the exclusive lock. Only call
+ * from code that already holds the lock (or from the locked wrapper below) —
+ * otherwise two unloads could race each other.
+ */
+async function unloadAllLmStudioModelsDirect(): Promise<void> {
+  const instances = await fetchActualLoadedModelInstances();
+  for (const instance of instances) {
+    try {
+      await unloadDirect(instance.instanceId);
+    } catch (err) {
+      console.warn(
+        "[LM Studio] Unload failed on shutdown:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  loadedModelId = null;
+  loadedContextLength = null;
+}
+
 /** Unload every model instance Veyra (or LM Studio) has in memory. */
 export async function unloadAllLmStudioModels(): Promise<void> {
-  return runLmStudioExclusive(async () => {
-    const instances = await fetchActualLoadedModelInstances();
-    for (const instance of instances) {
-      try {
-        await unloadDirect(instance.instanceId);
-      } catch (err) {
-        console.warn(
-          "[LM Studio] Unload failed on shutdown:",
-          err instanceof Error ? err.message : err,
-        );
-      }
-    }
-    loadedModelId = null;
-    loadedContextLength = null;
-  });
+  return runLmStudioExclusive(unloadAllLmStudioModelsDirect);
 }
 
 async function fetchActualLoadedModelInstances(): Promise<LoadedLmStudioModelInstance[]> {
@@ -149,7 +156,10 @@ export async function ensureLmStudioModel(
       try {
         await unloadDirect(loadedModelId);
       } catch {
-        await unloadAllLmStudioModels();
+        // Already inside the exclusive operation — clean up directly, since
+        // queueing another exclusive operation here would deadlock until the
+        // request timeout.
+        await unloadAllLmStudioModelsDirect();
       }
     }
 
@@ -198,6 +208,8 @@ export type PostChatPipelineOptions = {
   chatModel: string;
   titleModel: string;
   summaryModel: string;
+  /** Provider the chat ran on; background prep must follow it (cloud models must not touch LM Studio). */
+  providerId?: string;
   willTitle: boolean;
   willSummarize: boolean;
   willExtractMemory?: boolean;
@@ -207,6 +219,24 @@ export type PostChatPipelineOptions = {
   runMemoryExtraction?: () => Promise<{ prompt?: string; output?: string } | string | void>;
 };
 
+/**
+ * Prepare a background pipeline model through the provider that owns it.
+ * Falls back to direct LM Studio preparation when no provider is given.
+ */
+async function preparePipelineModel(
+  providerId: string | undefined,
+  modelId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (signal?.aborted) return;
+  if (providerId) {
+    const { prepareProviderModel } = await import("@/lib/providers");
+    await prepareProviderModel(providerId, modelId, { signal });
+    return;
+  }
+  await ensureLmStudioModel(modelId, signal);
+}
+
 /** Sequential background pipeline with exactly one resident model at a time. */
 export async function runPostChatModelPipeline(
   options: PostChatPipelineOptions,
@@ -215,6 +245,7 @@ export async function runPostChatModelPipeline(
     chatModel,
     titleModel,
     summaryModel,
+    providerId,
     willTitle,
     willSummarize,
     willExtractMemory,
@@ -230,7 +261,7 @@ export async function runPostChatModelPipeline(
   const outputs: string[] = [];
 
   if (willTitle) {
-    const result = await runWithLmStudioModel(titleModel, runTitle, signal);
+    const result = await runWithPipelineModel(providerId, titleModel, runTitle, signal);
     if (result) {
       if (typeof result === "object") {
         if (result.prompt) prompts.push(`[Title]\n${result.prompt}`);
@@ -242,7 +273,7 @@ export async function runPostChatModelPipeline(
   }
 
   if (willSummarize) {
-    const result = await runWithLmStudioModel(summaryModel, runSummary, signal);
+    const result = await runWithPipelineModel(providerId, summaryModel, runSummary, signal);
     if (result) {
       if (typeof result === "object") {
         if (result.prompt) prompts.push(`[Summary]\n${result.prompt}`);
@@ -254,7 +285,7 @@ export async function runPostChatModelPipeline(
   }
 
   if (willExtractMemory && runMemoryExtraction) {
-    const result = await runWithLmStudioModel(summaryModel, runMemoryExtraction, signal);
+    const result = await runWithPipelineModel(providerId, summaryModel, runMemoryExtraction, signal);
     if (result) {
       if (typeof result === "object") {
         if (result.prompt) prompts.push(`[Memory]\n${result.prompt}`);
@@ -266,7 +297,7 @@ export async function runPostChatModelPipeline(
   }
 
   if (!signal?.aborted) {
-    await ensureLmStudioModel(chatModel, signal);
+    await preparePipelineModel(providerId, chatModel, signal);
   }
 
   const prompt = prompts.length > 0 ? prompts.join("\n\n---\n\n") : undefined;
@@ -274,12 +305,13 @@ export async function runPostChatModelPipeline(
   return prompt || output ? { prompt, output } : undefined;
 }
 
-async function runWithLmStudioModel(
+async function runWithPipelineModel(
+  providerId: string | undefined,
   modelId: string,
   run: () => Promise<{ prompt?: string; output?: string } | string | void>,
   signal?: AbortSignal,
 ): Promise<{ prompt?: string; output?: string } | string | void> {
   if (signal?.aborted) return;
-  await ensureLmStudioModel(modelId, signal);
+  await preparePipelineModel(providerId, modelId, signal);
   if (!signal?.aborted) return run();
 }

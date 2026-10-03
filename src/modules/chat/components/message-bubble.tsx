@@ -37,6 +37,7 @@ type MessageBubbleProps = {
   layout: ChatMessageLayout;
   isLastAssistant?: boolean;
   isStudio?: boolean;
+  showStudioResponse?: boolean;
   pendingQuestion?: {
     toolCallId: string;
     questions: Array<{ text: string; options?: string[] }>;
@@ -58,6 +59,7 @@ export const MessageBubble = memo(function MessageBubble({
   layout,
   isLastAssistant = false,
   isStudio = false,
+  showStudioResponse = true,
   pendingQuestion,
   onResolveQuestion,
   onEdit,
@@ -98,7 +100,7 @@ export const MessageBubble = memo(function MessageBubble({
               onDelete={() => onDelete?.(message.id)}
             />
             <div
-              className={`studio-theme-user-message rounded-2xl rounded-tr-md border border-indigo-500/10 bg-[var(--color-accent-soft)] px-4 py-2.5 text-white transition-[font-size] duration-200 ease-out ${layout.messageText}`}
+              className={`studio-theme-user-message rounded-3xl bg-[var(--color-accent-soft)] px-5 py-3 text-white transition-[font-size] duration-200 ease-out ${layout.messageText}`}
             >
               {message.attachments && message.attachments.length > 0 && (
                 <MessageAttachmentsPreview
@@ -168,7 +170,7 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
         {showReplyBubble && (
         <div
-          className={`rounded-2xl rounded-tl-md border px-4 py-2.5 text-[var(--color-text)] transition-[font-size] duration-200 ease-out ${isStudio ? "border-violet-300/[0.09] bg-[linear-gradient(135deg,rgba(139,92,246,0.045),rgba(255,255,255,0.025)_38%,rgba(34,211,238,0.018))]" : "border-[var(--color-border)] bg-[var(--color-panel)]"} ${layout.messageText}`}
+          className={`py-3 text-[var(--color-text)] transition-[font-size] duration-200 ease-out ${isStudio ? "rounded-2xl border border-violet-300/[0.09] bg-[var(--color-panel)] px-4" : "bg-transparent"} ${layout.messageText}`}
         >
           {showThinking && !body ? (
               isStudio ? <StudioThinkingIndicator /> : <ThinkingIndicator />
@@ -188,7 +190,7 @@ export const MessageBubble = memo(function MessageBubble({
           <StudioProgress phase={studioTool?.phase} hasCustomMessage={Boolean(studioTool)} />
         )}
         </div>
-        {studioResponse && conversationId && (
+        {showStudioResponse && studioResponse && conversationId && (
           <StudioResponseView
             conversationId={conversationId}
             assistantMessageId={message.id}

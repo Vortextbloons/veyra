@@ -7,7 +7,6 @@ import {
 export type UiLayoutSliceState = {
   activeNav: string;
   recentChatsCollapsed: boolean;
-  rightPanelCollapsed: boolean;
   visibleToolSettingsSections: Record<ToolSettingsSectionId, boolean>;
   toolSettingsSubsectionsExpanded: Record<string, boolean>;
 };
@@ -15,7 +14,6 @@ export type UiLayoutSliceState = {
 export type UiLayoutSliceActions = {
   setActiveNav: (id: string) => void;
   setRecentChatsCollapsed: (collapsed: boolean) => void;
-  setRightPanelCollapsed: (collapsed: boolean) => void;
   setToolSettingsSectionVisible: (id: ToolSettingsSectionId, visible: boolean) => void;
   setAllToolSettingsSectionsVisible: (visible: boolean) => void;
   setToolSettingsSubsectionExpanded: (key: string, expanded: boolean) => void;
@@ -24,7 +22,6 @@ export type UiLayoutSliceActions = {
 export const DEFAULT_UI_LAYOUT_STATE: UiLayoutSliceState = {
   activeNav: "chat",
   recentChatsCollapsed: false,
-  rightPanelCollapsed: false,
   visibleToolSettingsSections: DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS,
   toolSettingsSubsectionsExpanded: {},
 };
@@ -35,7 +32,6 @@ export const createUiLayoutSlice: StateCreator<UiLayoutSlice, [], [], UiLayoutSl
   ...DEFAULT_UI_LAYOUT_STATE,
   setActiveNav: (activeNav) => set({ activeNav }),
   setRecentChatsCollapsed: (recentChatsCollapsed) => set({ recentChatsCollapsed }),
-  setRightPanelCollapsed: (rightPanelCollapsed) => set({ rightPanelCollapsed }),
   setToolSettingsSectionVisible: (id, visible) =>
     set((state) => ({
       visibleToolSettingsSections: {

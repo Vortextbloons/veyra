@@ -1,4 +1,4 @@
-import { listMemoryNodes, updateMemoryNode } from "@/modules/memory/memory-storage";
+import { archiveMemoryNode, listMemoryNodes } from "@/modules/memory/memory-storage";
 import { isProtectedMemory, type MemoryNode } from "@/modules/memory/memory-types";
 
 const EPHEMERAL_TTL_DAYS = 7;
@@ -78,7 +78,9 @@ function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
 
 async function archiveNodes(nodes: MemoryNode[]): Promise<number> {
   const unique = Array.from(new Map(nodes.map((node) => [node.id, node])).values());
-  await Promise.allSettled(unique.map((node) => updateMemoryNode({ id: node.id, status: "archived" })));
+  // Use the dedicated archive command — a status-only update must not touch
+  // node content (and therefore must not trigger embedding recompute).
+  await Promise.allSettled(unique.map((node) => archiveMemoryNode(node.id)));
   return unique.length;
 }
 
