@@ -17,7 +17,7 @@ Requires [Node.js](https://nodejs.org/), [Rust](https://www.rust-lang.org/), [Vi
 
 ## Releases
 
-Grab the latest installer and see what's new on the [releases page](https://github.com/Vortextbloons/veyra/releases).
+Grab the latest installer on the [releases page](https://github.com/Vortextbloons/veyra/releases). What's new is summarized in [CHANGELOG.md](./CHANGELOG.md).
 
 ## Features
 
