@@ -13,7 +13,6 @@ import type {
   StudioValidationIssue,
   StudioScene,
   StudioTransition,
-  StudioWorkspaceStatus,
 } from "@/modules/chat/studio/studio-types";
 import {
   copyStudioResponseForFork,
@@ -54,7 +53,6 @@ type ChatStore = {
   setConversationExperience: (id: string, experience: ConversationExperience) => boolean;
   setStudioMessageTheme: (conversationId: string, assistantMessageId: string, theme: StudioTheme | null) => boolean;
   commitStudioScene: (conversationId: string, assistantMessageId: string, scene: { title: string; html: string; css: string; javascript?: string; caption?: string; transition?: StudioTransition }, options?: { pointerSceneIdAtStart?: string }) => StudioScene | null;
-  setStudioWorkspaceStatus: (conversationId: string, status: StudioWorkspaceStatus, assistantMessageId?: string, error?: StudioValidationIssue[]) => boolean;
   selectStudioScene: (conversationId: string, sceneId: string) => boolean;
   commitStudioResponseRevision: (conversationId: string, assistantMessageId: string, revision: Omit<StudioResponseRevision, "revision" | "createdAt" | "assistantMessageId">, options?: { pointerRevisionAtStart?: number }) => StudioResponseRevision | null;
   setStudioResponseStatus: (conversationId: string, assistantMessageId: string, status: StudioResponseStatus, error?: StudioValidationIssue[]) => boolean;
@@ -79,7 +77,6 @@ type ChatStore = {
   skipNextBufferClear: () => void;
   resetAfterRePrompt: () => void;
   setModelLoadProgress: (progress: ModelLoadProgress) => void;
-  setStreamingWebSearchState: (state: WebSearchState) => void;
   upsertStreamingWebSearchRound: (round: WebSearchRound) => void;
   completeStreamingWebSearchRounds: () => void;
   setStreamingToolState: (state: ToolCallState) => void;
@@ -104,8 +101,6 @@ type ChatStore = {
   forkConversation: (conversationId: string, upToMessageId: string) => string;
   /** Strip the character binding from a conversation (escape hatch). */
   unbindCharacter: (conversationId: string) => void;
-  /** Recent conversations bound to a given character id. */
-  recentChatsForCharacter: (characterId: string, limit?: number) => Conversation[];
 };
 
 type SetChatStore = (
@@ -282,21 +277,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       return changed ? { conversations } : {};
     });
     return committed;
-  },
-  setStudioWorkspaceStatus: (conversationId, status, assistantMessageId, error) => {
-    let changed = false;
-    set((state) => {
-      const conversations = state.conversations.map((conversation) => {
-        if (conversation.id !== conversationId || resolveConversationExperience(conversation) !== "studio") return conversation;
-        const now = Date.now();
-        const previous = conversation.studioWorkspace;
-        changed = true;
-        return { ...conversation, updatedAt: now, studioWorkspace: { id: previous?.id ?? crypto.randomUUID(), scenes: previous?.scenes ?? [], currentSceneId: previous?.currentSceneId, latestSceneId: previous?.latestSceneId, status, pendingAssistantMessageId: status === "generating" || status === "validating" ? assistantMessageId : undefined, error: error?.length ? error : undefined, createdAt: previous?.createdAt ?? now, updatedAt: now } };
-      });
-      if (changed) void saveConversationSnapshot(conversations);
-      return changed ? { conversations } : {};
-    });
-    return changed;
   },
   setStudioMessageTheme: (conversationId, assistantMessageId, theme) => {
     let changed = false;
@@ -600,12 +580,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ streamingBuffer: null, _skipNextClear: false });
   },
   setModelLoadProgress: (progress) => set({ modelLoadProgress: progress }),
-  setStreamingWebSearchState: (webSearchState) => {
-    set((state) => {
-      if (!state.streamingBuffer) return state;
-      return { streamingBuffer: { ...state.streamingBuffer, webSearchState } };
-    });
-  },
   upsertStreamingWebSearchRound: (round) => {
     set((state) => {
       const buffer = state.streamingBuffer;
@@ -890,11 +864,5 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       void saveConversationSnapshot(conversations);
       return { conversations };
     });
-  },
-  recentChatsForCharacter: (characterId, limit = 5) => {
-    return get()
-      .conversations.filter((c) => c.characterId === characterId)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, limit);
   },
 }));

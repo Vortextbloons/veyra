@@ -7,7 +7,6 @@ import type {
 } from "./character-types";
 import {
   listCharacters as apiList,
-  getCharacter as apiGet,
   createCharacter as apiCreate,
   updateCharacter as apiUpdate,
   deleteCharacter as apiDelete,
@@ -25,7 +24,6 @@ type CharacterStore = {
 
   // Selection
   setActiveCharacterId: (id: string | null) => void;
-  clearActiveCharacter: () => void;
 
   // CRUD
   createCharacter: (
@@ -33,12 +31,9 @@ type CharacterStore = {
   ) => Promise<CharacterRecord>;
   updateCharacter: (input: UpdateCharacterInput) => Promise<CharacterRecord>;
   deleteCharacter: (id: string) => Promise<void>;
-  refreshCharacter: (id: string) => Promise<CharacterRecord | null>;
 
   // Derived
   getCharacterById: (id: string) => CharacterRecord | undefined;
-  globalCharacters: () => CharacterRecord[];
-  projectCharacters: (projectId: string) => CharacterRecord[];
   activeCharacter: () => CharacterRecord | null;
 };
 
@@ -69,10 +64,6 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
 
   setActiveCharacterId: (id) => {
     set({ activeCharacterId: id });
-  },
-
-  clearActiveCharacter: () => {
-    set({ activeCharacterId: null });
   },
 
   createCharacter: async (input) => {
@@ -117,31 +108,8 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     }
   },
 
-  refreshCharacter: async (id) => {
-    try {
-      const character = await apiGet(id);
-      set((state) => ({
-        characters: state.characters.map((c) =>
-          c.id === character.id ? character : c,
-        ),
-      }));
-      return character;
-    } catch (error) {
-      set({ error: String(error) });
-      return null;
-    }
-  },
-
   getCharacterById: (id) => {
     return get().characters.find((c) => c.id === id);
-  },
-
-  globalCharacters: () => {
-    return get().characters.filter((c) => c.isGlobal);
-  },
-
-  projectCharacters: (projectId) => {
-    return get().characters.filter((c) => c.projectId === projectId);
   },
 
   activeCharacter: () => {

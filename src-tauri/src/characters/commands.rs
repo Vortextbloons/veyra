@@ -14,17 +14,6 @@ pub async fn create_character(
 }
 
 #[tauri::command]
-pub async fn get_character(
-    id: String,
-    state: State<'_, CharacterDbState>,
-) -> Result<character_db::CharacterRow, String> {
-    run_db_command(state.inner(), "character", move |conn| {
-        character_db::get_character(conn, id)
-    })
-    .await
-}
-
-#[tauri::command]
 pub async fn update_character(
     input: String,
     state: State<'_, CharacterDbState>,

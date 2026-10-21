@@ -12,6 +12,7 @@ import {
   profileFromBaseline,
 } from "@/modules/research/research-config";
 import { ResearchProfileKnobsEditor } from "@/modules/research/components/ResearchProfileKnobsEditor";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { ResearchDepth } from "@/modules/research/research-types";
 import type { ModelInfo } from "@/modules/chat/chat-types";
 
@@ -40,35 +41,6 @@ const PRESET_BG: Record<ResearchDepth, string> = {
   deep: "bg-amber-500/10 text-amber-300",
   exhaustive: "bg-rose-500/10 text-rose-300",
 };
-
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${
-            value === opt.value
-              ? "bg-[var(--color-accent)] text-white"
-              : "bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function modelOptionsFromProvider(models: ModelInfo[]): { id: string; name: string; contextWindow?: number; size?: string }[] {
   return models.map((m) => ({
@@ -314,7 +286,7 @@ export function ResearchSettings() {
               </div>
             </div>
           </div>
-          <Segmented
+          <SegmentedControl
             value={research.defaultDepth}
             options={DEPTH_ORDER.map((d) => ({
               value: d,

@@ -1,4 +1,5 @@
 import { Toggle } from "@/components/toggle";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { ResearchProfileOverride } from "../research-config";
 import type { ResearchDepth } from "../research-types";
 
@@ -50,35 +51,6 @@ function Slider({
         <span>{format ? format((min + max) / 2) : (min + max) / 2}</span>
         <span>{format ? format(max) : max}</span>
       </div>
-    </div>
-  );
-}
-
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onChange(opt.value)}
-          className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${
-            value === opt.value
-              ? "bg-[var(--color-accent)] text-white"
-              : "bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
     </div>
   );
 }
@@ -205,7 +177,7 @@ export function ResearchProfileKnobsEditor({
                 {resolved.minSourceQuality}/5
               </span>
             </div>
-            <Segmented
+            <SegmentedControl
               value={String(resolved.minSourceQuality)}
               options={[
                 { value: "1", label: "1" },
@@ -363,7 +335,7 @@ export function ResearchProfileKnobsEditor({
                 Top-K checks the K most-confident claims; All-Pairs can grow very quickly and is capped below.
               </div>
             </div>
-            <Segmented
+            <SegmentedControl
               value={resolved.contradictionStrategy}
               options={[
                 { value: "all_pairs", label: "All Pairs" },

@@ -4,7 +4,6 @@ import {
   buildStudioThemeContextBlock,
   buildModeContextBlock,
   inferStudioContextMode,
-  shouldIncludeStudioResponseContext,
 } from "@/modules/chat/studio/studio-context";
 
 describe("Studio Phase 5 — specialized integrations", () => {
@@ -142,14 +141,6 @@ describe("Studio Phase 5 — specialized integrations", () => {
       const block = buildModeContextBlock("research");
       expect(block).toContain('mode="research"');
       expect(block).toContain("research sources");
-    });
-  });
-
-  describe("revision prompt detection", () => {
-    it("detects revision-related prompts", () => {
-      expect(shouldIncludeStudioResponseContext("Can you restyle the dashboard?")).toBe(true);
-      expect(shouldIncludeStudioResponseContext("Update the view")).toBe(true);
-      expect(shouldIncludeStudioResponseContext("What is the weather?")).toBe(false);
     });
   });
 });

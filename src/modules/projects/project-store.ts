@@ -25,7 +25,6 @@ type ProjectStore = {
 
   // ── Selection ──────────────────────────────────────────────────────────────
   setActiveProjectId: (id: string | null) => void;
-  clearActiveProject: () => void;
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
   createProject: (name: string, options?: {
@@ -48,7 +47,6 @@ type ProjectStore = {
   }>) => Promise<ProjectRecord>;
   deleteProject: (id: string) => Promise<void>;
   archiveProject: (id: string) => Promise<void>;
-  openProject: (id: string) => void;
 
   // ── Derived ────────────────────────────────────────────────────────────────
   activeProject: () => ProjectRecord | null;
@@ -78,7 +76,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
 
   setActiveProjectId: (id) => set({ activeProjectId: id }),
-  clearActiveProject: () => set({ activeProjectId: null }),
 
   createProject: async (name, options) => {
     const project = await createProjectApi({
@@ -132,17 +129,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       projects: state.projects.map((p) => (p.id === id ? project : p)),
       activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
     }));
-  },
-
-  openProject: (id) => {
-    const now = new Date().toISOString();
-    set({ activeProjectId: id });
-    // Fire and forget — update lastOpenedAt
-    void updateProjectApi({ id, lastOpenedAt: now, updatedAt: now }).then((updated) => {
-      set((state) => ({
-        projects: state.projects.map((p) => (p.id === id ? updated : p)),
-      }));
-    });
   },
 
   activeProject: () => {

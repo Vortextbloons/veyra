@@ -14,17 +14,6 @@ pub async fn create_character_group(
 }
 
 #[tauri::command]
-pub async fn get_character_group(
-    id: String,
-    state: State<'_, CharacterGroupDbState>,
-) -> Result<character_group_db::CharacterGroupRow, String> {
-    run_db_command(state.inner(), "character_group", move |conn| {
-        character_group_db::get_character_group(conn, id)
-    })
-    .await
-}
-
-#[tauri::command]
 pub async fn update_character_group(
     input: String,
     state: State<'_, CharacterGroupDbState>,

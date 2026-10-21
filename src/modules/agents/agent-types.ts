@@ -64,11 +64,3 @@ export type PiRunResult = {
   stderr: string;
   exitCode: number | null;
 };
-
-export type PiSession = {
-  id: string;
-  title: string;
-  updated: number;
-  created: number;
-  directory?: string;
-};

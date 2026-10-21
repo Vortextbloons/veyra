@@ -151,16 +151,6 @@ export interface CharacterDirectorSession {
   updatedAt: string;
 }
 
-export interface CharacterLorebookTestRun {
-  id: string;
-  characterId: string;
-  conversationId?: string;
-  matchedEntryIds: string[];
-  matchedAt: string;
-  /** Snippet from the messages that triggered each match. */
-  triggerSnippets: Record<string, string>;
-}
-
 export interface CharacterAssistTelemetryEvent {
   id: string;
   ts: string;

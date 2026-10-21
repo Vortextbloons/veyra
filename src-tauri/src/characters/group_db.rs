@@ -326,15 +326,6 @@ pub fn create_character_group(
     Ok(created)
 }
 
-pub fn get_character_group(conn: &Connection, id: String) -> Result<CharacterGroupRow, String> {
-    conn.query_row(
-        &format!("SELECT {} FROM character_groups WHERE id = ?1", SELECT_COLS),
-        [&id],
-        row_to_group,
-    )
-    .map_err(|e| format!("get_character_group failed: {}", e))
-}
-
 pub fn update_character_group(
     conn: &Connection,
     input_json: String,

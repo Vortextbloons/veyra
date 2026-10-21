@@ -19,10 +19,6 @@ export async function listCharacters(
   });
 }
 
-export async function getCharacter(id: string): Promise<CharacterRecord> {
-  return invoke<CharacterRecord>("get_character", { id });
-}
-
 export async function createCharacter(
   input: Omit<CreateCharacterInput, "id"> & { id?: string },
 ): Promise<CharacterRecord> {

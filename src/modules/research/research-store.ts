@@ -84,7 +84,6 @@ type ResearchStore = {
 
   // Selection
   setActiveRunId: (id: string | null) => void;
-  clearActiveRun: () => void;
 
   // CRUD
   createRun: (input: CreateResearchRunInput) => Promise<ResearchRun>;
@@ -116,7 +115,6 @@ type ResearchStore = {
   updateReport: (input: UpdateResearchReportInput) => Promise<ResearchReport>;
 
   // Derived
-  getRunById: (id: string) => ResearchRun | undefined;
   activeRunOrNull: () => ResearchRunWithRelations | null;
 
   // Live progress plumbing
@@ -177,10 +175,6 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
 
   setActiveRunId: (id) => {
     set({ activeRunId: id, activeRun: null, isLoading: false });
-  },
-
-  clearActiveRun: () => {
-    set({ activeRunId: null, activeRun: null, isLoading: false });
   },
 
   createRun: async (input) => {
@@ -449,10 +443,6 @@ export const useResearchStore = create<ResearchStore>((set, get) => ({
       set({ error: String(error) });
       throw error;
     }
-  },
-
-  getRunById: (id) => {
-    return get().runs.find((r) => r.id === id);
   },
 
   activeRunOrNull: () => {

@@ -18,7 +18,6 @@ type UpdateStore = {
   hydrateCurrentVersion: () => Promise<void>;
   checkForUpdates: (options?: { skipIfOffline?: boolean }) => Promise<UpdateCheckResult>;
   installUpdate: (release: AppReleaseInfo) => Promise<void>;
-  clearResult: () => void;
 };
 
 export const useUpdateStore = create<UpdateStore>((set, get) => ({
@@ -85,6 +84,4 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
       throw error;
     }
   },
-
-  clearResult: () => set({ result: null }),
 }));

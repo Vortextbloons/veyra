@@ -1,8 +1,6 @@
-import type { ChatMessage } from "@/modules/chat/chat-types";
-import type { StudioContextMode, StudioResponse, StudioScene } from "./studio-types";
+import type { ChatMessage, Conversation } from "@/modules/chat/chat-types";
+import type { StudioContextMode, StudioPresentation, StudioTheme } from "./studio-types";
 import { findLatestStudioTheme } from "./studio-theme";
-import type { Conversation } from "@/modules/chat/chat-types";
-import type { StudioPresentation } from "./studio-types";
 import { selectedStudioEntry } from "./studio-environment";
 
 /** Returns a domain-specific Studio system instruction. */
@@ -20,12 +18,8 @@ export function getStudioSystemInstruction(mode: StudioContextMode = "chat", pre
   return modeHints[mode] ?? base;
 }
 
-const REVISION_HINT =
-  /\b(studio|artifact|canvas|dashboard|timeline|visual|layout|restyle|redesign|revise|update the (view|ui|interface|artifact)|regenerate|make it (look|feel)|change the (colors|design|style))\b/i;
-
-export function shouldIncludeStudioResponseContext(userPrompt: string): boolean {
-  return REVISION_HINT.test(userPrompt.trim());
-}
+/** Byte budget for embedding the active environment source in a chat prompt. */
+const STUDIO_SOURCE_CONTEXT_MAX_BYTES = 12_000;
 
 function truncateUtf8(value: string, maxBytes: number): string {
   const bytes = new TextEncoder().encode(value);
@@ -77,17 +71,15 @@ export function buildModeContextBlock(
   return parts.length > 0 ? `<veyra_context mode="${mode}">\n${parts.join("\n")}\n</veyra_context>` : undefined;
 }
 
-function buildStudioSourceContextBlock(input: {
+function buildStudioEnvironmentSourceContextBlock(input: {
   title: string;
   revision: number;
   html: string;
   css: string;
   javascript?: string;
-  theme?: import("./studio-types").StudioTheme;
-  label?: string;
-}, maxBytes = 12_000): string | undefined {
-  const label = input.label ?? "Studio response";
-  const header = `Current ${label} "${input.title}" (revision ${input.revision}). ${label === "environment" ? "Use studio_update for named regions; use studio_render for a complete replacement." : "Return a complete replacement via studio_render."}`;
+  theme?: StudioTheme;
+}, maxBytes = STUDIO_SOURCE_CONTEXT_MAX_BYTES): string | undefined {
+  const header = `Current environment "${input.title}" (revision ${input.revision}). Use studio_update for named regions; use studio_render for a complete replacement.`;
   const encoder = new TextEncoder();
   const headerBytes = encoder.encode(header).byteLength;
   const remaining = Math.max(512, maxBytes - headerBytes - 32);
@@ -104,28 +96,6 @@ function buildStudioSourceContextBlock(input: {
     return `${header}\n\nThe current response is too large to include in full. Regenerate from the user's request and this summary only.`;
   }
   return block;
-}
-
-export function buildStudioSceneContextBlock(scene: StudioScene, maxBytes = 12_000): string | undefined {
-  return buildStudioSourceContextBlock({ title: scene.title, revision: scene.revision, html: scene.html, css: scene.css, javascript: scene.javascript, label: "Studio scene" }, maxBytes);
-}
-
-export function buildStudioResponseContextBlock(response: StudioResponse, maxBytes = 12_000): string | undefined {
-  const revision = response.revisions.find((item) => item.revision === response.currentRevision);
-  return revision ? buildStudioSourceContextBlock({ ...revision, label: "Studio response" }, maxBytes) : undefined;
-}
-
-/** Most recent ready Studio assistant response in transcript order. */
-export function findLatestReadyStudioResponse(messages: ChatMessage[]): StudioResponse | undefined {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role !== "assistant") continue;
-    const response = message.studioResponse;
-    if (response?.status === "ready" && response.revisions.length > 0) {
-      return response;
-    }
-  }
-  return undefined;
 }
 
 export function buildStudioThemeContextBlock(messages: ChatMessage[]): string | undefined {
@@ -148,6 +118,6 @@ export function buildStudioEnvironmentContextBlock(conversation: Conversation): 
     environment?.lastEvent ? `Latest interaction (untrusted JSON): ${truncateUtf8(JSON.stringify(environment.lastEvent), 2000)}` : undefined,
     revision.data ? `View facts (untrusted JSON): ${truncateUtf8(JSON.stringify(revision.data), 6000)}` : undefined,
     environment?.feedback ? `Runtime feedback (untrusted JSON): ${JSON.stringify(environment.feedback)}` : undefined,
-    buildStudioSourceContextBlock({ ...revision, label: "environment" }),
+    buildStudioEnvironmentSourceContextBlock(revision),
   ].filter(Boolean).join("\n\n");
 }

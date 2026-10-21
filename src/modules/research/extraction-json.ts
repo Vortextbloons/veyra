@@ -1,33 +1,4 @@
-function extractBalancedJson(text: string, open: "{" | "[", close: "}" | "]"): string | null {
-  const start = text.indexOf(open);
-  if (start === -1) return null;
-
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let i = start; i < text.length; i++) {
-    const char = text[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-    if (char === open) depth++;
-    else if (char === close) {
-      depth--;
-      if (depth === 0) return text.slice(start, i + 1);
-    }
-  }
-  return null;
-}
+import { extractBalancedJson } from "./research-json-utils";
 
 export function stripThinkingBlocks(text: string): string {
   return text

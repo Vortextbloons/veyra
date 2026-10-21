@@ -1,18 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  shouldIncludeStudioResponseContext,
-} from "@/modules/chat/studio/studio-context";
 import { getCachedStudioDocument } from "@/modules/chat/studio/studio-document-cache";
 import { getStudioDiagnosticsSnapshot, recordStudioRenderSuccess } from "@/modules/chat/studio/studio-diagnostics";
 import { STUDIO_SECURITY_FIXTURES } from "@/modules/chat/studio/studio-security-fixtures";
 import { validateStudioRender } from "@/modules/chat/studio/studio-validator";
 
 describe("Studio Phase 3 hardening", () => {
-  it("includes response context only for qualifying revision prompts", () => {
-    expect(shouldIncludeStudioResponseContext("Can you restyle the dashboard?")).toBe(true);
-    expect(shouldIncludeStudioResponseContext("What is the capital of France?")).toBe(false);
-  });
-
   it("memoizes built documents by response revision", () => {
     const first = getCachedStudioDocument({
       artifactId: "response-1",

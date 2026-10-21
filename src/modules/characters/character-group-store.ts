@@ -12,7 +12,6 @@ import type {
 } from "./character-group-types";
 import {
   listCharacterGroups as apiList,
-  getCharacterGroup as apiGet,
   createCharacterGroup as apiCreate,
   updateCharacterGroup as apiUpdate,
   deleteCharacterGroup as apiDelete,
@@ -30,7 +29,6 @@ type CharacterGroupStore = {
 
   // Selection
   setActiveGroupId: (id: string | null) => void;
-  clearActiveGroup: () => void;
 
   // CRUD
   createGroup: (
@@ -38,13 +36,8 @@ type CharacterGroupStore = {
   ) => Promise<CharacterGroupRecord>;
   updateGroup: (input: UpdateCharacterGroupInput) => Promise<CharacterGroupRecord>;
   deleteGroup: (id: string) => Promise<void>;
-  refreshGroup: (id: string) => Promise<CharacterGroupRecord | null>;
 
   // Derived
-  getGroupById: (id: string) => CharacterGroupRecord | undefined;
-  globalGroups: () => CharacterGroupRecord[];
-  projectGroups: (projectId: string) => CharacterGroupRecord[];
-  groupsForCharacter: (characterId: string) => CharacterGroupRecord[];
   activeGroup: () => CharacterGroupRecord | null;
 };
 
@@ -75,10 +68,6 @@ export const useCharacterGroupStore = create<CharacterGroupStore>((set, get) => 
 
   setActiveGroupId: (id) => {
     set({ activeGroupId: id });
-  },
-
-  clearActiveGroup: () => {
-    set({ activeGroupId: null });
   },
 
   createGroup: async (input) => {
@@ -119,34 +108,6 @@ export const useCharacterGroupStore = create<CharacterGroupStore>((set, get) => 
       set({ error: String(error) });
       throw error;
     }
-  },
-
-  refreshGroup: async (id) => {
-    try {
-      const group = await apiGet(id);
-      set((state) => ({
-        groups: state.groups.map((g) => (g.id === group.id ? group : g)),
-      }));
-      return group;
-    } catch {
-      return null;
-    }
-  },
-
-  getGroupById: (id) => {
-    return get().groups.find((g) => g.id === id);
-  },
-
-  globalGroups: () => {
-    return get().groups.filter((g) => g.isGlobal);
-  },
-
-  projectGroups: (projectId) => {
-    return get().groups.filter((g) => !g.isGlobal && g.projectId === projectId);
-  },
-
-  groupsForCharacter: (characterId) => {
-    return get().groups.filter((g) => g.memberIds.includes(characterId));
   },
 
   activeGroup: () => {

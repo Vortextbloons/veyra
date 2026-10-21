@@ -470,15 +470,6 @@ pub fn create_character(conn: &Connection, input_json: String) -> Result<Charact
     Ok(created)
 }
 
-pub fn get_character(conn: &Connection, id: String) -> Result<CharacterRow, String> {
-    conn.query_row(
-        &format!("SELECT {} FROM characters WHERE id = ?1", SELECT_COLS),
-        [&id],
-        row_to_character,
-    )
-    .map_err(|e| format!("get_character failed: {}", e))
-}
-
 pub fn update_character(conn: &Connection, input_json: String) -> Result<CharacterRow, String> {
     let input: CharacterUpdateInput = serde_json::from_str(&input_json)
         .map_err(|e| format!("invalid update_character input: {}", e))?;

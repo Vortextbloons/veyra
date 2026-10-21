@@ -5,6 +5,7 @@ import { useCharacterStore } from "../../character-store";
 import { nowIso } from "@/lib/id";
 import type { CharacterGroupRecord } from "../../character-group-types";
 import { RosterTab } from "./RosterTab";
+import { FieldRow } from "../tabs/SharedUI";
 
 export function GroupEditorDrawer({
   group,
@@ -174,23 +175,23 @@ function IdentityTab({
 }) {
   return (
     <div className="flex flex-col gap-4 p-6">
-      <Field label="Name" required>
+      <FieldRow label="Name" required>
         <input
           type="text"
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[12.5px] text-white focus:border-[var(--color-accent)] focus:outline-none"
         />
-      </Field>
-      <Field label="Description" hint="Short summary shown in the list.">
+      </FieldRow>
+      <FieldRow label="Description" hint="Short summary shown in the list.">
         <textarea
           value={draft.description}
           onChange={(e) => setDraft({ ...draft, description: e.target.value })}
           rows={2}
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[12.5px] text-white focus:border-[var(--color-accent)] focus:outline-none"
         />
-      </Field>
-      <Field
+      </FieldRow>
+      <FieldRow
         label="Speaker mode"
         hint="Auto: the model picks. Manual: the user picks each turn."
       >
@@ -215,8 +216,8 @@ function IdentityTab({
             </button>
           ))}
         </div>
-      </Field>
-      <Field label="Scope">
+      </FieldRow>
+      <FieldRow label="Scope">
         <label className="flex items-center gap-2 text-[12.5px] text-[var(--color-text-dim)]">
           <input
             type="checkbox"
@@ -226,7 +227,7 @@ function IdentityTab({
           />
           <span>Global (available in every project)</span>
         </label>
-      </Field>
+      </FieldRow>
     </div>
   );
 }
@@ -240,15 +241,15 @@ function SceneTab({
 }) {
   return (
     <div className="flex flex-col gap-4 p-6">
-      <Field label="Scene" hint="Default scene set on the system block.">
+      <FieldRow label="Scene" hint="Default scene set on the system block.">
         <textarea
           value={draft.scenario}
           onChange={(e) => setDraft({ ...draft, scenario: e.target.value })}
           rows={4}
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[12.5px] text-white focus:border-[var(--color-accent)] focus:outline-none"
         />
-      </Field>
-      <Field
+      </FieldRow>
+      <FieldRow
         label="Opening line"
         hint="Shown as the first assistant message when a new chat starts. Leave empty to fall back to the active speaker's greeting."
       >
@@ -258,7 +259,7 @@ function SceneTab({
           rows={4}
           className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[12.5px] text-white focus:border-[var(--color-accent)] focus:outline-none"
         />
-      </Field>
+      </FieldRow>
     </div>
   );
 }
@@ -271,37 +272,14 @@ function MetaTab({
 }) {
   return (
     <div className="flex flex-col gap-4 p-6">
-      <Field label="Internal ids" hint="Internal references. Read-only.">
+      <FieldRow label="Internal ids" hint="Internal references. Read-only.">
         <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/40 p-2 text-[11.5px] text-[var(--color-text-dim)]">
           <div>id: {draft.id}</div>
           <div>createdAt: {draft.createdAt}</div>
           <div>updatedAt: {draft.updatedAt}</div>
           <div>recentConversationIds: {draft.recentConversationIds.length} stored</div>
         </div>
-      </Field>
+      </FieldRow>
     </div>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  required,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[11.5px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-        {label}
-        {required && <span className="ml-1 text-red-300">*</span>}
-      </span>
-      {children}
-      {hint && <span className="text-[11px] text-[var(--color-text-dim)]/80">{hint}</span>}
-    </label>
   );
 }

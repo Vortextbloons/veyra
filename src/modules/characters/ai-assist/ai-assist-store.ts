@@ -15,7 +15,6 @@ import type {
   CharacterAssistTelemetryEvent,
   CharacterDirectorMessage,
   CharacterDirectorSession,
-  CharacterLorebookTestRun,
   CharacterPendingChange,
 } from "./ai-assist-types";
 import type { CharacterLorebookEntry, CharacterRecord } from "../character-types";
@@ -45,7 +44,6 @@ interface AssistState {
   pendingChanges: Record<string, CharacterPendingChange>;
   directorSessions: DirectorList;
   telemetryLog: CharacterAssistLog;
-  lorebookTestRuns: Record<string, CharacterLorebookTestRun>;
 
   // Job lifecycle
   startJob: (request: CharacterAssistRequest, context: {
@@ -67,11 +65,6 @@ interface AssistState {
   createDirectorSession: (characterId: string) => string;
   appendDirectorMessage: (sessionId: string, message: CharacterDirectorMessage) => void;
   clearDirectorSession: (sessionId: string) => void;
-  removeDirectorSession: (sessionId: string) => void;
-  getDirectorSession: (characterId: string) => CharacterDirectorSession | null;
-
-  // Lorebook test
-  recordLorebookTestRun: (run: Omit<CharacterLorebookTestRun, "id" | "matchedAt">) => string;
 
   // Telemetry
   logEvent: (event: Omit<CharacterAssistTelemetryEvent, "id" | "ts">) => void;
@@ -135,7 +128,6 @@ export const useCharacterAssistStore = create<AssistState>((set, get) => ({
   pendingChanges: {},
   directorSessions: readDirectorSessions(),
   telemetryLog: readTelemetry(),
-  lorebookTestRuns: {},
 
   startJob: (request, context) => {
     const jobId = newId("assist");
@@ -374,31 +366,6 @@ export const useCharacterAssistStore = create<AssistState>((set, get) => ({
       writeDirectorSessions(all);
       return { directorSessions: all };
     });
-  },
-
-  removeDirectorSession: (sessionId) => {
-    set((s) => {
-      const next = { ...s.directorSessions };
-      delete next[sessionId];
-      writeDirectorSessions(next);
-      return { directorSessions: next };
-    });
-  },
-
-  getDirectorSession: (characterId) => {
-    const sessions = Object.values(get().directorSessions);
-    return sessions.find((s) => s.characterId === characterId) ?? null;
-  },
-
-  recordLorebookTestRun: (run) => {
-    const id = newId("ltest");
-    const full: CharacterLorebookTestRun = {
-      ...run,
-      id,
-      matchedAt: nowIso(),
-    };
-    set((s) => ({ lorebookTestRuns: { ...s.lorebookTestRuns, [id]: full } }));
-    return id;
   },
 
   logEvent: (event) => {

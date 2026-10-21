@@ -26,10 +26,6 @@ export async function listCharacterGroups(
   });
 }
 
-export async function getCharacterGroup(id: string): Promise<CharacterGroupRecord> {
-  return invoke<CharacterGroupRecord>("get_character_group", { id });
-}
-
 export async function createCharacterGroup(
   input: Omit<CreateCharacterGroupInput, "id"> & { id?: string },
 ): Promise<CharacterGroupRecord> {

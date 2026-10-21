@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import { resolveStudioToolAvailability } from "@/modules/chat/chat-provider-options";
-import {
-  findLatestReadyStudioResponse,
-  shouldIncludeStudioResponseContext,
-} from "@/modules/chat/studio/studio-context";
 import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 const mocks = vi.hoisted(() => ({
@@ -152,59 +148,4 @@ describe("Studio Stage 4 creation-time experience", () => {
     })).toBe(true);
   });
 
-  it("selects the latest ready message-owned Studio response for context", () => {
-    const messages: ChatMessage[] = [
-      {
-        id: "assistant-1",
-        role: "assistant",
-        content: "one",
-        timestamp: 1,
-        studioResponse: {
-          id: "response-1",
-          title: "First",
-          currentRevision: 1,
-          latestRevision: 1,
-          revisions: [{ revision: 1, title: "First", html: "<main>1</main>", css: "", createdAt: 1 }],
-          status: "ready",
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      },
-      {
-        id: "assistant-2",
-        role: "assistant",
-        content: "two",
-        timestamp: 2,
-        studioResponse: {
-          id: "response-2",
-          title: "Second",
-          currentRevision: 1,
-          latestRevision: 1,
-          revisions: [{ revision: 1, title: "Second", html: "<main>2</main>", css: "", createdAt: 2 }],
-          status: "ready",
-          createdAt: 2,
-          updatedAt: 2,
-        },
-      },
-      {
-        id: "assistant-3",
-        role: "assistant",
-        content: "generating",
-        timestamp: 3,
-        studioResponse: {
-          id: "response-3",
-          title: "Pending",
-          currentRevision: 1,
-          latestRevision: 1,
-          revisions: [{ revision: 1, title: "Pending", html: "<main>3</main>", css: "", createdAt: 3 }],
-          status: "generating",
-          createdAt: 3,
-          updatedAt: 3,
-        },
-      },
-    ];
-
-    expect(findLatestReadyStudioResponse(messages)?.id).toBe("response-2");
-    expect(shouldIncludeStudioResponseContext("Can you restyle the dashboard?")).toBe(true);
-  });
 });
