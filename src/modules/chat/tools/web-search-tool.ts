@@ -9,7 +9,7 @@ import {
 import { useChatStore } from "@/stores/chat-store";
 import type { SearchIntent } from "@/modules/web-search/types";
 
-const TOOL_RETRY_LIMIT = 2;
+const TOOL_RETRY_LIMIT = 1;
 
 type WebSearchCallResult = {
   section: string;
@@ -98,6 +98,7 @@ export async function executeWebSearchCall(
       break;
     } catch (error) {
       lastSearchError = error;
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
       if (retry >= TOOL_RETRY_LIMIT) throw error;
     }
   }

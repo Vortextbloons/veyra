@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::Manager;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
@@ -15,12 +15,16 @@ use crate::web_search::fetch_types::{FetchRequest, FetchedPage, FETCH_CLIENT, MA
 use crate::web_search::fetch_utils::{
     contains_ole_compound_signature, is_epub_content_type, is_low_quality_extracted_text,
     is_office_content_type, is_zip_archive, make_error_page, run_blocking_extraction,
-    truncate_at_sentence_boundary,
+    transient_error_page, truncate_at_sentence_boundary,
 };
 use crate::web_search::fetch_wayback::try_wayback_fallback;
 use crate::web_search::fetch_youtube::{handle_youtube, is_youtube_url};
 
-const FETCH_MAX_RETRIES: u32 = 2;
+const FETCH_MAX_ATTEMPTS: u32 = 2;
+const FETCH_MAX_REDIRECTS: usize = 5;
+/// Extra wall-clock allowance on top of the per-page timeout before the whole
+/// batch gives up on a page (covers redirect hops and Wayback recovery).
+const FETCH_BUDGET_GRACE_SECS: u64 = 4;
 
 fn validate_cache_dir(cache_dir: &std::path::Path, app: &tauri::AppHandle) -> Result<(), String> {
     let app_data = app
@@ -38,7 +42,153 @@ fn validate_cache_dir(cache_dir: &std::path::Path, app: &tauri::AppHandle) -> Re
 }
 
 fn fetch_retry_delay(attempt: u32, retry_after: Option<Duration>) -> Duration {
-    retry_after.unwrap_or_else(|| Duration::from_secs(2u64.pow(attempt.min(3))))
+    retry_after.unwrap_or_else(|| Duration::from_millis(300 * u64::from(attempt.min(3)) + 300))
+}
+
+#[derive(Debug)]
+struct FetchFailure {
+    status: &'static str,
+    reason: String,
+    retryable: bool,
+    retry_after: Option<Duration>,
+}
+
+impl FetchFailure {
+    fn new(status: &'static str, reason: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            status,
+            reason: reason.into(),
+            retryable,
+            retry_after: None,
+        }
+    }
+}
+
+fn remaining_budget(deadline: Option<Instant>) -> Option<Duration> {
+    deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()))
+}
+
+/// Resolve a `Location` header against the URL that produced it.
+fn resolve_redirect_target(current: &url::Url, location: &str) -> Result<url::Url, FetchFailure> {
+    let next = current.join(location).map_err(|error| {
+        FetchFailure::new("http", format!("Invalid redirect target: {error}"), false)
+    })?;
+    if !matches!(next.scheme(), "http" | "https") {
+        return Err(FetchFailure::new(
+            "ssrf_blocked",
+            format!("Redirect to unsupported scheme: {}", next.scheme()),
+            false,
+        ));
+    }
+    Ok(next)
+}
+
+/// GET a URL, following redirects manually so every hop can be SSRF-checked.
+/// Returns the final response together with the URL it was served from.
+async fn fetch_following_redirects(
+    start: &url::Url,
+    timeout: Duration,
+    deadline: Option<Instant>,
+) -> Result<(reqwest::Response, url::Url), FetchFailure> {
+    let mut current = start.clone();
+
+    for _ in 0..=FETCH_MAX_REDIRECTS {
+        let effective = match remaining_budget(deadline) {
+            Some(remaining) => {
+                if remaining < Duration::from_millis(150) {
+                    return Err(FetchFailure::new(
+                        "timeout",
+                        "Fetch time budget exhausted",
+                        false,
+                    ));
+                }
+                remaining.min(timeout)
+            }
+            None => timeout,
+        };
+
+        let response = match tokio::time::timeout(
+            effective,
+            FETCH_CLIENT.get(current.clone()).timeout(effective).send(),
+        )
+        .await
+        {
+            Ok(Ok(response)) => response,
+            Ok(Err(error)) => {
+                let (status, reason) = if error.is_timeout() {
+                    ("timeout", "Request timed out".to_string())
+                } else {
+                    ("network", format!("Network error: {error}"))
+                };
+                return Err(FetchFailure::new(status, reason, status == "network"));
+            }
+            Err(_) => {
+                return Err(FetchFailure::new(
+                    "timeout",
+                    format!("Request timed out after {}s", effective.as_secs().max(1)),
+                    false,
+                ))
+            }
+        };
+
+        let status = response.status();
+        if status.is_success() {
+            return Ok((response, current));
+        }
+
+        if status.is_redirection() {
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let Some(location) = location else {
+                return Err(FetchFailure::new(
+                    "http",
+                    format!("HTTP {} without a Location header", status.as_u16()),
+                    false,
+                ));
+            };
+            let next = resolve_redirect_target(&current, location)?;
+            if let Err(reason) = ssrf_check(&next).await {
+                return Err(FetchFailure::new("ssrf_blocked", reason, false));
+            }
+            current = next;
+            continue;
+        }
+
+        let retryable =
+            status.as_u16() == 429 || status.as_u16() == 408 || status.is_server_error();
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<u64>().ok())
+            .map(Duration::from_secs);
+        let mut failure = FetchFailure::new("http", format!("HTTP {}", status.as_u16()), retryable);
+        failure.retry_after = retry_after;
+        return Err(failure);
+    }
+
+    Err(FetchFailure::new(
+        "http",
+        format!("Too many redirects (more than {FETCH_MAX_REDIRECTS})"),
+        false,
+    ))
+}
+
+/// Wayback recovery, only when enabled and when enough budget remains to be useful.
+async fn recover_with_wayback(req: &FetchRequest) -> Option<FetchedPage> {
+    if !req.wayback_fallback_enabled {
+        return None;
+    }
+    if let Some(remaining) = remaining_budget(req.deadline) {
+        if remaining < Duration::from_millis(1_200) {
+            return None;
+        }
+    }
+    try_wayback_fallback(&req.url, req.max_chars, &req.cache_dir).await
 }
 
 async fn fetch_one(req: FetchRequest) -> FetchedPage {
@@ -96,7 +246,6 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     if let Err(reason) = ssrf_check(&parsed).await {
         return make_error_page(&url, max_chars, "ssrf_blocked", &reason, &req.cache_dir);
     }
-
     if youtube_url {
         if !req.advanced_search_bundle_enabled {
             return make_error_page(
@@ -116,77 +265,53 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
 
     let timeout = Duration::from_secs(req.timeout_secs.clamp(2, 30));
 
-    enum FetchOutcome {
-        Ok(reqwest::Response),
-        Err(String, String),
-    }
+    let mut attempt = 0u32;
+    let fetched = loop {
+        let attempt_timeout = match remaining_budget(req.deadline) {
+            Some(remaining) => {
+                if remaining < Duration::from_millis(200) {
+                    break Err(FetchFailure::new(
+                        "timeout",
+                        "Fetch time budget exhausted",
+                        false,
+                    ));
+                }
+                remaining.min(timeout)
+            }
+            None => timeout,
+        };
 
-    let outcome = 'retry: {
-        for attempt in 0..=FETCH_MAX_RETRIES {
-            let result = tokio::time::timeout(
-                timeout,
-                FETCH_CLIENT.get(parsed.clone()).timeout(timeout).send(),
-            )
-            .await;
-            match result {
-                Ok(Ok(r)) => {
-                    let status = r.status();
-                    if status.is_success() {
-                        break 'retry FetchOutcome::Ok(r);
-                    }
-                    let retryable = status.as_u16() == 429
-                        || status.as_u16() == 408
-                        || status.is_server_error();
-                    if retryable && attempt < FETCH_MAX_RETRIES {
-                        let retry_after = r
-                            .headers()
-                            .get(reqwest::header::RETRY_AFTER)
-                            .and_then(|v| v.to_str().ok())
-                            .and_then(|s| s.parse::<u64>().ok())
-                            .map(Duration::from_secs);
-                        sleep(fetch_retry_delay(attempt, retry_after)).await;
-                        continue;
-                    }
-                    break 'retry FetchOutcome::Err(
-                        "http".to_string(),
-                        format!("HTTP {}", status.as_u16()),
-                    );
+        match fetch_following_redirects(&parsed, attempt_timeout, req.deadline).await {
+            Ok(response) => break Ok(response),
+            Err(failure) => {
+                let budget_left = remaining_budget(req.deadline)
+                    .map(|remaining| remaining > Duration::from_secs(1))
+                    .unwrap_or(true);
+                if failure.retryable && attempt + 1 < FETCH_MAX_ATTEMPTS && budget_left {
+                    let delay =
+                        fetch_retry_delay(attempt, failure.retry_after).min(Duration::from_secs(1));
+                    attempt += 1;
+                    sleep(delay).await;
+                    continue;
                 }
-                Ok(Err(e)) => {
-                    let reason = if e.is_timeout() {
-                        "Request timed out".to_string()
-                    } else {
-                        format!("Network error: {e}")
-                    };
-                    let status = if e.is_timeout() { "timeout" } else { "network" };
-                    if attempt < FETCH_MAX_RETRIES {
-                        sleep(fetch_retry_delay(attempt, None)).await;
-                        continue;
-                    }
-                    break 'retry FetchOutcome::Err(status.to_string(), reason);
-                }
-                Err(_) => {
-                    if attempt < FETCH_MAX_RETRIES {
-                        sleep(fetch_retry_delay(attempt, None)).await;
-                        continue;
-                    }
-                    break 'retry FetchOutcome::Err(
-                        "timeout".to_string(),
-                        format!("Request timed out after {}s", req.timeout_secs),
-                    );
-                }
+                break Err(failure);
             }
         }
-        FetchOutcome::Err("retry".to_string(), "all attempts failed".to_string())
     };
 
-    let response = match outcome {
-        FetchOutcome::Ok(r) => r,
-        FetchOutcome::Err(status, reason) => {
-            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+    let (response, final_url) = match fetched {
+        Ok(fetched) => fetched,
+        Err(failure) => {
+            if let Some(recovered) = recover_with_wayback(&req).await {
                 return recovered;
             }
-            return make_error_page(&url, max_chars, &status, &reason, &req.cache_dir);
+            return make_error_page(
+                &url,
+                max_chars,
+                failure.status,
+                &failure.reason,
+                &req.cache_dir,
+            );
         }
     };
 
@@ -258,7 +383,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
             return result;
         }
         // PDF extraction failed — try Wayback fallback
-        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+        if let Some(recovered) = recover_with_wayback(&req).await {
             return recovered;
         }
         return result;
@@ -286,7 +411,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
         if result.status == "ok" {
             return result;
         }
-        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+        if let Some(recovered) = recover_with_wayback(&req).await {
             return recovered;
         }
         return result;
@@ -314,7 +439,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
         if result.status == "ok" {
             return result;
         }
-        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+        if let Some(recovered) = recover_with_wayback(&req).await {
             return recovered;
         }
         return result;
@@ -333,7 +458,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
             if result.status == "ok" {
                 return result;
             }
-            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+            if let Some(recovered) = recover_with_wayback(&req).await {
                 return recovered;
             }
             return result;
@@ -359,7 +484,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
             if result.status == "ok" {
                 return result;
             }
-            if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+            if let Some(recovered) = recover_with_wayback(&req).await {
                 return recovered;
             }
             return result;
@@ -378,7 +503,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     let extraction_result = run_blocking_extraction(&url, {
         let url = url.clone();
         let body = body.clone();
-        let parsed_url = parsed.clone();
+        let parsed_url = final_url.clone();
         move || match extract_text_from_html_body(&body, &parsed_url) {
             Ok((content, title)) => FetchedPage {
                 url,
@@ -407,7 +532,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
     .await;
 
     if extraction_result.status != "ok" {
-        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+        if let Some(recovered) = recover_with_wayback(&req).await {
             return recovered;
         }
         let reason = extraction_result
@@ -421,7 +546,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
 
     let content_trimmed = primary_content.trim();
     if is_low_quality_extracted_text(content_trimmed) {
-        if let Some(recovered) = try_wayback_fallback(&url, max_chars, &req.cache_dir).await {
+        if let Some(recovered) = recover_with_wayback(&req).await {
             return recovered;
         }
         return make_error_page(
@@ -472,6 +597,7 @@ pub async fn fetch_and_extract_pages(
     max_chars_per_source: usize,
     cache_dir: PathBuf,
     advanced_search_bundle_enabled: Option<bool>,
+    wayback_fallback_enabled: Option<bool>,
 ) -> Result<Vec<FetchedPage>, String> {
     if cache_dir.as_os_str().is_empty() {
         return Err("Cache directory is required".into());
@@ -482,6 +608,10 @@ pub async fn fetch_and_extract_pages(
     let max_chars = max_chars_per_source.clamp(500, 50_000);
     let timeout = timeout_secs.clamp(2, 30);
     let bundle_enabled = advanced_search_bundle_enabled.unwrap_or(true);
+    let wayback_enabled = wayback_fallback_enabled.unwrap_or(true);
+    // One shared wall-clock budget keeps a single dead host from stalling the
+    // whole batch: retries, redirect hops and Wayback recovery all share it.
+    let deadline = Instant::now() + Duration::from_secs(timeout + FETCH_BUDGET_GRACE_SECS);
 
     let mut tasks = Vec::with_capacity(urls.len());
     for url in urls {
@@ -491,13 +621,27 @@ pub async fn fetch_and_extract_pages(
         let handle = tokio::spawn(async move {
             let _permit = permit_source.acquire_owned().await.ok()?;
             let req = FetchRequest {
-                url,
+                url: url.clone(),
                 timeout_secs: timeout,
                 max_chars,
                 cache_dir,
                 advanced_search_bundle_enabled: bundle_enabled,
+                wayback_fallback_enabled: wayback_enabled,
+                deadline: Some(deadline),
             };
-            Some(fetch_one(req).await)
+            // Hard stop for the page, including extraction work that the network
+            // deadline does not cover.
+            let budget = deadline
+                .saturating_duration_since(Instant::now())
+                .max(Duration::from_millis(1_500));
+            match tokio::time::timeout(budget, fetch_one(req)).await {
+                Ok(page) => Some(page),
+                Err(_) => Some(transient_error_page(
+                    &url,
+                    "timeout",
+                    "Fetch budget exhausted",
+                )),
+            }
         });
         tasks.push((url_for_error, handle));
     }
@@ -538,4 +682,64 @@ pub fn get_web_fetch_cache_stats(
 ) -> Result<fetch_cache::CacheStats, String> {
     validate_cache_dir(&cache_dir, &app)?;
     Ok(fetch_cache::stats(&cache_dir))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(url: &str, wayback: bool, deadline: Option<Instant>) -> FetchRequest {
+        FetchRequest {
+            url: url.to_string(),
+            timeout_secs: 8,
+            max_chars: 8000,
+            cache_dir: std::env::temp_dir(),
+            advanced_search_bundle_enabled: true,
+            wayback_fallback_enabled: wayback,
+            deadline,
+        }
+    }
+
+    #[test]
+    fn resolves_relative_and_absolute_redirects() {
+        let base = url::Url::parse("http://example.com/a/b").unwrap();
+        let relative = resolve_redirect_target(&base, "../c").unwrap();
+        assert_eq!(relative.as_str(), "http://example.com/c");
+
+        let absolute = resolve_redirect_target(&base, "https://other.test/x").unwrap();
+        assert_eq!(absolute.as_str(), "https://other.test/x");
+    }
+
+    #[test]
+    fn rejects_non_http_redirect_targets() {
+        let base = url::Url::parse("https://example.com/").unwrap();
+        let failure = resolve_redirect_target(&base, "file:///etc/passwd").unwrap_err();
+        assert_eq!(failure.status, "ssrf_blocked");
+        assert!(!failure.retryable);
+    }
+
+    #[test]
+    fn retry_backoff_stays_short_and_honors_retry_after() {
+        assert!(fetch_retry_delay(0, None) <= Duration::from_millis(400));
+        assert_eq!(
+            fetch_retry_delay(2, Some(Duration::from_secs(7))),
+            Duration::from_secs(7)
+        );
+    }
+
+    #[tokio::test]
+    async fn wayback_is_skipped_when_disabled_or_out_of_budget() {
+        assert!(
+            recover_with_wayback(&request("https://example.com", false, None))
+                .await
+                .is_none()
+        );
+
+        let expired = Instant::now() - Duration::from_secs(1);
+        assert!(
+            recover_with_wayback(&request("https://example.com", true, Some(expired)))
+                .await
+                .is_none()
+        );
+    }
 }

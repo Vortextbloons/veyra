@@ -84,10 +84,16 @@ pub(crate) fn make_error_page(
     reason: &str,
     cache_dir: &std::path::Path,
 ) -> FetchedPage {
+    // Timeouts and network blips say nothing about the page itself, so remember
+    // them only briefly instead of poisoning the URL for a full day.
+    let ttl_secs = match status {
+        "timeout" | "network" | "retry" => 5 * 60,
+        _ => 24 * 60 * 60,
+    };
     let entry = fetch_cache::CachedEntry {
         url: url.to_string(),
         fetched_at_unix: fetch_cache::now_unix_static(),
-        ttl_secs: 24 * 60 * 60,
+        ttl_secs,
         status: status.to_string(),
         title: None,
         content: None,

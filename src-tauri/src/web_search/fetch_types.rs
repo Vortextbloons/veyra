@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::LazyLock;
+use std::time::Instant;
 
 #[derive(Serialize, Clone)]
 pub struct FetchedPage {
@@ -47,6 +48,12 @@ pub struct FetchRequest {
     pub cache_dir: PathBuf,
     #[serde(default = "default_bundle_enabled")]
     pub advanced_search_bundle_enabled: bool,
+    /// Whether the Wayback Machine may be used to recover failed pages.
+    #[serde(default = "default_bundle_enabled")]
+    pub wayback_fallback_enabled: bool,
+    /// Hard wall-clock budget for this page (shared across retries and fallbacks).
+    #[serde(skip)]
+    pub deadline: Option<Instant>,
 }
 
 fn default_bundle_enabled() -> bool {

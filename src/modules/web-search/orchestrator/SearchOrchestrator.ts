@@ -21,6 +21,37 @@ import { rankSearchPassages } from "../passage-ranker";
 
 let activeSearch: Promise<SearchContextBundle> | null = null;
 
+/**
+ * Supplementary providers (ArXiv/Wikipedia) must never extend the critical path
+ * of a search: they are rate-limited and can otherwise add seconds on top of
+ * the engine result, or hang entirely.
+ */
+const DIRECT_PROVIDER_TIMEOUT_MS = 5_000;
+
+function withSoftTimeout(
+  promise: Promise<SearchResult[]>,
+  timeoutMs: number,
+  label: string,
+): Promise<SearchResult[]> {
+  return new Promise<SearchResult[]>((resolve) => {
+    const timer = setTimeout(() => {
+      console.warn(`[web-search] ${label} did not finish within ${timeoutMs}ms; skipping it`);
+      resolve([]);
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        console.warn(`[web-search] ${label} failed; skipping it:`, error);
+        resolve([]);
+      },
+    );
+  });
+}
+
 export type RunSearchOptions = {
   projectId?: string;
   signal?: AbortSignal;
@@ -135,20 +166,28 @@ export async function runSearch(
         intent: request.intent,
       }),
       direct.arxiv
-        ? new ArXivProvider({
-            id: "arxiv-direct",
-            name: "ArXiv",
-            enabled: true,
-            maxResults: directLimit,
-          }).search({ query, limit: directLimit })
+        ? withSoftTimeout(
+            new ArXivProvider({
+              id: "arxiv-direct",
+              name: "ArXiv",
+              enabled: true,
+              maxResults: directLimit,
+            }).search({ query, limit: directLimit }),
+            DIRECT_PROVIDER_TIMEOUT_MS,
+            "ArXiv",
+          )
         : Promise.resolve([] as SearchResult[]),
       direct.wikipedia
-        ? new WikipediaProvider({
-            id: "wikipedia-direct",
-            name: "Wikipedia",
-            enabled: true,
-            maxResults: directLimit,
-          }).search({ query, limit: directLimit })
+        ? withSoftTimeout(
+            new WikipediaProvider({
+              id: "wikipedia-direct",
+              name: "Wikipedia",
+              enabled: true,
+              maxResults: directLimit,
+            }).search({ query, limit: directLimit }),
+            DIRECT_PROVIDER_TIMEOUT_MS,
+            "Wikipedia",
+          )
         : Promise.resolve([] as SearchResult[]),
     ]);
 
@@ -178,10 +217,15 @@ export async function runSearch(
       try {
         const pages = await invokeFetchAndExtractPages(
           topForFetch,
-          3,
+          // Fetch pages in a single wave where possible; the Rust side bounds the
+          // whole batch with one shared deadline, so more parallelism is safe.
+          Math.min(topForFetch.length, 6),
           perPageTimeoutSecs,
           maxCharsPerSource,
-          { advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled },
+          {
+            advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
+            waybackFallbackEnabled: settings.bundleWaybackFallback,
+          },
         );
         onFetchProgress?.(pages.length, topForFetch.length);
         fetchedPages = pages.map((p: FetchedPage) => ({

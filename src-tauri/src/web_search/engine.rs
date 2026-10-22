@@ -515,6 +515,14 @@ fn spawn_engine(
         .env("DONSETCH_NO_PREWARM", "1")
         .stdin(Stdio::null());
 
+    // The ghost lane escalates blocked SERP engines into a full browser render.
+    // In keyless mode those engines are almost always captcha-walled, so the
+    // escalation usually burns 20+ seconds and returns nothing. Skip it unless
+    // the user opts back in with VEYRA_SEARCH_GHOST_LANES=1.
+    if std::env::var_os("VEYRA_SEARCH_GHOST_LANES").is_none() {
+        command.env("DONSEEK_NO_GHOST_LANES", "1");
+    }
+
     match log_path {
         Some(path) => {
             let stdout = std::fs::File::create(path)

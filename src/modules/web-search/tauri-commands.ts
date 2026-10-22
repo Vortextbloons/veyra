@@ -99,7 +99,10 @@ export async function invokeFetchAndExtractPages(
   concurrency: number,
   timeoutSecs: number,
   maxCharsPerSource: number,
-  options?: { advancedSearchBundleEnabled?: boolean },
+  options?: {
+    advancedSearchBundleEnabled?: boolean;
+    waybackFallbackEnabled?: boolean;
+  },
 ): Promise<FetchedPage[]> {
   const cacheDir = await cacheDirPath();
   return invoke<FetchedPage[]>("fetch_and_extract_pages", {
@@ -109,6 +112,7 @@ export async function invokeFetchAndExtractPages(
     maxCharsPerSource,
     cacheDir,
     advancedSearchBundleEnabled: options?.advancedSearchBundleEnabled ?? null,
+    waybackFallbackEnabled: options?.waybackFallbackEnabled ?? null,
   });
 }
 
