@@ -25,7 +25,7 @@ Grab the latest installer on the [releases page](https://github.com/Vortextbloon
 - **Research** — deep research pipeline with citations and source auditing
 - **Characters** — roleplay personas with lorebooks, group chats, and character card support
 - **Agents** — plan-building and code-writing agents
-- **Web Search** — search the web via SearXNG, ArXiv, Wikipedia
+- **Web Search** — bundled local search engine (DonSeTch), ArXiv, Wikipedia — no Docker or extra install
 - **Projects** — scope chats and settings per project
 - **Code Execution** — run code inside your workspace with AI
 

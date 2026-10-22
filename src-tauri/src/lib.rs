@@ -333,17 +333,16 @@ pub fn run() {
             agents::commands::run_pi_agent,
             agents::commands::stop_pi_agent,
             connectivity::commands::probe_internet_connectivity,
-            web_search::commands::web_search_searxng,
-            web_search::commands::get_searxng_capabilities,
-            web_search::commands::test_searxng_connection,
+            web_search::engine::web_search,
+            web_search::engine::get_search_engine_status,
+            web_search::engine::restart_search_engine,
+            web_search::engine::stop_search_engine,
+            web_search::engine::get_search_engine_logs,
             web_search::commands::search_arxiv,
             web_search::commands::search_wikipedia,
             web_search::fetch_commands::fetch_and_extract_pages,
             web_search::fetch_commands::clear_web_fetch_cache,
             web_search::fetch_commands::get_web_fetch_cache_stats,
-            web_search::searxng_setup::check_searxng_setup,
-            web_search::searxng_setup::start_searxng_container,
-            web_search::searxng_setup::stop_searxng_container,
             shared::lm_studio_setup::start_lm_studio_server,
             projects::commands::create_project,
             projects::commands::update_project,
@@ -411,8 +410,10 @@ pub fn run() {
             character_group_db_state.spawn_background_init();
             app.manage(character_group_db_state);
 
-            let searxng_state = web_search::searxng_setup::SearxngState::new();
-            app.manage(searxng_state);
+            let search_engine_state =
+                web_search::engine::SearchEngineState::new(app.handle().clone());
+            search_engine_state.start_background();
+            app.manage(search_engine_state);
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -425,11 +426,8 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
-                let state = window.state::<web_search::searxng_setup::SearxngState>();
-                if state.was_started_by_us() {
-                    web_search::searxng_setup::stop_container();
-                    state.clear_started();
-                }
+                let state = window.state::<web_search::engine::SearchEngineState>();
+                state.stop_now();
             }
         })
         .build(tauri::generate_context!())
@@ -444,12 +442,9 @@ pub fn run() {
                 RunEvent::ExitRequested { .. } => {
                     agents::commands::stop_all_pi_agents();
                     if let Some(state) =
-                        app_handle.try_state::<web_search::searxng_setup::SearxngState>()
+                        app_handle.try_state::<web_search::engine::SearchEngineState>()
                     {
-                        if state.was_started_by_us() {
-                            web_search::searxng_setup::stop_container();
-                            state.clear_started();
-                        }
+                        state.stop_now();
                     }
                 }
                 _ => {}

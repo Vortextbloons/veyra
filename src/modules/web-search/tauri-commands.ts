@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import type { FetchStatus as BaseFetchStatus } from "@/lib/fetch-status";
-import type { SearxCapabilities } from "./types";
 
 const inflightDirectSearches = new Map<string, Promise<unknown>>();
 
@@ -22,53 +21,53 @@ export type TauriSearchResult = {
   snippet: string;
   engine: string;
   score: number;
+  published_at: string | null;
 };
 
 export type TauriSearchResponse = {
   query: string;
   results: TauriSearchResult[];
   result_count: number;
-  searxng_url: string;
+  engine: string;
+  degraded: boolean;
 };
 
-export async function invokeSearchSearxng(
-  baseUrl: string,
+export type SearchEngineStatusKind = "stopped" | "starting" | "ready" | "failed";
+
+export type SearchEngineStatus = {
+  state: SearchEngineStatusKind;
+  version: string;
+  url: string | null;
+  message: string | null;
+  logPath: string;
+};
+
+export async function invokeWebSearch(
   query: string,
   limit: number,
-  allowExternal = true,
-  options?: {
-    timeRange?: string;
-    categories?: string;
-    safeSearch?: number;
-    language?: string;
-    engines?: string;
-    page?: number;
-  },
+  intent?: string,
 ): Promise<TauriSearchResponse> {
-  return invoke<TauriSearchResponse>("web_search_searxng", {
-    baseUrl,
+  return invoke<TauriSearchResponse>("web_search", {
     query,
     limit,
-    allowExternal,
-    timeRange: options?.timeRange || null,
-    categories: options?.categories || null,
-    safeSearch: options?.safeSearch ?? null,
-    language: options?.language || null,
-    engines: options?.engines || null,
-    page: options?.page ?? null,
+    intent: intent ?? null,
   });
 }
 
-export async function invokeGetSearxngCapabilities(
-  baseUrl: string,
-): Promise<SearxCapabilities> {
-  return invoke<SearxCapabilities>("get_searxng_capabilities", { baseUrl });
+export async function invokeGetSearchEngineStatus(): Promise<SearchEngineStatus> {
+  return invoke<SearchEngineStatus>("get_search_engine_status");
 }
 
-export async function invokeTestSearxngConnection(
-  baseUrl: string,
-): Promise<boolean> {
-  return invoke<boolean>("test_searxng_connection", { baseUrl });
+export async function invokeRestartSearchEngine(): Promise<SearchEngineStatus> {
+  return invoke<SearchEngineStatus>("restart_search_engine");
+}
+
+export async function invokeStopSearchEngine(): Promise<void> {
+  return invoke<void>("stop_search_engine");
+}
+
+export async function invokeGetSearchEngineLogs(): Promise<string> {
+  return invoke<string>("get_search_engine_logs");
 }
 
 export type FetchStatus = BaseFetchStatus;

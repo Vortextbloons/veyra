@@ -41,17 +41,16 @@ export const TOOL_SETTINGS_SECTIONS: ToolSettingsSection[] = [
   {
     id: "webSearch",
     label: "Web Search",
-    description: "SearXNG, search defaults, parameters, and page extraction.",
+    description: "Bundled local search engine, defaults, parameters, and page extraction.",
     icon: Globe,
     keywords: [
       "search",
-      "searxng",
-      "docker",
+      "donsetch",
+      "engine",
       "web",
       "fetch",
       "cache",
       "results",
-      "safe search",
       "connectivity",
     ],
     component: WebSearchSettings,
@@ -88,11 +87,11 @@ export const TOOL_SETTINGS_SUBSECTIONS: Record<
   Array<{ title: string; description?: string; keywords?: string[] }>
 > = {
   webSearch: [
-    { title: "SearXNG Server", keywords: ["docker", "container", "searxng"] },
+    { title: "Search Engine", keywords: ["engine", "donsetch", "restart", "logs", "local"] },
     { title: "Web Search", keywords: ["default", "enable"] },
-    { title: "SearXNG Provider", keywords: ["url", "connection", "test"] },
     { title: "Search Mode", keywords: ["auto"] },
-    { title: "Search Parameters", keywords: ["results", "time", "category", "safe"] },
+    { title: "Search Parameters", keywords: ["results"] },
+    { title: "Advanced Search Bundle", keywords: ["bundle", "extractors"] },
     { title: "Content Extraction", keywords: ["fetch", "cache", "readability"] },
   ],
   codeExecution: [

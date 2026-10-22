@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "node scripts/fetch-search-engine.mjs && npm run build"
   },
   "app": {
     "windows": [
@@ -28,6 +28,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": {
+      "resources/search-engine/": "search-engine/"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

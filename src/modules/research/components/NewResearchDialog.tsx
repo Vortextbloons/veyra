@@ -17,7 +17,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useResearchStore } from "../research-store";
 import { enqueueResearchRunJob, type ResearchRunOverride } from "../research-runtime";
-import { invokeTestSearxngConnection } from "@/modules/web-search/tauri-commands";
+import { invokeGetSearchEngineStatus } from "@/modules/web-search/tauri-commands";
 import { resolveResearchProfileForRun } from "../research-config";
 import { ResearchProfileKnobsEditor } from "./ResearchProfileKnobsEditor";
 import type { ResearchDepth } from "../research-types";
@@ -83,16 +83,14 @@ async function runResearchPreflight(): Promise<
     };
   }
 
-  const searxngUrl = useSettingsStore.getState().webSearchSearxngUrl.trim();
-  if (!searxngUrl) {
-    return {
-      ok: false,
-      error: "SearXNG URL is not configured. Open Settings → Tools → Web Search to set a SearXNG instance URL.",
-    };
-  }
-
   try {
-    await invokeTestSearxngConnection(searxngUrl);
+    const status = await invokeGetSearchEngineStatus();
+    if (status.state === "failed") {
+      return {
+        ok: false,
+        error: `The local search engine failed to start: ${status.message ?? "unknown error"}`,
+      };
+    }
     return { ok: true };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);

@@ -4,7 +4,7 @@ import { aiScheduler } from "@/lib/ai-scheduler";
 import { flushConversationSave, saveConversationSnapshot, terminateDecryptWorker, terminateEncryptWorker } from "@/lib/conversation-storage";
 import { unloadAllProviderModels } from "@/lib/providers";
 import { useProviderStore } from "@/stores/provider-store";
-import { invokeStopSearxngContainer } from "@/modules/web-search/searxng-setup";
+import { invokeStopSearchEngine } from "@/modules/web-search/tauri-commands";
 import { useChatStore } from "@/stores/chat-store";
 import { useResearchStore } from "@/modules/research/research-store";
 
@@ -33,14 +33,14 @@ const SHUTDOWN_STEPS: ShutdownStep[] = [
   { id: "preparing", label: "Stopping background work" },
   { id: "saving", label: "Saving conversations" },
   { id: "unloading_models", label: "Unloading models" },
-  { id: "stopping_search", label: "Stopping web search" },
+  { id: "stopping_search", label: "Stopping search engine" },
 ];
 
 const STEP_LABELS: Record<ShutdownStepId, string> = {
   preparing: "Stopping background work…",
   saving: "Saving your conversations…",
   unloading_models: "Unloading models from memory…",
-  stopping_search: "Stopping web search container…",
+  stopping_search: "Stopping the search engine…",
   done: "Goodbye!",
 };
 
@@ -143,7 +143,7 @@ async function persistConversations(): Promise<void> {
   await flushConversationSave();
 }
 
-/** Release external resources started by Veyra (models, Docker, jobs). */
+/** Release external resources started by Veyra (models, search engine, jobs). */
 export async function runAppShutdown(): Promise<void> {
   if (shutdownComplete || shuttingDown) return;
   shuttingDown = true;
@@ -167,7 +167,7 @@ export async function runAppShutdown(): Promise<void> {
   );
 
   setShutdownStep("stopping_search");
-  await withTimeout(invokeStopSearxngContainer(), "Stop SearXNG container");
+  await withTimeout(invokeStopSearchEngine(), "Stop search engine");
 
   setShutdownStep("done");
 }

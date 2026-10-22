@@ -2,12 +2,8 @@ import type { StateCreator } from "zustand";
 
 export type WebSearchSliceState = {
   defaultWebSearchEnabled: boolean;
-  webSearchSearxngUrl: string;
   webSearchDefaultMode: "auto" | "always" | "off";
   webSearchMaxResults: number;
-  webSearchTimeRange: "" | "day" | "week" | "month" | "year";
-  webSearchCategories: string;
-  webSearchSafeSearch: 0 | 1 | 2;
   webSearchContextTokenLimit: number;
   webSearchFetchEnabled: boolean;
   webSearchFetchCount: number;
@@ -15,11 +11,6 @@ export type WebSearchSliceState = {
   webSearchFetchMaxCharsPerSource: number;
   webSearchSpeedPreset: "normal" | "fast";
   advancedSearchBundleEnabled: boolean;
-  advancedSearchMultiQueryEnabled: boolean;
-  advancedSearchFusionEnabled: boolean;
-  advancedSearchAdaptiveFallbackEnabled: boolean;
-  advancedSearchFreshnessBoostEnabled: boolean;
-  advancedSearchQualityFilterEnabled: boolean;
   bundleExtractDocx: boolean;
   bundleExtractPptx: boolean;
   bundleExtractXlsx: boolean;
@@ -27,16 +18,11 @@ export type WebSearchSliceState = {
   bundleWaybackFallback: boolean;
   bundleArxivSearch: boolean;
   bundleWikipediaSearch: boolean;
-  searxngSetupError: string;
 };
 
 export type WebSearchSliceActions = {
   setDefaultWebSearchEnabled: (enabled: boolean) => void;
-  setWebSearchSearxngUrl: (url: string) => void;
   setWebSearchMaxResults: (n: number) => void;
-  setWebSearchTimeRange: (range: "" | "day" | "week" | "month" | "year") => void;
-  setWebSearchCategories: (categories: string) => void;
-  setWebSearchSafeSearch: (level: 0 | 1 | 2) => void;
   setWebSearchContextTokenLimit: (n: number) => void;
   setWebSearchFetchEnabled: (enabled: boolean) => void;
   setWebSearchFetchCount: (n: number) => void;
@@ -44,11 +30,6 @@ export type WebSearchSliceActions = {
   setWebSearchFetchMaxCharsPerSource: (n: number) => void;
   setWebSearchSpeedPreset: (preset: "normal" | "fast") => void;
   setAdvancedSearchBundleEnabled: (enabled: boolean) => void;
-  setAdvancedSearchMultiQueryEnabled: (enabled: boolean) => void;
-  setAdvancedSearchFusionEnabled: (enabled: boolean) => void;
-  setAdvancedSearchAdaptiveFallbackEnabled: (enabled: boolean) => void;
-  setAdvancedSearchFreshnessBoostEnabled: (enabled: boolean) => void;
-  setAdvancedSearchQualityFilterEnabled: (enabled: boolean) => void;
   setBundleExtractDocx: (enabled: boolean) => void;
   setBundleExtractPptx: (enabled: boolean) => void;
   setBundleExtractXlsx: (enabled: boolean) => void;
@@ -56,17 +37,12 @@ export type WebSearchSliceActions = {
   setBundleWaybackFallback: (enabled: boolean) => void;
   setBundleArxivSearch: (enabled: boolean) => void;
   setBundleWikipediaSearch: (enabled: boolean) => void;
-  setSearxngSetupError: (message: string) => void;
 };
 
 export const DEFAULT_WEB_SEARCH_STATE: WebSearchSliceState = {
   defaultWebSearchEnabled: false,
-  webSearchSearxngUrl: "",
   webSearchDefaultMode: "auto",
   webSearchMaxResults: 8,
-  webSearchTimeRange: "",
-  webSearchCategories: "",
-  webSearchSafeSearch: 0,
   webSearchContextTokenLimit: 4000,
   webSearchFetchEnabled: true,
   webSearchFetchCount: 5,
@@ -74,11 +50,6 @@ export const DEFAULT_WEB_SEARCH_STATE: WebSearchSliceState = {
   webSearchFetchMaxCharsPerSource: 8000,
   webSearchSpeedPreset: "normal",
   advancedSearchBundleEnabled: true,
-  advancedSearchMultiQueryEnabled: true,
-  advancedSearchFusionEnabled: true,
-  advancedSearchAdaptiveFallbackEnabled: true,
-  advancedSearchFreshnessBoostEnabled: true,
-  advancedSearchQualityFilterEnabled: true,
   bundleExtractDocx: true,
   bundleExtractPptx: true,
   bundleExtractXlsx: true,
@@ -86,7 +57,6 @@ export const DEFAULT_WEB_SEARCH_STATE: WebSearchSliceState = {
   bundleWaybackFallback: true,
   bundleArxivSearch: true,
   bundleWikipediaSearch: true,
-  searxngSetupError: "",
 };
 
 export type WebSearchSlice = WebSearchSliceState & WebSearchSliceActions;
@@ -94,12 +64,9 @@ export type WebSearchSlice = WebSearchSliceState & WebSearchSliceActions;
 export const createWebSearchSlice: StateCreator<WebSearchSlice, [], [], WebSearchSlice> = (set) => ({
   ...DEFAULT_WEB_SEARCH_STATE,
   setDefaultWebSearchEnabled: (defaultWebSearchEnabled) => set({ defaultWebSearchEnabled }),
-  setWebSearchSearxngUrl: (webSearchSearxngUrl) => set({ webSearchSearxngUrl }),
   setWebSearchMaxResults: (webSearchMaxResults) => set({ webSearchMaxResults }),
-  setWebSearchTimeRange: (webSearchTimeRange) => set({ webSearchTimeRange }),
-  setWebSearchCategories: (webSearchCategories) => set({ webSearchCategories }),
-  setWebSearchSafeSearch: (webSearchSafeSearch) => set({ webSearchSafeSearch }),
-  setWebSearchContextTokenLimit: (webSearchContextTokenLimit) => set({ webSearchContextTokenLimit }),
+  setWebSearchContextTokenLimit: (webSearchContextTokenLimit) =>
+    set({ webSearchContextTokenLimit }),
   setWebSearchFetchEnabled: (webSearchFetchEnabled) => set({ webSearchFetchEnabled }),
   setWebSearchFetchCount: (webSearchFetchCount) => set({ webSearchFetchCount }),
   setWebSearchPerPageTimeoutSecs: (webSearchPerPageTimeoutSecs) =>
@@ -109,16 +76,6 @@ export const createWebSearchSlice: StateCreator<WebSearchSlice, [], [], WebSearc
   setWebSearchSpeedPreset: (webSearchSpeedPreset) => set({ webSearchSpeedPreset }),
   setAdvancedSearchBundleEnabled: (advancedSearchBundleEnabled) =>
     set({ advancedSearchBundleEnabled }),
-  setAdvancedSearchMultiQueryEnabled: (advancedSearchMultiQueryEnabled) =>
-    set({ advancedSearchMultiQueryEnabled }),
-  setAdvancedSearchFusionEnabled: (advancedSearchFusionEnabled) =>
-    set({ advancedSearchFusionEnabled }),
-  setAdvancedSearchAdaptiveFallbackEnabled: (advancedSearchAdaptiveFallbackEnabled) =>
-    set({ advancedSearchAdaptiveFallbackEnabled }),
-  setAdvancedSearchFreshnessBoostEnabled: (advancedSearchFreshnessBoostEnabled) =>
-    set({ advancedSearchFreshnessBoostEnabled }),
-  setAdvancedSearchQualityFilterEnabled: (advancedSearchQualityFilterEnabled) =>
-    set({ advancedSearchQualityFilterEnabled }),
   setBundleExtractDocx: (bundleExtractDocx) => set({ bundleExtractDocx }),
   setBundleExtractPptx: (bundleExtractPptx) => set({ bundleExtractPptx }),
   setBundleExtractXlsx: (bundleExtractXlsx) => set({ bundleExtractXlsx }),
@@ -126,5 +83,4 @@ export const createWebSearchSlice: StateCreator<WebSearchSlice, [], [], WebSearc
   setBundleWaybackFallback: (bundleWaybackFallback) => set({ bundleWaybackFallback }),
   setBundleArxivSearch: (bundleArxivSearch) => set({ bundleArxivSearch }),
   setBundleWikipediaSearch: (bundleWikipediaSearch) => set({ bundleWikipediaSearch }),
-  setSearxngSetupError: (searxngSetupError) => set({ searxngSetupError }),
 });

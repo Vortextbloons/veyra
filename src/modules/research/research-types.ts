@@ -106,7 +106,7 @@ export interface ResearchRun {
   modelUsed?: string;
   providerId?: string;
   totalTokensUsed?: number;
-  searchProvider?: "searxng" | "auto";
+  searchProvider?: "donsetch" | "auto";
 }
 
 export interface ResearchPlan {

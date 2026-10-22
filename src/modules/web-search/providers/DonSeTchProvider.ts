@@ -1,15 +1,5 @@
-import type {
-  SearchProvider,
-  SearchInput,
-  SearchResult,
-  SearXNGProviderConfig,
-} from "../types";
-import { useConnectivityStore } from "@/stores/connectivity-store";
-import { invokeSearchSearxng, invokeTestSearxngConnection } from "../tauri-commands";
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
+import type { SearchInput, SearchProvider, SearchResult } from "../types";
+import { invokeWebSearch } from "../tauri-commands";
 
 function stripUtmParams(urlString: string): string {
   try {
@@ -65,8 +55,6 @@ const SPAM_KEYWORDS = [
   "crypto-scam",
 ];
 
-const MIN_SCORE_THRESHOLD = 0.1;
-
 function isBlockedUrl(urlString: string): boolean {
   let hostname: string;
   try {
@@ -85,19 +73,8 @@ function isBlockedUrl(urlString: string): boolean {
   return false;
 }
 
-function isLowQualityResult(opts: {
-  title?: string;
-  snippet?: string;
-  score?: number;
-}): boolean {
-  const title = (opts.title ?? "").trim();
-  const snippet = (opts.snippet ?? "").trim();
-  const hasAnyText = title.length > 0 || snippet.length > 0;
-  if (!hasAnyText) return true;
-  if (typeof opts.score === "number" && opts.score > 0 && opts.score < MIN_SCORE_THRESHOLD) {
-    return true;
-  }
-  return false;
+function isLowQualityResult(result: { title?: string; snippet?: string }): boolean {
+  return (result.title ?? "").trim().length === 0 && (result.snippet ?? "").trim().length === 0;
 }
 
 function extractDisplayUrl(urlString: string): string {
@@ -109,35 +86,38 @@ function extractDisplayUrl(urlString: string): string {
   }
 }
 
-export class SearXNGProvider implements SearchProvider {
+export type DonSeTchProviderConfig = {
+  id: string;
+  name: string;
+  maxResults: number;
+};
+
+/**
+ * Search provider backed by the bundled DonSeTch process.
+ * The Rust supervisor owns its lifecycle; this class only maps results.
+ */
+export class DonSeTchProvider implements SearchProvider {
   readonly id: string;
   readonly name: string;
-  readonly type = "searxng" as const;
-  private config: SearXNGProviderConfig;
+  readonly type = "donsetch" as const;
+  private config: DonSeTchProviderConfig;
+  private degraded = false;
 
-  constructor(config: SearXNGProviderConfig) {
+  constructor(config: DonSeTchProviderConfig) {
     this.id = config.id;
     this.name = config.name;
     this.config = config;
   }
 
+  /** True when DonSeTch reported that some upstream engines were unavailable. */
+  get isDegraded(): boolean {
+    return this.degraded;
+  }
+
   async search(input: SearchInput): Promise<SearchResult[]> {
     const limit = input.limit ?? this.config.maxResults;
-    const allowExternal = useConnectivityStore.getState().effectiveConnectivity === "online";
-    const response = await invokeSearchSearxng(
-      this.config.baseUrl,
-      input.query,
-      limit,
-      allowExternal,
-      {
-        timeRange: input.timeRange,
-        categories: input.categories,
-        safeSearch: input.safeSearch,
-        language: input.language,
-        engines: input.engines,
-        page: input.page,
-      },
-    );
+    const response = await invokeWebSearch(input.query, limit, input.intent);
+    this.degraded = response.degraded;
 
     const seenUrls = new Set<string>();
     return response.results
@@ -145,32 +125,23 @@ export class SearXNGProvider implements SearchProvider {
         const normalized = result.url.trim().toLowerCase();
         if (!normalized || seenUrls.has(normalized)) return false;
         if (isBlockedUrl(normalized)) return false;
-        if (isLowQualityResult({ title: result.title, snippet: result.snippet, score: result.score })) {
-          return false;
-        }
+        if (isLowQualityResult(result)) return false;
         seenUrls.add(normalized);
         return true;
       })
+      .slice(0, limit)
       .map((result, index) => ({
-      id: result.id || generateId(),
-      title: result.title,
-      url: stripUtmParams(result.url),
-      displayUrl: extractDisplayUrl(result.url),
-      snippet: result.snippet,
-      providerId: this.id,
-      engine: result.engine,
-      score: result.score,
-      rank: index + 1,
-      fetchedAt: new Date().toISOString(),
-    }));
-  }
-
-  async testConnection(): Promise<boolean> {
-    try {
-      return await invokeTestSearxngConnection(this.config.baseUrl);
-    } catch (error) {
-      console.error(`[SearXNGProvider] Connection test failed:`, error);
-      return false;
-    }
+        id: result.id,
+        title: result.title,
+        url: stripUtmParams(result.url),
+        displayUrl: extractDisplayUrl(result.url),
+        snippet: result.snippet,
+        providerId: this.id,
+        engine: result.engine,
+        publishedAt: result.published_at ?? undefined,
+        score: result.score,
+        rank: index + 1,
+        fetchedAt: new Date().toISOString(),
+      }));
   }
 }

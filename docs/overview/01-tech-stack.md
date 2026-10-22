@@ -26,7 +26,7 @@ Veyra is a **local-first AI desktop workspace** built with Tauri v2, React, Type
 ### Backend (Tauri plugins)
 - `@tauri-apps/plugin-dialog` - File dialogs
 - `@tauri-apps/plugin-http` - HTTP requests
-- `@tauri-apps/plugin-shell` - Shell commands (Pi CLI, Docker)
+- `@tauri-apps/plugin-shell` - Shell commands (Pi CLI)
 
 ### Dev
 - Vite 8, TypeScript 6, ESLint 10, Vitest 3, Tailwind CSS 4

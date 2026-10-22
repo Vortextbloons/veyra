@@ -17,10 +17,10 @@
   },
   "scripts": {
     "dev": "vite",
-    "dev:app": "node scripts/dev-app.mjs",
-    "dev:full": "npm run tauri -- dev",
+    "dev:app": "node scripts/fetch-search-engine.mjs && node scripts/dev-app.mjs",
+    "dev:full": "node scripts/fetch-search-engine.mjs && npm run tauri -- dev",
     "build": "tsc -b && vite build",
-    "build:app": "npm run tauri -- build",
+    "build:app": "node scripts/fetch-search-engine.mjs && npm run tauri -- build",
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",

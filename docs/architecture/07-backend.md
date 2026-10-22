@@ -13,7 +13,7 @@
 | `projects/` | Project CRUD, manifest export |
 | `research/` | Research run, step, source, evidence, claim, contradiction, report CRUD |
 | `shared/` | SQLite connection, migrations, encryption keys |
-| `web_search/` | SearXNG Docker management, page fetching |
+| `web_search/` | Bundled engine lifecycle, MCP bridge, page fetching |
 
 ## Command Count
 
@@ -43,7 +43,7 @@
 3. Connect to LM Studio
 4. Load characters and projects
 5. Check Pi CLI availability
-6. Initialize web search (check Docker/SearXNG)
+6. Initialize web search (start the bundled engine)
 
 ### Shutdown (`src/lib/app-shutdown.ts`)
 1. Unload all AI models

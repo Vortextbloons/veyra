@@ -38,7 +38,7 @@ The settings store is composed from 9 slices in `src/stores/slices/`:
 |-------|------|---------|
 | `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, panel collapsed state, visible tool settings |
 | `model-slice` | `model-slice.ts` | Default model, temperature, context length |
-| `web-search-slice` | `web-search-slice.ts` | SearXNG URL, provider settings |
+| `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, and extraction settings |
 | `character-slice` | `character-slice.ts` | AI assist model, max tokens, tone settings |
 | `research-slice` | `research-slice.ts` | Default depth, approval requirements |
 | `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |

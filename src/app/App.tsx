@@ -28,10 +28,6 @@ import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-stor
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useResearchStore } from "@/modules/research/research-store";
 import { useCharacterStore } from "@/modules/characters/character-store";
-import {
-  invokeCheckSearxngSetup,
-  runSearxngAutoSetup,
-} from "@/modules/web-search/searxng-setup";
 import { useAppZoom } from "@/hooks/use-app-zoom";
 import { useChatContextPanel } from "@/hooks/use-chat-context-panel";
 import { useChatPipeline } from "@/hooks/use-chat-pipeline";
@@ -165,40 +161,6 @@ function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  // Auto-setup SearXNG via Docker — deferred so it does not compete with first paint.
-  useEffect(() => {
-    let cancelled = false;
-
-    const cancelIdle = deferUntilIdle(() => {
-      void (async () => {
-        if (useConnectivityStore.getState().effectiveConnectivity !== "online") {
-          return;
-        }
-
-        const { setSearxngSetupError, setWebSearchSearxngUrl } = useSettingsStore.getState();
-        setSearxngSetupError("");
-
-        await runSearxngAutoSetup();
-        if (cancelled) return;
-
-        const status = await invokeCheckSearxngSetup();
-        if (status.searxng_url) {
-          setWebSearchSearxngUrl(status.searxng_url);
-        }
-      })().catch((err) => {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : String(err);
-        useSettingsStore.getState().setSearxngSetupError(message);
-        console.error("[SearXNG] Auto-setup failed:", err);
-      });
-    }, 5000);
-
-    return () => {
-      cancelled = true;
-      cancelIdle();
-    };
   }, []);
 
   // ── Hooks ────────────────────────────────────────────────────────────────

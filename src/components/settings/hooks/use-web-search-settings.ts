@@ -1,36 +1,22 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
-  invokeTestSearxngConnection,
   invokeClearWebFetchCache,
+  invokeGetSearchEngineLogs,
+  invokeGetSearchEngineStatus,
   invokeGetWebFetchCacheStats,
+  invokeRestartSearchEngine,
+  type SearchEngineStatus,
   type WebFetchCacheStats,
 } from "@/modules/web-search/tauri-commands";
-import {
-  invokeCheckSearxngSetup,
-  invokeStartSearxngContainer,
-  invokeStopSearxngContainer,
-  type SearxngSetupStatus,
-} from "@/modules/web-search/searxng-setup";
-
-export type TestStatus = "idle" | "testing" | "success" | "error";
 
 export function useWebSearchSettings() {
   const defaultWebSearchEnabled = useSettingsStore((s) => s.defaultWebSearchEnabled);
   const setDefaultWebSearchEnabled = useSettingsStore((s) => s.setDefaultWebSearchEnabled);
-  const webSearchSearxngUrl = useSettingsStore((s) => s.webSearchSearxngUrl);
-  const setWebSearchSearxngUrl = useSettingsStore((s) => s.setWebSearchSearxngUrl);
   const webSearchDefaultMode = useSettingsStore((s) => s.webSearchDefaultMode);
-  const searxngSetupError = useSettingsStore((s) => s.searxngSetupError);
 
   const webSearchMaxResults = useSettingsStore((s) => s.webSearchMaxResults);
   const setWebSearchMaxResults = useSettingsStore((s) => s.setWebSearchMaxResults);
-  const webSearchTimeRange = useSettingsStore((s) => s.webSearchTimeRange);
-  const setWebSearchTimeRange = useSettingsStore((s) => s.setWebSearchTimeRange);
-  const webSearchCategories = useSettingsStore((s) => s.webSearchCategories);
-  const setWebSearchCategories = useSettingsStore((s) => s.setWebSearchCategories);
-  const webSearchSafeSearch = useSettingsStore((s) => s.webSearchSafeSearch);
-  const setWebSearchSafeSearch = useSettingsStore((s) => s.setWebSearchSafeSearch);
   const webSearchContextTokenLimit = useSettingsStore((s) => s.webSearchContextTokenLimit);
   const setWebSearchContextTokenLimit = useSettingsStore((s) => s.setWebSearchContextTokenLimit);
   const webSearchFetchEnabled = useSettingsStore((s) => s.webSearchFetchEnabled);
@@ -43,16 +29,6 @@ export function useWebSearchSettings() {
   const setWebSearchFetchMaxCharsPerSource = useSettingsStore((s) => s.setWebSearchFetchMaxCharsPerSource);
   const advancedSearchBundleEnabled = useSettingsStore((s) => s.advancedSearchBundleEnabled);
   const setAdvancedSearchBundleEnabled = useSettingsStore((s) => s.setAdvancedSearchBundleEnabled);
-  const advancedSearchMultiQueryEnabled = useSettingsStore((s) => s.advancedSearchMultiQueryEnabled);
-  const setAdvancedSearchMultiQueryEnabled = useSettingsStore((s) => s.setAdvancedSearchMultiQueryEnabled);
-  const advancedSearchFusionEnabled = useSettingsStore((s) => s.advancedSearchFusionEnabled);
-  const setAdvancedSearchFusionEnabled = useSettingsStore((s) => s.setAdvancedSearchFusionEnabled);
-  const advancedSearchAdaptiveFallbackEnabled = useSettingsStore((s) => s.advancedSearchAdaptiveFallbackEnabled);
-  const setAdvancedSearchAdaptiveFallbackEnabled = useSettingsStore((s) => s.setAdvancedSearchAdaptiveFallbackEnabled);
-  const advancedSearchFreshnessBoostEnabled = useSettingsStore((s) => s.advancedSearchFreshnessBoostEnabled);
-  const setAdvancedSearchFreshnessBoostEnabled = useSettingsStore((s) => s.setAdvancedSearchFreshnessBoostEnabled);
-  const advancedSearchQualityFilterEnabled = useSettingsStore((s) => s.advancedSearchQualityFilterEnabled);
-  const setAdvancedSearchQualityFilterEnabled = useSettingsStore((s) => s.setAdvancedSearchQualityFilterEnabled);
   const bundleExtractDocx = useSettingsStore((s) => s.bundleExtractDocx);
   const setBundleExtractDocx = useSettingsStore((s) => s.setBundleExtractDocx);
   const bundleExtractPptx = useSettingsStore((s) => s.bundleExtractPptx);
@@ -68,29 +44,35 @@ export function useWebSearchSettings() {
   const bundleWikipediaSearch = useSettingsStore((s) => s.bundleWikipediaSearch);
   const setBundleWikipediaSearch = useSettingsStore((s) => s.setBundleWikipediaSearch);
 
-  const [testStatus, setTestStatus] = useState<TestStatus>("idle");
-  const [testError, setTestError] = useState<string>("");
   const [cacheStats, setCacheStats] = useState<WebFetchCacheStats | null>(null);
   const [clearingCache, setClearingCache] = useState(false);
   const [clearError, setClearError] = useState<string>("");
 
-  const [setupStatus, setSetupStatus] = useState<SearxngSetupStatus | null>(null);
-  const [containerAction, setContainerAction] = useState<"idle" | "starting" | "stopping">("idle");
-  const [containerError, setContainerError] = useState<string>("");
+  const [engineStatus, setEngineStatus] = useState<SearchEngineStatus | null>(null);
+  const [engineAction, setEngineAction] = useState<"idle" | "restarting">("idle");
+  const [engineError, setEngineError] = useState<string>("");
+  const [engineLogs, setEngineLogs] = useState<string>("");
 
-  const refreshSetupStatus = useCallback(async () => {
+  const refreshEngineStatus = useCallback(async () => {
     try {
-      const status = await invokeCheckSearxngSetup();
-      setSetupStatus(status);
-    } catch (e) {
-      setContainerError(e instanceof Error ? e.message : String(e));
+      const status = await invokeGetSearchEngineStatus();
+      setEngineStatus(status);
+      setEngineError("");
+    } catch (error) {
+      setEngineError(error instanceof Error ? error.message : String(error));
     }
   }, []);
 
   useEffect(() => {
-    const id = window.setTimeout(() => void refreshSetupStatus(), 0);
-    return () => window.clearTimeout(id);
-  }, [refreshSetupStatus]);
+    const initial = window.setTimeout(() => void refreshEngineStatus(), 0);
+    const interval = window.setInterval(() => {
+      void refreshEngineStatus();
+    }, 3000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
+  }, [refreshEngineStatus]);
 
   const refreshCacheStats = useCallback(async () => {
     try {
@@ -119,66 +101,35 @@ export function useWebSearchSettings() {
     }
   }
 
-  async function handleTestConnection() {
-    setTestStatus("testing");
-    setTestError("");
+  async function handleRestartEngine() {
+    setEngineAction("restarting");
+    setEngineError("");
+    setEngineLogs("");
     try {
-      const ok = await invokeTestSearxngConnection(webSearchSearxngUrl);
-      setTestStatus(ok ? "success" : "error");
-      if (!ok) setTestError("Connection failed. Check the URL and try again.");
+      const status = await invokeRestartSearchEngine();
+      setEngineStatus(status);
     } catch (e) {
-      setTestStatus("error");
-      setTestError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function handleStartContainer() {
-    setContainerAction("starting");
-    setContainerError("");
-    try {
-      const url = await invokeStartSearxngContainer();
-      setWebSearchSearxngUrl(url);
-      await refreshSetupStatus();
-    } catch (e) {
-      setContainerError(e instanceof Error ? e.message : String(e));
+      setEngineError(e instanceof Error ? e.message : String(e));
+      await refreshEngineStatus();
     } finally {
-      setContainerAction("idle");
+      setEngineAction("idle");
     }
   }
 
-  async function handleStopContainer() {
-    setContainerAction("stopping");
-    setContainerError("");
+  async function handleLoadLogs() {
     try {
-      await invokeStopSearxngContainer();
-      await refreshSetupStatus();
+      setEngineLogs(await invokeGetSearchEngineLogs());
     } catch (e) {
-      setContainerError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setContainerAction("idle");
+      setEngineError(e instanceof Error ? e.message : String(e));
     }
   }
-
-  const dockerInstalled = setupStatus?.docker_installed ?? false;
-  const dockerDaemonRunning = setupStatus?.docker_daemon_running ?? false;
-  const containerRunning = setupStatus?.container_running ?? false;
-  const containerExists = setupStatus?.container_exists ?? false;
-  const setupError = containerError || searxngSetupError;
 
   return {
     defaultWebSearchEnabled,
     setDefaultWebSearchEnabled,
-    webSearchSearxngUrl,
-    setWebSearchSearxngUrl,
     webSearchDefaultMode,
     webSearchMaxResults,
     setWebSearchMaxResults,
-    webSearchTimeRange,
-    setWebSearchTimeRange,
-    webSearchCategories,
-    setWebSearchCategories,
-    webSearchSafeSearch,
-    setWebSearchSafeSearch,
     webSearchContextTokenLimit,
     setWebSearchContextTokenLimit,
     webSearchFetchEnabled,
@@ -191,16 +142,6 @@ export function useWebSearchSettings() {
     setWebSearchFetchMaxCharsPerSource,
     advancedSearchBundleEnabled,
     setAdvancedSearchBundleEnabled,
-    advancedSearchMultiQueryEnabled,
-    setAdvancedSearchMultiQueryEnabled,
-    advancedSearchFusionEnabled,
-    setAdvancedSearchFusionEnabled,
-    advancedSearchAdaptiveFallbackEnabled,
-    setAdvancedSearchAdaptiveFallbackEnabled,
-    advancedSearchFreshnessBoostEnabled,
-    setAdvancedSearchFreshnessBoostEnabled,
-    advancedSearchQualityFilterEnabled,
-    setAdvancedSearchQualityFilterEnabled,
     bundleExtractDocx,
     setBundleExtractDocx,
     bundleExtractPptx,
@@ -215,20 +156,16 @@ export function useWebSearchSettings() {
     setBundleArxivSearch,
     bundleWikipediaSearch,
     setBundleWikipediaSearch,
-    testStatus,
-    testError,
     cacheStats,
     clearingCache,
     clearError,
-    dockerInstalled,
-    dockerDaemonRunning,
-    containerRunning,
-    containerExists,
-    setupError,
-    containerAction,
     handleClearCache,
-    handleTestConnection,
-    handleStartContainer,
-    handleStopContainer,
+    engineStatus,
+    engineAction,
+    engineError,
+    engineLogs,
+    refreshEngineStatus,
+    handleRestartEngine,
+    handleLoadLogs,
   };
 }

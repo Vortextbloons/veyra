@@ -3,7 +3,7 @@
 Copy this prompt into an AI coding assistant when you want it to update Veyra's documentation after code changes.
 
 ````text
-You are updating documentation for Veyra, a local-first AI desktop workspace built with Tauri v2, React, TypeScript, Vite, Zustand, LM Studio, optional SearXNG, and optional Pi CLI agents. Windows is the supported development platform.
+You are updating documentation for Veyra, a local-first AI desktop workspace built with Tauri v2, React, TypeScript, Vite, Zustand, LM Studio, a bundled DonSeTch search engine, and optional Pi CLI agents. Windows is the supported development platform.
 
 Your job is to keep the docs accurate, concise, and useful for future contributors. Do not rewrite docs broadly unless the code change truly requires it.
 
@@ -13,7 +13,7 @@ Repository documentation structure:
 - docs/chat/README.md: chat pipeline, streaming, tools, provider flow.
 - docs/characters/README.md: personas, lorebook, group chat.
 - docs/research/README.md: 9-phase research pipeline.
-- docs/web-search/README.md: SearXNG, ArXiv, Wikipedia.
+- docs/web-search/README.md: bundled DonSeTch engine, ArXiv, Wikipedia.
 - docs/projects/README.md: project containers.
 - docs/agents/README.md: Pi CLI integration.
 - docs/architecture/README.md: state, scheduling, providers, backend.

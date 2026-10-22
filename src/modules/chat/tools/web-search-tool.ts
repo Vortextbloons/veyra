@@ -7,7 +7,7 @@ import {
   buildSearchContextBlock,
 } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import { useChatStore } from "@/stores/chat-store";
-import type { SearchIntent, SearchTimeRange } from "@/modules/web-search/types";
+import type { SearchIntent } from "@/modules/web-search/types";
 
 const TOOL_RETRY_LIMIT = 2;
 
@@ -33,10 +33,6 @@ export async function executeWebSearchCall(
   const chatStore = useChatStore.getState();
   const query = stringArg(call.arguments, "query");
   const intent = stringArg(call.arguments, "intent") as SearchIntent;
-  const timeRange = stringArg(call.arguments, "timeRange") as SearchTimeRange;
-  const language = stringArg(call.arguments, "language");
-  const safeSearchValue = call.arguments.safeSearch;
-  const pageValue = call.arguments.page;
   if (!query) {
     throw new Error("Web search failed: invalid tool arguments.");
   }
@@ -87,12 +83,6 @@ export async function executeWebSearchCall(
         request: {
           query,
           ...(intent ? { intent } : {}),
-          ...(timeRange ? { timeRange } : {}),
-          ...(language ? { language } : {}),
-          ...(safeSearchValue === 0 || safeSearchValue === 1 || safeSearchValue === 2
-            ? { safeSearch: safeSearchValue }
-            : {}),
-          ...(typeof pageValue === "number" ? { page: Math.max(1, Math.min(20, Math.floor(pageValue))) } : {}),
         },
         onFetchProgress: (completed, total) => {
           useChatStore.getState().upsertStreamingWebSearchRound({
@@ -143,7 +133,7 @@ export async function executeWebSearchCall(
   });
 
   return {
-    section: `Tool result for ${WEB_SEARCH_TOOL_NAME}(${JSON.stringify({ query, ...(intent ? { intent } : {}), ...(timeRange ? { timeRange } : {}) })}):\n\n${contextBlock}`,
+    section: `Tool result for ${WEB_SEARCH_TOOL_NAME}(${JSON.stringify({ query, ...(intent ? { intent } : {}) })}):\n\n${contextBlock}`,
     sources,
     contextBlock,
     query,

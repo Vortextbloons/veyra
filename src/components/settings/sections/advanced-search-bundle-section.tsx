@@ -27,16 +27,6 @@ function AdvancedSearchToggleRow({
 interface AdvancedSearchBundleSectionProps {
   advancedSearchBundleEnabled: boolean;
   setAdvancedSearchBundleEnabled: (v: boolean) => void;
-  advancedSearchMultiQueryEnabled: boolean;
-  setAdvancedSearchMultiQueryEnabled: (v: boolean) => void;
-  advancedSearchFusionEnabled: boolean;
-  setAdvancedSearchFusionEnabled: (v: boolean) => void;
-  advancedSearchAdaptiveFallbackEnabled: boolean;
-  setAdvancedSearchAdaptiveFallbackEnabled: (v: boolean) => void;
-  advancedSearchFreshnessBoostEnabled: boolean;
-  setAdvancedSearchFreshnessBoostEnabled: (v: boolean) => void;
-  advancedSearchQualityFilterEnabled: boolean;
-  setAdvancedSearchQualityFilterEnabled: (v: boolean) => void;
   bundleExtractDocx: boolean;
   setBundleExtractDocx: (v: boolean) => void;
   bundleExtractPptx: boolean;
@@ -56,16 +46,6 @@ interface AdvancedSearchBundleSectionProps {
 export function AdvancedSearchBundleSection({
   advancedSearchBundleEnabled,
   setAdvancedSearchBundleEnabled,
-  advancedSearchMultiQueryEnabled,
-  setAdvancedSearchMultiQueryEnabled,
-  advancedSearchFusionEnabled,
-  setAdvancedSearchFusionEnabled,
-  advancedSearchAdaptiveFallbackEnabled,
-  setAdvancedSearchAdaptiveFallbackEnabled,
-  advancedSearchFreshnessBoostEnabled,
-  setAdvancedSearchFreshnessBoostEnabled,
-  advancedSearchQualityFilterEnabled,
-  setAdvancedSearchQualityFilterEnabled,
   bundleExtractDocx,
   setBundleExtractDocx,
   bundleExtractPptx,
@@ -85,7 +65,7 @@ export function AdvancedSearchBundleSection({
     <CollapsibleSettingsSection
       subsectionKey="webSearch:bundle"
       title="Advanced Search Bundle"
-      description="Optional extractors for non-HTML sources (YouTube transcripts, PDF text, Office documents, EPUB, and direct API providers)."
+      description="Optional extractors for non-HTML sources and supplementary direct APIs."
       keywords={["youtube", "transcript", "pdf", "bundle", "advanced", "docx", "epub", "arxiv", "wikipedia"]}
     >
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
@@ -98,53 +78,12 @@ export function AdvancedSearchBundleSection({
           When on, search results from YouTube, PDF, Office documents, and
           EPUB files are extracted using dedicated handlers. Wayback Machine
           fallback recovers content from failed fetches. Direct API providers
-          (ArXiv, Wikipedia) supplement SearXNG results.
+          (ArXiv, Wikipedia) supplement the local search engine.
         </p>
       </div>
 
       {advancedSearchBundleEnabled && (
         <>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-            <div className="mb-3">
-              <div className="text-[12.5px] font-medium text-white">Search Intelligence</div>
-              <p className="mt-1 text-[10.5px] text-[var(--color-text-dim)]">
-                Controls how Veyra expands, ranks, and cleans up result sets before sources are injected into chat.
-              </p>
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              <AdvancedSearchToggleRow
-                label="Multi-query expansion"
-                on={advancedSearchMultiQueryEnabled}
-                onChange={setAdvancedSearchMultiQueryEnabled}
-                description="Runs broad, recent, academic, primary-source, and opposing-view query variants."
-              />
-              <AdvancedSearchToggleRow
-                label="Result fusion and reranking"
-                on={advancedSearchFusionEnabled}
-                onChange={setAdvancedSearchFusionEnabled}
-                description="Deduplicates results, boosts authority/extraction success, and diversifies domains."
-              />
-              <AdvancedSearchToggleRow
-                label="Adaptive fallback searches"
-                on={advancedSearchAdaptiveFallbackEnabled}
-                onChange={setAdvancedSearchAdaptiveFallbackEnabled}
-                description="Broadens weak searches when too few usable results come back."
-              />
-              <AdvancedSearchToggleRow
-                label="Freshness boost"
-                on={advancedSearchFreshnessBoostEnabled}
-                onChange={setAdvancedSearchFreshnessBoostEnabled}
-                description="Gives recently published sources a small lift without hiding older authority pages."
-              />
-              <AdvancedSearchToggleRow
-                label="Quality domain filter"
-                on={advancedSearchQualityFilterEnabled}
-                onChange={setAdvancedSearchQualityFilterEnabled}
-                description="Suppresses low-signal domains when enough better alternatives are available."
-              />
-            </div>
-          </div>
-
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
             <div className="mb-3">
               <div className="text-[12.5px] font-medium text-white">Content Sources</div>
@@ -196,7 +135,7 @@ export function AdvancedSearchBundleSection({
             <div className="mb-3">
               <div className="text-[12.5px] font-medium text-white">Recovery and Direct Sources</div>
               <p className="mt-1 text-[10.5px] text-[var(--color-text-dim)]">
-                Adds fallback retrieval and direct provider results that supplement SearXNG.
+                Adds fallback retrieval and direct provider results that supplement the local engine.
               </p>
             </div>
             <div className="grid gap-2 md:grid-cols-2">
@@ -228,11 +167,6 @@ export function AdvancedSearchBundleSection({
             <ul className="space-y-1 text-[11px] text-[var(--color-text-dim)]">
               <li>• YouTube videos → captions/transcripts</li>
               <li>• PDF documents → text extraction</li>
-              {advancedSearchMultiQueryEnabled && <li>• Multi-query expansion for broader coverage</li>}
-              {advancedSearchFusionEnabled && <li>• Result fusion, authority boosts, and domain diversification</li>}
-              {advancedSearchAdaptiveFallbackEnabled && <li>• Adaptive fallback when searches are sparse</li>}
-              {advancedSearchFreshnessBoostEnabled && <li>• Freshness boost for recently published sources</li>}
-              {advancedSearchQualityFilterEnabled && <li>• Quality domain filtering when alternatives are available</li>}
               {bundleExtractDocx && <li>• DOCX documents → text extraction</li>}
               {bundleExtractPptx && <li>• PowerPoint presentations → slide text</li>}
               {bundleExtractXlsx && <li>• Excel spreadsheets → cell data</li>}

@@ -54,3 +54,10 @@ keyring = "4"
 # Official Model Context Protocol Rust SDK. The host adapter is intentionally
 # isolated under `extensions` so protocol/library upgrades do not leak into chat.
 rmcp = { version = "2.2.0", features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }

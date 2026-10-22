@@ -59,9 +59,11 @@ if (Get-Command "lms" -ErrorAction SilentlyContinue) {
     Write-Host "[OK] lms $(lms --version 2>&1 | Select-Object -First 1)"
 }
 
-Test-Command "docker" -Required $false -OptionalLabel ", Docker for SearXNG" | Out-Null
-if (Get-Command "docker" -ErrorAction SilentlyContinue) {
-    Write-Host "[OK] docker $(docker --version)"
+$searchEngine = Join-Path $PSScriptRoot "..\src-tauri\resources\search-engine\donsetch.exe"
+if (Test-Path $searchEngine) {
+    Write-Host "[OK] bundled search engine present"
+} else {
+    Write-Host "[INFO] search engine not fetched yet; run 'npm run search-engine:fetch'"
 }
 
 Test-Command "opencode" -Required $false -OptionalLabel ", Agents mode" | Out-Null

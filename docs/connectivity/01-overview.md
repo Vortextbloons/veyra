@@ -33,5 +33,5 @@ Resolves user preference against system network status:
 | Requirement | Description |
 |-------------|-------------|
 | `none` | No connectivity needed |
-| `local_service` | Requires local service (LM Studio, Docker) |
+| `local_service` | Requires local service (LM Studio, bundled search engine) |
 | `internet` | Requires internet access |

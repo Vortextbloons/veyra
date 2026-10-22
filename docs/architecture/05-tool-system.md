@@ -4,7 +4,7 @@
 
 | Tool | Condition | Description |
 |------|-----------|-------------|
-| `web_search` | `webSearchEnabled` | Search the web via SearXNG. Parallel execution with up to 2 retries. |
+| `web_search` | `webSearchEnabled` | Search the web via the bundled DonSeTch engine. Up to 2 retries. |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds. |
 | `ask_question` | `enhancedMode` | Pause execution to ask the user a question. |
 | `studio_render` | `studioEnabled` | Render a validated HTML/CSS Studio response in an isolated iframe. |

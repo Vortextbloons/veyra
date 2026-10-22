@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-10-03T22:03:10.421Z
+> Generated: 2026-10-21T21:24:28.584Z
 > Total files: 67
 
 ## Table of Contents
@@ -119,7 +119,7 @@ Veyra is a **local-first AI desktop workspace** built with Tauri v2, React, Type
 ### Backend (Tauri plugins)
 - `@tauri-apps/plugin-dialog` - File dialogs
 - `@tauri-apps/plugin-http` - HTTP requests
-- `@tauri-apps/plugin-shell` - Shell commands (Pi CLI, Docker)
+- `@tauri-apps/plugin-shell` - Shell commands (Pi CLI)
 
 ### Dev
 - Vite 8, TypeScript 6, ESLint 10, Vitest 3, Tailwind CSS 4
@@ -211,7 +211,7 @@ npm run version:check
 | Chat | `docs/chat/` | Core AI chat pipeline with streaming and tool calls |
 | Characters | `docs/characters/` | Roleplay personas with lorebook, group chat, and CCv3 support |
 | Research | `docs/research/` | 9-phase deep research pipeline with citation auditing |
-| Web Search | `docs/web-search/` | SearXNG/Docker search with ArXiv and Wikipedia support |
+| Web Search | `docs/web-search/` | Bundled DonSeTch search with ArXiv and Wikipedia support |
 | Projects | `docs/projects/` | Per-project containers for scoping chats and settings |
 | Agents | `docs/agents/` | Optional Pi CLI integration for plan and build modes |
 | Architecture | `docs/architecture/` | Cross-cutting patterns, state management, providers, backend |
@@ -314,7 +314,7 @@ If the model returns tool calls, they are executed in rounds with re-prompting a
 
 | Tool | Required Flag | Description |
 |------|--------------|-------------|
-| `web_search` | `webSearchEnabled` | Search the web via SearXNG with intent routing, time range, language, safe search, and pagination parameters |
+| `web_search` | `webSearchEnabled` | Search the web via the bundled DonSeTch engine with optional intent selection |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
 | `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
 | `studio_render` | `studioModeEnabled` + conversation `experience: "studio"` | Render a validated HTML/CSS Studio response |
@@ -1850,39 +1850,47 @@ Deep research pipeline with 9 phases, multi-depth presets, source scoring, and c
 
 # Web Search Setup
 
-Optional web search capability via SearXNG (Docker) with direct ArXiv and Wikipedia API support. Used by both the chat tool and the research pipeline.
+Veyra ships its own local search engine. There is no Docker dependency, no Python install, and no user-configured search URL.
 
-## Key Files
+## Bundled engine
 
-| File | Purpose |
-|------|---------|
-| `src/modules/web-search/types.ts` | Type definitions |
-| `src/modules/web-search/orchestrator/SearchOrchestrator.ts` | Main search orchestrator |
-| `src/modules/web-search/search-planner.ts` | Multi-query generation |
-| `src/modules/web-search/search-ranker.ts` | URL canonicalization, deduplication, RRF fusion, composite ranking, and domain diversification |
-| `src/modules/web-search/search-routing.ts` | Intent-based category/engine routing |
-| `src/modules/web-search/passage-ranker.ts` | Lexical passage ranking from fetched pages |
-| `src/modules/web-search/search-evaluation.ts` | Retrieval quality metrics (recall, MRR, nDCG) |
-| `src/modules/web-search/searx-capabilities-service.ts` | SearXNG `/config` capabilities with caching |
-| `src/modules/web-search/searxng-setup.ts` | Docker setup for SearXNG |
-| `src/modules/web-search/providers/` | Provider implementations |
-| `src/modules/web-search/tauri-commands.ts` | Tauri IPC for page fetching and capabilities |
+The engine is [DonSeTch](https://github.com/dondai44423/donsetch), a Rust single-binary metasearch server. Veyra pins one release and runs it as a separate process over loopback MCP.
 
-## SearXNG Setup
+| Piece | Location |
+|-------|----------|
+| Engine binary and DLLs | `src-tauri/resources/search-engine/` (not committed) |
+| Rerank model | `src-tauri/resources/search-engine/rerank/` |
+| Runtime cache | `<app-data>/search-engine/` |
+| Log | `<app-data>/logs/search-engine.log` |
+| Fetch script | `scripts/fetch-search-engine.mjs` |
 
-### Requirements
-- Docker Desktop installed and running
-- SearXNG Docker container
+`npm run dev:app` and `npm run build:app` call `fetch-search-engine.mjs` automatically. It downloads the pinned `donsetch-win32-x64.tar.gz` (or the asset for the current platform), verifies the published SHA256, and fetches the 23 MB rerank model from Hugging Face.
 
-### Auto-Setup
-1. `searxng-setup.ts` checks Docker installation and daemon status
-2. If the SearXNG container exists, it's auto-started
-3. If not, Docker pulls and creates the container
-4. The SearXNG URL must be **localhost** (SSRF protection)
+The artifact is intentionally ignored by git. Run `npm run search-engine:fetch` after cloning if you are not using the npm scripts.
 
-### Security
-- SearXNG URL is validated to be localhost-only
-- Prevents server-side request forgery (SSRF) attacks
+## Lifecycle
+
+1. `SearchEngineState` is created during Tauri setup.
+2. It reserves an ephemeral loopback port and generates a per-session bearer token.
+3. It starts `donsetch mcp --http --host 127.0.0.1 --port <port>` with `CREATE_NO_WINDOW`.
+4. The bundled rerank model is copied into the app cache on first launch.
+5. The engine is polled at `/health` until ready (25 s budget).
+6. On window close and `ExitRequested`, the process tree is killed with `taskkill /T /F` and `Child::kill`.
+7. `Drop` for the engine state is a final safety net if the app exits unexpectedly.
+
+`web_search` waits for engine readiness, calls the MCP `web_search` tool, and maps `_meta["com.donsetch/search-debug"].results` into Veyra's search response.
+
+## Security
+
+- The engine binds `127.0.0.1` only.
+- The MCP endpoint requires `Authorization: Bearer <random token>` per session.
+- The token is never persisted or exposed to the frontend.
+- Search requests are made by the Rust supervisor, not the webview.
+- The engine runs as a separate process; Veyra does not link it as a crate.
+
+## Licensing
+
+DonSeTch is AGPL-3.0. The fetch script copies its `LICENSE` and a `SOURCE-OFFER.txt` into the resource directory. Keep both in the installer. If Veyra ever patches the engine, publish the patch under the AGPL.
 
 ---
 
@@ -1892,130 +1900,66 @@ Optional web search capability via SearXNG (Docker) with direct ArXiv and Wikipe
 
 # Web Search Flow
 
-## Intent Routing
+## One query, intent-aware
 
-`search-routing.ts` resolves search intent before query execution. The model can supply an explicit `intent`, or it's inferred from the query text:
+`SearchOrchestrator.runSearch()` sends a single query to the bundled DonSeTch engine. Veyra's previous multi-query expansion, RRF fusion, and adaptive fallback pipeline has been removed; DonSeTch performs its own multi-engine consensus, semantic reranking, and authority placement internally.
 
-| Intent | Trigger Keywords |
-|--------|-----------------|
-| news | latest, today, breaking, current events |
-| academic | study, paper, research, journal, arxiv, pubmed |
-| code | error, stack trace, typescript, python, rust, github |
-| documentation | docs, documentation, reference, manual |
-| local | near me, directions, map |
-| discussion | reddit, forum, opinions |
+The model can supply an explicit `intent`, or omit it and let the engine infer one. Veyra maps its intent names to DonSeTch intents:
 
-The router maps each intent to SearXNG categories and engine hints, filtered against the instance's live capabilities from `SearxCapabilities`.
+| Veyra intent | DonSeTch intent | Adds |
+|--------------|-----------------|------|
+| `general` | `web` | General web results |
+| `news` | `news` | Google News, Hacker News |
+| `academic` | `paper` | Google Scholar, arXiv |
+| `code` | `code` | GitHub, Hacker News, Stack Exchange, MDN |
+| `documentation` | `code` | GitHub, Hacker News, Stack Exchange, MDN |
+| `local` | `web` | General web results |
+| `discussion` | `web` | General web results |
 
-## Capability Discovery
+There is no category/engine routing, time-range filter, safe-search level, language parameter, or pagination in the engine API. Those controls were removed from Settings and the tool schema.
 
-On each search, `searx-capabilities-service.ts` fetches the SearXNG `/config` endpoint to discover available engines, categories, and locales. Results are cached for 10 minutes with request deduplication. This enables adapter-free routing: Veyra automatically adapts to any SearXNG instance's installed engines.
+## Supplementary providers
 
-## Query Planning
+When the Advanced Search Bundle is enabled, ArXiv and Wikipedia direct APIs run in parallel with DonSeTch and are merged by URL. Research depth profiles can disable either provider per run.
 
-`search-planner.ts` generates multiple search queries from a single user query across different lanes:
+## Deduplication
 
-| Lane | Purpose | Example |
-|------|---------|---------|
-| General | Standard search | "quantum computing applications" |
-| Recent | Current year filter | "quantum computing 2025 applications" |
-| Academic | Scholarly sources | "quantum computing applications research paper" |
-| Primary | Government/data sources | "quantum computing applications site:gov" |
-| Opposing | Criticism/limitations | "quantum computing limitations problems" |
+Results are merged in order (DonSeTch, ArXiv, Wikipedia) and deduplicated by a normalized URL key:
 
-## Concurrent Execution
+- hostname lowercased and `www.` stripped
+- fragment removed
+- trailing slash removed
+- query string preserved
 
-- Queries are executed concurrently (max 3 at a time)
-- Each query hits the SearXNG API with routing parameters (categories, engines, page, language, safe search)
-- ArXiv and Wikipedia direct searches run in parallel when applicable
+The result list is capped at the user's "Results per search" setting (1–12).
 
-## Deduplication and Ranking
+## Page fetching
 
-`search-ranker.ts` applies a multi-stage pipeline: URL canonicalization, deduplication, Reciprocal Rank Fusion (RRF), scoring, and domain diversification.
+- Top results are fetched through Tauri IPC (`fetch_and_extract_pages`).
+- HTML, PDF, Office documents, EPUB, and YouTube transcripts use the existing extraction handlers.
+- Wayback Machine fallback is available when enabled.
+- Fetch status is tracked per source.
 
-### URL Canonicalization
+## Passage ranking
 
-`normalizeSearchUrl()` maps variant URLs to a canonical key before deduplication:
+After fetching, `passage-ranker.ts` splits each page into blocks, scores them against the query, and returns the top passages with heading context and offsets. The context bundle prefers passages over raw page content.
 
-- Strips tracking parameters: `utm_*`, `fbclid`, `gclid`, `msclkid`, `ref`, `ref_src`, `source`
-- Removes URL fragments (`#section`)
-- Normalizes trailing slashes (strips `/` suffix)
-- Lowercases the entire URL
-- Note: remaining query parameters are not sorted, so `?a=1&b=2` and `?b=2&a=1` produce different keys
-
-The `hostname()` helper separately strips `www.` and lowercases the host. Redirects are not followed (disabled in the fetch client for SSRF safety); the Wayback Machine fallback recovers content when the original URL fails.
-
-### Deduplication
-
-Three strategies collapse duplicates, applied in priority order:
-
-1. **Canonical URL key** — normalized URLs map to the same group
-2. **Content-based** — when fetched content exceeds 300 characters, identical normalized content across different hosts is collapsed
-3. **Title similarity** — syndicated articles with ≥92% Jaccard token overlap across different hosts are collapsed
-
-### Reciprocal Rank Fusion (RRF)
-
-Each deduplicated group receives an RRF score:
-
-```
-score = Σ(weight / (K + rank)) × 20
-```
-
-Where `K = 60` and per-lane weights:
-
-| Lane | Weight |
-|------|--------|
-| primary | 1.1 |
-| academic | 1.1 |
-| recent | 1.05 |
-| general | 1.0 |
-| opposing | 0.7 |
-
-A result appearing across multiple queries and lanes accumulates a higher RRF score. Because RRF operates on rank position rather than raw provider scores, it is resistant to incomparable or unscaled scores from different search engines.
-
-### Composite Score
-
-Final ranking combines RRF with additional signals:
-
-- **Multi-provider bonus** (+0.12 per provider)
-- **Multi-lane bonus** (+0.08 per lane)
-- **Query term coverage** (×0.3, ratio of query tokens matched in title/snippet)
-- **Authority boost** (+0.25 for `.gov`, `.edu`, WHO, NIH, World Bank, UN, etc.; –0.15 for Pinterest, Quora, Medium, Substack, SlideShare)
-- **Freshness boost** (+0.18 ≤30 days, +0.12 ≤180 days, +0.06 ≤2 years)
-- **Extraction boost** (+0.15 if content was successfully fetched; –0.08 if fetch failed)
-- **Lane relevance score** (up to +0.2 for domain/content matching the query lane)
-
-### Domain Diversity
-
-After scoring, results are diversified by domain. A domain may contribute at most 2 results, and this cap only applies once half the desired result count (`ceil(maxResults / 2)`) is already placed — so top-ranked results are never excluded. Low-value domains (Medium, Quora, etc.) are filtered earlier if there are enough candidates.
-
-## Passage Ranking
-
-After pages are fetched, `passage-ranker.ts` splits each page into blocks, scores them against the query via lexical overlap, and returns the top passages (default 3, max 1600 chars each). Passages include heading context and character offsets for provenance. The context bundle uses passages instead of raw page content when available.
-
-## Page Fetching
-
-- Top results are fetched via Tauri IPC
-- Content is extracted from HTML, with Wayback Machine fallback
-- Fetch status is tracked per result
-
-## Speed Preset
-
-Callers can override the user's search-speed preset at runtime via `speedPreset` in `RunSearchOptions`:
+## Speed preset
 
 | Preset | Effect |
 |--------|--------|
-| `"fast"` | Skips page fetching, returns up to 3 snippet-only results, disables multi-query fusion and adaptive fallback |
-| `"normal"` | Full-quality search respecting user settings for fetch, fusion, ranking, and capabilities |
+| `"fast"` | Skips page fetching, returns up to 3 snippet-only results, disables direct ArXiv/Wikipedia providers |
+| `"normal"` | Full-quality search respecting user settings |
 
-The research pipeline uses `"normal"` for background and gap-phase searches to ensure complete source collection, regardless of the user's configured speed preset.
+The research pipeline uses `"normal"` for background and gap-phase searches.
 
-## Context Bundle
+## Diagnostics
 
-Returns a `SearchContextBundle` containing:
-- `sources` — Array of search results with metadata and ranked passages
-- `summaries` — Page content summaries
-- `diagnostics` — Timing, routing decisions, capability availability
+`SearchContextBundle.diagnostics` reports:
+
+- the single executed query
+- per-provider result counts
+- `degraded` when DonSeTch reports unavailable upstream engines
 
 ---
 
@@ -2027,35 +1971,38 @@ Returns a `SearchContextBundle` containing:
 
 | Provider | Description |
 |----------|-------------|
-| SearXNG | Self-hosted search via Docker container — primary provider |
-| ArXiv | Direct ArXiv API for academic papers |
-| Wikipedia | Direct Wikipedia API |
+| DonSeTch | Bundled local metasearch engine — primary provider |
+| ArXiv | Direct ArXiv API for academic papers (optional) |
+| Wikipedia | Direct Wikipedia API (optional) |
 
-## Provider Architecture
+## Provider architecture
 
 Each provider implements a common interface in `src/modules/web-search/providers/`:
-- Accepts search input (query, num results, freshness)
-- Returns normalized `SearchResult` objects
-- Providers are selected based on availability and search context
 
-## SearXNG Provider
+- accepts search input (query, limit, intent)
+- returns normalized `SearchResult` objects
+- is selected by the orchestrator based on settings and research depth
 
-The primary provider. Requires a running Docker container on localhost. Handles:
-- General web search queries with intent-based category/engine routing
-- Date-filtered searches for recency (`timeRange` parameter)
-- Paginated results (`page` parameter)
-- Language/locale filtering
-- Safe search levels (0 off, 1 moderate, 2 strict)
-- Result parsing and normalization
-- Capability discovery via `get_searxng_capabilities` Tauri command (fetches `/config`)
+## DonSeTch provider
 
-## ArXiv Provider
+`DonSeTchProvider` calls the Rust `web_search` command, which talks to the bundled engine over authenticated loopback MCP. The Rust supervisor owns:
 
-Direct API access for academic paper searches. Returns paper metadata with links.
+- process start/stop and crash handling
+- ephemeral port + bearer token
+- rerank model seeding
+- MCP session and result mapping
 
-## Wikipedia Provider
+`DonSeTchProvider` only normalizes results: it strips tracking parameters, removes duplicate URLs, drops obvious spam domains, and maps `published_at` into `publishedAt`.
 
-Direct API access for encyclopedia searches. Returns article summaries and links.
+The engine returns ranked URLs, titles, snippets, and scores. It also reports `degraded` when some upstream engines are blocked or unavailable; this is passed through diagnostics rather than treated as a failure.
+
+## ArXiv provider
+
+Direct API access for academic paper searches. Returns paper metadata with links. Gated by `advancedSearchBundleEnabled`, `bundleArxivSearch`, and the active research depth.
+
+## Wikipedia provider
+
+Direct API access for encyclopedia searches. Returns article summaries and links. Gated by `advancedSearchBundleEnabled`, `bundleWikipediaSearch`, and the active research depth.
 
 ---
 
@@ -2065,39 +2012,39 @@ Direct API access for encyclopedia searches. Returns article summaries and links
 
 # Web Search Integration
 
-## Chat Tool Integration
+## Chat tool integration
 
-In chat, the `web_search` tool triggers search with additional optional parameters:
+In chat, the `web_search` tool accepts:
 
 ```json
 {
   "query": "string",
-  "intent": "general | news | academic | code | documentation | local | discussion",
-  "timeRange": "day | week | month | year",
-  "language": "en-US",
-  "safeSearch": 0,
-  "page": 1
+  "intent": "general | news | academic | code | documentation | local | discussion"
 }
 ```
 
-Parameters beyond `query` are optional. When omitted, the intent is inferred from the query text and routing is handled by `search-routing.ts`.
+`intent` is optional. When omitted, DonSeTch infers it from the query.
 
-The tool has retry logic (up to 2 retries) and real-time UI updates showing:
-- **Search phase**: querying sources
+The tool has retry logic (up to 2 retries) and real-time UI updates:
+
+- **Search phase**: querying the local engine
 - **Fetch phase**: downloading content
 - **Reading phase**: extracting text
 
-## Research Pipeline Integration
+## Research pipeline integration
 
-The research module uses the search orchestrator with:
-- Multiple queries per research step
-- Source type filtering
-- Higher fetch limits for thorough research
-- Credibility scoring integration
+The research module uses the same orchestrator with:
 
-## Direct Search Providers
+- multiple queries per research step (generated by the research planner, not by the search provider)
+- per-depth ArXiv/Wikipedia overrides
+- higher fetch limits for thorough research
+- credibility scoring integration
 
-`src/lib/direct-search-providers.ts` provides an alternative search path using Serper and Serpstack APIs that bypasses the full SearXNG orchestration for lightweight queries.
+Research runs record `searchProvider: "donsetch"` (or `"auto"` for legacy records).
+
+## Supplementary direct providers
+
+`src/lib/direct-search-providers.ts` decides whether the ArXiv and Wikipedia APIs should run for a search. It requires the Advanced Search Bundle and the corresponding provider toggle, and respects per-run research overrides.
 
 ---
 
@@ -2114,12 +2061,6 @@ type SearchInput = {
   query: string;
   limit?: number;
   intent?: SearchIntent;
-  language?: string;
-  categories?: string;
-  engines?: string;
-  timeRange?: SearchTimeRange;
-  safeSearch?: 0 | 1 | 2;
-  page?: number;
 };
 
 type SearchIntent =
@@ -2131,27 +2072,11 @@ type SearchIntent =
   | "local"
   | "discussion";
 
-type SearchTimeRange = "day" | "week" | "month" | "year";
-
-type SearxCapabilities = {
-  engines: Array<{
-    name: string;
-    shortcut: string;
-    categories: string[];
-    enabled: boolean;
-  }>;
-  categories: string[];
-  locales: string[];
-  safeSearch: 0 | 1 | 2;
-  fetchedAt: number;
-};
-
 interface SearchProvider {
   id: string;
   name: string;
-  type: "searxng" | "brave" | "custom" | "direct_source";
+  type: "donsetch" | "brave" | "custom" | "direct_source";
   search(input: SearchInput): Promise<SearchResult[]>;
-  testConnection?(): Promise<boolean>;
 }
 
 type SearchResult = {
@@ -2183,9 +2108,6 @@ type SearchSource = {
   publishedAt?: string;
   score?: number;
   rank?: number;
-  rankScore?: number;
-  rankReason?: string;
-  queryLane?: string;
   passages?: SearchPassage[];
   fetch?: {
     status: FetchStatus | string;
@@ -2195,16 +2117,6 @@ type SearchSource = {
     char_count?: number;
     source_type?: string;
   };
-};
-
-type SearchPassage = {
-  sourceId: string;
-  heading?: string;
-  text: string;
-  startOffset?: number;
-  endOffset?: number;
-  lexicalScore: number;
-  finalScore: number;
 };
 
 type SearchContextBundle = {
@@ -2218,48 +2130,38 @@ type SearchContextBundle = {
     providerResultCounts: Record<string, number>;
     fused: boolean;
     fallbackUsed: boolean;
-    freshnessBoosted?: boolean;
-    qualityFiltered?: boolean;
-    capabilitiesAvailable?: boolean;
-    routedCategories?: string[];
-    routedEngines?: string[];
+    degraded?: boolean;
   };
-};
-
-type FetchedPageSummary = {
-  url: string;
-  status: FetchStatus | string;
-  title: string | null;
-  content: string | null;
-  error_reason: string | null;
-  source_type?: string | null;
-  extraction_method?: string | null;
-  via_wayback?: boolean | null;
-  char_count?: number | null;
 };
 ```
 
-## Search Lanes
+## Engine status types
 
-| Lane | Purpose |
-|------|---------|
-| `general` | Standard search |
-| `recent` | Current year filter |
-| `academic` | Scholarly sources |
-| `primary` | Government/data sources |
-| `opposing` | Criticism/limitations |
+From `src/modules/web-search/tauri-commands.ts`:
 
-## Search Intents
+```typescript
+type SearchEngineStatusKind = "stopped" | "starting" | "ready" | "failed";
 
-| Intent | Categories | Engine Hints |
-|--------|-----------|--------------|
-| `general` | general | wikipedia |
-| `news` | news | — |
-| `academic` | science | arxiv, pubmed, semantic scholar, openalex |
-| `code` | it | github, stackoverflow |
-| `documentation` | it | github, stackoverflow |
-| `local` | map | openstreetmap |
-| `discussion` | general, social media | reddit |
+type SearchEngineStatus = {
+  state: SearchEngineStatusKind;
+  version: string;
+  url: string | null;
+  message: string | null;
+  logPath: string;
+};
+```
+
+## Intent mapping
+
+| Veyra intent | DonSeTch intent |
+|--------------|-----------------|
+| `general` | `web` |
+| `news` | `news` |
+| `academic` | `paper` |
+| `code` | `code` |
+| `documentation` | `code` |
+| `local` | `web` |
+| `discussion` | `web` |
 
 ---
 
@@ -2269,13 +2171,13 @@ type FetchedPageSummary = {
 
 # Web Search Module
 
-Optional web search via SearXNG (Docker), ArXiv, and Wikipedia APIs.
+Bundled local web search via DonSeTch, with optional ArXiv and Wikipedia direct APIs.
 
 ## Contents
 
-- [01-setup.md](01-setup.md) — SearXNG Docker setup and security
-- [02-search-flow.md](02-search-flow.md) — Query planning, execution, ranking
-- [03-providers.md](03-providers.md) — Search providers (SearXNG, ArXiv, Wikipedia)
+- [01-setup.md](01-setup.md) — Bundled engine, vendoring, lifecycle, and security
+- [02-search-flow.md](02-search-flow.md) — Query execution, deduplication, fetching, ranking
+- [03-providers.md](03-providers.md) — Search providers (DonSeTch, ArXiv, Wikipedia)
 - [04-integration.md](04-integration.md) — Chat tool and research pipeline integration
 - [05-types.md](05-types.md) — Key type definitions
 
@@ -2787,7 +2689,7 @@ Resolves user preference against system network status:
 | Requirement | Description |
 |-------------|-------------|
 | `none` | No connectivity needed |
-| `local_service` | Requires local service (LM Studio, Docker) |
+| `local_service` | Requires local service (LM Studio, bundled search engine) |
 | `internet` | Requires internet access |
 
 ---
@@ -2904,7 +2806,7 @@ The settings store is composed from 9 slices in `src/stores/slices/`:
 |-------|------|---------|
 | `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, panel collapsed state, visible tool settings |
 | `model-slice` | `model-slice.ts` | Default model, temperature, context length |
-| `web-search-slice` | `web-search-slice.ts` | SearXNG URL, provider settings |
+| `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, and extraction settings |
 | `character-slice` | `character-slice.ts` | AI assist model, max tokens, tone settings |
 | `research-slice` | `research-slice.ts` | Default depth, approval requirements |
 | `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |
@@ -3066,7 +2968,7 @@ under `veyra.provider.v1`.
 
 | Tool | Condition | Description |
 |------|-----------|-------------|
-| `web_search` | `webSearchEnabled` | Search the web via SearXNG. Parallel execution with up to 2 retries. |
+| `web_search` | `webSearchEnabled` | Search the web via the bundled DonSeTch engine. Up to 2 retries. |
 | `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds. |
 | `ask_question` | `enhancedMode` | Pause execution to ask the user a question. |
 | `studio_render` | `studioEnabled` | Render a validated HTML/CSS Studio response in an isolated iframe. |
@@ -3141,7 +3043,7 @@ Native `code_execution` is disabled and is not included in provider tool definit
 | `projects/` | Project CRUD, manifest export |
 | `research/` | Research run, step, source, evidence, claim, contradiction, report CRUD |
 | `shared/` | SQLite connection, migrations, encryption keys |
-| `web_search/` | SearXNG Docker management, page fetching |
+| `web_search/` | Bundled engine lifecycle, MCP bridge, page fetching |
 
 ## Command Count
 
@@ -3171,7 +3073,7 @@ Native `code_execution` is disabled and is not included in provider tool definit
 3. Connect to LM Studio
 4. Load characters and projects
 5. Check Pi CLI availability
-6. Initialize web search (check Docker/SearXNG)
+6. Initialize web search (start the bundled engine)
 
 ### Shutdown (`src/lib/app-shutdown.ts`)
 1. Unload all AI models

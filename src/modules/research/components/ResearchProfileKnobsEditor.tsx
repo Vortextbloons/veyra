@@ -203,8 +203,8 @@ export function ResearchProfileKnobsEditor({
               <div className="text-[12px] font-medium text-white">Direct ArXiv API search</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
                 {depthLabel
-                  ? `For ${depthName} runs, supplement SearXNG with ArXiv abstracts. Requires Web Search bundle.`
-                  : "Supplement SearXNG with ArXiv abstracts for this run. Requires Web Search bundle."}
+                  ? `For ${depthName} runs, supplement the local search engine with ArXiv abstracts. Requires Web Search bundle.`
+                  : "Supplement the local search engine with ArXiv abstracts for this run. Requires Web Search bundle."}
               </div>
             </div>
             <Toggle
@@ -217,8 +217,8 @@ export function ResearchProfileKnobsEditor({
               <div className="text-[12px] font-medium text-white">Direct Wikipedia API search</div>
               <div className="text-[10.5px] text-[var(--color-text-dim)]">
                 {depthLabel
-                  ? `For ${depthName} runs, supplement SearXNG with Wikipedia snippets. Requires Web Search bundle.`
-                  : "Supplement SearXNG with Wikipedia snippets for this run. Requires Web Search bundle."}
+                  ? `For ${depthName} runs, supplement the local search engine with Wikipedia snippets. Requires Web Search bundle.`
+                  : "Supplement the local search engine with Wikipedia snippets for this run. Requires Web Search bundle."}
               </div>
             </div>
             <Toggle

@@ -30,7 +30,7 @@ Feature modules built around the chat core.
 | [extensions/README.md](extensions/README.md) | MCP servers, Skills, capability grants |
 | [characters/README.md](characters/README.md) | Personas, lorebook, group chat |
 | [research/README.md](research/README.md) | 9-phase deep research pipeline |
-| [web-search/README.md](web-search/README.md) | SearXNG, ArXiv, Wikipedia search |
+| [web-search/README.md](web-search/README.md) | Bundled DonSeTch engine, ArXiv, Wikipedia search |
 | [projects/README.md](projects/README.md) | Project containers and scoping |
 | [agents/README.md](agents/README.md) | Pi CLI integration, plan/build modes |
 | [connectivity/README.md](connectivity/README.md) | Online/offline mode, network detection |

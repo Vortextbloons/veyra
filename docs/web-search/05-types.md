@@ -7,12 +7,6 @@ type SearchInput = {
   query: string;
   limit?: number;
   intent?: SearchIntent;
-  language?: string;
-  categories?: string;
-  engines?: string;
-  timeRange?: SearchTimeRange;
-  safeSearch?: 0 | 1 | 2;
-  page?: number;
 };
 
 type SearchIntent =
@@ -24,27 +18,11 @@ type SearchIntent =
   | "local"
   | "discussion";
 
-type SearchTimeRange = "day" | "week" | "month" | "year";
-
-type SearxCapabilities = {
-  engines: Array<{
-    name: string;
-    shortcut: string;
-    categories: string[];
-    enabled: boolean;
-  }>;
-  categories: string[];
-  locales: string[];
-  safeSearch: 0 | 1 | 2;
-  fetchedAt: number;
-};
-
 interface SearchProvider {
   id: string;
   name: string;
-  type: "searxng" | "brave" | "custom" | "direct_source";
+  type: "donsetch" | "brave" | "custom" | "direct_source";
   search(input: SearchInput): Promise<SearchResult[]>;
-  testConnection?(): Promise<boolean>;
 }
 
 type SearchResult = {
@@ -76,9 +54,6 @@ type SearchSource = {
   publishedAt?: string;
   score?: number;
   rank?: number;
-  rankScore?: number;
-  rankReason?: string;
-  queryLane?: string;
   passages?: SearchPassage[];
   fetch?: {
     status: FetchStatus | string;
@@ -88,16 +63,6 @@ type SearchSource = {
     char_count?: number;
     source_type?: string;
   };
-};
-
-type SearchPassage = {
-  sourceId: string;
-  heading?: string;
-  text: string;
-  startOffset?: number;
-  endOffset?: number;
-  lexicalScore: number;
-  finalScore: number;
 };
 
 type SearchContextBundle = {
@@ -111,45 +76,35 @@ type SearchContextBundle = {
     providerResultCounts: Record<string, number>;
     fused: boolean;
     fallbackUsed: boolean;
-    freshnessBoosted?: boolean;
-    qualityFiltered?: boolean;
-    capabilitiesAvailable?: boolean;
-    routedCategories?: string[];
-    routedEngines?: string[];
+    degraded?: boolean;
   };
-};
-
-type FetchedPageSummary = {
-  url: string;
-  status: FetchStatus | string;
-  title: string | null;
-  content: string | null;
-  error_reason: string | null;
-  source_type?: string | null;
-  extraction_method?: string | null;
-  via_wayback?: boolean | null;
-  char_count?: number | null;
 };
 ```
 
-## Search Lanes
+## Engine status types
 
-| Lane | Purpose |
-|------|---------|
-| `general` | Standard search |
-| `recent` | Current year filter |
-| `academic` | Scholarly sources |
-| `primary` | Government/data sources |
-| `opposing` | Criticism/limitations |
+From `src/modules/web-search/tauri-commands.ts`:
 
-## Search Intents
+```typescript
+type SearchEngineStatusKind = "stopped" | "starting" | "ready" | "failed";
 
-| Intent | Categories | Engine Hints |
-|--------|-----------|--------------|
-| `general` | general | wikipedia |
-| `news` | news | — |
-| `academic` | science | arxiv, pubmed, semantic scholar, openalex |
-| `code` | it | github, stackoverflow |
-| `documentation` | it | github, stackoverflow |
-| `local` | map | openstreetmap |
-| `discussion` | general, social media | reddit |
+type SearchEngineStatus = {
+  state: SearchEngineStatusKind;
+  version: string;
+  url: string | null;
+  message: string | null;
+  logPath: string;
+};
+```
+
+## Intent mapping
+
+| Veyra intent | DonSeTch intent |
+|--------------|-----------------|
+| `general` | `web` |
+| `news` | `news` |
+| `academic` | `paper` |
+| `code` | `code` |
+| `documentation` | `code` |
+| `local` | `web` |
+| `discussion` | `web` |

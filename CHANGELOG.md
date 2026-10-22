@@ -5,6 +5,17 @@ All notable changes to Veyra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Web Search** — Replaced the Docker-managed SearXNG container with a bundled, app-managed DonSeTch engine. It starts with Veyra, runs on an ephemeral authenticated loopback port, and stops with the app. No Docker, Python, or separate install is required.
+- **Web Search settings** — Removed the SearXNG URL, Docker container controls, time range, categories, safe search, language, pagination, multi-query, fusion, freshness, and quality-filter settings. Search now uses the engine's intent-aware ranking.
+
+### Added
+
+- **Search engine status** — Running state, version, restart, and log access in Settings → Tools → Web Search.
+
 ## [1.5.2] - 2026-10-03
 
 ### Added

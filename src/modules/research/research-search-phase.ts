@@ -107,7 +107,7 @@ export async function searchPhase(
           title: src.title,
           snippet: src.snippet,
           sourceType: guessSourceType(src.url),
-          engine: run.searchProvider ?? "searxng",
+          engine: run.searchProvider ?? "donsetch",
           score: src.score ?? 0,
           rank: src.rank ?? (sources.length + pendingSources.length + 1),
           ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
@@ -168,7 +168,7 @@ export async function searchPhase(
             title: src.title,
             snippet: src.snippet,
             sourceType: guessSourceType(src.url),
-            engine: run.searchProvider ?? "searxng",
+            engine: run.searchProvider ?? "donsetch",
             score: src.score ?? 0,
             rank: src.rank ?? (sources.length + 1),
             ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
@@ -184,7 +184,7 @@ export async function searchPhase(
   }
 
   if (sources.length === 0) {
-    const provider = run.searchProvider ?? "searxng";
+    const provider = run.searchProvider ?? "donsetch";
     throw new Error(
       ctx.firstSearchError
         ? `No sources found using search provider "${provider}". ${ctx.firstSearchError}`

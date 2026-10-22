@@ -1,12 +1,11 @@
-import { Loader2 } from "lucide-react";
-import { Toggle } from "@/components/toggle";
 import { useConnectivity } from "@/lib/connectivity/useConnectivity";
 import { useWebSearchSettings } from "./hooks/use-web-search-settings";
-import { SearxngServerSection } from "./sections/searxng-server-section";
+import { SearchEngineSection } from "./sections/search-engine-section";
 import { SearchParametersSection } from "./sections/search-parameters-section";
 import { AdvancedSearchBundleSection } from "./sections/advanced-search-bundle-section";
 import { ContentExtractionSection } from "./sections/content-extraction-section";
 import { CollapsibleSettingsSection } from "./collapsible-settings-section";
+import { Toggle } from "@/components/toggle";
 
 export function WebSearchSettings() {
   const settings = useWebSearchSettings();
@@ -20,22 +19,19 @@ export function WebSearchSettings() {
           <div>
             <p className="text-[12.5px] font-medium text-amber-100">Offline mode is active</p>
             <p className="mt-1 text-[11.5px] leading-relaxed text-amber-100/80">
-              Web search is disabled while offline. You can still configure SearXNG manually, but
-              searches will not run until connectivity is restored.
+              Web search is disabled while offline. Searches resume when connectivity returns.
             </p>
           </div>
         </div>
       )}
 
-      <SearxngServerSection
-        dockerInstalled={settings.dockerInstalled}
-        dockerDaemonRunning={settings.dockerDaemonRunning}
-        containerRunning={settings.containerRunning}
-        containerExists={settings.containerExists}
-        containerAction={settings.containerAction}
-        setupError={settings.setupError}
-        onStartContainer={settings.handleStartContainer}
-        onStopContainer={settings.handleStopContainer}
+      <SearchEngineSection
+        engineStatus={settings.engineStatus}
+        engineAction={settings.engineAction}
+        engineError={settings.engineError}
+        engineLogs={settings.engineLogs}
+        onRestart={settings.handleRestartEngine}
+        onLoadLogs={settings.handleLoadLogs}
       />
 
       <CollapsibleSettingsSection
@@ -56,58 +52,6 @@ export function WebSearchSettings() {
           When on, new chats start with web search enabled. You can still turn
           web search on or off per chat from the composer toolbar.
         </p>
-      </CollapsibleSettingsSection>
-
-      <CollapsibleSettingsSection
-        subsectionKey="webSearch:provider"
-        title="SearXNG Provider"
-        description="Instance URL and connection test."
-        keywords={["url", "localhost", "connection", "test"]}
-      >
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-          <div className="mb-2">
-            <div className="text-[12.5px] font-medium text-white">
-              SearXNG Instance URL
-            </div>
-            <div className="text-[11px] text-[var(--color-text-dim)]">
-              {settings.containerRunning
-                ? "Auto-configured from Docker. You can override this with a custom URL."
-                : "Enter the URL of your SearXNG instance."}
-            </div>
-          </div>
-          <input
-            type="text"
-            value={settings.webSearchSearxngUrl}
-            onChange={(e) => settings.setWebSearchSearxngUrl(e.target.value)}
-            placeholder="http://localhost:8888"
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-[12px] text-white placeholder:text-[var(--color-text-dim)] focus:border-[var(--color-accent)] focus:outline-none"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={settings.handleTestConnection}
-            disabled={settings.testStatus === "testing" || !settings.webSearchSearxngUrl.trim()}
-            className="rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {settings.testStatus === "testing" ? "Testing…" : "Test Connection"}
-          </button>
-
-          {settings.testStatus === "testing" && (
-            <Loader2 className="size-3.5 animate-spin text-[var(--color-text-dim)]" />
-          )}
-          {settings.testStatus === "success" && (
-            <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-              Connected
-            </span>
-          )}
-          {settings.testStatus === "error" && (
-            <span className="flex items-center gap-1 text-[11px] text-red-400">
-              {settings.testError}
-            </span>
-          )}
-        </div>
       </CollapsibleSettingsSection>
 
       <CollapsibleSettingsSection
@@ -134,12 +78,6 @@ export function WebSearchSettings() {
       <SearchParametersSection
         webSearchMaxResults={settings.webSearchMaxResults}
         setWebSearchMaxResults={settings.setWebSearchMaxResults}
-        webSearchTimeRange={settings.webSearchTimeRange}
-        setWebSearchTimeRange={settings.setWebSearchTimeRange}
-        webSearchCategories={settings.webSearchCategories}
-        setWebSearchCategories={settings.setWebSearchCategories}
-        webSearchSafeSearch={settings.webSearchSafeSearch}
-        setWebSearchSafeSearch={settings.setWebSearchSafeSearch}
         webSearchContextTokenLimit={settings.webSearchContextTokenLimit}
         setWebSearchContextTokenLimit={settings.setWebSearchContextTokenLimit}
       />
@@ -147,16 +85,6 @@ export function WebSearchSettings() {
       <AdvancedSearchBundleSection
         advancedSearchBundleEnabled={settings.advancedSearchBundleEnabled}
         setAdvancedSearchBundleEnabled={settings.setAdvancedSearchBundleEnabled}
-        advancedSearchMultiQueryEnabled={settings.advancedSearchMultiQueryEnabled}
-        setAdvancedSearchMultiQueryEnabled={settings.setAdvancedSearchMultiQueryEnabled}
-        advancedSearchFusionEnabled={settings.advancedSearchFusionEnabled}
-        setAdvancedSearchFusionEnabled={settings.setAdvancedSearchFusionEnabled}
-        advancedSearchAdaptiveFallbackEnabled={settings.advancedSearchAdaptiveFallbackEnabled}
-        setAdvancedSearchAdaptiveFallbackEnabled={settings.setAdvancedSearchAdaptiveFallbackEnabled}
-        advancedSearchFreshnessBoostEnabled={settings.advancedSearchFreshnessBoostEnabled}
-        setAdvancedSearchFreshnessBoostEnabled={settings.setAdvancedSearchFreshnessBoostEnabled}
-        advancedSearchQualityFilterEnabled={settings.advancedSearchQualityFilterEnabled}
-        setAdvancedSearchQualityFilterEnabled={settings.setAdvancedSearchQualityFilterEnabled}
         bundleExtractDocx={settings.bundleExtractDocx}
         setBundleExtractDocx={settings.setBundleExtractDocx}
         bundleExtractPptx={settings.bundleExtractPptx}

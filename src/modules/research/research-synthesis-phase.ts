@@ -27,7 +27,7 @@ export async function synthesisPhase(
   const existingRun = store.activeRunOrNull();
 
   if (config.perSourceRead && evidenceList.length === 0) {
-    throw new Error("No usable evidence was extracted from the fetched sources. Try a broader question, different search settings, or verify SearXNG/page fetching is working.");
+    throw new Error("No usable evidence was extracted from the fetched sources. Try a broader question, different search settings, or verify the local search engine/page fetching is working.");
   }
   if (resumeFromPhase && existingRun?.report) {
     onEvent({ type: "report_complete", reportId: existingRun.report.id });

@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const MAX_INSTALLER_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const DOWNLOAD_PROGRESS_EVENT: &str = "app-update-download-progress";
@@ -187,6 +187,10 @@ pub async fn install_app_update(
     .await
     .map_err(|error| format!("the update download task failed: {error}"))??;
 
+    // Release the bundled search engine before the installer replaces it.
+    if let Some(state) = app.try_state::<crate::web_search::engine::SearchEngineState>() {
+        state.stop_now();
+    }
     launch_installer(&installer_path, installer_kind)?;
     app.exit(0);
     Ok(())

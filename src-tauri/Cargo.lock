@@ -138,6 +138,7 @@ dependencies = [
  "tokio",
  "url",
  "urlencoding",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

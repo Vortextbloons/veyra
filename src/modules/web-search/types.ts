@@ -3,21 +3,14 @@ import type { FetchStatus } from "@/lib/fetch-status";
 export interface SearchProvider {
   id: string;
   name: string;
-  type: "searxng" | "brave" | "custom" | "direct_source";
+  type: "donsetch" | "brave" | "custom" | "direct_source";
   search(input: SearchInput): Promise<SearchResult[]>;
-  testConnection?(): Promise<boolean>;
 }
 
 export type SearchInput = {
   query: string;
   limit?: number;
   intent?: SearchIntent;
-  language?: string;
-  categories?: string;
-  engines?: string;
-  timeRange?: SearchTimeRange;
-  safeSearch?: 0 | 1 | 2;
-  page?: number;
 };
 
 export type SearchIntent =
@@ -28,32 +21,6 @@ export type SearchIntent =
   | "documentation"
   | "local"
   | "discussion";
-
-export type SearchTimeRange = "day" | "week" | "month" | "year";
-
-export type SearxCapabilities = {
-  engines: Array<{
-    name: string;
-    shortcut: string;
-    categories: string[];
-    enabled: boolean;
-  }>;
-  categories: string[];
-  locales: string[];
-  safeSearch: 0 | 1 | 2;
-  fetchedAt: number;
-};
-
-export type SearXNGProviderConfig = {
-  id: string;
-  name: string;
-  baseUrl: string;
-  enabled: boolean;
-  defaultCategory?: "general" | "news" | "images" | "science" | "it";
-  jsonEnabled: boolean;
-  timeoutMs: number;
-  maxResults: number;
-};
 
 export type SearchResult = {
   id: string;
@@ -118,11 +85,7 @@ export type SearchContextBundle = {
     providerResultCounts: Record<string, number>;
     fused: boolean;
     fallbackUsed: boolean;
-    freshnessBoosted?: boolean;
-    qualityFiltered?: boolean;
-    capabilitiesAvailable?: boolean;
-    routedCategories?: string[];
-    routedEngines?: string[];
+    degraded?: boolean;
   };
 };
 
