@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchRound, WebSearchState } from "@/modules/chat/chat-types";
+import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
+import { MAX_INTERACTIVE_ANSWER_CHARS } from "@/modules/chat/interactive-answer";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { normalizeAttachment } from "@/lib/message-attachments";
 import { abortPendingQuestion } from "@/modules/chat/pending-question-registry";
@@ -51,6 +53,12 @@ type ChatStore = {
   upsertStreamingWebSearchRound: (round: WebSearchRound) => void;
   completeStreamingWebSearchRounds: () => void;
   setStreamingToolState: (state: ToolCallState) => void;
+  setAssistantToolState: (conversationId: string, messageId: string, state: ToolCallState) => boolean;
+  setAssistantInteractiveAnswer: (
+    conversationId: string,
+    messageId: string,
+    answer: InteractiveAnswer,
+  ) => boolean;
   updateToolCallState: (toolCallId: string, patch: Partial<ToolCallState>) => void;
   appendToScratchpad: (conversationId: string, messageId: string, content: string) => void;
   setPendingQuestion: (question: { toolCallId: string; questions: Array<{ text: string; options?: string[] }>; answers: Record<number, string> } | null) => void;
@@ -70,8 +78,6 @@ type ChatStore = {
   removeLastMessagePair: (conversationId: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   forkConversation: (conversationId: string, upToMessageId: string) => string;
-  /** Strip the character binding from a conversation (escape hatch). */
-  unbindCharacter: (conversationId: string) => void;
 };
 
 type SetChatStore = (
@@ -343,6 +349,60 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       return { streamingBuffer: { ...buffer, toolStates: next } };
     });
   },
+  setAssistantToolState: (conversationId, messageId, toolState) => {
+    let updated = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        const messages = conversation.messages.map((message) => {
+          if (message.id !== messageId || message.role !== "assistant") return message;
+          const existing = message.toolStates ?? [];
+          const toolStates = existing.some((item) => item.id === toolState.id)
+            ? existing.map((item) => item.id === toolState.id ? { ...item, ...toolState } : item)
+            : [...existing, toolState];
+          updated = true;
+          return { ...message, toolStates };
+        });
+        return updated ? { ...conversation, messages, updatedAt: Date.now() } : conversation;
+      });
+      if (!updated) return state;
+      let streamingBuffer = state.streamingBuffer;
+      if (
+        streamingBuffer?.conversationId === conversationId &&
+        streamingBuffer.messageId === messageId
+      ) {
+        const existing = streamingBuffer.toolStates ?? [];
+        const toolStates = existing.some((item) => item.id === toolState.id)
+          ? existing.map((item) => item.id === toolState.id ? { ...item, ...toolState } : item)
+          : [...existing, toolState];
+        streamingBuffer = { ...streamingBuffer, toolStates };
+      }
+      void saveConversationSnapshot(conversations);
+      return { conversations, streamingBuffer };
+    });
+    return updated;
+  },
+  setAssistantInteractiveAnswer: (conversationId, messageId, answer) => {
+    if (answer.version !== 1 || JSON.stringify(answer).length > MAX_INTERACTIVE_ANSWER_CHARS) {
+      return false;
+    }
+    let updated = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        const messages = conversation.messages.map((message) => {
+          if (message.id !== messageId || message.role !== "assistant") return message;
+          updated = true;
+          return { ...message, interactiveAnswer: answer };
+        });
+        return updated ? { ...conversation, messages, updatedAt: Date.now() } : conversation;
+      });
+      if (!updated) return state;
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+    return updated;
+  },
   updateToolCallState: (toolCallId, patch) => {
     set((state) => {
       const conversations = state.conversations.map((conversation) => ({
@@ -547,22 +607,5 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       return { conversations, activeConversationId: forked.id };
     });
     return newId;
-  },
-  unbindCharacter: (conversationId) => {
-    set((state) => {
-      const conversations = state.conversations.map((c) =>
-        c.id === conversationId
-          ? {
-              ...c,
-              characterId: undefined,
-              characterSnapshot: undefined,
-              characterGreetingIndex: undefined,
-              updatedAt: Date.now(),
-            }
-          : c,
-      );
-      void saveConversationSnapshot(conversations);
-      return { conversations };
-    });
   },
 }));

@@ -7,7 +7,7 @@ Accurate as of the current source code (`src/modules/chat/chat-types.ts`).
 ```typescript
 type ChatRole = "user" | "assistant" | "system";
 
-type ChatMode = "chat" | "agents" | "research" | "characters";
+type ChatMode = "chat" | "agents" | "research";
 
 type WorkspaceChatMode = "chat" | "agents";
 
@@ -74,11 +74,6 @@ interface Conversation {
   createdAt: number;
   updatedAt: number;
   projectId?: string;
-  characterId?: string;
-  characterSnapshot?: CharacterConversationSnapshot;
-  characterGreetingIndex?: number;
-  groupId?: string;
-  groupGreetingIndex?: number;
   lmResponseId?: string;
   conversationSummary?: string;
   summaryCoversMessageCount?: number;
@@ -90,7 +85,7 @@ interface Conversation {
 ```typescript
 type ContextBlockCategory =
   | "system_core" | "model_identity" | "user_prompt"
-  | "character" | "project" | "summary"
+  | "project" | "summary"
   | "context_anchor"
   | "tool_definitions" | "web_search_results"
   | "user_message" | "assistant_message" | "system_message";

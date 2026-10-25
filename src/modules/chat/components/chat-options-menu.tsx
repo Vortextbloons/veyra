@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Globe, Sparkles, TerminalSquare, X, Zap } from "lucide-react";
+import { Globe, LayoutDashboard, Sparkles, TerminalSquare, X, Zap } from "lucide-react";
 import { DialogSurface } from "@/components/dialog-surface";
 import { ChatExtensionsSettings } from "@/modules/extensions/components/chat-extensions-settings";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -160,6 +160,8 @@ export function ChatOptionsMenu({
 }: ChatOptionsMenuProps) {
   const [activeTab, setActiveTab] = useState<"chat" | "skills">("chat");
   const speedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
+  const interactiveAnswersEnabled = useSettingsStore((s) => s.interactiveAnswersEnabled);
+  const setInteractiveAnswersEnabled = useSettingsStore((s) => s.setInteractiveAnswersEnabled);
   const webSearchOn = webSearchEnabled && !webSearchDisabled;
   const webSearchIconClass = speedPreset === "fast" ? "text-cyan-300" : "text-emerald-300";
 
@@ -215,10 +217,22 @@ export function ChatOptionsMenu({
             <SettingRow
               icon={<Zap className="size-4" />}
               label="Enhanced"
-              description="Use the extended workflow"
+              description="More tool rounds, notes, and follow-up questions"
               active={enhancedMode}
               onToggle={onEnhancedModeChange}
             />
+            {enhancedMode && (
+              <div className="ml-4 border-l border-white/[0.08] pl-2">
+                <SettingRow
+                  icon={<LayoutDashboard className="size-4" />}
+                  label="Interactive answers"
+                  description="Create charts, comparisons, calculators, and explainers"
+                  active={interactiveAnswersEnabled}
+                  onToggle={setInteractiveAnswersEnabled}
+                  iconActiveClass="text-violet-300"
+                />
+              </div>
+            )}
 
             <div className="mx-2 my-1.5 h-px bg-white/[0.06]" />
 

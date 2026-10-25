@@ -2,7 +2,7 @@
 
 Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority-based queueing.
 
-## Job Types (8 total)
+## Job Types (7 total)
 
 | Type | Priority | Description |
 |------|----------|-------------|
@@ -10,7 +10,6 @@ Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority
 | `agent_pi` | 1 | Pi CLI agent runs |
 | `research_run` | 1 | Research pipeline execution |
 | `auto_name_chat` | 2 | Auto-generate conversation titles |
-| `character_ai_assist` | 2 | AI-assisted character creation |
 | `summarize_chat` | 3 | Conversation summarization |
 | `compress_context` | 3 | Context compression |
 | `maintenance` | 4 (lowest) | Background cleanup |

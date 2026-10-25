@@ -28,7 +28,6 @@ Feature modules built around the chat core.
 | File | Description |
 |------|-------------|
 | [extensions/README.md](extensions/README.md) | MCP servers, Skills, capability grants |
-| [characters/README.md](characters/README.md) | Personas, lorebook, group chat |
 | [research/README.md](research/README.md) | 9-phase deep research pipeline |
 | [web-search/README.md](web-search/README.md) | Bundled DonSeTch engine, ArXiv, Wikipedia search |
 | [projects/README.md](projects/README.md) | Project containers and scoping |
@@ -61,4 +60,4 @@ Agent update instructions and generated output (excluded from combined docs).
 
 ## File Count
 
-**14 documentation folders** with multiple files each (auto-discovered by combine script).
+**11 documentation folders** with multiple files each (auto-discovered by combine script).

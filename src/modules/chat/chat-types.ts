@@ -5,10 +5,11 @@ import type { MessageAttachment } from "@/lib/message-attachments";
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult } from "@/modules/web-search/types";
 import type { FetchStatus } from "@/lib/fetch-status";
+import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
 
 export type ChatRole = "user" | "assistant" | "system";
 
-export type ChatMode = "chat" | "agents" | "research" | "characters";
+export type ChatMode = "chat" | "agents" | "research";
 
 export type WorkspaceChatMode = "chat" | "agents";
 
@@ -87,6 +88,8 @@ export interface ChatMessage {
   toolStates?: ToolCallState[];
   /** Working scratchpad notes accumulated during enhanced mode tool rounds. */
   scratchpadContent?: string;
+  /** Structured interactive answer generated during an Enhanced chat turn. */
+  interactiveAnswer?: InteractiveAnswer;
   /** Model id that produced this assistant message. Used to render the
    *  correct avatar/label even when the active model changes later. */
   modelId?: string;
@@ -111,42 +114,12 @@ export interface Conversation {
   updatedAt: number;
   /** Project this conversation belongs to. undefined = no project (global chat). */
   projectId?: string;
-  /** Character this conversation is bound to. undefined = plain (non-character) chat. */
-  characterId?: string;
-  /**
-   * Snapshot of character identity at the time the conversation was created.
-   * Preserves header rendering (name, gradient, version) if the character
-   * record is later deleted or renamed.
-   */
-  characterSnapshot?: CharacterConversationSnapshot;
-  /** Index of the seeded greeting in `messages` (0 unless greeting regenerated). */
-  characterGreetingIndex?: number;
-  /**
-   * Character group this conversation is bound to. When set, the chat pipeline
-   * drives multi-character replies. The `characterId` field is reused as the
-   * active speaker for the most recent assistant turn.
-   */
-  groupId?: string;
-  /**
-   * Index of the greeting slot in `messages` for the group, used when
-   * regenerating greetings.
-   */
-  groupGreetingIndex?: number;
   /** LM Studio `/api/v1/chat` response id for multi-turn continuity */
   lmResponseId?: string;
   /** Rolling summary of older turns (see auto-summarize setting) */
   conversationSummary?: string;
   /** Number of leading messages folded into `conversationSummary` */
   summaryCoversMessageCount?: number;
-}
-
-export interface CharacterConversationSnapshot {
-  id: string;
-  name: string;
-  title?: string;
-  avatarColor?: string;
-  spec: "veyra" | "chara_card_v3";
-  version: string;
 }
 
 // ── Context stats ───────────────────────────────────────────────────────────
@@ -168,7 +141,6 @@ export type ContextBlockCategory =
   | "system_core"
   | "model_identity"
   | "user_prompt"
-  | "character"
   | "project"
   | "summary"
   | "context_anchor"
@@ -182,7 +154,6 @@ export const CONTEXT_BLOCK_ACCENTS: Record<ContextBlockCategory, string> = {
   system_core: "var(--color-text-dim)",
   model_identity: "var(--color-text-dim)",
   user_prompt: "var(--color-accent)",
-  character: "#c084fc",
   project: "#60a5fa",
   summary: "#2dd4bf",
   context_anchor: "#64748b",
@@ -243,7 +214,7 @@ export type ModelLoadProgress = {
 
 export interface ChatPanelProps {
   title?: string;
-  /** Optional node rendered next to the title (e.g. character badge). */
+  /** Optional node rendered next to the title. */
   titleAccessory?: ReactNode;
   /** Optional right-side action buttons rendered in the title bar. */
   headerActions?: ReactNode;

@@ -8,7 +8,6 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 | App database | `%APPDATA%/com.veyra.app/` | SQLite |
 | Settings | localStorage | `veyra.settings.v1` key |
 | Provider config | localStorage | `veyra.provider.v1` key |
-| Characters | SQLite via Tauri | Structured records |
 | Projects | SQLite via Tauri | Structured records |
 | Research | SQLite via Tauri | Structured records |
 | Agent sessions | localStorage | Serialized sessions |

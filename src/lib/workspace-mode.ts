@@ -13,10 +13,6 @@ export function useWorkspaceModeChange() {
         setActiveNav("research");
         return;
       }
-      if (mode === "characters") {
-        setActiveNav("characters");
-        return;
-      }
       setActiveNav("chat");
       setWorkspaceChatMode(mode);
     },

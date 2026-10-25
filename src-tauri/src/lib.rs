@@ -34,7 +34,6 @@ fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
 
 mod agents;
 mod app_update;
-mod characters;
 mod connectivity;
 mod document_extraction;
 mod extensions;
@@ -365,21 +364,6 @@ pub fn run() {
             research::commands::create_research_report,
             research::commands::update_research_report,
             research::commands::update_research_source_after_fetch,
-            characters::commands::create_character,
-            characters::commands::update_character,
-            characters::commands::list_characters,
-            characters::commands::delete_character,
-            characters::group_commands::create_character_group,
-            characters::group_commands::update_character_group,
-            characters::group_commands::list_character_groups,
-            characters::group_commands::delete_character_group,
-            characters::io_commands::read_text_file,
-            characters::io_commands::read_binary_file,
-            characters::io_commands::write_text_file,
-            characters::io_commands::write_binary_file,
-            characters::io_commands::save_character_avatar,
-            characters::io_commands::delete_character_avatar,
-            characters::io_commands::read_character_avatar,
             file_extraction::commands::extract_file_text,
             extensions::commands::snapshot_skill_directory,
             extensions::commands::snapshot_skill_zip,
@@ -400,15 +384,6 @@ pub fn run() {
             let research_db_state = research::db::ResearchDbState::new(app.handle().clone());
             research_db_state.spawn_background_init();
             app.manage(research_db_state);
-
-            let character_db_state = characters::db::CharacterDbState::new(app.handle().clone());
-            character_db_state.spawn_background_init();
-            app.manage(character_db_state);
-
-            let character_group_db_state =
-                characters::group_db::CharacterGroupDbState::new(app.handle().clone());
-            character_group_db_state.spawn_background_init();
-            app.manage(character_group_db_state);
 
             let search_engine_state =
                 web_search::engine::SearchEngineState::new(app.handle().clone());

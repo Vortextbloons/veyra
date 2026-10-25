@@ -91,6 +91,7 @@ export function resolveProviderTooling({
     webSearchEnabled: effectiveWebSearchEnabled,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
     enhancedMode,
+    interactiveAnswersEnabled: useSettingsStore.getState().interactiveAnswersEnabled,
   }), ...buildMcpProviderTools(extensions.mcpServers, projectId, extensions.featureFlags, disabledMcpServersForChat(extensions.mcpServers, conversationId ? extensions.chatDisabledMcpServerIds[conversationId] : undefined), conversationId ? extensions.chatEnabledMcpServerIds[conversationId] ?? [] : [])];
 
   return {

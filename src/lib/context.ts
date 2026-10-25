@@ -37,9 +37,6 @@ export interface BuildChatContextOptions {
   modelName?: string | null;
   /** Active provider display name — paired with `modelName`. */
   providerName?: string | null;
-  /** Character context block (persona, lorebook, examples) for roleplay
-   *  chats. Injected after the core prompt alongside other context blocks. */
-  characterBlock?: string | null;
 }
 
 /**
@@ -81,13 +78,10 @@ function buildContextContents(options: BuildChatContextOptions): {
   const skillContextBlock = options.skillContextBlock?.trim() || undefined;
   const userPrompt = options.userPrompt?.trim() || undefined;
 
-  const characterBlock = options.characterBlock?.trim() || undefined;
-
   const systemContent = composeMainSystemPrompt({
     userPrompt,
     projectPromptBlock,
     skillContextBlock,
-    characterBlock,
     contextAnchoringBlock,
     modelName: options.modelName ?? undefined,
     providerName: options.providerName ?? undefined,

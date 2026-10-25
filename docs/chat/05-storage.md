@@ -14,13 +14,9 @@
 - An emergency browser copy is compared by authenticated revision during recovery
 - Failed recovery blocks writes and displays a persistent warning
 
-## Conversation Identity
-
-Conversations preserve character identity snapshots even if the character is later deleted or renamed, ensuring chat history remains coherent.
-
 ## File Format
 
 Each conversation is serialized as an encrypted JSON file containing:
 - Messages array with content, reasoning, tool calls, and web search state
-- Metadata (title, mode, character binding, project binding, timestamps)
+- Metadata (title, mode, project binding, timestamps)
 - Conversation summary (if auto-summarized)

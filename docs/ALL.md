@@ -1,7 +1,7 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-10-25T07:22:56.968Z
-> Total files: 66
+> Generated: 2026-10-25T07:27:49.637Z
+> Total files: 59
 
 ## Table of Contents
 
@@ -28,14 +28,6 @@
   - [03-chat-integration](#extensions-03-chat-integration)
   - [04-types](#extensions-04-types)
   - [README](#extensions-readme)
-- [characters](#characters)
-  - [01-overview](#characters-01-overview)
-  - [02-lorebook](#characters-02-lorebook)
-  - [03-context-injection](#characters-03-context-injection)
-  - [04-group-chat](#characters-04-group-chat)
-  - [05-import-export](#characters-05-import-export)
-  - [06-types](#characters-06-types)
-  - [README](#characters-readme)
 - [research](#research)
   - [01-pipeline](#research-01-pipeline)
   - [02-depth-presets](#research-02-depth-presets)
@@ -139,7 +131,6 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 | App database | `%APPDATA%/com.veyra.app/` | SQLite |
 | Settings | localStorage | `veyra.settings.v1` key |
 | Provider config | localStorage | `veyra.provider.v1` key |
-| Characters | SQLite via Tauri | Structured records |
 | Projects | SQLite via Tauri | Structured records |
 | Research | SQLite via Tauri | Structured records |
 | Agent sessions | localStorage | Serialized sessions |
@@ -208,7 +199,6 @@ npm run version:check
 | Module | Folder | Description |
 |--------|--------|-------------|
 | Chat | `docs/chat/` | Core AI chat pipeline with streaming and tool calls |
-| Characters | `docs/characters/` | Roleplay personas with lorebook, group chat, and CCv3 support |
 | Research | `docs/research/` | 9-phase deep research pipeline with citation auditing |
 | Web Search | `docs/web-search/` | Bundled DonSeTch search with ArXiv and Wikipedia support |
 | Projects | `docs/projects/` | Per-project containers for scoping chats and settings |
@@ -261,7 +251,6 @@ The chat module is Veyra's core AI pipeline. It manages conversations, streaming
 | `chat` | Standard AI conversation |
 | `agents` | Pi CLI agent integration |
 | `research` | Deep research pipeline |
-| `characters` | Character roleplay chat |
 
 ## Pipeline Flow
 
@@ -278,7 +267,6 @@ User types a message in the composer component and hits send.
   - `<model_identity>` — Model name/identity
   - `<veyra_user_prompt>` — Custom user instructions
   - `<veyra_project>` — Active project context
-  - `<veyra_character>` — Character persona (if in character mode)
   - `<veyra_context>` — Date, time, platform info (context anchoring)
   - `<veyra_conversation_summary>` — Summary of older turns
   - `<veyra_tools>` — Available tool definitions
@@ -442,15 +430,11 @@ Both LM Studio and cloud providers use the same streaming interface, ensuring co
 - An emergency browser copy is compared by authenticated revision during recovery
 - Failed recovery blocks writes and displays a persistent warning
 
-## Conversation Identity
-
-Conversations preserve character identity snapshots even if the character is later deleted or renamed, ensuring chat history remains coherent.
-
 ## File Format
 
 Each conversation is serialized as an encrypted JSON file containing:
 - Messages array with content, reasoning, tool calls, and web search state
-- Metadata (title, mode, character binding, project binding, timestamps)
+- Metadata (title, mode, project binding, timestamps)
 - Conversation summary (if auto-summarized)
 
 ---
@@ -468,7 +452,7 @@ Accurate as of the current source code (`src/modules/chat/chat-types.ts`).
 ```typescript
 type ChatRole = "user" | "assistant" | "system";
 
-type ChatMode = "chat" | "agents" | "research" | "characters";
+type ChatMode = "chat" | "agents" | "research";
 
 type WorkspaceChatMode = "chat" | "agents";
 
@@ -535,11 +519,6 @@ interface Conversation {
   createdAt: number;
   updatedAt: number;
   projectId?: string;
-  characterId?: string;
-  characterSnapshot?: CharacterConversationSnapshot;
-  characterGreetingIndex?: number;
-  groupId?: string;
-  groupGreetingIndex?: number;
   lmResponseId?: string;
   conversationSummary?: string;
   summaryCoversMessageCount?: number;
@@ -551,7 +530,7 @@ interface Conversation {
 ```typescript
 type ContextBlockCategory =
   | "system_core" | "model_identity" | "user_prompt"
-  | "character" | "project" | "summary"
+  | "project" | "summary"
   | "context_anchor"
   | "tool_definitions" | "web_search_results"
   | "user_message" | "assistant_message" | "system_message";
@@ -1134,301 +1113,6 @@ MCP (Model Context Protocol) server integration and local SKILL.md instruction p
 - [02-skills.md](02-skills.md) — Skill runtime, validation, AI generation
 - [03-chat-integration.md](03-chat-integration.md) — MCP tools and skill context in chat
 - [04-types.md](04-types.md) — Key type definitions
-
----
-
-# characters > 01-overview
-
-> Source: `docs/characters/01-overview.md`
-
-# Characters Overview
-
-Roleplay persona system with Character Card V3 support, lorebook matching, group chat, and AI-assisted creation.
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/modules/characters/character-types.ts` | Type definitions |
-| `src/modules/characters/character-store.ts` | Zustand store for characters |
-| `src/modules/characters/character-storage.ts` | Tauri IPC layer |
-| `src/modules/characters/character-chat.ts` | Character chat helpers |
-| `src/modules/characters/character-context.ts` | Builds character context block |
-| `src/modules/characters/lorebook.ts` | Lorebook evaluation engine |
-| `src/modules/characters/character-export.ts` | Export (Veyra JSON, CCv3 JSON, CCv3 PNG) |
-| `src/modules/characters/ai-assist/` | AI-assisted creation and CCv3 I/O |
-
-## Character Fields
-
-| Field | Description |
-|-------|-------------|
-| `name` | Character name (displayed in chat) |
-| `title` | Short subtitle |
-| `description` | Character description |
-| `personality` | Personality traits |
-| `scenario` | Setting/scenario context |
-| `firstMessage` | Opening greeting |
-| `alternateGreetings` | Multiple greeting options |
-| `systemPrompt` | Custom system prompt override |
-| `postHistoryInstructions` | Instructions after chat history |
-| `exampleMessages` | Few-shot example messages |
-| `lorebookEntries` | Contextual knowledge entries |
-| `chatDefaults` | Per-character chat settings |
-
-## Starting a Character Chat
-
-1. `startCharacterChat()` creates a new conversation bound to the character
-2. The greeting is randomly picked from `firstMessage` + `alternateGreetings`
-3. The conversation is pre-seeded with the greeting as the first assistant message
-4. Character identity snapshots are preserved even if the character is later deleted or renamed
-
-## Character Chat Defaults
-
-Per-character settings that override global settings:
-
-| Setting | Description |
-|---------|-------------|
-| `scanDepth` | How many messages to scan for lorebook matches |
-| `maxLorebookEntries` | Maximum lorebook entries to inject |
-| `includeExamples` | Whether to include few-shot examples |
-| `allowDocumentTools` | Whether doc tools are available in character chat |
-
----
-
-# characters > 02-lorebook
-
-> Source: `docs/characters/02-lorebook.md`
-
-# Lorebook System
-
-Lorebook entries provide contextual knowledge that's injected into the chat when triggered by keyword matches.
-
-## Entry Fields
-
-| Field | Description |
-|-------|-------------|
-| `keys` | Trigger keywords |
-| `matchType` | `any` (OR), `all` (AND), or `regex` |
-| `content` | Knowledge content to inject |
-| `priority` | 1-5 (higher = more important) |
-| `constant` | Always included (ignores keyword matching) |
-| `selective` | Only included when keywords match |
-| `insertionOrder` | Ordering within the lorebook block |
-| `probability` | Roll chance (0-100%) for non-constant entries |
-| `position` | `before` or `after` the character block |
-
-## How Lorebook Works
-
-1. The engine scans trailing messages for keyword matches
-2. Matches are filtered by probability rolls
-3. Entries are sorted by priority, then insertion order
-4. Results are capped at `maxLorebookEntries` (default from chat defaults)
-5. Matched entries are injected into `<veyra_lorebook>` block
-
-## Scan Depth
-
-Controls how many recent messages are scanned for keyword matches (configurable per character). Higher values include more context but may trigger more entries.
-
----
-
-# characters > 03-context-injection
-
-> Source: `docs/characters/03-context-injection.md`
-
-# Character Context Injection
-
-When a character is active, the system prompt includes these XML blocks:
-
-1. **`<veyra_character>`** — Persona block (name, description, personality, scenario)
-2. **`<veyra_character_system>`** — System prompt override (if provided)
-3. **`<veyra_character_examples>`** — Few-shot examples (if enabled)
-4. **`<veyra_lorebook>`** — Matched lorebook entries
-5. **Post-history instructions** — Instructions after chat history
-
-## Context Size Limits
-
-Total character context is soft-capped at **16,000 characters** with truncation to prevent overflow of the model's context window.
-
-## Conditional Inclusion
-
-- System prompt override only included if the character defines one
-- Few-shot examples only included if `includeExamples` is enabled in chat defaults
-- Lorebook block only included if triggered entries exist
-
----
-
-# characters > 04-group-chat
-
-> Source: `docs/characters/04-group-chat.md`
-
-# Group Chat
-
-Multiple characters can share a conversation with manual or automatic speaker selection.
-
-## Group Fields
-
-| Field | Description |
-|-------|-------------|
-| `name` | Group display name |
-| `memberIds` | Array of character IDs |
-| `speakerMode` | `manual` (user picks) or `auto` (AI selects) |
-| `openingMessage` | Group greeting |
-| `activeSpeakerId` | Currently active character |
-
-## Group Chat Flow
-
-1. `startGroupChat()` creates a conversation with the group binding
-2. The `activeSpeaker` character responds to each turn
-3. **Manual mode**: user selects which character speaks
-4. **Auto mode**: AI selects the most appropriate speaker
-5. `regenerateGroupGreeting()` swaps the opening message
-
-## Group Context
-
-Each group turn includes the speaker's character block in the prompt, ensuring the AI responds in that character's voice and personality.
-
----
-
-# characters > 05-import-export
-
-> Source: `docs/characters/05-import-export.md`
-
-# Character Import/Export
-
-## Export Formats
-
-| Format | Description |
-|--------|-------------|
-| Veyra JSON | Native Veyra format with all fields preserved |
-| Character Card V3 JSON | Standard CCv3 format (SillyTavern compatible) |
-| Character Card V3 PNG | PNG with embedded CCv3 metadata chunk |
-
-## Import
-
-- Import from Veyra JSON or Character Card V3 JSON
-- PNG cards with CCv3 metadata chunks are also supported
-- Fields are mapped from CCv3 spec to Veyra's internal model
-
-## AI-Assisted Creation
-
-The `ai-assist/` module provides:
-- Describe a character and the AI generates the full record
-- AI generates lorebook entries from descriptions
-- Tone and style suggestion for personality fields
-- Character descriptions from CCv3 card parsing
-
----
-
-# characters > 06-types
-
-> Source: `docs/characters/06-types.md`
-
-# Characters Key Types
-
-From `src/modules/characters/character-types.ts`:
-
-```typescript
-type CharacterSpec = "veyra" | "chara_card_v3";
-type CharacterSource = "native" | "imported_ccv3" | "duplicate";
-type CharacterScope = "global" | "project";
-
-interface CharacterRecord {
-  id: string;
-  name: string;
-  title?: string;
-  avatarPath?: string;
-  avatarColor?: string;
-  tagline: string;
-  description: string;
-  personality: string;
-  scenario: string;
-  firstMessage: string;
-  alternateGreetings: string[];
-  systemPrompt: string;
-  postHistoryInstructions?: string;
-  exampleMessages: ExampleMessage[];
-  creatorNotes: string;
-  tags: string[];
-  category?: string;
-  version: string;
-  spec: CharacterSpec;
-  creator: string;
-  source: CharacterSource;
-  isGlobal: boolean;
-  projectId?: string;
-  creatorMetadata?: Record<string, unknown>;
-  stats: CharacterStats;
-  lorebookEntries?: CharacterLorebookEntry[];
-  chatDefaults?: CharacterChatDefaults;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CharacterLorebookEntry {
-  id: string;
-  characterId: string;
-  keys: string[];
-  secondaryKeys?: string[];
-  content: string;
-  constant: boolean;
-  selective: boolean;
-  insertionOrder: number;
-  priority: 1 | 2 | 3 | 4 | 5;
-  enabled: boolean;
-  matchType: "any" | "all" | "regex";
-  caseSensitive: boolean;
-  scope: "character" | "global";
-  group?: string;
-  comment?: string;
-  position: "before" | "after";
-  probability?: number;
-  recurseDepth?: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CharacterChatDefaults {
-  scanDepth: number;
-  maxLorebookEntries: number;
-  includeExamples: boolean;
-  allowDocumentTools: boolean;
-}
-
-interface CharacterGroupRecord {
-  id: string;
-  name: string;
-  description: string;
-  scenario: string;
-  memberIds: string[];
-  speakerMode: "manual" | "auto";
-  recentConversationIds: string[];
-  openingMessage: string;
-  activeSpeakerId?: string;
-  isGlobal: boolean;
-  projectId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
----
-
-# characters > README
-
-> Source: `docs/characters/README.md`
-
-# Characters Module
-
-Roleplay persona system with Character Card V3 support, lorebook matching, group chat, and AI-assisted creation.
-
-## Contents
-
-- [01-overview.md](01-overview.md) — Character fields, chat defaults, starting a chat
-- [02-lorebook.md](02-lorebook.md) — Lorebook keyword matching and injection
-- [03-context-injection.md](03-context-injection.md) — XML context blocks and size limits
-- [04-group-chat.md](04-group-chat.md) — Multi-character group conversations
-- [05-import-export.md](05-import-export.md) — Export formats and AI-assisted creation
-- [06-types.md](06-types.md) — Key type definitions
 
 ---
 
@@ -2672,39 +2356,35 @@ Cross-cutting architecture patterns for state management.
 | File | Purpose |
 |------|---------|
 | `src/stores/chat-store.ts` | Central conversation state |
-| `src/stores/settings-store.ts` | Combined settings (9 slices) |
+| `src/stores/settings-store.ts` | Combined settings (8 slices) |
 | `src/stores/provider-store.ts` | Provider and model management |
 | `src/stores/connectivity-store.ts` | Connectivity state |
 | `src/stores/update-store.ts` | App update state |
 
-## Zustand Stores (11 total)
+## Zustand Stores (8 total)
 
 Stores live in both `src/stores/` and `src/modules/<feature>/`:
 
 | Store Hook | Location | Purpose |
 |------------|----------|---------|
 | `useChatStore` | `src/stores/chat-store.ts` | Conversations, streaming buffer, messages |
-| `useSettingsStore` | `src/stores/settings-store.ts` | All app settings (9 slices) |
+| `useSettingsStore` | `src/stores/settings-store.ts` | All app settings (8 slices) |
 | `useProviderStore` | `src/stores/provider-store.ts` | Provider connection, model listing |
 | `useConnectivityStore` | `src/stores/connectivity-store.ts` | Online/offline/local-only state |
 | `useUpdateStore` | `src/stores/update-store.ts` | App update state |
-| `useCharacterStore` | `src/modules/characters/character-store.ts` | Character records |
-| `useCharacterGroupStore` | `src/modules/characters/character-group-store.ts` | Character groups |
-| `useCharacterAssistStore` | `src/modules/characters/ai-assist/ai-assist-store.ts` | AI-assisted creation state |
 | `useProjectStore` | `src/modules/projects/project-store.ts` | Projects |
 | `useResearchStore` | `src/modules/research/research-store.ts` | Research runs and reports |
 | `useAgentStore` | `src/modules/agents/agent-store.ts` | Agent sessions |
 
-## Settings Store (9 Slices)
+## Settings Store (8 Slices)
 
-The settings store is composed from 9 slices in `src/stores/slices/`:
+The settings store is composed from 8 slices in `src/stores/slices/`:
 
 | Slice | File | Purpose |
 |-------|------|---------|
 | `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, panel collapsed state, visible tool settings |
 | `model-slice` | `model-slice.ts` | Default model, temperature, context length |
 | `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, and extraction settings |
-| `character-slice` | `character-slice.ts` | AI assist model, max tokens, tone settings |
 | `research-slice` | `research-slice.ts` | Default depth, approval requirements |
 | `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |
 | `connectivity-slice` | `connectivity-slice.ts` | Online/offline preference |
@@ -2723,7 +2403,7 @@ All settings persist to localStorage under `veyra.settings.v1`.
 
 Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority-based queueing.
 
-## Job Types (8 total)
+## Job Types (7 total)
 
 | Type | Priority | Description |
 |------|----------|-------------|
@@ -2731,7 +2411,6 @@ Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority
 | `agent_pi` | 1 | Pi CLI agent runs |
 | `research_run` | 1 | Research pipeline execution |
 | `auto_name_chat` | 2 | Auto-generate conversation titles |
-| `character_ai_assist` | 2 | AI-assisted character creation |
 | `summarize_chat` | 3 | Conversation summarization |
 | `compress_context` | 3 | Context compression |
 | `maintenance` | 4 (lowest) | Background cleanup |
@@ -2767,7 +2446,6 @@ Veyra assembles authoritative system instructions separately from retrieved or g
 System message:
 Veyra core          — Base AI identity and behavior
 <veyra_project>     — Active project context
-<veyra_character>   — Character persona
 <veyra_context>     — Date, time, platform
 
 Non-system reference message:
@@ -2923,13 +2601,12 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 # Tauri Backend
 
-## Rust Modules (10 total)
+## Rust Modules (9 total)
 
 | Module | Purpose |
 |--------|---------|
 | `agents/` | Pi CLI integration |
 | `app_update` | Application auto-update download, validation, installer launch |
-| `characters/` | Character and group CRUD, I/O commands, avatar management |
 | `connectivity/` | Network connectivity probe |
 | `extensions/` | MCP server discovery and invocation |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
@@ -2940,14 +2617,13 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 ## Command Count
 
-**~78 Tauri commands** registered across all modules. Key counts:
+**~61 Tauri commands** registered across all modules. Key counts:
 - Agents: 3 commands
 - App update: 1 command
 - Connectivity: 1 command
 - Web search: 14 commands
 - Projects: 5 commands
 - Research: 15 commands
-- Characters: 17 commands
 - Extensions: 14 commands
 - File extraction: 1 command
 - Core (conversations, credentials, app lifecycle): 8 commands
@@ -2964,7 +2640,7 @@ Native `code_execution` is disabled and is not included in provider tool definit
 1. Initialize Tauri IPC
 2. Load settings from localStorage
 3. Connect to LM Studio
-4. Load characters and projects
+4. Load projects
 5. Check Pi CLI availability
 6. Initialize web search (start the bundled engine)
 

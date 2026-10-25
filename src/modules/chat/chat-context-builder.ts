@@ -1,7 +1,6 @@
 import type { ChatMessage, Conversation } from "@/modules/chat/chat-types";
 import type { ProviderChatOptions, ProviderToolDefinition } from "@/lib/providers/types";
 import { buildChatContext } from "@/lib/context";
-import { resolveCharacterBlock } from "@/lib/resolve-character-block";
 import type { ResolvedModelSettings } from "@/modules/chat/chat-provider-options";
 
 export type RoundMessagesContext = {
@@ -51,7 +50,6 @@ export function buildRoundMessages(
       reservedOutputTokens: context.resolvedReservedOutputTokens,
       modelName: context.activeModelName,
       providerName: context.activeProviderName,
-      characterBlock: resolveCharacterBlock(context.conversation, chainMessages),
     },
     context.resolvedContextLength,
   );

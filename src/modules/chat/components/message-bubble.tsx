@@ -13,6 +13,7 @@ import { ThinkingIndicator } from "@/modules/chat/components/thinking-indicator"
 import { useProviderStore } from "@/stores/provider-store";
 import { type MessageAttachment } from "@/lib/message-attachments";
 import { FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
+import { InteractiveAnswerBlock } from "@/modules/chat/components/interactive-answer-block";
 
 const MarkdownRenderer = lazy(() =>
   import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
@@ -43,6 +44,7 @@ type MessageBubbleProps = {
   onCopy?: (messageId: string) => void;
   onFork?: (messageId: string) => void;
   onDelete?: (messageId: string) => void;
+  onFollowUp?: (prompt: string) => void;
 };
 
 export const MessageBubble = memo(function MessageBubble({
@@ -58,6 +60,7 @@ export const MessageBubble = memo(function MessageBubble({
   onCopy,
   onFork,
   onDelete,
+  onFollowUp,
 }: MessageBubbleProps) {
   const models = useProviderStore((state) => state.models);
   const resolvedModelName = message.modelId
@@ -173,6 +176,12 @@ export const MessageBubble = memo(function MessageBubble({
             <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
           )}
         </div>
+        )}
+        {message.interactiveAnswer && (
+          <InteractiveAnswerBlock
+            answer={message.interactiveAnswer}
+            onFollowUp={onFollowUp}
+          />
         )}
         </div>
         {!isStreaming && message.performance && (

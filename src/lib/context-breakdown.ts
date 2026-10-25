@@ -49,15 +49,6 @@ function buildSystemBlocks(options: BuildChatContextOptions): {
     });
   }
 
-  if (options.characterBlock?.trim()) {
-    blocks.push({
-      category: "character",
-      label: "Character",
-      tokenCount: estimateTokens(options.characterBlock.trim()),
-      dropped: false,
-    });
-  }
-
   if (options.contextAnchoringBlock?.trim()) {
     blocks.push({
       category: "context_anchor",

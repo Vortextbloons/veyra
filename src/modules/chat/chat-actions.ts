@@ -85,6 +85,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     providerId: selectedProvider,
     messages,
     model: selectedModel,
+    assistantMessageId: assistantMessage.id,
     previousResponseId,
     signal,
     webSearchEnabled,

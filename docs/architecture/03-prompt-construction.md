@@ -6,7 +6,6 @@ Veyra assembles authoritative system instructions separately from retrieved or g
 System message:
 Veyra core          — Base AI identity and behavior
 <veyra_project>     — Active project context
-<veyra_character>   — Character persona
 <veyra_context>     — Date, time, platform
 
 Non-system reference message:

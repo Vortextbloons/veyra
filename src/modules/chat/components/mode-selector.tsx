@@ -15,11 +15,6 @@ const MODES: { id: ChatMode; label: string; description: string }[] = [
     description: "Multi-step tasks with tools",
   },
   {
-    id: "characters",
-    label: "Characters",
-    description: "Roleplay with custom persona cards",
-  },
-  {
     id: "research",
     label: "Deep Research",
     description: "In-depth research and analysis",

@@ -21,7 +21,6 @@ The chat module is Veyra's core AI pipeline. It manages conversations, streaming
 | `chat` | Standard AI conversation |
 | `agents` | Pi CLI agent integration |
 | `research` | Deep research pipeline |
-| `characters` | Character roleplay chat |
 
 ## Pipeline Flow
 
@@ -38,7 +37,6 @@ User types a message in the composer component and hits send.
   - `<model_identity>` — Model name/identity
   - `<veyra_user_prompt>` — Custom user instructions
   - `<veyra_project>` — Active project context
-  - `<veyra_character>` — Character persona (if in character mode)
   - `<veyra_context>` — Date, time, platform info (context anchoring)
   - `<veyra_conversation_summary>` — Summary of older turns
   - `<veyra_tools>` — Available tool definitions

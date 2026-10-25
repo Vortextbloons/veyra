@@ -11,7 +11,6 @@ Repository documentation structure:
 - docs/INDEX.md: canonical doc ordering (source of truth for combine script).
 - docs/overview/README.md: project overview, tech stack, storage, privacy notes.
 - docs/chat/README.md: chat pipeline, streaming, tools, provider flow.
-- docs/characters/README.md: personas, lorebook, group chat.
 - docs/research/README.md: 9-phase research pipeline.
 - docs/web-search/README.md: bundled DonSeTch engine, ArXiv, Wikipedia.
 - docs/projects/README.md: project containers.

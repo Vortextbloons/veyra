@@ -1,7 +1,6 @@
 import type { ChatMessage, WebSearchSource } from "@/modules/chat/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
 import type { ProviderAdapter, ProviderChatOptions, ProviderToolCall } from "@/lib/providers/types";
-import { useChatStore } from "@/stores/chat-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { executeToolRound } from "@/modules/chat/chat-tool-rounds";
@@ -156,19 +155,19 @@ export function createExecuteToolRoundLocal(params: {
   signal?: AbortSignal;
   projectId?: string;
   conversationId?: string;
+  assistantMessageId: string;
   effectiveWebSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
 }) {
   const settings = useSettingsStore.getState();
   return async (toolCalls: ProviderToolCall[]) => {
-    const buffer = useChatStore.getState().streamingBuffer;
     const activeProject = useProjectStore.getState().activeProject();
     const workspaceRoot = activeProject?.settings?.agentProjectPath?.trim() || null;
     const result = await executeToolRound(toolCalls, {
       signal: params.signal,
       projectId: params.projectId,
       conversationId: params.conversationId,
-      assistantMessageId: buffer?.messageId,
+      assistantMessageId: params.assistantMessageId,
       webSearchEnabled: params.effectiveWebSearchEnabled,
       webSearchAvailability: params.webSearchAvailability,
       codeExecution: {

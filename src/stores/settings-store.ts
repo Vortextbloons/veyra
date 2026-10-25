@@ -6,7 +6,6 @@ import { DEFAULT_RESEARCH_CONFIG } from "@/modules/research/research-config";
 import { createUiLayoutSlice, DEFAULT_UI_LAYOUT_STATE } from "./slices/ui-layout-slice";
 import { createModelSlice, DEFAULT_MODEL_STATE } from "./slices/model-slice";
 import { createWebSearchSlice, DEFAULT_WEB_SEARCH_STATE } from "./slices/web-search-slice";
-import { createCharacterSlice, DEFAULT_CHARACTER_STATE } from "./slices/character-slice";
 import { createResearchSlice, DEFAULT_RESEARCH_SLICE_STATE } from "./slices/research-slice";
 import { createCodeExecutionSlice, DEFAULT_CODE_EXECUTION_STATE } from "./slices/code-execution-slice";
 import { createConnectivitySlice, DEFAULT_CONNECTIVITY_STATE } from "./slices/connectivity-slice";
@@ -23,7 +22,6 @@ const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 export type SettingsStoreState = UiLayoutSliceState
   & ModelSliceState
   & WebSearchSliceState
-  & CharacterSliceState
   & ResearchSliceState
   & CodeExecutionSliceState
   & ConnectivitySliceState
@@ -34,7 +32,6 @@ export type SettingsStore = SettingsStoreState
   & UiLayoutSliceActions
   & ModelSliceActions
   & WebSearchSliceActions
-  & CharacterSliceActions
   & ResearchSliceActions
   & ConnectivitySliceActions
   & ChatSliceActions
@@ -44,7 +41,6 @@ export type SettingsStore = SettingsStoreState
 import type { UiLayoutSliceState, UiLayoutSliceActions } from "./slices/ui-layout-slice";
 import type { ModelSliceState, ModelSliceActions } from "./slices/model-slice";
 import type { WebSearchSliceState, WebSearchSliceActions } from "./slices/web-search-slice";
-import type { CharacterSliceState, CharacterSliceActions } from "./slices/character-slice";
 import type { ResearchSliceState, ResearchSliceActions } from "./slices/research-slice";
 import type { CodeExecutionSliceState } from "./slices/code-execution-slice";
 import type { ConnectivitySliceState, ConnectivitySliceActions } from "./slices/connectivity-slice";
@@ -57,7 +53,6 @@ const DEFAULT_STATE: SettingsStoreState = {
   ...DEFAULT_UI_LAYOUT_STATE,
   ...DEFAULT_MODEL_STATE,
   ...DEFAULT_WEB_SEARCH_STATE,
-  ...DEFAULT_CHARACTER_STATE,
   ...DEFAULT_RESEARCH_SLICE_STATE,
   ...DEFAULT_CODE_EXECUTION_STATE,
   ...DEFAULT_CONNECTIVITY_STATE,
@@ -106,14 +101,10 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     bundleWaybackFallback: state.bundleWaybackFallback,
     bundleArxivSearch: state.bundleArxivSearch,
     bundleWikipediaSearch: state.bundleWikipediaSearch,
-    characterAssistModel: state.characterAssistModel,
-    characterAssistMaxTokens: state.characterAssistMaxTokens,
-    characterAssistSendContext: state.characterAssistSendContext,
-    characterAssistTelemetry: state.characterAssistTelemetry,
-    characterAssistTone: state.characterAssistTone,
     workspaceChatMode: state.workspaceChatMode,
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     enhancedModeEnabled: state.enhancedModeEnabled,
+    interactiveAnswersEnabled: state.interactiveAnswersEnabled,
     research: state.research,
     researchAdvancedOpen: state.researchAdvancedOpen,
     researchFirstRunNoticeDismissed: state.researchFirstRunNoticeDismissed,
@@ -144,7 +135,6 @@ export const useSettingsStore = create<SettingsStore>()(
       ...createUiLayoutSlice(...a),
       ...createModelSlice(...a),
       ...createWebSearchSlice(...a),
-      ...createCharacterSlice(...a),
       ...createResearchSlice(...a),
       ...createCodeExecutionSlice(...a),
       ...createConnectivitySlice(...a),
@@ -158,6 +148,7 @@ export const useSettingsStore = create<SettingsStore>()(
       merge: (persisted, current) => {
         const parsed = persisted as Partial<SettingsStoreState> & { webSearchEnabled?: boolean };
         const migrated: Partial<SettingsStoreState> = { ...parsed };
+        if (parsed.activeNav === "characters") migrated.activeNav = "chat";
         if (
           parsed.webSearchEnabled !== undefined &&
           parsed.defaultWebSearchEnabled === undefined

@@ -1,12 +1,11 @@
 # Tauri Backend
 
-## Rust Modules (10 total)
+## Rust Modules (9 total)
 
 | Module | Purpose |
 |--------|---------|
 | `agents/` | Pi CLI integration |
 | `app_update` | Application auto-update download, validation, installer launch |
-| `characters/` | Character and group CRUD, I/O commands, avatar management |
 | `connectivity/` | Network connectivity probe |
 | `extensions/` | MCP server discovery and invocation |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
@@ -17,14 +16,13 @@
 
 ## Command Count
 
-**~78 Tauri commands** registered across all modules. Key counts:
+**~61 Tauri commands** registered across all modules. Key counts:
 - Agents: 3 commands
 - App update: 1 command
 - Connectivity: 1 command
 - Web search: 14 commands
 - Projects: 5 commands
 - Research: 15 commands
-- Characters: 17 commands
 - Extensions: 14 commands
 - File extraction: 1 command
 - Core (conversations, credentials, app lifecycle): 8 commands
@@ -41,7 +39,7 @@
 1. Initialize Tauri IPC
 2. Load settings from localStorage
 3. Connect to LM Studio
-4. Load characters and projects
+4. Load projects
 5. Check Pi CLI availability
 6. Initialize web search (start the bundled engine)
 

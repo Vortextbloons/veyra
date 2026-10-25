@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { FileText, Search, TerminalSquare, Wrench, NotepadText, MessageCircleQuestion } from "lucide-react";
+import { FileText, LayoutDashboard, Search, TerminalSquare, Wrench, NotepadText, MessageCircleQuestion } from "lucide-react";
 import type { ToolCallPhase } from "@/modules/chat/chat-types";
 import {
   CODE_EXEC_TOOL_NAME,
@@ -9,6 +9,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
   SCRATCHPAD_TOOL_NAME,
   ASK_QUESTION_TOOL_NAME,
+  INTERACTIVE_ANSWER_TOOL_NAME,
   INLINE_EDIT_TOOL_NAME,
 } from "@/lib/tool-registry";
 
@@ -55,6 +56,11 @@ export const TOOL_CALL_UI: Record<string, ToolCallUiMeta> = {
     label: "Ask Question",
     icon: MessageCircleQuestion,
     accent: "amber",
+  },
+  [INTERACTIVE_ANSWER_TOOL_NAME]: {
+    label: "Interactive Answer",
+    icon: LayoutDashboard,
+    accent: "violet",
   },
   [INLINE_EDIT_TOOL_NAME]: {
     label: "Inline Edit",

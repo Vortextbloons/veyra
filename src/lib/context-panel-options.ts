@@ -6,15 +6,12 @@ import {
 } from "@/lib/prompts";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProjectStore } from "@/modules/projects/project-store";
-import { resolveCharacterBlock } from "@/lib/resolve-character-block";
 
 export function buildContextPanelOptions(input: {
   conversation: {
     messages: ChatMessage[];
     conversationSummary?: string | null;
     summaryCoversMessageCount?: number;
-    characterId?: string | null;
-    groupId?: string | null;
     projectId?: string | null;
   };
   modelId: string;
@@ -50,6 +47,5 @@ export function buildContextPanelOptions(input: {
     reservedOutputTokens: input.reservedOutputTokens,
     modelName: input.modelName,
     providerName: input.providerName,
-    characterBlock: resolveCharacterBlock(input.conversation, input.conversation.messages),
   };
 }

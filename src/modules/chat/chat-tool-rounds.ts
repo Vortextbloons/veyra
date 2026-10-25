@@ -5,6 +5,7 @@ import {
   CODE_EXEC_TOOL_NAME,
   SCRATCHPAD_TOOL_NAME,
   ASK_QUESTION_TOOL_NAME,
+  INTERACTIVE_ANSWER_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
@@ -20,6 +21,7 @@ import {
 } from "@/modules/chat/tools/code-execution-tool";
 import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
 import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
+import { executeInteractiveAnswerCall } from "@/modules/chat/tools/interactive-answer-tool";
 import { disabledMcpServersForChat, findCapabilityGrant, isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
 
@@ -48,9 +50,10 @@ export async function executeToolRound(
   const codeExecutionCalls = toolCalls.filter((call) => call.name === CODE_EXEC_TOOL_NAME);
   const scratchpadCalls = toolCalls.filter((call) => call.name === SCRATCHPAD_TOOL_NAME);
   const askQuestionCalls = toolCalls.filter((call) => call.name === ASK_QUESTION_TOOL_NAME);
+  const interactiveAnswerCalls = toolCalls.filter((call) => call.name === INTERACTIVE_ANSWER_TOOL_NAME);
   const mcpCalls = toolCalls.filter((call) => call.name.startsWith("mcp_"));
 
-  registerStreamingToolCalls(toolCalls, "running", (call) => {
+  registerStreamingToolCalls(toolCalls.filter((call) => call.name !== INTERACTIVE_ANSWER_TOOL_NAME), "running", (call) => {
     if (call.name === WEB_SEARCH_TOOL_NAME) return stringArg(call.arguments, "query");
     if (call.name === CODE_EXEC_TOOL_NAME) {
       return summarizeCodeSnippet(stripPythonCodeFence(stringArg(call.arguments, "code")));
@@ -62,6 +65,14 @@ export async function executeToolRound(
   const webSearchSources: WebSearchSource[] = [];
   const webSearchContextBlocks: string[] = [];
   const streamedChunks: string[] = [];
+
+  for (const call of interactiveAnswerCalls) {
+    toolResultSections.push(executeInteractiveAnswerCall(call, {
+      signal: ctx.signal,
+      conversationId: ctx.conversationId,
+      assistantMessageId: ctx.assistantMessageId ?? "",
+    }));
+  }
 
   const webResults = await Promise.all(
     webSearchCalls.map(async (call) => {

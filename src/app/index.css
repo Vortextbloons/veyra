@@ -48,8 +48,8 @@
   /* ── Tailwind palette (declared explicitly) ──────────────────────────────
      Tailwind v4 only generates classes (e.g. from-rose-500, to-pink-600,
      bg-indigo-500/20) for colors that exist in the @theme block. Declaring
-     them here means every shade used anywhere in the app — for character
-     avatar gradients, ring accents, status badges, etc. — actually
+     them here means every shade used anywhere in the app — for avatar
+     gradients, ring accents, status badges, etc. — actually
      compiles to a real CSS rule.
      The opacity modifiers (e.g. /20, /40) are handled automatically by
      Tailwind via color-mix(). */

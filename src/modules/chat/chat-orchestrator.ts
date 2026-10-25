@@ -6,7 +6,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { buildChatContext } from "@/lib/context";
-import { resolveCharacterBlock } from "@/lib/resolve-character-block";
 import { buildContextAnchoringBlock, buildProjectContextBlock } from "@/lib/prompts";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { registerStreamingToolCall } from "@/modules/chat/chat-tool-utils";
@@ -19,6 +18,7 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
+import { INTERACTIVE_ANSWER_TOOL_NAME } from "@/lib/tool-registry";
 
 export interface SendChatCompleteContext {
   webSearchSources?: WebSearchSource[];
@@ -32,6 +32,7 @@ type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
   codeExecutionEnabled: boolean;
   enhancedMode: boolean;
   conversationId?: string;
+  assistantMessageId: string;
   projectId?: string;
   onComplete?: (
     result: LmChatCompleteResult,
@@ -46,6 +47,7 @@ export async function sendChatRequest({
   codeExecutionEnabled,
   enhancedMode,
   conversationId,
+  assistantMessageId,
   projectId,
   ...options
 }: SendChatRequest): Promise<void> {
@@ -139,6 +141,15 @@ export async function sendChatRequest({
   let toolCompletion: Promise<void> = Promise.resolve();
 
   const handleToolCallDetected = (call: Pick<ProviderToolCall, "id" | "name">) => {
+    if (call.name === INTERACTIVE_ANSWER_TOOL_NAME && conversationId) {
+      useChatStore.getState().setAssistantToolState(conversationId, assistantMessageId, {
+        id: call.id,
+        name: call.name,
+        label: "Interactive answer",
+        phase: "pending",
+      });
+      return;
+    }
     registerStreamingToolCall(call, "pending");
   };
 
@@ -169,6 +180,7 @@ export async function sendChatRequest({
     signal: options.signal,
     projectId,
     conversationId,
+    assistantMessageId,
     effectiveWebSearchEnabled,
     webSearchAvailability,
   });
@@ -266,7 +278,6 @@ export async function sendChatRequest({
       reservedOutputTokens: resolved.reservedOutputTokens,
       modelName: activeModelName,
       providerName: activeProviderName,
-      characterBlock: resolveCharacterBlock(conversation, messages),
     },
     resolved.contextLength,
   );

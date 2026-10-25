@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { Cpu, FlaskConical, MessageCircle, Puzzle, Settings, Shield, Users, Wrench, type LucideIcon } from "lucide-react";
+import { Cpu, FlaskConical, MessageCircle, Puzzle, Settings, Shield, Wrench, type LucideIcon } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
 import { ChatSettings } from "./chat-settings";
 import { ModelsSettings } from "./models-settings";
 import { ToolsSettings } from "./tools-settings";
-import { CharacterSettings } from "./character-settings";
 import { ResearchSettings } from "./research-settings";
 import { ExtensionsSettings } from "./extensions-settings";
 type SettingsTab =
@@ -14,7 +13,6 @@ type SettingsTab =
   | "chat"
   | "models"
   | "tools"
-  | "characters"
   | "research"
   | "extensions";
 
@@ -25,7 +23,6 @@ const TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "models", label: "Models", icon: Cpu },
   { id: "tools", label: "Tools", icon: Wrench },
   { id: "research", label: "Research", icon: FlaskConical },
-  { id: "characters", label: "Characters", icon: Users },
   { id: "extensions", label: "Extensions", icon: Puzzle },
 ];
 
@@ -66,7 +63,6 @@ export function SettingsPage() {
           {activeTab === "models" && <ModelsSettings />}
           {activeTab === "tools" && <ToolsSettings />}
           {activeTab === "research" && <ResearchSettings />}
-          {activeTab === "characters" && <CharacterSettings />}
           {activeTab === "extensions" && <ExtensionsSettings />}
         </div>
       </div>

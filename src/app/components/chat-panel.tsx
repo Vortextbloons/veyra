@@ -182,6 +182,10 @@ export function ChatPanel({
     },
     [controlledMode, onModeChange],
   );
+  const sendInteractiveFollowUp = useCallback(
+    (prompt: string) => onSend?.(prompt),
+    [onSend],
+  );
 
   const lastAssistantId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -284,6 +288,7 @@ export function ChatPanel({
                   onCopy={onCopyMessage}
                   onFork={onForkMessage}
                   onDelete={onDeleteMessage}
+                  onFollowUp={sendInteractiveFollowUp}
                 />
               </div>
             ))}
