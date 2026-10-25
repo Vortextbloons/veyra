@@ -160,6 +160,7 @@ fn launch_installer(installer_path: &Path, installer_kind: &str) -> Result<(), S
             Command::new(installer_path)
         };
 
+        crate::shared::process::hide_console(&mut command);
         command
             .spawn()
             .map_err(|error| format!("could not launch the update installer: {error}"))?;

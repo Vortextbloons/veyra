@@ -368,3 +368,33 @@ body {
     border-color: #ccc !important;
   }
 }
+
+.reasoning-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.reasoning-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -3px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.15);
+}
+
+.reasoning-range:disabled::-webkit-slider-thumb {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.reasoning-range:focus-visible {
+  outline: none;
+}
+
+.reasoning-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}

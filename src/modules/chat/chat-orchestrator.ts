@@ -66,6 +66,7 @@ export async function sendChatRequest({
     topP: options.topP,
     repetitionPenalty: options.repetitionPenalty,
     stopSequences: options.stopSequences,
+    providerId,
   });
 
   const projectRecord = projectId
@@ -285,6 +286,7 @@ export async function sendChatRequest({
     onChunk: wrappedOnChunk,
     onReasoningChunk: wrappedOnReasoningChunk,
     reasoningEnabled: resolved.reasoningEnabled,
+    reasoningLevel: resolved.reasoningLevel,
     onToolCallDetected: handleToolCallDetected,
     onComplete: wrappedOnComplete,
     messages: modelSupportsImages ? contextMessages : stripImageAttachments(contextMessages),

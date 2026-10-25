@@ -1,5 +1,6 @@
 import type { ChatMessage, ModelInfo } from "@/modules/chat/chat-types";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
+import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
 
 export type ProviderToolCall = {
   id: string;
@@ -31,6 +32,7 @@ export type ProviderChatOptions = {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  reasoningLevel?: ReasoningLevel;
   responseFormat?: { type: "json_object" | "text" };
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;

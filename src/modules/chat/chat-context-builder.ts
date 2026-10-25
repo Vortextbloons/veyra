@@ -65,6 +65,7 @@ export function providerChatBase(
     ...options,
     previousResponseId: undefined,
     reasoningEnabled: resolved.reasoningEnabled,
+    reasoningLevel: resolved.reasoningLevel,
     temperature: options.temperature ?? resolved.temperature,
     contextLength: resolved.contextLength,
     maxTokens: resolved.maxTokens || undefined,

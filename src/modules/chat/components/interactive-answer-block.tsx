@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, BarChart3, Calculator, ChevronLeft, ChevronRight, Layers3, MessageCircleQuestion } from "lucide-react";
+import { ArrowRight, BarChart3, Calculator, ChevronLeft, ChevronRight, Layers3, MessageCircleQuestion, RotateCcw, Workflow } from "lucide-react";
 import {
   evaluateInteractiveFormula,
   normalizeInteractiveAnswer,
@@ -7,7 +7,10 @@ import {
   type InteractiveAnswerCalculator,
   type InteractiveAnswerChart,
   type InteractiveAnswerComparison,
+  type InteractiveAnswerDiagram,
+  type InteractiveAnswerSection,
   type InteractiveAnswerSteps,
+  type InteractiveAnswerText,
 } from "@/modules/chat/interactive-answer";
 
 const SERIES_COLORS = ["#8b9cff", "#62d6c5", "#f2b36f", "#d28be9"];
@@ -25,12 +28,14 @@ export function InteractiveAnswerBlock({ answer, onFollowUp }: InteractiveAnswer
   if (!normalized.ok) return null;
 
   const safeAnswer = normalized.answer;
-  const followUp = (context: string) => {
+  const followUp = (sectionTitle: string, context: string) => {
     if (!onFollowUp) return;
     onFollowUp(
       "Use the interactive answer titled \"" +
         safeAnswer.title +
-        "\" and this selected state: " +
+        "\", specifically the section \"" +
+        sectionTitle +
+        "\", and this selected state: " +
         context +
         " Explain or compare it as requested.",
     );
@@ -44,8 +49,10 @@ export function InteractiveAnswerBlock({ answer, onFollowUp }: InteractiveAnswer
             <BarChart3 className="size-4" />
           ) : safeAnswer.kind === "calculator" ? (
             <Calculator className="size-4" />
-          ) : safeAnswer.kind === "comparison" ? (
+          ) : safeAnswer.kind === "comparison" || safeAnswer.kind === "board" ? (
             <Layers3 className="size-4" />
+          ) : safeAnswer.kind === "diagram" ? (
+            <Workflow className="size-4" />
           ) : (
             <ArrowRight className="size-4" />
           )}
@@ -64,36 +71,175 @@ export function InteractiveAnswerBlock({ answer, onFollowUp }: InteractiveAnswer
       </header>
 
       <div className="px-4 py-4">
-        {safeAnswer.kind === "chart" && (
-          <ChartAnswer
+        {safeAnswer.kind === "board" ? (
+          <div className="space-y-5">
+            {safeAnswer.sections.map((section) => (
+              <section key={section.id} className="border-b border-white/[0.06] pb-5 last:border-b-0 last:pb-0">
+                <div className="mb-2.5">
+                  <h3 className="m-0 text-[11.5px] font-medium text-white/90">{section.title}</h3>
+                  {section.summary && (
+                    <p className="mb-0 mt-1 text-[10.5px] leading-relaxed text-[var(--color-text-dim)]">
+                      {section.summary}
+                    </p>
+                  )}
+                </div>
+                <AnswerSection
+                  answer={section}
+                  onFollowUp={(context) => followUp(section.title, context)}
+                  canFollowUp={Boolean(onFollowUp)}
+                />
+              </section>
+            ))}
+          </div>
+        ) : (
+          <AnswerSection
             answer={safeAnswer}
-            onFollowUp={(context) => followUp(context)}
-            canFollowUp={Boolean(onFollowUp)}
-          />
-        )}
-        {safeAnswer.kind === "comparison" && (
-          <ComparisonAnswer
-            answer={safeAnswer}
-            onFollowUp={(context) => followUp(context)}
-            canFollowUp={Boolean(onFollowUp)}
-          />
-        )}
-        {safeAnswer.kind === "calculator" && (
-          <CalculatorAnswer
-            answer={safeAnswer}
-            onFollowUp={(context) => followUp(context)}
-            canFollowUp={Boolean(onFollowUp)}
-          />
-        )}
-        {safeAnswer.kind === "steps" && (
-          <StepsAnswer
-            answer={safeAnswer}
-            onFollowUp={(context) => followUp(context)}
+            onFollowUp={(context) => followUp(safeAnswer.title, context)}
             canFollowUp={Boolean(onFollowUp)}
           />
         )}
       </div>
     </section>
+  );
+}
+
+function AnswerSection({
+  answer,
+  onFollowUp,
+  canFollowUp,
+}: {
+  answer: InteractiveAnswerSection;
+  onFollowUp: (context: string) => void;
+  canFollowUp: boolean;
+}) {
+  if (answer.kind === "chart") {
+    return <ChartAnswer answer={answer} onFollowUp={onFollowUp} canFollowUp={canFollowUp} />;
+  }
+  if (answer.kind === "comparison") {
+    return <ComparisonAnswer answer={answer} onFollowUp={onFollowUp} canFollowUp={canFollowUp} />;
+  }
+  if (answer.kind === "calculator") {
+    return <CalculatorAnswer answer={answer} onFollowUp={onFollowUp} canFollowUp={canFollowUp} />;
+  }
+  if (answer.kind === "steps") {
+    return <StepsAnswer answer={answer} onFollowUp={onFollowUp} canFollowUp={canFollowUp} />;
+  }
+  if (answer.kind === "diagram") {
+    return <DiagramAnswer answer={answer} onFollowUp={onFollowUp} canFollowUp={canFollowUp} />;
+  }
+  return <TextAnswer answer={answer} onFollowUp={onFollowUp} canFollowUp={canFollowUp} />;
+}
+
+function TextAnswer({
+  answer,
+  onFollowUp,
+  canFollowUp,
+}: {
+  answer: InteractiveAnswerText;
+  onFollowUp: (context: string) => void;
+  canFollowUp: boolean;
+}) {
+  return (
+    <div>
+      <p className="m-0 whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--color-text-dim)]">
+        {answer.body}
+      </p>
+      {canFollowUp && (
+        <FollowUpButton label="Ask about this section" context={answer.body} onFollowUp={onFollowUp} />
+      )}
+    </div>
+  );
+}
+
+function DiagramAnswer({
+  answer,
+  onFollowUp,
+  canFollowUp,
+}: {
+  answer: InteractiveAnswerDiagram;
+  onFollowUp: (context: string) => void;
+  canFollowUp: boolean;
+}) {
+  const [selectedId, setSelectedId] = useState(answer.nodes[0]?.id ?? "");
+  const selectedNode = answer.nodes.find((node) => node.id === selectedId) ?? answer.nodes[0];
+  const markerId = "diagram-arrow-" + answer.id.replace(/[^A-Za-z0-9_-]/g, "");
+  const nodeById = new Map(answer.nodes.map((node) => [node.id, node]));
+  const context = selectedNode ? selectedNode.label + ": " + selectedNode.description : answer.title;
+
+  return (
+    <div>
+      <div className="relative min-h-56 overflow-hidden rounded-lg border border-white/[0.07] bg-white/[0.018] [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.08)_1px,transparent_0)] [background-size:18px_18px]">
+        <svg aria-hidden="true" className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <defs>
+            <marker id={markerId} markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L5,2.5 L0,5 z" fill="#8b9cff" />
+            </marker>
+          </defs>
+          {answer.edges.map((edge, index) => {
+            const from = nodeById.get(edge.from);
+            const to = nodeById.get(edge.to);
+            if (!from || !to) return null;
+            return (
+              <g key={edge.from + "-" + edge.to + "-" + index}>
+                <line
+                  x1={from.x}
+                  y1={from.y}
+                  x2={to.x}
+                  y2={to.y}
+                  stroke="#8b9cff"
+                  strokeOpacity="0.56"
+                  strokeWidth="0.8"
+                  markerEnd={`url(#${markerId})`}
+                />
+                {edge.label && (
+                  <text
+                    x={(from.x + to.x) / 2}
+                    y={(from.y + to.y) / 2 - 2}
+                    textAnchor="middle"
+                    fill="#c7cdee"
+                    fontSize="3.2"
+                    paintOrder="stroke"
+                    stroke="#171a23"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  >
+                    {edge.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        {answer.nodes.map((node) => (
+          <button
+            key={node.id}
+            type="button"
+            aria-pressed={selectedId === node.id}
+            onClick={() => setSelectedId(node.id)}
+            title={node.label}
+            className={`absolute max-w-[28%] -translate-x-1/2 -translate-y-1/2 truncate rounded-lg border px-3 py-2 text-[10px] font-medium shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 ${
+              selectedId === node.id
+                ? "border-violet-300/55 bg-[#242839] text-white"
+                : "border-white/[0.12] bg-[#1d212b] text-white/80 hover:border-violet-300/35 hover:text-white"
+            }`}
+            style={{ left: `${node.x}%`, top: `${node.y}%` }}
+          >
+            {node.label}
+          </button>
+        ))}
+      </div>
+      {selectedNode && (
+        <div className="mt-3 rounded-lg border border-white/[0.07] bg-white/[0.018] px-3 py-2.5">
+          <h3 className="m-0 text-[11.5px] font-medium text-white">{selectedNode.label}</h3>
+          <p className="mb-0 mt-1.5 text-[11px] leading-relaxed text-[var(--color-text-dim)]">
+            {selectedNode.description}
+          </p>
+        </div>
+      )}
+      {canFollowUp && (
+        <FollowUpButton label="Ask about this part" context={context} onFollowUp={onFollowUp} />
+      )}
+    </div>
   );
 }
 
@@ -142,6 +288,94 @@ function ChartAnswer({
   const chartContext = answer.series
     .map((series) => series.name + ": " + series.values.map((value, index) => answer.labels[index] + " " + value).join(", "))
     .join("; ");
+  const horizontalLayout = answer.chartType === "bar" && (
+    answer.orientation === "horizontal" ||
+    answer.labels.length > 6 ||
+    answer.labels.some((label) => label.length > 14)
+  );
+
+  if (horizontalLayout) {
+    const horizontalMin = Math.min(0, ...values);
+    const horizontalMax = Math.max(0, ...values);
+    const horizontalRange = horizontalMax - horizontalMin || 1;
+    const zeroPosition = ((0 - horizontalMin) / horizontalRange) * 100;
+    const ticks = [0, 0.5, 1].map((fraction) => horizontalMin + horizontalRange * fraction);
+
+    return (
+      <div>
+        {answer.yAxisLabel && (
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+            {answer.yAxisLabel}
+          </p>
+        )}
+        <div className="space-y-3.5">
+          {answer.labels.map((label, labelIndex) => (
+            <div key={label + labelIndex} className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] items-start gap-x-3">
+              <span title={label} className="break-words pt-0.5 text-right text-[10.5px] leading-snug text-[var(--color-text-dim)]">
+                {label}
+              </span>
+              <div className="min-w-0 space-y-1.5">
+                {answer.series.map((series, seriesIndex) => {
+                  const value = series.values[labelIndex];
+                  const valuePosition = ((value - horizontalMin) / horizontalRange) * 100;
+                  const left = Math.min(zeroPosition, valuePosition);
+                  const width = Math.max(0.7, Math.abs(valuePosition - zeroPosition));
+                  return (
+                    <div key={series.name + label} className="flex min-w-0 items-center gap-2">
+                      <div
+                        role="img"
+                        aria-label={series.name + ", " + label + ": " + formatNumber(value)}
+                        className="relative h-3.5 min-w-0 flex-1 overflow-hidden rounded bg-white/[0.035]"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-y-0 w-px bg-white/25"
+                          style={{ left: `${zeroPosition}%` }}
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-y-0 rounded-sm"
+                          style={{
+                            left: `${left}%`,
+                            width: `${width}%`,
+                            backgroundColor: SERIES_COLORS[seriesIndex % SERIES_COLORS.length],
+                          }}
+                        />
+                      </div>
+                      <span title={series.name + ": " + formatNumber(value)} className="w-[4.75rem] shrink-0 text-right text-[10px] tabular-nums text-white/80">
+                        {formatNumber(value)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-x-3">
+          <span />
+          <div className="flex justify-between text-[9px] tabular-nums text-[var(--color-text-dim)]/80">
+            {ticks.map((tick, index) => (
+              <span key={index}>{formatNumber(tick)}</span>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+          {answer.series.map((series, index) => (
+            <span key={series.name} className="inline-flex items-center gap-1.5 text-[9.5px] text-[var(--color-text-dim)]">
+              <span className="size-2 rounded-full" style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }} />
+              {series.name}
+            </span>
+          ))}
+        </div>
+        {canFollowUp && (
+          <FollowUpButton label="Ask about this chart" context={chartContext} onFollowUp={onFollowUp} />
+        )}
+      </div>
+    );
+  }
+
+  const tickStep = Math.max(1, Math.ceil((points.length - 1) / 5));
 
   return (
     <div>
@@ -241,18 +475,22 @@ function ChartAnswer({
                 </g>
               );
             })}
-          {points.map(({ label, x }, index) => (
-            <text
-              key={label + index}
-              x={x}
-              y={chart.y + chart.height + 22}
-              textAnchor="middle"
-              fill="#9aa2b1"
-              fontSize="10"
-            >
-              {label.length > 14 ? label.slice(0, 13) + "…" : label}
-            </text>
-          ))}
+          {points.map(({ label, x }, index) => {
+            if (answer.chartType === "line" && index % tickStep !== 0 && index !== points.length - 1) return null;
+            return (
+              <text
+                key={label + index}
+                x={x}
+                y={chart.y + chart.height + 22}
+                textAnchor="middle"
+                fill="#9aa2b1"
+                fontSize="10"
+              >
+                <title>{label}</title>
+                {label.length > 14 ? label.slice(0, 13) + "…" : label}
+              </text>
+            );
+          })}
           {answer.series.map((series, index) => {
             const x = chart.x + index * 150;
             return (
@@ -345,20 +583,45 @@ function CalculatorAnswer({
   const [values, setValues] = useState<Record<string, number>>(() =>
     Object.fromEntries(answer.inputs.map((input) => [input.id, input.value])),
   );
-  const result = useMemo(
-    () => evaluateInteractiveFormula(answer.formula, values),
-    [answer.formula, values],
+  const outputs = useMemo(
+    () => answer.outputs ?? [{ label: answer.resultLabel, formula: answer.formula, suffix: answer.resultSuffix }],
+    [answer.outputs, answer.resultLabel, answer.formula, answer.resultSuffix],
   );
+  const results = useMemo(
+    () => outputs.map((output) => ({
+      ...output,
+      value: evaluateInteractiveFormula(output.formula, values),
+    })),
+    [outputs, values],
+  );
+  const changed = answer.inputs.some((input) => values[input.id] !== input.value);
 
   const updateValue = (id: string, value: number) => {
     setValues((current) => ({ ...current, [id]: value }));
   };
+  const resetValues = () => {
+    setValues(Object.fromEntries(answer.inputs.map((input) => [input.id, input.value])));
+  };
   const context =
     answer.inputs.map((input) => input.label + " = " + values[input.id] + (input.suffix ?? "")).join(", ") +
-    (result === undefined ? "" : ", " + answer.resultLabel + " = " + formatNumber(result) + (answer.resultSuffix ?? ""));
+    results.map((result) => result.value === undefined
+      ? ""
+      : ", " + result.label + " = " + formatNumber(result.value) + (result.suffix ?? ""),
+    ).join("");
 
   return (
     <div>
+      <div className="mb-2 flex justify-end">
+        <button
+          type="button"
+          disabled={!changed}
+          onClick={resetValues}
+          className="inline-flex min-h-7 items-center gap-1.5 rounded-md px-2 text-[10px] text-[var(--color-text-dim)] transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-300/50 disabled:cursor-default disabled:opacity-35"
+        >
+          <RotateCcw className="size-3" />
+          Reset inputs
+        </button>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {answer.inputs.map((input) => (
           <label key={input.id} className="rounded-lg border border-white/[0.07] bg-white/[0.018] px-3 py-2.5">
@@ -386,11 +649,15 @@ function CalculatorAnswer({
           </label>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-violet-300/15 bg-violet-300/[0.045] px-3.5 py-3">
-        <span className="text-[11px] font-medium text-[var(--color-text-dim)]">{answer.resultLabel}</span>
-        <output aria-live="polite" className="text-[21px] font-medium tabular-nums tracking-tight text-white">
-          {result === undefined ? "—" : formatNumber(result) + (answer.resultSuffix ?? "")}
-        </output>
+      <div className={`mt-3 grid gap-2 ${results.length > 1 ? "sm:grid-cols-2" : ""}`}>
+        {results.map((result) => (
+          <div key={result.label} className="flex min-w-0 flex-wrap items-end justify-between gap-2 rounded-lg border border-violet-300/15 bg-violet-300/[0.045] px-3.5 py-3">
+            <span className="text-[11px] font-medium text-[var(--color-text-dim)]">{result.label}</span>
+            <output aria-live="polite" className="text-[21px] font-medium tabular-nums tracking-tight text-white">
+              {result.value === undefined ? "—" : formatNumber(result.value) + (result.suffix ?? "")}
+            </output>
+          </div>
+        ))}
       </div>
       {canFollowUp && (
         <FollowUpButton

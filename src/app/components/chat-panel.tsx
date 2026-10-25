@@ -94,8 +94,6 @@ export function ChatPanel({
   onEditSave,
   onStop,
 }: ChatPanelProps) {
-  const reasoningEnabled = useSettingsStore((s) => s.reasoningEnabled);
-  const setReasoningEnabled = useSettingsStore((s) => s.setReasoningEnabled);
   const enhancedModeEnabled = useSettingsStore((s) => s.enhancedModeEnabled);
   const setEnhancedModeEnabled = useSettingsStore((s) => s.setEnhancedModeEnabled);
   const streamingBuffer = useChatStore((s) => s.streamingBuffer);
@@ -309,8 +307,6 @@ export function ChatPanel({
           </div>
         )}
         <Composer
-          reasoningEnabled={reasoningEnabled}
-          onReasoningEnabledChange={setReasoningEnabled}
           enhancedMode={enhancedModeEnabled}
           onEnhancedModeChange={setEnhancedModeEnabled}
           mode={mode}

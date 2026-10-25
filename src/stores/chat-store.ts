@@ -2,6 +2,8 @@ import { create } from "zustand";
 import type { ChatMessage, Conversation, ModelLoadProgress, ToolCallState, WebSearchRound, WebSearchState } from "@/modules/chat/chat-types";
 import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
 import { MAX_INTERACTIVE_ANSWER_CHARS } from "@/modules/chat/interactive-answer";
+import type { Artifact } from "@/modules/chat/artifact";
+import { artifactByteLength, MAX_ARTIFACT_BYTES, normalizeArtifact } from "@/modules/chat/artifact";
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { normalizeAttachment } from "@/lib/message-attachments";
 import { abortPendingQuestion } from "@/modules/chat/pending-question-registry";
@@ -59,6 +61,8 @@ type ChatStore = {
     messageId: string,
     answer: InteractiveAnswer,
   ) => boolean;
+  setAssistantArtifact: (conversationId: string, messageId: string, artifact: Artifact) => boolean;
+  updateAssistantDocument: (messageId: string, title: string, content: string) => boolean;
   updateToolCallState: (toolCallId: string, patch: Partial<ToolCallState>) => void;
   appendToScratchpad: (conversationId: string, messageId: string, content: string) => void;
   setPendingQuestion: (question: { toolCallId: string; questions: Array<{ text: string; options?: string[] }>; answers: Record<number, string> } | null) => void;
@@ -396,6 +400,48 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           return { ...message, interactiveAnswer: answer };
         });
         return updated ? { ...conversation, messages, updatedAt: Date.now() } : conversation;
+      });
+      if (!updated) return state;
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+    return updated;
+  },
+  setAssistantArtifact: (conversationId, messageId, artifact) => {
+    if (artifactByteLength(artifact.content) > MAX_ARTIFACT_BYTES) return false;
+    let updated = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        let conversationUpdated = false;
+        const messages = conversation.messages.map((message) => {
+          if (message.id !== messageId || message.role !== "assistant" || message.artifact) return message;
+          updated = conversationUpdated = true;
+          return { ...message, artifact };
+        });
+        return conversationUpdated ? { ...conversation, messages, updatedAt: Date.now() } : conversation;
+      });
+      if (!updated) return state;
+      void saveConversationSnapshot(conversations);
+      return { conversations };
+    });
+    return updated;
+  },
+  updateAssistantDocument: (messageId, title, content) => {
+    if (artifactByteLength(content) > MAX_ARTIFACT_BYTES) return false;
+    let updated = false;
+    set((state) => {
+      const conversations = state.conversations.map((conversation) => {
+        let conversationUpdated = false;
+        const messages = conversation.messages.map((message) => {
+          const existing = message.artifact;
+          if (message.id !== messageId || message.role !== "assistant" || existing?.format !== "document") return message;
+          const normalized = normalizeArtifact({ ...existing, title, content }, existing.id, existing.createdAt);
+          if (!normalized.ok) return message;
+          updated = conversationUpdated = true;
+          return { ...message, artifact: normalized.artifact };
+        });
+        return conversationUpdated ? { ...conversation, messages, updatedAt: Date.now() } : conversation;
       });
       if (!updated) return state;
       void saveConversationSnapshot(conversations);

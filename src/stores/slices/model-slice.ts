@@ -1,4 +1,5 @@
 import type { StateCreator } from "zustand";
+import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
 
 export type ModelSettings = {
   temperature?: number;
@@ -36,6 +37,10 @@ export type ModelSliceState = {
   defaultSystemPrompt: string;
   modelOverrides: Record<string, ModelSettings>;
   reasoningEnabled: boolean;
+  /** Global fallback effort used when a model has no explicit choice. */
+  reasoningLevel: ReasoningLevel;
+  /** Per provider/model/endpoint reasoning level (see reasoningModelKey). */
+  reasoningLevelByModel: Record<string, ReasoningLevel>;
   backgroundJobsEnabled: boolean;
   autoSummarizeChats: boolean;
   summaryModel: string;
@@ -57,6 +62,8 @@ export type ModelSliceActions = {
   clearModelOverride: (modelId: string) => void;
   getModelSettings: (modelId: string) => ResolvedModelSettings;
   setReasoningEnabled: (enabled: boolean) => void;
+  setReasoningLevel: (level: ReasoningLevel) => void;
+  setModelReasoningLevel: (key: string, level: ReasoningLevel) => void;
   setBackgroundJobsEnabled: (enabled: boolean) => void;
   setAutoSummarizeChats: (enabled: boolean) => void;
   setSummaryModel: (modelId: string) => void;
@@ -76,6 +83,8 @@ export const DEFAULT_MODEL_STATE: ModelSliceState = {
   defaultSystemPrompt: "",
   modelOverrides: {},
   reasoningEnabled: true,
+  reasoningLevel: "medium",
+  reasoningLevelByModel: {},
   backgroundJobsEnabled: true,
   autoSummarizeChats: false,
   summaryModel: "",
@@ -128,7 +137,14 @@ export const createModelSlice: StateCreator<ModelSlice, [], [], ModelSlice> = (s
       systemPrompt: override?.systemPrompt ?? state.defaultSystemPrompt,
     };
   },
-  setReasoningEnabled: (reasoningEnabled) => set({ reasoningEnabled }),
+  setReasoningEnabled: (reasoningEnabled) => set((state) => ({
+    reasoningEnabled,
+    reasoningLevel: reasoningEnabled ? (state.reasoningLevel === "off" ? "medium" : state.reasoningLevel) : "off",
+  })),
+  setReasoningLevel: (reasoningLevel) => set({ reasoningLevel }),
+  setModelReasoningLevel: (key, level) => set((state) => ({
+    reasoningLevelByModel: { ...state.reasoningLevelByModel, [key]: level },
+  })),
   setBackgroundJobsEnabled: (backgroundJobsEnabled) => set({ backgroundJobsEnabled }),
   setAutoSummarizeChats: (autoSummarizeChats) => set({ autoSummarizeChats }),
   setSummaryModel: (summaryModel) => set({ summaryModel }),

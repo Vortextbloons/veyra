@@ -8,6 +8,7 @@ export type InteractiveAnswerBase = {
 export type InteractiveAnswerChart = InteractiveAnswerBase & {
   kind: "chart";
   chartType: "bar" | "line";
+  orientation?: "vertical" | "horizontal";
   labels: string[];
   series: Array<{ name: string; values: number[] }>;
   yAxisLabel?: string;
@@ -33,6 +34,7 @@ export type InteractiveAnswerCalculator = InteractiveAnswerBase & {
   formula: string;
   resultLabel: string;
   resultSuffix?: string;
+  outputs?: Array<{ label: string; formula: string; suffix?: string }>;
 };
 
 export type InteractiveAnswerSteps = InteractiveAnswerBase & {
@@ -40,11 +42,39 @@ export type InteractiveAnswerSteps = InteractiveAnswerBase & {
   steps: Array<{ title: string; description: string }>;
 };
 
-export type InteractiveAnswer =
+export type InteractiveAnswerText = InteractiveAnswerBase & {
+  kind: "text";
+  body: string;
+};
+
+export type InteractiveAnswerDiagram = InteractiveAnswerBase & {
+  kind: "diagram";
+  nodes: Array<{
+    id: string;
+    label: string;
+    description: string;
+    x: number;
+    y: number;
+  }>;
+  edges: Array<{ from: string; to: string; label?: string }>;
+};
+
+export type InteractiveAnswerSection =
+  | InteractiveAnswerText
   | InteractiveAnswerChart
   | InteractiveAnswerComparison
   | InteractiveAnswerCalculator
-  | InteractiveAnswerSteps;
+  | InteractiveAnswerSteps
+  | InteractiveAnswerDiagram;
+
+export type InteractiveAnswerBoard = InteractiveAnswerBase & {
+  kind: "board";
+  sections: InteractiveAnswerSection[];
+};
+
+export type InteractiveAnswer =
+  | InteractiveAnswerSection
+  | InteractiveAnswerBoard;
 
 export type InteractiveAnswerNormalization =
   | { ok: true; answer: InteractiveAnswer }
@@ -55,9 +85,16 @@ export const MAX_INTERACTIVE_ANSWER_CHARS = 24_000;
 const MAX_ABS_VALUE = 1_000_000_000;
 
 export function summarizeInteractiveAnswer(answer: InteractiveAnswer): string {
-  const kindLabel = answer.kind === "steps" ? "step-by-step explanation" : answer.kind;
+  const kindLabel = answer.kind === "steps"
+    ? "step-by-step explanation"
+    : answer.kind === "board"
+      ? "interactive experience"
+      : answer.kind;
   const summary = typeof answer.summary === "string" ? answer.summary.trim() : "";
-  return "Interactive " + kindLabel + ": " + answer.title + (summary ? ". " + summary : ".");
+  const sections = answer.kind === "board"
+    ? " Includes " + answer.sections.map((section) => section.kind).join(", ") + "."
+    : "";
+  return "Interactive " + kindLabel + ": " + answer.title + (summary ? ". " + summary : ".") + sections;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,6 +140,14 @@ export function normalizeInteractiveAnswer(
   raw: Record<string, unknown>,
   id: string,
 ): InteractiveAnswerNormalization {
+  return normalizeInteractiveAnswerValue(raw, id, true);
+}
+
+function normalizeInteractiveAnswerValue(
+  raw: Record<string, unknown>,
+  id: string,
+  allowBoard: boolean,
+): InteractiveAnswerNormalization {
   if (raw.version !== undefined && raw.version !== 1) {
     return { ok: false, error: "This interactive answer version is not supported." };
   }
@@ -124,10 +169,99 @@ export function normalizeInteractiveAnswer(
     };
   }
 
+  if (raw.kind === "board") {
+    if (!allowBoard || !Array.isArray(raw.sections) || raw.sections.length < 2 || raw.sections.length > 6) {
+      return { ok: false, error: "An interactive experience needs 2–6 sections and cannot contain another experience." };
+    }
+    const sections = raw.sections.map((section, index) => {
+      if (!isRecord(section)) return undefined;
+      const normalized = normalizeInteractiveAnswerValue(section, id + "_section_" + (index + 1), false);
+      return normalized.ok ? normalized.answer : undefined;
+    });
+    if (sections.some((section) => !section)) {
+      return { ok: false, error: "Every experience section must be a valid text, chart, comparison, calculator, explainer, or diagram." };
+    }
+    return {
+      ok: true,
+      answer: {
+        ...base.fields,
+        kind: "board",
+        sections: sections as InteractiveAnswerSection[],
+      },
+    };
+  }
+
+  if (raw.kind === "text") {
+    const body = text(raw.body, 1600);
+    if (!body) return { ok: false, error: "A text section needs a short body under 1,600 characters." };
+    return { ok: true, answer: { ...base.fields, kind: "text", body } };
+  }
+
+  if (raw.kind === "diagram") {
+    if (!Array.isArray(raw.nodes) || raw.nodes.length < 2 || raw.nodes.length > 10) {
+      return { ok: false, error: "A diagram needs 2–10 nodes." };
+    }
+    const nodes = raw.nodes.map((entry) => {
+      if (!isRecord(entry)) return undefined;
+      const nodeId = text(entry.id, 24);
+      const label = text(entry.label, 48);
+      const description = text(entry.description, 240);
+      const x = finiteNumber(entry.x);
+      const y = finiteNumber(entry.y);
+      if (!nodeId || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(nodeId) || !label || !description || x === undefined || y === undefined || x < 20 || x > 80 || y < 14 || y > 86) {
+        return undefined;
+      }
+      return { id: nodeId, label, description, x, y };
+    });
+    if (nodes.some((node) => !node) || new Set((nodes as NonNullable<(typeof nodes)[number]>[]).map((node) => node.id)).size !== nodes.length) {
+      return { ok: false, error: "Diagram nodes need unique ids, labels, descriptions, x positions from 20–80, and y positions from 14–86." };
+    }
+    const validNodes = nodes as NonNullable<(typeof nodes)[number]>[];
+    const hasOverlappingNodes = validNodes.some((node, index) =>
+      validNodes.slice(index + 1).some((other) =>
+        Math.abs(node.x - other.x) < 28 && Math.abs(node.y - other.y) < 16,
+      ),
+    );
+    if (hasOverlappingNodes) {
+      return { ok: false, error: "Diagram nodes overlap. Space each pair at least 28 percentage points apart horizontally or 16 vertically." };
+    }
+    if (!Array.isArray(raw.edges) || raw.edges.length < 1 || raw.edges.length > 16) {
+      return { ok: false, error: "A diagram needs 1–16 connections." };
+    }
+    const nodeIds = new Set(validNodes.map((node) => node.id));
+    const edges = raw.edges.map((entry) => {
+      if (!isRecord(entry)) return undefined;
+      const from = text(entry.from, 24);
+      const to = text(entry.to, 24);
+      const label = entry.label === undefined ? undefined : text(entry.label, 36);
+      if (!from || !to || from === to || !nodeIds.has(from) || !nodeIds.has(to) || (entry.label !== undefined && !label)) {
+        return undefined;
+      }
+      return { from, to, ...(label ? { label } : {}) };
+    });
+    if (edges.some((edge) => !edge)) {
+      return { ok: false, error: "Every diagram connection must join two different existing nodes." };
+    }
+    return {
+      ok: true,
+      answer: {
+        ...base.fields,
+        kind: "diagram",
+        nodes: validNodes,
+        edges: edges as InteractiveAnswerDiagram["edges"],
+      },
+    };
+  }
+
   if (raw.kind === "chart") {
     const chartType = raw.chartType === "line" ? "line" : raw.chartType === "bar" ? "bar" : undefined;
+    const orientation = raw.orientation === undefined
+      ? undefined
+      : raw.orientation === "horizontal" || raw.orientation === "vertical"
+        ? raw.orientation
+        : null;
     const labels = textArray(raw.labels, 2, 12, 32);
-    if (!chartType || !labels || !Array.isArray(raw.series) || raw.series.length < 1 || raw.series.length > 4) {
+    if (!chartType || orientation === null || !labels || !Array.isArray(raw.series) || raw.series.length < 1 || raw.series.length > 4) {
       return { ok: false, error: "A chart needs 2–12 labels, a bar or line style, and 1–4 data series." };
     }
     const series = raw.series.map((entry) => {
@@ -152,6 +286,7 @@ export function normalizeInteractiveAnswer(
         ...base.fields,
         kind: "chart",
         chartType,
+        ...(orientation ? { orientation } : {}),
         labels,
         series: series as InteractiveAnswerChart["series"],
         ...(yAxisLabel ? { yAxisLabel } : {}),
@@ -224,16 +359,41 @@ export function normalizeInteractiveAnswer(
     if (new Set(validInputs.map((input) => input.id)).size !== validInputs.length) {
       return { ok: false, error: "Calculator input names must be unique." };
     }
-    const formula = text(raw.formula, 160);
-    const resultLabel = text(raw.resultLabel, 48);
-    const resultSuffix = raw.resultSuffix === undefined ? undefined : text(raw.resultSuffix, 12);
-    if (!formula || !resultLabel || (raw.resultSuffix !== undefined && !resultSuffix)) {
-      return { ok: false, error: "A calculator needs a short formula and result label." };
-    }
     const initialValues = Object.fromEntries(validInputs.map((input) => [input.id, input.value]));
-    if (evaluateInteractiveFormula(formula, initialValues) === undefined) {
+    let outputs: InteractiveAnswerCalculator["outputs"];
+    if (raw.outputs !== undefined) {
+      if (!Array.isArray(raw.outputs) || raw.outputs.length < 1 || raw.outputs.length > 4) {
+        return { ok: false, error: "A calculator can show 1–4 results." };
+      }
+      const normalizedOutputs = raw.outputs.map((entry) => {
+        if (!isRecord(entry)) return undefined;
+        const label = text(entry.label, 48);
+        const outputFormula = text(entry.formula, 160);
+        const suffix = entry.suffix === undefined ? undefined : text(entry.suffix, 12);
+        if (!label || !outputFormula || (entry.suffix !== undefined && !suffix) || evaluateInteractiveFormula(outputFormula, initialValues) === undefined) {
+          return undefined;
+        }
+        return { label, formula: outputFormula, ...(suffix ? { suffix } : {}) };
+      });
+      if (normalizedOutputs.some((output) => !output)) {
+        return { ok: false, error: "Each calculator result needs a valid label and a finite arithmetic formula." };
+      }
+      const validOutputs = normalizedOutputs as NonNullable<InteractiveAnswerCalculator["outputs"]>;
+      if (new Set(validOutputs.map((output) => output.label.toLowerCase())).size !== validOutputs.length) {
+        return { ok: false, error: "Calculator result labels must be unique." };
+      }
+      outputs = validOutputs;
+    }
+    const formula = outputs?.[0]?.formula ?? text(raw.formula, 160);
+    const resultLabel = outputs?.[0]?.label ?? text(raw.resultLabel, 48);
+    const resultSuffix = outputs?.[0]?.suffix ?? (raw.resultSuffix === undefined ? undefined : text(raw.resultSuffix, 12));
+    if (!formula || !resultLabel || (raw.resultSuffix !== undefined && !resultSuffix)) {
+      return { ok: false, error: "A calculator needs a short formula and result label, or one or more result formulas." };
+    }
+    if (!outputs && evaluateInteractiveFormula(formula, initialValues) === undefined) {
       return { ok: false, error: "The calculator formula is invalid or does not produce a finite result." };
     }
+    if (!outputs) outputs = [{ label: resultLabel, formula, ...(resultSuffix ? { suffix: resultSuffix } : {}) }];
     return {
       ok: true,
       answer: {
@@ -243,6 +403,7 @@ export function normalizeInteractiveAnswer(
         formula,
         resultLabel,
         ...(resultSuffix ? { resultSuffix } : {}),
+        outputs,
       },
     };
   }

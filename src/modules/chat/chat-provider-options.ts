@@ -2,6 +2,13 @@ import type { ProviderToolDefinition } from "@/lib/providers/types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { buildProviderTools } from "@/lib/tool-registry";
+import {
+  effectiveReasoningLevel,
+  getCachedReasoningControl,
+  getCachedReasoningLevels,
+  reasoningModelKey,
+  type ReasoningLevel,
+} from "@/lib/reasoning-capabilities";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
@@ -17,6 +24,7 @@ export type ResolvedModelSettings = {
   userPrompt: string | undefined;
   temperature: number;
   reasoningEnabled: boolean;
+  reasoningLevel: ReasoningLevel;
 };
 
 export type ProviderTooling = {
@@ -34,10 +42,22 @@ export function resolveModelSettings(
     topP?: number;
     repetitionPenalty?: number;
     stopSequences?: string[];
+    providerId?: string;
   },
 ): ResolvedModelSettings {
   const settings = useSettingsStore.getState();
   const modelSettings = settings.getModelSettings(modelId);
+  const providerState = useProviderStore.getState();
+  const providerId = overrides.providerId ?? providerState.selectedProvider;
+  const baseUrl = providerState.cloudProviders.find((provider) => provider.id === providerId)?.baseUrl;
+  const reasoningKey = reasoningModelKey(providerId, modelId, baseUrl);
+  const storedLevel = settings.reasoningLevelByModel[reasoningKey] ?? settings.reasoningLevel;
+  const cachedLevels = getCachedReasoningLevels(reasoningKey);
+  const reasoningLevel = getCachedReasoningControl(reasoningKey) === "none"
+    ? "off"
+    : cachedLevels?.length
+      ? effectiveReasoningLevel(storedLevel, cachedLevels)
+      : storedLevel;
   return {
     contextLength: overrides.contextLength ?? modelSettings.contextLength,
     maxTokens: overrides.maxTokens ?? modelSettings.maxTokens,
@@ -47,7 +67,8 @@ export function resolveModelSettings(
     reservedOutputTokens: modelSettings.reservedOutputTokens,
     userPrompt: modelSettings.systemPrompt || undefined,
     temperature: modelSettings.temperature,
-    reasoningEnabled: settings.reasoningEnabled,
+    reasoningEnabled: reasoningLevel !== "off",
+    reasoningLevel,
   };
 }
 
@@ -92,6 +113,7 @@ export function resolveProviderTooling({
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
     enhancedMode,
     interactiveAnswersEnabled: useSettingsStore.getState().interactiveAnswersEnabled,
+    artifactsEnabled: useSettingsStore.getState().artifactsEnabled,
   }), ...buildMcpProviderTools(extensions.mcpServers, projectId, extensions.featureFlags, conversationId ? extensions.chatDisabledMcpServerIds[conversationId] ?? [] : [], conversationId ? extensions.chatEnabledMcpServerIds[conversationId] ?? [] : [])];
 
   return {

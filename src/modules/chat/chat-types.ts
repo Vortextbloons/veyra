@@ -6,6 +6,7 @@ import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult } from "@/modules/web-search/types";
 import type { FetchStatus } from "@/lib/fetch-status";
 import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
+import type { Artifact } from "@/modules/chat/artifact";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -90,6 +91,8 @@ export interface ChatMessage {
   scratchpadContent?: string;
   /** Structured interactive answer generated during an Enhanced chat turn. */
   interactiveAnswer?: InteractiveAnswer;
+  /** Finished HTML, code, or document output owned by this assistant message. */
+  artifact?: Artifact;
   /** Model id that produced this assistant message. Used to render the
    *  correct avatar/label even when the active model changes later. */
   modelId?: string;

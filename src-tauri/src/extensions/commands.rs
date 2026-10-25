@@ -172,6 +172,7 @@ pub async fn discover_stdio_mcp(executable: String, arguments: Vec<String>, work
         if !path.is_dir() { return Err("MCP working directory does not exist".into()); }
         command.current_dir(path);
     }
+    crate::shared::process::hide_console_async(&mut command);
     let transport = TokioChildProcess::new(command).map_err(|error| format!("MCP server could not start: {error}"))?;
     let mut client = ().serve(transport).await.map_err(|error| format!("MCP initialization failed: {error}"))?;
     let tools = client.peer().list_tools(Default::default()).await.map_err(|error| format!("MCP tools discovery failed: {error}"))?;
@@ -232,6 +233,7 @@ pub async fn read_stdio_mcp_resource(executable: String, arguments: Vec<String>,
     if executable.trim().is_empty() || uri.trim().is_empty() { return Err("MCP resource configuration is invalid".into()); }
     let mut command = tokio::process::Command::new(executable); command.args(arguments);
     if let Some(directory) = working_directory.filter(|value| !value.trim().is_empty()) { command.current_dir(directory); }
+    crate::shared::process::hide_console_async(&mut command);
     let transport = TokioChildProcess::new(command).map_err(|error| format!("MCP server could not start: {error}"))?;
     let mut client = ().serve(transport).await.map_err(|error| format!("MCP initialization failed: {error}"))?;
     let result = client.peer().read_resource(ReadResourceRequestParams::new(uri)).await.map_err(|error| format!("MCP resource read failed: {error}"))?;
@@ -244,6 +246,7 @@ pub async fn get_stdio_mcp_prompt(executable: String, arguments: Vec<String>, wo
     if executable.trim().is_empty() || name.trim().is_empty() { return Err("MCP prompt configuration is invalid".into()); }
     let mut command = tokio::process::Command::new(executable); command.args(arguments);
     if let Some(directory) = working_directory.filter(|value| !value.trim().is_empty()) { command.current_dir(directory); }
+    crate::shared::process::hide_console_async(&mut command);
     let transport = TokioChildProcess::new(command).map_err(|error| format!("MCP server could not start: {error}"))?;
     let mut client = ().serve(transport).await.map_err(|error| format!("MCP initialization failed: {error}"))?;
     let result = client.peer().get_prompt(GetPromptRequestParams::new(name).with_arguments(prompt_arguments)).await.map_err(|error| format!("MCP prompt retrieval failed: {error}"))?;
@@ -257,6 +260,7 @@ pub async fn call_stdio_mcp(executable: String, arguments: Vec<String>, working_
     let mut command = tokio::process::Command::new(&executable);
     command.args(&arguments);
     if let Some(directory) = working_directory.filter(|value| !value.trim().is_empty()) { command.current_dir(PathBuf::from(directory)); }
+    crate::shared::process::hide_console_async(&mut command);
     let transport = TokioChildProcess::new(command).map_err(|error| format!("MCP server could not start: {error}"))?;
     let mut client = ().serve(transport).await.map_err(|error| format!("MCP initialization failed: {error}"))?;
     let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(30_000).clamp(1_000, 120_000));

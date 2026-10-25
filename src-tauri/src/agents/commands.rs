@@ -44,10 +44,13 @@ pub struct StartPiAgentInput {
 pub async fn check_pi_available() -> bool {
     tauri::async_runtime::spawn_blocking(|| {
         pi_candidates().iter().any(|candidate| {
-            Command::new(candidate)
+            let mut command = Command::new(candidate);
+            command
                 .arg("--version")
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
+                .stderr(Stdio::piped());
+            crate::shared::process::hide_console(&mut command);
+            command
                 .output()
                 .is_ok_and(|output| output.status.success())
         })

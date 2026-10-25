@@ -51,8 +51,8 @@ export function executeInteractiveAnswerCall(
     return "Tool result for " + INTERACTIVE_ANSWER_TOOL_NAME + ": this assistant response is no longer available.";
   }
   if (owner.interactiveAnswer) {
-    setToolState(context, call, "error", "Only one interactive answer can be attached to a response.");
-    return "Tool result for " + INTERACTIVE_ANSWER_TOOL_NAME + ": only one interactive answer can be attached to a response.";
+    setToolState(context, call, "error", "An interactive answer is already attached to this response. Combine the useful sections into one board.");
+    return "Tool result for " + INTERACTIVE_ANSWER_TOOL_NAME + ": an interactive answer is already attached to this response; combine useful sections into one board.";
   }
 
   const normalized = normalizeInteractiveAnswer(call.arguments, call.id);

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Globe, LayoutDashboard, Sparkles, TerminalSquare, X, Zap } from "lucide-react";
+import { Globe, LayoutDashboard, TerminalSquare, X, Zap } from "lucide-react";
 import { DialogSurface } from "@/components/dialog-surface";
 import { ChatExtensionsSettings } from "@/modules/extensions/components/chat-extensions-settings";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -7,8 +7,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 export type ChatOptionsMenuProps = {
   open: boolean;
   onClose: () => void;
-  reasoningEnabled: boolean;
-  onReasoningEnabledChange: (on: boolean) => void;
   enhancedMode: boolean;
   onEnhancedModeChange: (on: boolean) => void;
   webSearchEnabled: boolean;
@@ -145,8 +143,6 @@ function SectionLabel({ children }: { children: ReactNode }) {
 export function ChatOptionsMenu({
   open,
   onClose,
-  reasoningEnabled,
-  onReasoningEnabledChange,
   enhancedMode,
   onEnhancedModeChange,
   webSearchEnabled,
@@ -208,13 +204,6 @@ export function ChatOptionsMenu({
           <div id="chat-settings-panel" role="tabpanel" aria-label="Chat">
             <SectionLabel>Conversation</SectionLabel>
             <SettingRow
-              icon={<Sparkles className="size-4" />}
-              label="Reasoning"
-              description="Show deeper analysis"
-              active={reasoningEnabled}
-              onToggle={onReasoningEnabledChange}
-            />
-            <SettingRow
               icon={<Zap className="size-4" />}
               label="Enhanced"
               description="More tool rounds, notes, and follow-up questions"
@@ -226,7 +215,7 @@ export function ChatOptionsMenu({
                 <SettingRow
                   icon={<LayoutDashboard className="size-4" />}
                   label="Interactive answers"
-                  description="Create charts, comparisons, calculators, and explainers"
+                  description="Let AI compose charts, tools, diagrams, and explainers"
                   active={interactiveAnswersEnabled}
                   onToggle={setInteractiveAnswersEnabled}
                   iconActiveClass="text-violet-300"

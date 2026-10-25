@@ -81,6 +81,8 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     defaultSystemPrompt: state.defaultSystemPrompt,
     modelOverrides: state.modelOverrides,
     reasoningEnabled: state.reasoningEnabled,
+    reasoningLevel: state.reasoningLevel,
+    reasoningLevelByModel: state.reasoningLevelByModel,
     backgroundJobsEnabled: state.backgroundJobsEnabled,
     autoSummarizeChats: state.autoSummarizeChats,
     summaryModel: state.summaryModel,
@@ -105,6 +107,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     enhancedModeEnabled: state.enhancedModeEnabled,
     interactiveAnswersEnabled: state.interactiveAnswersEnabled,
+    artifactsEnabled: state.artifactsEnabled,
     research: state.research,
     researchAdvancedOpen: state.researchAdvancedOpen,
     researchFirstRunNoticeDismissed: state.researchFirstRunNoticeDismissed,
@@ -168,6 +171,12 @@ export const useSettingsStore = create<SettingsStore>()(
           depthOverrides: parsed.research?.depthOverrides ?? {},
           customProfiles: parsed.research?.customProfiles ?? [],
         };
+        if (parsed.reasoningLevel === undefined) {
+          migrated.reasoningLevel = parsed.reasoningEnabled === false ? "off" : "medium";
+        }
+        if (parsed.reasoningLevelByModel === undefined) {
+          migrated.reasoningLevelByModel = {};
+        }
         return { ...current, ...DEFAULT_STATE, ...migrated };
       },
     },

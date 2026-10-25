@@ -9,6 +9,7 @@ import { readV1SseStream } from "@/lib/lm-studio-sse";
 import { withFetchTimeout } from "@/lib/abort-utils";
 import { parseToolArguments, stableToolCallId, extractToolCalls } from "@/lib/lm-studio-v1";
 import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
+import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
 import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import {
@@ -74,6 +75,7 @@ function buildOpenAiChatBody(options: {
   toolChoice?: "auto" | "none";
   stream?: boolean;
   reasoningEnabled?: boolean;
+  reasoningLevel?: ReasoningLevel;
   responseFormat?: { type: "json_object" | "text" };
   omitUnsupportedFields?: boolean;
 }): Record<string, unknown> {
@@ -91,7 +93,16 @@ function buildOpenAiChatBody(options: {
     body.tools = options.tools;
     body.tool_choice = options.toolChoice ?? "auto";
   }
-  if (options.reasoningEnabled === false && !options.omitUnsupportedFields) {
+  if (options.reasoningLevel && !options.omitUnsupportedFields) {
+    // Pi already limits these levels to what the model advertises. Collapse
+    // values older OpenAI-compatible APIs do not understand.
+    body.reasoning_effort =
+      options.reasoningLevel === "off"
+        ? "none"
+        : options.reasoningLevel === "xhigh" || options.reasoningLevel === "max"
+          ? "high"
+          : options.reasoningLevel;
+  } else if (options.reasoningEnabled === false && !options.omitUnsupportedFields) {
     body.reasoning_effort = "none";
   }
   if (options.responseFormat?.type === "json_object") {
@@ -243,6 +254,7 @@ export type OpenAiChatSendOptions = {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  reasoningLevel?: ReasoningLevel;
   responseFormat?: { type: "json_object" | "text" };
   headers?: Record<string, string>;
   omitUnsupportedFields?: boolean;

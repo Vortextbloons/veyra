@@ -27,6 +27,27 @@ function locatePi() {
 }
 
 const normalizeUrl = (value) => value?.replace(/\/+$/, "");
+
+/** Print the directory Pi uses for its model registry (models.json lives here). */
+export async function printAgentDir() {
+  const root = locatePi();
+  const sdk = await import(pathToFileURL(join(root, "dist/index.js")).href);
+  console.log(sdk.getAgentDir());
+}
+
+/** Build a model registry across Pi SDK versions (ModelRuntime is the current API). */
+async function createRegistry(sdk) {
+  if (typeof sdk.ModelRuntime?.create === "function") {
+    const runtime = await sdk.ModelRuntime.create({ allowModelNetwork: false });
+    return typeof sdk.ModelRegistry === "function" ? new sdk.ModelRegistry(runtime) : runtime;
+  }
+  const auth = sdk.AuthStorage?.inMemory?.();
+  if (!auth || typeof sdk.ModelRegistry?.create !== "function") {
+    throw new Error("Pi model registry API is unavailable");
+  }
+  return sdk.ModelRegistry.create(auth);
+}
+
 export async function main() {
 try {
   const [providerId, modelId, baseUrl, requested, contextLength, maxTokens] = process.argv.slice(1);
@@ -37,8 +58,7 @@ try {
   const aiPath = aiRoots.flatMap((directory) => [join(directory, "dist/compat.js"), join(directory, "dist/index.js")]).find(existsSync);
   if (!aiPath) throw new Error("Pi reasoning helpers not found");
   const ai = await import(pathToFileURL(aiPath).href);
-  const auth = sdk.AuthStorage.inMemory();
-  let registry = sdk.ModelRegistry.create(auth);
+  let registry = await createRegistry(sdk);
   let models = await registry.getAll();
   const input = { providerId, modelId, baseUrl, requested, contextLength, maxTokens };
   let result = resolveModelReasoning(models, input, ai);
@@ -51,7 +71,7 @@ try {
     const temporary = `${path}.${process.pid}.tmp`;
     writeFileSync(temporary, JSON.stringify(configured.config, null, 2), { mode: 0o600 });
     renameSync(temporary, path);
-    registry = sdk.ModelRegistry.create(auth);
+    registry = await createRegistry(sdk);
     models = await registry.getAll();
     result = resolveModelReasoning(models, { ...input, providerId: configured.provider }, ai);
   }

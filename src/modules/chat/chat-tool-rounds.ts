@@ -6,6 +6,7 @@ import {
   SCRATCHPAD_TOOL_NAME,
   ASK_QUESTION_TOOL_NAME,
   INTERACTIVE_ANSWER_TOOL_NAME,
+  CREATE_ARTIFACT_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
@@ -22,6 +23,7 @@ import {
 import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
 import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
 import { executeInteractiveAnswerCall } from "@/modules/chat/tools/interactive-answer-tool";
+import { executeArtifactCall } from "@/modules/chat/tools/artifact-tool";
 import { findCapabilityGrant, isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
 
@@ -51,9 +53,10 @@ export async function executeToolRound(
   const scratchpadCalls = toolCalls.filter((call) => call.name === SCRATCHPAD_TOOL_NAME);
   const askQuestionCalls = toolCalls.filter((call) => call.name === ASK_QUESTION_TOOL_NAME);
   const interactiveAnswerCalls = toolCalls.filter((call) => call.name === INTERACTIVE_ANSWER_TOOL_NAME);
+  const artifactCalls = toolCalls.filter((call) => call.name === CREATE_ARTIFACT_TOOL_NAME);
   const mcpCalls = toolCalls.filter((call) => call.name.startsWith("mcp_"));
 
-  registerStreamingToolCalls(toolCalls.filter((call) => call.name !== INTERACTIVE_ANSWER_TOOL_NAME), "running", (call) => {
+  registerStreamingToolCalls(toolCalls.filter((call) => call.name !== INTERACTIVE_ANSWER_TOOL_NAME && call.name !== CREATE_ARTIFACT_TOOL_NAME), "running", (call) => {
     if (call.name === WEB_SEARCH_TOOL_NAME) return stringArg(call.arguments, "query");
     if (call.name === CODE_EXEC_TOOL_NAME) {
       return summarizeCodeSnippet(stripPythonCodeFence(stringArg(call.arguments, "code")));
@@ -68,6 +71,14 @@ export async function executeToolRound(
 
   for (const call of interactiveAnswerCalls) {
     toolResultSections.push(executeInteractiveAnswerCall(call, {
+      signal: ctx.signal,
+      conversationId: ctx.conversationId,
+      assistantMessageId: ctx.assistantMessageId ?? "",
+    }));
+  }
+
+  for (const call of artifactCalls) {
+    toolResultSections.push(executeArtifactCall(call, {
       signal: ctx.signal,
       conversationId: ctx.conversationId,
       assistantMessageId: ctx.assistantMessageId ?? "",

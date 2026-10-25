@@ -20,6 +20,12 @@ import {
 import { ModeSelector } from "@/modules/chat/components/mode-selector";
 import { FileTypeIcon, FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
 import { ChatOptionsMenu } from "@/modules/chat/components/chat-options-menu";
+import { ReasoningSlider } from "@/modules/chat/components/reasoning-slider";
+import { useModelReasoning } from "@/hooks/use-model-reasoning";
+import {
+  effectiveReasoningLevel,
+  type ReasoningLevel,
+} from "@/lib/reasoning-capabilities";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { missingRequiredCapabilities } from "@/modules/extensions/skill-runtime";
 import { useChatStore } from "@/stores/chat-store";
@@ -146,8 +152,6 @@ export function IconButton({
 }
 
 type ComposerProps = {
-  reasoningEnabled: boolean;
-  onReasoningEnabledChange: (on: boolean) => void;
   enhancedMode: boolean;
   onEnhancedModeChange: (on: boolean) => void;
   mode: ChatMode;
@@ -180,8 +184,6 @@ type ComposerProps = {
 };
 
 export function Composer({
-  reasoningEnabled,
-  onReasoningEnabledChange,
   enhancedMode,
   onEnhancedModeChange,
   mode,
@@ -221,6 +223,14 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   const webSearchSpeedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
+  const defaultReasoningLevel = useSettingsStore((s) => s.reasoningLevel);
+  const reasoningLevelByModel = useSettingsStore((s) => s.reasoningLevelByModel);
+  const setModelReasoningLevel = useSettingsStore((s) => s.setModelReasoningLevel);
+  const modelReasoning = useModelReasoning();
+  const reasoningLevels = modelReasoning.result?.levels ?? [];
+  const preferredReasoningLevel = reasoningLevelByModel[modelReasoning.modelKey] ?? defaultReasoningLevel;
+  const reasoningLevel = effectiveReasoningLevel(preferredReasoningLevel, reasoningLevels);
+  const reasoningControl = modelReasoning.result?.control ?? "unknown";
   const conversationId = useChatStore((state) => state.activeConversationId) ?? "new-chat";
   const projectId = useProjectStore((state) => state.activeProjectId) ?? undefined;
   const skills = useExtensionsStore((state) => state.skills);
@@ -304,6 +314,17 @@ export function Composer({
   useEffect(() => {
     if (!disabled) textareaRef.current?.focus();
   }, [disabled]);
+
+  useEffect(() => {
+    const result = modelReasoning.result;
+    if (!result || !modelReasoning.modelKey) return;
+    // Nothing to normalize when the endpoint is managed or the lookup failed;
+    // keep the stored preference so it applies again when levels are readable.
+    if (result.levels.length === 0) return;
+    if (preferredReasoningLevel !== reasoningLevel) {
+      setModelReasoningLevel(modelReasoning.modelKey, reasoningLevel);
+    }
+  }, [modelReasoning.result, modelReasoning.modelKey, preferredReasoningLevel, reasoningLevel, setModelReasoningLevel]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -579,6 +600,19 @@ export function Composer({
           <div className="flex shrink-0 items-center gap-1.5">
             {!isEditMode && (
               <>
+                <ReasoningSlider
+                  levels={reasoningLevels}
+                  value={reasoningLevel}
+                  control={reasoningControl}
+                  known={modelReasoning.result?.known ?? false}
+                  message={modelReasoning.result?.message ?? (modelReasoning.checking ? "Checking reasoning options…" : "Select a model to configure reasoning")}
+                  checking={modelReasoning.checking}
+                  disabled={isControlsBlocked || !modelReasoning.result}
+                  onChange={(level: ReasoningLevel) =>
+                    setModelReasoningLevel(modelReasoning.modelKey, effectiveReasoningLevel(level, reasoningLevels))
+                  }
+                  onRefresh={modelReasoning.refresh}
+                />
                 <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
                 {contextIndicator}
                 {onWebSearchChange && (
@@ -616,8 +650,6 @@ export function Composer({
                   <ChatOptionsMenu
                     open={optionsOpen}
                     onClose={() => setOptionsOpen(false)}
-                    reasoningEnabled={reasoningEnabled}
-                    onReasoningEnabledChange={onReasoningEnabledChange}
                     enhancedMode={enhancedMode}
                     onEnhancedModeChange={onEnhancedModeChange}
                     webSearchEnabled={webSearchEnabled}

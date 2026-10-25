@@ -1,6 +1,8 @@
+import { REASONING_LEVELS, type ReasoningLevel } from "@/lib/reasoning-capabilities";
+
 export type AgentMode = "plan" | "build";
-export const AGENT_REASONING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-export type AgentReasoningLevel = typeof AGENT_REASONING_LEVELS[number];
+export const AGENT_REASONING_LEVELS = REASONING_LEVELS;
+export type AgentReasoningLevel = ReasoningLevel;
 
 export type AgentStatus =
   | "idle"

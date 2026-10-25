@@ -390,6 +390,8 @@ pub fn run() {
             search_engine_state.start_background();
             app.manage(search_engine_state);
 
+            agents::reasoning::start_reasoning_watcher(app.handle().clone());
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

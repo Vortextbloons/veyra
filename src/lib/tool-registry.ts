@@ -10,6 +10,7 @@ export const CODE_EXEC_TOOL_NAME = "code_execution";
 export const SCRATCHPAD_TOOL_NAME = "scratchpad_write";
 export const ASK_QUESTION_TOOL_NAME = "ask_question";
 export const INTERACTIVE_ANSWER_TOOL_NAME = "generate_interactive_answer";
+export const CREATE_ARTIFACT_TOOL_NAME = "create_artifact";
 export const INLINE_EDIT_TOOL_NAME = "inline_edit";
 
 export function buildProviderTools(options: {
@@ -17,6 +18,7 @@ export function buildProviderTools(options: {
   codeExecutionEnabled: boolean;
   enhancedMode?: boolean;
   interactiveAnswersEnabled?: boolean;
+  artifactsEnabled?: boolean;
 }): ProviderToolDefinition[] {
   const tools: ProviderToolDefinition[] = [];
 
@@ -127,20 +129,39 @@ export function buildProviderTools(options: {
       },
     });
 
-    if (options.interactiveAnswersEnabled) {
+    if (options.enhancedMode && options.interactiveAnswersEnabled) {
+      const answerVariantRequirements: Array<{ kind: string; required: string[] }> = [
+        { kind: "text", required: ["body"] },
+        { kind: "chart", required: ["chartType", "labels", "series"] },
+        { kind: "comparison", required: ["columns", "rows"] },
+        { kind: "calculator", required: ["inputs", "formula", "resultLabel"] },
+        { kind: "calculator", required: ["inputs", "outputs"] },
+        { kind: "steps", required: ["steps"] },
+        { kind: "diagram", required: ["nodes", "edges"] },
+        { kind: "board", required: ["sections"] },
+      ];
+      const variantClauses = (includeBoard: boolean) =>
+        answerVariantRequirements
+          .filter(({ kind }) => includeBoard || kind !== "board")
+          .map(({ kind, required }) => ({
+            properties: { kind: { enum: [kind] } },
+            required,
+          }));
+
       tools.push({
         type: "function",
         function: {
           name: INTERACTIVE_ANSWER_TOOL_NAME,
           description:
-            "Create an interactive answer inside the chat when it helps the user understand, compare, or explore something. Choose one kind: chart, comparison, calculator, or steps. Use plain text for simple answers. The rendered controls are local and cannot run arbitrary code or access files.",
+            "Choose the most useful response for the task: plain text, one focused interactive answer, or a composed experience with 2–6 distinct sections. Supported sections are short text, chart, comparison, calculator, step explainer, and a selectable relationship/process diagram. Combine sections when they genuinely help (for example, a comparison plus a chart); avoid duplicating the surrounding prose. Calculator controls update locally and can drive multiple outputs. Use only values provided by the user or established by available tools; label assumptions and sample data. Controls cannot run arbitrary code or access files.",
           parameters: {
             type: "object",
+            anyOf: variantClauses(true),
             properties: {
               kind: {
                 type: "string",
-                enum: ["chart", "comparison", "calculator", "steps"],
-                description: "The visual form that best fits the user's task.",
+                enum: ["chart", "comparison", "calculator", "steps", "text", "diagram", "board"],
+                description: "Choose one visual form, or board to combine 2–6 useful sections.",
               },
               title: {
                 type: "string",
@@ -154,6 +175,11 @@ export function buildProviderTools(options: {
                 type: "string",
                 enum: ["bar", "line"],
                 description: "Required for charts.",
+              },
+              orientation: {
+                type: "string",
+                enum: ["vertical", "horizontal"],
+                description: "Optional bar chart layout. Horizontal is best for many or long category labels.",
               },
               labels: {
                 type: "array",
@@ -217,6 +243,20 @@ export function buildProviderTools(options: {
                 type: "string",
                 description: "Calculator arithmetic using input ids, numbers, parentheses, +, -, *, /, and ^.",
               },
+              outputs: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    label: { type: "string" },
+                    formula: { type: "string" },
+                    suffix: { type: "string" },
+                  },
+                  required: ["label", "formula"],
+                  additionalProperties: false,
+                },
+                description: "Optional 1–4 calculated outputs driven by the same slider inputs. Each formula uses the input ids.",
+              },
               resultLabel: {
                 type: "string",
                 description: "Short label for the live calculator result.",
@@ -238,6 +278,162 @@ export function buildProviderTools(options: {
                 },
                 description: "Two to twelve selectable steps in an explanation or process.",
               },
+              body: {
+                type: "string",
+                description: "Plain text for a short standalone section.",
+              },
+              nodes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    label: { type: "string" },
+                    description: { type: "string" },
+                    x: { type: "number" },
+                    y: { type: "number" },
+                  },
+                  required: ["id", "label", "description", "x", "y"],
+                  additionalProperties: false,
+                },
+                description: "Diagram nodes positioned from 20 to 80 on x and 14 to 86 on y; keep pairs at least 28 percentage points apart horizontally or 16 vertically.",
+              },
+              edges: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    from: { type: "string" },
+                    to: { type: "string" },
+                    label: { type: "string" },
+                  },
+                  required: ["from", "to"],
+                  additionalProperties: false,
+                },
+                description: "Connections between diagram node ids, with optional short labels.",
+              },
+              sections: {
+                type: "array",
+                items: {
+                  type: "object",
+                  anyOf: variantClauses(false),
+                  properties: {
+                    kind: {
+                      type: "string",
+                      enum: ["text", "chart", "comparison", "calculator", "steps", "diagram"],
+                    },
+                    title: { type: "string" },
+                    summary: { type: "string" },
+                    body: { type: "string" },
+                    chartType: { type: "string", enum: ["bar", "line"] },
+                    orientation: { type: "string", enum: ["vertical", "horizontal"] },
+                    labels: { type: "array", items: { type: "string" } },
+                    series: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          name: { type: "string" },
+                          values: { type: "array", items: { type: "number" } },
+                        },
+                        required: ["name", "values"],
+                        additionalProperties: false,
+                      },
+                    },
+                    yAxisLabel: { type: "string" },
+                    columns: { type: "array", items: { type: "string" } },
+                    rows: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          label: { type: "string" },
+                          values: { type: "array", items: { type: "string" } },
+                        },
+                        required: ["label", "values"],
+                        additionalProperties: false,
+                      },
+                    },
+                    inputs: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string" },
+                          label: { type: "string" },
+                          value: { type: "number" },
+                          min: { type: "number" },
+                          max: { type: "number" },
+                          step: { type: "number" },
+                          suffix: { type: "string" },
+                        },
+                        required: ["id", "label", "value", "min", "max", "step"],
+                        additionalProperties: false,
+                      },
+                    },
+                    formula: { type: "string" },
+                    outputs: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          label: { type: "string" },
+                          formula: { type: "string" },
+                          suffix: { type: "string" },
+                        },
+                        required: ["label", "formula"],
+                        additionalProperties: false,
+                      },
+                    },
+                    resultLabel: { type: "string" },
+                    resultSuffix: { type: "string" },
+                    steps: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          title: { type: "string" },
+                          description: { type: "string" },
+                        },
+                        required: ["title", "description"],
+                        additionalProperties: false,
+                      },
+                    },
+                    nodes: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string" },
+                          label: { type: "string" },
+                          description: { type: "string" },
+                          x: { type: "number" },
+                          y: { type: "number" },
+                        },
+                        required: ["id", "label", "description", "x", "y"],
+                        additionalProperties: false,
+                      },
+                      description: "Keep node pairs at least 28 percentage points apart horizontally or 16 vertically to prevent overlap.",
+                    },
+                    edges: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          from: { type: "string" },
+                          to: { type: "string" },
+                          label: { type: "string" },
+                        },
+                        required: ["from", "to"],
+                        additionalProperties: false,
+                      },
+                    },
+                  },
+                  required: ["kind", "title"],
+                  additionalProperties: false,
+                },
+                description: "Two to six distinct native sections; each section uses only its fields for its kind.",
+              },
             },
             required: ["kind", "title"],
             additionalProperties: false,
@@ -245,6 +441,29 @@ export function buildProviderTools(options: {
         },
       });
     }
+  }
+
+  if (options.artifactsEnabled) {
+    tools.push({
+      type: "function",
+      function: {
+        name: CREATE_ARTIFACT_TOOL_NAME,
+        description:
+          "Create one finished, self-contained deliverable attached to this reply. Use an artifact only when the user asks you to create a reusable deliverable, requests a visual output, or a visual materially clarifies the requested result. Keep ordinary explanations and advice in chat. Formats: html for visual pages, diagrams, infographics, roadmaps, print-friendly reports, or mockups; document for editable Markdown deliverables; code for a downloadable source/configuration file. HTML must use inline CSS/SVG and optional inline JavaScript only, with no remote dependencies or fabricated data. Code is a downloadable file and is never run by this tool. Return one artifact at most per assistant reply.",
+        parameters: {
+          type: "object",
+          properties: {
+            format: { type: "string", enum: ["html", "code", "document"] },
+            title: { type: "string", description: "Short display title." },
+            content: { type: "string", description: "Complete artifact source. Documents use Markdown." },
+            language: { type: "string", description: "Optional language for code files, such as json, sql, yaml, python, or rust." },
+            filename: { type: "string", description: "Optional single output filename, such as Dockerfile or package.json." },
+          },
+          required: ["format", "title", "content"],
+          additionalProperties: false,
+        },
+      },
+    });
   }
 
   return tools;

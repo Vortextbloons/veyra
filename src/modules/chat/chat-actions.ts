@@ -2,12 +2,13 @@ import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { SendChatCompleteContext } from "@/modules/chat/chat-orchestrator";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
 import { summarizeInteractiveAnswer } from "@/modules/chat/interactive-answer";
+import { summarizeArtifact } from "@/modules/chat/artifact";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 
 function getAssistantVisibleText(message: ChatMessage | undefined): string {
   const content = message?.content?.trim();
-  return content || (message?.interactiveAnswer ? summarizeInteractiveAnswer(message.interactiveAnswer) : "") || message?.reasoning?.trim() || "";
+  return content || (message?.artifact ? summarizeArtifact(message.artifact) : "") || (message?.interactiveAnswer ? summarizeInteractiveAnswer(message.interactiveAnswer) : "") || message?.reasoning?.trim() || "";
 }
 
 type ChatSendParams = {
@@ -81,17 +82,21 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
               message.role !== "assistant" || getAssistantVisibleText(message).trim(),
           )
           .map((message) => {
+            const { artifact, ...providerMessage } = message;
             if (
               message.role === "assistant" &&
               !message.content.trim() &&
               message.interactiveAnswer
             ) {
               return {
-                ...message,
+                ...providerMessage,
                 content: summarizeInteractiveAnswer(message.interactiveAnswer),
               };
             }
-            return message;
+            if (message.role === "assistant" && !message.content.trim() && artifact) {
+              return { ...providerMessage, content: summarizeArtifact(artifact) };
+            }
+            return providerMessage;
           })
       : [userMessage];
 

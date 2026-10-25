@@ -15,7 +15,10 @@ fn find_lms() -> Option<PathBuf> {
 }
 
 fn find_lms_uncached() -> Option<PathBuf> {
-    if let Ok(output) = Command::new("lms").arg("--version").output() {
+    let mut probe = Command::new("lms");
+    probe.arg("--version");
+    crate::shared::process::hide_console(&mut probe);
+    if let Ok(output) = probe.output() {
         if output.status.success() {
             return Some(PathBuf::from("lms"));
         }
@@ -76,6 +79,7 @@ fn run_lms(args: &[&str]) -> Result<std::process::Output, String> {
         cmd.env("PATH", new_path);
     }
 
+    crate::shared::process::hide_console(&mut cmd);
     cmd.args(args)
         .output()
         .map_err(|e| format!("Failed to run lms: {e}"))

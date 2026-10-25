@@ -333,11 +333,13 @@ impl EngineInner {
         if let Some(mut child) = child {
             #[cfg(target_os = "windows")]
             {
-                let _ = Command::new("taskkill")
+                let mut command = Command::new("taskkill");
+                command
                     .args(["/PID", &child.id().to_string(), "/T", "/F"])
                     .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
+                    .stderr(Stdio::null());
+                crate::shared::process::hide_console(&mut command);
+                let _ = command.status();
             }
             let _ = child.kill();
             let _ = child.wait();
@@ -539,12 +541,7 @@ fn spawn_engine(
         }
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
+    crate::shared::process::hide_console(&mut command);
 
     command.spawn().map_err(|error| {
         format!(

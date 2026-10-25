@@ -135,15 +135,16 @@ pub(crate) fn run_pi_agent_blocking(
     let mut last_error = String::new();
     let mut child = None;
     for candidate in pi_candidates() {
-        match Command::new(candidate)
+        let mut command = Command::new(candidate);
+        command
             .args(&args)
             .env("VEYRA_PI_API_KEY", api_key)
             .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
+            .stderr(Stdio::piped());
+        crate::shared::process::hide_console(&mut command);
+        match command.spawn() {
             Ok(c) => {
                 child = Some(c);
                 break;

@@ -45,11 +45,13 @@ pub(crate) fn kill_agent_process(session_id: &str) {
 pub(crate) fn kill_pid(pid: u32) {
     #[cfg(windows)]
     {
-        let _ = Command::new("taskkill")
+        let mut command = Command::new("taskkill");
+        command
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+            .stderr(Stdio::null());
+        crate::shared::process::hide_console(&mut command);
+        let _ = command.status();
     }
     #[cfg(not(windows))]
     {
