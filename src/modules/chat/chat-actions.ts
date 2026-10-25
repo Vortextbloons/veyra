@@ -1,12 +1,13 @@
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { SendChatCompleteContext } from "@/modules/chat/chat-orchestrator";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
+import { summarizeInteractiveAnswer } from "@/modules/chat/interactive-answer";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 
 function getAssistantVisibleText(message: ChatMessage | undefined): string {
   const content = message?.content?.trim();
-  return content || message?.reasoning?.trim() || "";
+  return content || (message?.interactiveAnswer ? summarizeInteractiveAnswer(message.interactiveAnswer) : "") || message?.reasoning?.trim() || "";
 }
 
 type ChatSendParams = {
@@ -79,6 +80,19 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
             (message) =>
               message.role !== "assistant" || getAssistantVisibleText(message).trim(),
           )
+          .map((message) => {
+            if (
+              message.role === "assistant" &&
+              !message.content.trim() &&
+              message.interactiveAnswer
+            ) {
+              return {
+                ...message,
+                content: summarizeInteractiveAnswer(message.interactiveAnswer),
+              };
+            }
+            return message;
+          })
       : [userMessage];
 
   await sendChatRequest({

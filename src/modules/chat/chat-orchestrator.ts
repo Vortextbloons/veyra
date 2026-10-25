@@ -18,7 +18,6 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { INTERACTIVE_ANSWER_TOOL_NAME } from "@/lib/tool-registry";
 
 export interface SendChatCompleteContext {
   webSearchSources?: WebSearchSource[];
@@ -141,15 +140,6 @@ export async function sendChatRequest({
   let toolCompletion: Promise<void> = Promise.resolve();
 
   const handleToolCallDetected = (call: Pick<ProviderToolCall, "id" | "name">) => {
-    if (call.name === INTERACTIVE_ANSWER_TOOL_NAME && conversationId) {
-      useChatStore.getState().setAssistantToolState(conversationId, assistantMessageId, {
-        id: call.id,
-        name: call.name,
-        label: "Interactive answer",
-        phase: "pending",
-      });
-      return;
-    }
     registerStreamingToolCall(call, "pending");
   };
 

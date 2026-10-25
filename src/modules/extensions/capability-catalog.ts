@@ -15,7 +15,7 @@ export function classifyMcpTool(tool: Record<string, unknown>): SideEffectLevel 
   if (hint === true) return "destructive";
   const haystack = `${text(tool.name)} ${text(tool.description)}`.toLowerCase();
   if (/\b(delete|destroy|drop|remove|terminate|reset|wipe)\b/.test(haystack)) return "destructive";
-  if (/\b(write|create|update|edit|send|publish|deploy|merge|invite)\b/.test(haystack)) return "external_write";
+  // Unknown tools default to external writes and still require explicit approval.
   return "external_write";
 }
 

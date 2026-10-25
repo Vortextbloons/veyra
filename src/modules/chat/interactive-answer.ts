@@ -54,6 +54,12 @@ export const MAX_INTERACTIVE_ANSWER_CHARS = 24_000;
 
 const MAX_ABS_VALUE = 1_000_000_000;
 
+export function summarizeInteractiveAnswer(answer: InteractiveAnswer): string {
+  const kindLabel = answer.kind === "steps" ? "step-by-step explanation" : answer.kind;
+  const summary = typeof answer.summary === "string" ? answer.summary.trim() : "";
+  return "Interactive " + kindLabel + ": " + answer.title + (summary ? ". " + summary : ".");
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -111,7 +117,12 @@ export function normalizeInteractiveAnswer(
   }
 
   const base = baseFields(raw, id);
-  if ("error" in base) return { ok: false, error: base.error };
+  if ("error" in base) {
+    return {
+      ok: false,
+      error: typeof base.error === "string" ? base.error : "The interactive answer is missing a title.",
+    };
+  }
 
   if (raw.kind === "chart") {
     const chartType = raw.chartType === "line" ? "line" : raw.chartType === "bar" ? "bar" : undefined;
@@ -291,7 +302,7 @@ export function evaluateInteractiveFormula(
       return result;
     }
     const numeric = Number(token);
-    if (Number.isFinite(numeric) && /^\d/.test(token) || Number.isFinite(numeric) && /^\.\d/.test(token)) {
+    if (Number.isFinite(numeric) && (/^\d/.test(token) || /^\.\d/.test(token))) {
       return numeric;
     }
     return Object.prototype.hasOwnProperty.call(values, token) && Number.isFinite(values[token])

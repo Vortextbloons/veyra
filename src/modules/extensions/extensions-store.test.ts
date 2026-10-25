@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { disabledMcpServersForChat, findCapabilityGrant, hasCapabilityGrant, isMcpEnabledForChat } from "./extensions-store";
+import { findCapabilityGrant, hasCapabilityGrant, isMcpEnabledForChat } from "./extensions-store";
 
 const grant = { id: "g", serverId: "mcp.one", capabilityId: "mcp.mcp.one.read", category: "external_mutation" as const, decision: "allow" as const, createdAt: "2026-01-01T00:00:00.000Z", capabilityFingerprint: "current" };
 
@@ -19,15 +19,8 @@ describe("hasCapabilityGrant", () => {
   });
 });
 
-describe("disabledMcpServersForChat", () => {
-  const servers = [{ id: "one" }, { id: "two" }] as never;
-
-  it("keeps enabled MCP servers on until a chat explicitly turns one off", () => {
-    expect(disabledMcpServersForChat(servers, undefined)).toEqual([]);
-    expect(disabledMcpServersForChat(servers, ["two"])).toEqual(["two"]);
-  });
-
-  it("allows a chat to override a disabled server", () => {
+describe("isMcpEnabledForChat", () => {
+  it("allows a chat to enable a server that is disabled by default", () => {
     const server = { id: "one", enabled: false } as never;
     expect(isMcpEnabledForChat(server, [], undefined)).toBe(false);
     expect(isMcpEnabledForChat(server, [], ["one"])).toBe(true);

@@ -18,9 +18,9 @@ export type InteractiveAnswerBlockProps = {
 };
 
 export function InteractiveAnswerBlock({ answer, onFollowUp }: InteractiveAnswerBlockProps) {
-  const normalized = normalizeInteractiveAnswer(
-    answer as unknown as Record<string, unknown>,
-    answer.id,
+  const normalized = useMemo(
+    () => normalizeInteractiveAnswer(answer as unknown as Record<string, unknown>, answer.id),
+    [answer],
   );
   if (!normalized.ok) return null;
 

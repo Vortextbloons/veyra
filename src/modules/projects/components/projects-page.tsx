@@ -42,6 +42,17 @@ const COLOR_RING: Record<string, string> = {
   slate: "ring-slate-500/40 bg-slate-500/15 text-slate-300",
 };
 
+function filterProjects(projects: ProjectRecord[], search: string): ProjectRecord[] {
+  if (!search) return projects;
+
+  const query = search.toLowerCase();
+  return projects.filter(
+    (project) =>
+      project.name.toLowerCase().includes(query) ||
+      project.description.toLowerCase().includes(query),
+  );
+}
+
 export function ProjectsPage() {
   const { projects, activeProjectId, setActiveProjectId, archiveProject } =
     useProjectStore();
@@ -53,21 +64,8 @@ export function ProjectsPage() {
   );
   const archivedProjects = projects.filter((p) => p.status === "archived");
 
-  const filteredActive = search
-    ? activeProjects.filter(
-        (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.description.toLowerCase().includes(search.toLowerCase()),
-      )
-    : activeProjects;
-
-  const filteredArchived = search
-    ? archivedProjects.filter(
-        (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.description.toLowerCase().includes(search.toLowerCase()),
-      )
-    : archivedProjects;
+  const filteredActive = filterProjects(activeProjects, search);
+  const filteredArchived = filterProjects(archivedProjects, search);
 
   const selectedProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const handleArchiveProject = (project: ProjectRecord) => {

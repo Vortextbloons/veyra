@@ -2,7 +2,7 @@ import { PlugZap, Sparkles } from "lucide-react";
 import { useChatStore } from "@/stores/chat-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { missingRequiredCapabilities } from "@/modules/extensions/skill-runtime";
-import { disabledMcpServersForChat, isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
+import { isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="px-2 pb-1 pt-2 text-[10.5px] font-medium text-[var(--color-text-dim)]">{children}</p>;
@@ -44,7 +44,6 @@ export function ChatExtensionsSettings() {
   const activeSkillId = activeSkillIds[chatId] === undefined ? projectPolicy?.defaultSkillId : activeSkillIds[chatId];
   const activeSkillWorkflowId = activeSkillWorkflowIds[chatId];
   const availableServers = servers.filter((server) => server.health === "ready" && (!projectId || server.projectIds.length === 0 || server.projectIds.includes(projectId)));
-  const disabledMcpServerIds = disabledMcpServersForChat(servers, disabledMcpIds);
 
   return (
     <div className="border-t border-white/[0.06] pb-1">
@@ -116,7 +115,7 @@ export function ChatExtensionsSettings() {
       ) : (
         <div className="space-y-0.5">
           {availableServers.map((server) => {
-            const active = isMcpEnabledForChat(server, disabledMcpServerIds, enabledMcpIds);
+            const active = isMcpEnabledForChat(server, disabledMcpIds, enabledMcpIds);
             return (
               <div key={server.id} className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-white/[0.05]">
                 <PlugZap className={`size-4 shrink-0 ${active && mcpEnabled ? "text-cyan-300" : "text-[var(--color-text-dim)]"}`} />

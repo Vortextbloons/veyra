@@ -61,11 +61,6 @@ export function hasCapabilityGrant(grants: CapabilityGrant[], input: { serverId:
   return Boolean(findCapabilityGrant(grants, input));
 }
 
-/** Enabled MCP servers are active in new chats unless a chat explicitly turns one off. */
-export function disabledMcpServersForChat(_servers: McpServerRecord[], storedDisabledIds: string[] | undefined): string[] {
-  return storedDisabledIds ?? [];
-}
-
 export function isMcpEnabledForChat(server: McpServerRecord, disabledIds: string[] | undefined, enabledIds: string[] | undefined): boolean {
   if (disabledIds?.includes(server.id)) return false;
   return server.enabled || Boolean(enabledIds?.includes(server.id));
@@ -110,7 +105,7 @@ export const useExtensionsStore = create<ExtensionsStore>()(persist((set, get) =
   setActiveSkill: (scopeId, skillId, workflowId) => set((state) => ({ activeSkillIds: { ...state.activeSkillIds, [scopeId]: skillId }, activeSkillWorkflowIds: { ...state.activeSkillWorkflowIds, [scopeId]: skillId ? workflowId : undefined } })),
   setFeatureFlag: (flag, enabled) => set((state) => ({ featureFlags: { ...state.featureFlags, [flag]: enabled } })),
   setChatMcpEnabled: (chatId, serverId, enabled) => set((state) => {
-    const disabled = disabledMcpServersForChat(state.mcpServers, state.chatDisabledMcpServerIds[chatId]);
+    const disabled = state.chatDisabledMcpServerIds[chatId] ?? [];
     const explicitlyEnabled = state.chatEnabledMcpServerIds[chatId] ?? [];
     const next = enabled ? disabled.filter((id) => id !== serverId) : [...new Set([...disabled, serverId])];
     const nextEnabled = enabled ? [...new Set([...explicitlyEnabled, serverId])] : explicitlyEnabled.filter((id) => id !== serverId);
