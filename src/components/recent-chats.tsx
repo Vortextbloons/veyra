@@ -2,18 +2,6 @@ import { useState } from "react";
 import { MessageSquare, PanelLeftClose, PanelLeftOpen, Search, Trash2 } from "lucide-react";
 import type { RecentChatsProps } from "@/modules/chat/chat-types";
 
-function StudioChatBadge() {
-  return (
-    <span
-      className="shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-violet-200"
-      aria-label="Studio conversation"
-      title="Studio chat"
-    >
-      Studio
-    </span>
-  );
-}
-
 export function RecentChats({
   chats = [],
   activeId,
@@ -91,7 +79,6 @@ export function RecentChats({
           <ul className="space-y-0.5">
             {visibleChats.map((chat) => {
               const active = chat.id === activeId;
-              const isStudio = chat.experience === "studio";
               return (
                 <li key={chat.id} className="group">
                   <div
@@ -119,7 +106,6 @@ export function RecentChats({
                         >
                           {chat.title}
                         </span>
-                        {isStudio && <StudioChatBadge />}
                       </span>
                     </button>
                     <button

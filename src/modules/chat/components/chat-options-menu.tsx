@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Globe, Sparkles, TerminalSquare, X, Zap } from "lucide-react";
 import { DialogSurface } from "@/components/dialog-surface";
+import { ChatExtensionsSettings } from "@/modules/extensions/components/chat-extensions-settings";
 import { useSettingsStore } from "@/stores/settings-store";
 
 export type ChatOptionsMenuProps = {
@@ -157,6 +158,7 @@ export function ChatOptionsMenu({
   codeExecutionDisabled = false,
   codeExecutionDisabledReason,
 }: ChatOptionsMenuProps) {
+  const [activeTab, setActiveTab] = useState<"chat" | "skills">("chat");
   const speedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
   const webSearchOn = webSearchEnabled && !webSearchDisabled;
   const webSearchIconClass = speedPreset === "fast" ? "text-cyan-300" : "text-emerald-300";
@@ -185,52 +187,74 @@ export function ChatOptionsMenu({
         </button>
       </header>
 
-      <div className="overflow-y-auto p-2 scrollbar-thin">
-        <SectionLabel>Conversation</SectionLabel>
-        <SettingRow
-          icon={<Sparkles className="size-4" />}
-          label="Reasoning"
-          description="Show deeper analysis"
-          active={reasoningEnabled}
-          onToggle={onReasoningEnabledChange}
-        />
-        <SettingRow
-          icon={<Zap className="size-4" />}
-          label="Enhanced"
-          description="Use the extended workflow"
-          active={enhancedMode}
-          onToggle={onEnhancedModeChange}
-        />
-
-        <div className="mx-2 my-1.5 h-px bg-white/[0.06]" />
-
-        <SectionLabel>Tools</SectionLabel>
-        {onWebSearchChange && (
-          <>
+      <div role="tablist" aria-label="Chat settings sections" className="flex gap-1 border-b border-white/10 px-2 pt-2">
+        {([ ["chat", "Chat"], ["skills", "Skills & MCP"] ] as const).map(([tab, label]) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            onClick={() => setActiveTab(tab)}
+            className={`rounded-t-md border-b-2 px-3 py-2 text-[11px] font-medium transition-colors ${activeTab === tab ? "border-[var(--color-accent)] text-white" : "border-transparent text-[var(--color-text-dim)] hover:text-white"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-2 scrollbar-thin">
+        {activeTab === "chat" ? (
+          <div id="chat-settings-panel" role="tabpanel" aria-label="Chat">
+            <SectionLabel>Conversation</SectionLabel>
             <SettingRow
-              icon={<Globe className="size-4" />}
-              label="Web search"
-              description="Search the web when needed"
-              active={webSearchOn}
-              onToggle={onWebSearchChange}
-              iconActiveClass={webSearchIconClass}
-              disabled={webSearchDisabled}
-              disabledReason={webSearchDisabledReason}
+              icon={<Sparkles className="size-4" />}
+              label="Reasoning"
+              description="Show deeper analysis"
+              active={reasoningEnabled}
+              onToggle={onReasoningEnabledChange}
             />
-            <SearchSpeedToggle on={webSearchOn} />
-          </>
-        )}
-        {onCodeExecutionChange && (
-          <SettingRow
-            icon={<TerminalSquare className="size-4" />}
-            label="Code execution"
-            description="Run Python for calculations and data"
-            active={codeExecutionEnabled}
-            onToggle={onCodeExecutionChange}
-            iconActiveClass="text-amber-300"
-            disabled={codeExecutionDisabled}
-            disabledReason={codeExecutionDisabledReason}
-          />
+            <SettingRow
+              icon={<Zap className="size-4" />}
+              label="Enhanced"
+              description="Use the extended workflow"
+              active={enhancedMode}
+              onToggle={onEnhancedModeChange}
+            />
+
+            <div className="mx-2 my-1.5 h-px bg-white/[0.06]" />
+
+            <SectionLabel>Tools</SectionLabel>
+            {onWebSearchChange && (
+              <>
+                <SettingRow
+                  icon={<Globe className="size-4" />}
+                  label="Web search"
+                  description="Search the web when needed"
+                  active={webSearchOn}
+                  onToggle={onWebSearchChange}
+                  iconActiveClass={webSearchIconClass}
+                  disabled={webSearchDisabled}
+                  disabledReason={webSearchDisabledReason}
+                />
+                <SearchSpeedToggle on={webSearchOn} />
+              </>
+            )}
+            {onCodeExecutionChange && (
+              <SettingRow
+                icon={<TerminalSquare className="size-4" />}
+                label="Code execution"
+                description="Run Python for calculations and data"
+                active={codeExecutionEnabled}
+                onToggle={onCodeExecutionChange}
+                iconActiveClass="text-amber-300"
+                disabled={codeExecutionDisabled}
+                disabledReason={codeExecutionDisabledReason}
+              />
+            )}
+          </div>
+        ) : (
+          <div id="skills-settings-panel" role="tabpanel" aria-label="Skills and MCP">
+            <ChatExtensionsSettings />
+          </div>
         )}
       </div>
     </DialogSurface>

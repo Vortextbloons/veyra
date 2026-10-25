@@ -5,13 +5,6 @@ import type { MessageAttachment } from "@/lib/message-attachments";
 import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult } from "@/modules/web-search/types";
 import type { FetchStatus } from "@/lib/fetch-status";
-import type {
-  ConversationExperience,
-  StudioResponse,
-  StudioTheme,
-  StudioWorkspace,
-  StudioEnvironment,
-} from "@/modules/chat/studio/studio-types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -97,10 +90,6 @@ export interface ChatMessage {
   /** Model id that produced this assistant message. Used to render the
    *  correct avatar/label even when the active model changes later. */
   modelId?: string;
-  /** Message-owned Studio response (assistant messages only). */
-  studioResponse?: StudioResponse;
-  /** Message-owned chat theme. Null explicitly restores Veyra's default theme. */
-  studioTheme?: StudioTheme | null;
 }
 
 export interface MessagePerformance {
@@ -120,11 +109,6 @@ export interface Conversation {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
-  /** Presentation/response expectations within normal chat (`standard` | `studio`). */
-  experience?: ConversationExperience;
-  /** Conversation-owned dynamic Studio stage. */
-  studioWorkspace?: StudioWorkspace;
-  studioEnvironment?: StudioEnvironment;
   /** Project this conversation belongs to. undefined = no project (global chat). */
   projectId?: string;
   /** Character this conversation is bound to. undefined = plain (non-character) chat. */
@@ -300,8 +284,6 @@ export interface ChatPanelProps {
   mode?: ChatMode;
   defaultMode?: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
-  experience?: ConversationExperience;
-  onExperienceChange?: (experience: ConversationExperience) => void;
   agentSessions?: AgentSession[];
   activeAgentSessionId?: string | null;
   agentRuntimeAvailable?: boolean | null;
@@ -330,7 +312,6 @@ export interface RecentChatsItem {
   id: string;
   title: string;
   meta: string;
-  experience?: ConversationExperience;
 }
 
 export interface RecentChatsProps {

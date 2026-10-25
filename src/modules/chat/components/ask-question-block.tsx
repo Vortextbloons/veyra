@@ -150,7 +150,7 @@ export function AskQuestionBlock({
 
   return (
     <ToolCallShell
-      icon={<Icon className={`size-3 ${TOOL_CALL_ACCENT_STYLES[meta.accent].text}`} />}
+      icon={<Icon className={`size-4 ${TOOL_CALL_ACCENT_STYLES[meta.accent].text}`} />}
       label={state.label || meta.label}
       phaseLabel={
         isPending

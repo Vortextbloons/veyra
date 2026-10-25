@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Search engine status** — Running state, version, restart, and log access in Settings → Tools → Web Search.
 
+### Removed
+
+- **Studio** — The Studio conversation experience, its tools, themes, settings, and stored response model are removed. Chats use the standard conversation experience.
+
 ## [1.5.2] - 2026-10-03
 
 ### Added

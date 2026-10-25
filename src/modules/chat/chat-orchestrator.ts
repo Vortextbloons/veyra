@@ -19,8 +19,6 @@ import {
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { buildSkillContext } from "@/modules/extensions/skill-runtime";
-import { getStudioSystemInstruction, buildStudioEnvironmentContextBlock, buildStudioThemeContextBlock, buildModeContextBlock, inferStudioContextMode } from "@/modules/chat/studio/studio-context";
-import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 
 export interface SendChatCompleteContext {
   webSearchSources?: WebSearchSource[];
@@ -93,35 +91,7 @@ export async function sendChatRequest({
       })()
     : extensionState.resolveActiveSkillSelection(conversationId ?? "new-chat", projectId);
   const baseSkillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
-  const experience = resolveConversationExperience({ experience: conversation?.experience });
-  const studioEligible =
-    settings.studioModeEnabled &&
-    experience === "studio" &&
-    !conversation?.characterId &&
-    !conversation?.groupId;
-  const studioEnabled = studioEligible;
-  const studioContextMode = studioEnabled ? inferStudioContextMode({
-    characterId: conversation?.characterId,
-    groupId: conversation?.groupId,
-    projectId: conversation?.projectId,
-  }) : undefined;
-  const studioResponseBlock = studioEnabled && conversation ? buildStudioEnvironmentContextBlock(conversation) : undefined;
-  const studioThemeBlock = studioEnabled && conversation
-    ? buildStudioThemeContextBlock(conversation.messages)
-    : undefined;
-  const modeContextBlock = studioContextMode
-    ? buildModeContextBlock(studioContextMode, {
-        persona: conversation?.characterSnapshot?.name
-          ? `${conversation.characterSnapshot.name}${conversation.characterSnapshot.title ? ` — ${conversation.characterSnapshot.title}` : ""}`
-          : undefined,
-        projectName: projectRecord?.name,
-        projectKind: projectRecord?.kind,
-        projectDescription: projectRecord?.description,
-      })
-    : undefined;
-  const studioInstruction = studioContextMode ? getStudioSystemInstruction(studioContextMode, settings.studioPresentation) : undefined;
-  const skillContextBlock = [baseSkillContextBlock, studioInstruction, modeContextBlock, studioThemeBlock, studioResponseBlock]
-    .filter(Boolean).join("\n\n") || undefined;
+  const skillContextBlock = baseSkillContextBlock;
 
   const contextAnchoringBlock = settings.contextAnchoringEnabled
     ? buildContextAnchoringBlock()
@@ -133,7 +103,6 @@ export async function sendChatRequest({
     enhancedMode,
     projectId,
     conversationId,
-    studioEnabled,
   });
 
   const providerStore = useProviderStore.getState();
@@ -190,14 +159,7 @@ export async function sendChatRequest({
     chatStore.resetAfterRePrompt();
   };
 
-  const getRoundMessagesContext = () => {
-    const current = useChatStore.getState().conversations.find((item) => item.id === conversationId);
-    const refreshedStudio = studioEnabled && current ? buildStudioEnvironmentContextBlock(current) : undefined;
-    return {
-      ...roundMessagesContext,
-      skillContextBlock: studioEnabled ? [baseSkillContextBlock, studioInstruction, modeContextBlock, current ? buildStudioThemeContextBlock(current.messages) : undefined, refreshedStudio].filter(Boolean).join("\n\n") : skillContextBlock,
-    };
-  };
+  const getRoundMessagesContext = () => ({ ...roundMessagesContext });
   const providerChatBaseBound = () =>
     buildProviderChatBase(options, resolved, providerTools, handleToolCallDetected);
 
@@ -207,7 +169,6 @@ export async function sendChatRequest({
     signal: options.signal,
     projectId,
     conversationId,
-    studioMode: studioContextMode,
     effectiveWebSearchEnabled,
     webSearchAvailability,
   });

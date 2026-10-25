@@ -1,11 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import { Globe, PanelsTopLeft, TerminalSquare } from "lucide-react";
+import { Globe, TerminalSquare } from "lucide-react";
 import { CodeExecutionSettings } from "./code-execution-settings";
 import { WebSearchSettings } from "./web-search-settings";
-import { StudioSettingsSection } from "./studio-settings-section";
 import { useToolsSettingsSearch } from "./tools-settings-search-context";
 
-export type ToolSettingsSectionId = "webSearch" | "codeExecution" | "studio";
+export type ToolSettingsSectionId = "webSearch" | "codeExecution";
 
 export type ToolSettingsSection = {
   id: ToolSettingsSectionId;
@@ -56,30 +55,11 @@ export const TOOL_SETTINGS_SECTIONS: ToolSettingsSection[] = [
     component: WebSearchSettings,
     defaultVisible: true,
   },
-  {
-    id: "studio",
-    label: "Studio Mode",
-    description: "Custom visual and interactive messages with isolated HTML, CSS, and JavaScript.",
-    icon: PanelsTopLeft,
-    keywords: [
-      "studio",
-      "visual",
-      "html",
-      "css",
-      "canvas",
-      "dashboard",
-      "presentation",
-      "artifact",
-    ],
-    component: StudioSettingsSection,
-    defaultVisible: true,
-  },
 ];
 
 export const DEFAULT_VISIBLE_TOOL_SETTINGS_SECTIONS: Record<ToolSettingsSectionId, boolean> = {
   codeExecution: true,
   webSearch: true,
-  studio: true,
 };
 
 export const TOOL_SETTINGS_SUBSECTIONS: Record<
@@ -100,7 +80,6 @@ export const TOOL_SETTINGS_SUBSECTIONS: Record<
     { title: "Timeout", keywords: ["seconds", "limit"] },
     { title: "Safety", keywords: ["read only", "imports", "blocking"] },
   ],
-  studio: [],
 };
 
 export function mergeVisibleToolSettingsSections(

@@ -5,6 +5,7 @@ import { stringArg } from "@/modules/chat/chat-tool-utils";
 import {
   runSearch,
   buildSearchContextBlock,
+  resolveSearchContextTokenLimit,
 } from "@/modules/web-search/orchestrator/SearchOrchestrator";
 import { useChatStore } from "@/stores/chat-store";
 import type { SearchIntent } from "@/modules/web-search/types";
@@ -104,7 +105,9 @@ export async function executeWebSearchCall(
   }
   if (!searchBundle) throw lastSearchError ?? new Error("Search failed");
 
-  const contextBlock = buildSearchContextBlock(searchBundle);
+  const contextBlock = buildSearchContextBlock(searchBundle, {
+    tokenLimit: resolveSearchContextTokenLimit({ projectId: opts.projectId }),
+  });
   const sources: WebSearchSource[] = searchBundle.sources.map((s) => ({
     id: s.id,
     title: s.title,

@@ -119,7 +119,7 @@ export function WebSearchToolCallBlock({
 
   return (
     <ToolCallShell
-      icon={<Search className="size-3 text-cyan-400" />}
+      icon={<Search className="size-4 text-cyan-400" />}
       label={roundLabel}
       phaseLabel={displayPhase}
       accent="cyan"

@@ -2,7 +2,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { Toggle } from "@/components/toggle";
 import { ModelDropdown } from "@/components/settings/model-dropdown";
 import { useProviderStore } from "@/stores/provider-store";
-import { StudioSettingsSection } from "@/components/settings/studio-settings-section";
 
 export function ChatSettings() {
   const defaultSystemPrompt = useSettingsStore((s) => s.defaultSystemPrompt);
@@ -24,10 +23,6 @@ export function ChatSettings() {
 
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">Studio Mode</h2>
-        <StudioSettingsSection />
-      </section>
       <section>
         <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
           System Prompt

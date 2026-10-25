@@ -57,7 +57,6 @@ export function startCharacterChat(
     messages: greetingText ? [greetingMessage] : [],
     createdAt: now,
     updatedAt: now,
-    experience: "standard",
     characterId: character.id,
     characterSnapshot: makeSnapshot(character),
     characterGreetingIndex: greetingText ? 0 : undefined,

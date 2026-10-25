@@ -31,8 +31,6 @@ import { useCharacterStore } from "@/modules/characters/character-store";
 import { useAppZoom } from "@/hooks/use-app-zoom";
 import { useChatContextPanel } from "@/hooks/use-chat-context-panel";
 import { useChatPipeline } from "@/hooks/use-chat-pipeline";
-import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
-import type { ConversationExperience } from "@/modules/chat/studio/studio-types";
 import { useAgentDispatch } from "@/hooks/use-agent-dispatch";
 
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
@@ -214,7 +212,6 @@ function App() {
       id: conversation.id,
       title: conversation.title,
       meta: new Date(conversation.updatedAt).toLocaleDateString(),
-      experience: resolveConversationExperience(conversation),
     }));
   }, [activeProjectId, conversations]);
 
@@ -251,16 +248,6 @@ function App() {
     }
     deleteAllConversations();
   }, [pipelineHandleNewChat, deleteAllConversations]);
-
-  const handleExperienceChange = useCallback((experience: ConversationExperience) => {
-    const store = useChatStore.getState();
-    const conversationId = store.activeConversationId;
-    if (!conversationId) {
-      store.createConversation(activeProjectId ?? undefined, { experience });
-      return;
-    }
-    store.setConversationExperience(conversationId, experience);
-  }, [activeProjectId]);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -343,8 +330,6 @@ function App() {
             modelLoadProgress={pipelineRest.modelLoadProgress}
             mode={workspaceChatMode}
             onModeChange={handleModeChange}
-            experience={resolveConversationExperience(activeConversation ?? {})}
-            onExperienceChange={handleExperienceChange}
             agentSessions={agent.agentSessions}
             activeAgentSessionId={agent.activeAgentSessionId}
             agentRuntimeAvailable={agent.agentRuntimeAvailable}

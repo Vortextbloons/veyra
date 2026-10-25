@@ -25,7 +25,7 @@ export function ScratchpadBlock({ state, scratchpadContent }: ScratchpadBlockPro
 
   return (
     <ToolCallShell
-      icon={<Icon className={`size-3 ${TOOL_CALL_ACCENT_STYLES[meta.accent].text}`} />}
+      icon={<Icon className={`size-4 ${TOOL_CALL_ACCENT_STYLES[meta.accent].text}`} />}
       label={state.label || meta.label}
       phaseLabel={toolCallPhaseLabel(state.phase, state.attempts)}
       accent={meta.accent}

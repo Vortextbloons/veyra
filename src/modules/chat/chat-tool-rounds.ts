@@ -5,9 +5,6 @@ import {
   CODE_EXEC_TOOL_NAME,
   SCRATCHPAD_TOOL_NAME,
   ASK_QUESTION_TOOL_NAME,
-  STUDIO_RENDER_TOOL_NAME,
-  STUDIO_THEME_TOOL_NAME,
-  STUDIO_UPDATE_TOOL_NAME,
 } from "@/lib/tool-registry";
 import {
   stringArg,
@@ -25,7 +22,6 @@ import { executeScratchpadCall } from "@/modules/chat/tools/scratchpad-tool";
 import { executeAskQuestionCall } from "@/modules/chat/tools/ask-question-tool";
 import { disabledMcpServersForChat, findCapabilityGrant, isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
-import { executeStudioCallWithFeedback, executeStudioThemeCall } from "@/modules/chat/studio/studio-runtime";
 
 export type ToolRoundResult = {
   toolResultSections: string[];
@@ -39,13 +35,9 @@ type ToolRoundContext = {
   projectId?: string;
   conversationId?: string;
   assistantMessageId?: string;
-  /** Studio context mode for specialized integrations (character scenes, research evidence, etc.). */
-  studioMode?: import("@/modules/chat/studio/studio-types").StudioContextMode;
   webSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
   codeExecution: CodeExecutionSettings;
-  /** Shared across tool rounds for one assistant response. */
-  studioThemeCallAttempted?: { value: boolean };
 };
 
 export async function executeToolRound(
@@ -57,15 +49,12 @@ export async function executeToolRound(
   const scratchpadCalls = toolCalls.filter((call) => call.name === SCRATCHPAD_TOOL_NAME);
   const askQuestionCalls = toolCalls.filter((call) => call.name === ASK_QUESTION_TOOL_NAME);
   const mcpCalls = toolCalls.filter((call) => call.name.startsWith("mcp_"));
-  const studioCalls = toolCalls.filter((call) => call.name === STUDIO_RENDER_TOOL_NAME || call.name === STUDIO_UPDATE_TOOL_NAME);
-  const studioThemeCalls = toolCalls.filter((call) => call.name === STUDIO_THEME_TOOL_NAME);
 
   registerStreamingToolCalls(toolCalls, "running", (call) => {
     if (call.name === WEB_SEARCH_TOOL_NAME) return stringArg(call.arguments, "query");
     if (call.name === CODE_EXEC_TOOL_NAME) {
       return summarizeCodeSnippet(stripPythonCodeFence(stringArg(call.arguments, "code")));
     }
-    if (call.name === STUDIO_THEME_TOOL_NAME) return stringArg(call.arguments, "vibe");
     return stringArg(call.arguments, "title");
   });
 
@@ -73,27 +62,6 @@ export async function executeToolRound(
   const webSearchSources: WebSearchSource[] = [];
   const webSearchContextBlocks: string[] = [];
   const streamedChunks: string[] = [];
-
-  for (const call of studioCalls) {
-    if (ctx.signal?.aborted) break;
-    toolResultSections.push(await executeStudioCallWithFeedback(call, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId, mode: ctx.studioMode, signal: ctx.signal }));
-  }
-  if (studioThemeCalls.length > 0 && ctx.studioThemeCallAttempted?.value) {
-    for (const call of studioThemeCalls) {
-      useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio theme", phase: "done", detail: "Kept the theme already chosen for this response" });
-    }
-    toolResultSections.push(`Tool result for ${STUDIO_THEME_TOOL_NAME}: skipped because a theme was already chosen for this assistant turn. Do not call studio_theme again; continue with the answer.`);
-  } else {
-    for (const call of studioThemeCalls.slice(0, -1)) {
-      useChatStore.getState().setStreamingToolState({ id: call.id, name: call.name, label: "Studio theme", phase: "done", detail: "Used the final theme direction" });
-      toolResultSections.push(`Tool result for ${STUDIO_THEME_TOOL_NAME}: skipped because only the last theme call in a batch is applied.`);
-    }
-    const studioThemeCall = studioThemeCalls.at(-1);
-    if (studioThemeCall) {
-      if (ctx.studioThemeCallAttempted) ctx.studioThemeCallAttempted.value = true;
-      toolResultSections.push(executeStudioThemeCall(studioThemeCall, { conversationId: ctx.conversationId, assistantMessageId: ctx.assistantMessageId }));
-    }
-  }
 
   const webResults = await Promise.all(
     webSearchCalls.map(async (call) => {

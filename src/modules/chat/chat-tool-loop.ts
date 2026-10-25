@@ -152,18 +152,14 @@ export async function rePromptWithTools(params: {
   });
 }
 
-import type { StudioContextMode } from "@/modules/chat/studio/studio-types";
-
 export function createExecuteToolRoundLocal(params: {
   signal?: AbortSignal;
   projectId?: string;
   conversationId?: string;
   effectiveWebSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
-  studioMode?: StudioContextMode;
 }) {
   const settings = useSettingsStore.getState();
-  const studioThemeCallAttempted = { value: false };
   return async (toolCalls: ProviderToolCall[]) => {
     const buffer = useChatStore.getState().streamingBuffer;
     const activeProject = useProjectStore.getState().activeProject();
@@ -173,7 +169,6 @@ export function createExecuteToolRoundLocal(params: {
       projectId: params.projectId,
       conversationId: params.conversationId,
       assistantMessageId: buffer?.messageId,
-      studioMode: params.studioMode,
       webSearchEnabled: params.effectiveWebSearchEnabled,
       webSearchAvailability: params.webSearchAvailability,
       codeExecution: {
@@ -181,7 +176,6 @@ export function createExecuteToolRoundLocal(params: {
         pythonPath: settings.customPythonPath.trim() || null,
         workspaceRoot,
       },
-      studioThemeCallAttempted,
     });
     return result;
   };

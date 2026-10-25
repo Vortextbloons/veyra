@@ -2,7 +2,6 @@ import type { ProviderToolDefinition } from "@/lib/providers/types";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { buildProviderTools } from "@/lib/tool-registry";
-import { STUDIO_RENDER_TOOL_NAME } from "@/modules/chat/studio/studio-tool";
 import { isFeatureAvailable } from "@/lib/connectivity/feature-capabilities";
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { disabledMcpServersForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
@@ -25,7 +24,6 @@ export type ProviderTooling = {
   webSearchEnabled: boolean;
   webSearchAvailability: { available: boolean; reason?: string };
   codeExecutionEnabled: boolean;
-  studioToolAvailable: boolean;
 };
 
 export function resolveModelSettings(
@@ -53,46 +51,18 @@ export function resolveModelSettings(
   };
 }
 
-export function resolveStudioToolAvailability({
-  experience,
-  conversationId,
-  projectId,
-  characterId,
-  groupId,
-}: {
-  experience?: "standard" | "studio";
-  conversationId?: string | null;
-  projectId?: string;
-  characterId?: string;
-  groupId?: string;
-}): boolean {
-  const settings = useSettingsStore.getState();
-  if (!settings.studioModeEnabled || experience !== "studio") return true;
-  if (characterId || groupId) return false;
-  return resolveProviderTooling({
-    webSearchEnabled: false,
-    codeExecutionEnabled: false,
-    enhancedMode: settings.enhancedModeEnabled,
-    projectId,
-    conversationId: conversationId ?? undefined,
-    studioEnabled: true,
-  }).studioToolAvailable;
-}
-
 export function resolveProviderTooling({
   webSearchEnabled,
   codeExecutionEnabled,
   enhancedMode,
   projectId,
   conversationId,
-  studioEnabled = false,
 }: {
   webSearchEnabled: boolean;
   codeExecutionEnabled: boolean;
   enhancedMode: boolean;
   projectId?: string;
   conversationId?: string;
-  studioEnabled?: boolean;
 }): ProviderTooling {
   const effectiveConnectivity = useConnectivityStore.getState().effectiveConnectivity;
   const localServiceReady = useProviderStore.getState().providers.some(
@@ -121,7 +91,6 @@ export function resolveProviderTooling({
     webSearchEnabled: effectiveWebSearchEnabled,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
     enhancedMode,
-    studioEnabled,
   }), ...buildMcpProviderTools(extensions.mcpServers, projectId, extensions.featureFlags, disabledMcpServersForChat(extensions.mcpServers, conversationId ? extensions.chatDisabledMcpServerIds[conversationId] : undefined), conversationId ? extensions.chatEnabledMcpServerIds[conversationId] ?? [] : [])];
 
   return {
@@ -129,6 +98,5 @@ export function resolveProviderTooling({
     webSearchEnabled: effectiveWebSearchEnabled,
     webSearchAvailability,
     codeExecutionEnabled: effectiveCodeExecutionEnabled,
-    studioToolAvailable: providerTools.some((tool) => tool.function.name === STUDIO_RENDER_TOOL_NAME),
   };
 }

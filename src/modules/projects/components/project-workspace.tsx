@@ -10,20 +10,8 @@ import { PROJECT_KIND_LABELS } from "@/modules/projects/project-types";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { resolveConversationExperience } from "@/modules/chat/studio/studio-normalize";
 import { ProjectSettingsPanel } from "./project-settings-panel";
 import { ProjectExportPanel } from "./project-export-panel";
-
-function StudioListBadge() {
-  return (
-    <span
-      className="shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-violet-200"
-      aria-label="Studio conversation"
-    >
-      Studio
-    </span>
-  );
-}
 
 type Tab = "overview" | "chats" | "instructions" | "settings";
 
@@ -130,7 +118,6 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
                 <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text)]">
                   {chat.title}
                 </span>
-                {resolveConversationExperience(chat) === "studio" && <StudioListBadge />}
                 <span className="text-[10px] text-[var(--color-text-dim)]">
                   {new Date(chat.updatedAt).toLocaleDateString()}
                 </span>
@@ -155,7 +142,7 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
   );
 
   const handleNewChat = () => {
-    createConversation(project.id, { experience: "standard" });
+    createConversation(project.id);
     setActiveNav("chat");
   };
 
@@ -200,7 +187,6 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
                   <div className="truncate text-[13px] font-medium text-[var(--color-text)]">
                     {chat.title}
                   </div>
-                  {resolveConversationExperience(chat) === "studio" && <StudioListBadge />}
                 </div>
                 <div className="text-[11px] text-[var(--color-text-dim)]">
                   {chat.messages.length} messages

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, ChevronDown, Loader2, X } from "lucide-react";
+import { ChevronRight, Loader2, X } from "lucide-react";
 import { TOOL_CALL_ACCENT_STYLES, type ToolCallAccent } from "@/lib/tool-call-ui";
 
 type ToolCallShellProps = {
@@ -31,59 +31,54 @@ export function ToolCallShell({
   onToggle,
   children,
 }: ToolCallShellProps) {
-  const styles = isError
-    ? {
-        border: "border-red-500/20",
-        bg: "bg-red-500/[0.06]",
-        hover: "hover:border-red-500/30 hover:bg-red-500/[0.09]",
-        text: "text-red-300",
-        iconBg: "bg-red-500/20",
-      }
-    : TOOL_CALL_ACCENT_STYLES[accent];
+  const styles = TOOL_CALL_ACCENT_STYLES[accent];
+  const phaseTone = isError
+    ? "text-red-300"
+    : isActive
+      ? styles.text
+      : isDone
+        ? "text-[var(--color-success)]"
+        : "text-[var(--color-text-dim)]";
 
   const Wrapper = expandable ? "button" : "div";
 
   return (
-    <div className="mb-2">
+    <div className="mb-1">
       <Wrapper
         {...(expandable
           ? {
               type: "button" as const,
               onClick: onToggle,
+              "aria-expanded": expanded,
             }
           : {})}
-        className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${styles.border} ${styles.bg} ${expandable ? styles.hover : ""}`}
+        title={inputPreview?.slice(0, 180)}
+        className={`group flex w-full items-center gap-3 rounded-md px-1 py-1 text-left transition-colors hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20 ${expandable ? "cursor-pointer" : "cursor-default"}`}
       >
-        <div className={`flex size-5 shrink-0 items-center justify-center rounded ${styles.iconBg}`}>
+        <span className={`flex size-4 shrink-0 items-center justify-center opacity-80 ${isError ? "text-red-300" : styles.text}`} aria-hidden="true">
           {isActive ? (
-            <Loader2 className={`size-3 animate-spin ${styles.text}`} />
+            <Loader2 className="size-4 animate-spin" />
           ) : isError ? (
-            <X className="size-3 text-red-400" />
-          ) : isDone ? (
-            <CheckCircle2 className={`size-3 ${styles.text}`} />
+            <X className="size-4" />
           ) : (
             icon
           )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <span className={`text-[11.5px] font-medium ${isError ? "text-red-300" : styles.text}`}>
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[13px] leading-5 text-white/65">
+          <span className={isError ? "text-red-300/90" : ""}>
             {label}
           </span>
-          <span className="mx-1.5 text-[10px] text-[var(--color-text-dim)]/40">·</span>
-          <span className="text-[11.5px] text-[var(--color-text-dim)]">{phaseLabel}</span>
-        </div>
-        {inputPreview && (
-          <span className="max-w-[240px] shrink-0 truncate font-mono text-[10.5px] text-[var(--color-text-dim)]/60">
-            {inputPreview}
+          <span className={`ml-2 text-[12px] ${phaseTone}`}>
+            {phaseLabel}
           </span>
-        )}
+        </span>
         {expandable && (
-          <ChevronDown
-            className={`size-3 shrink-0 text-[var(--color-text-dim)]/50 transition-transform ${expanded ? "rotate-180" : ""}`}
+          <ChevronRight
+            className={`size-4 shrink-0 text-[var(--color-text-dim)]/50 transition-[color,transform] group-hover:text-[var(--color-accent)] ${expanded ? "rotate-90" : ""}`}
           />
         )}
       </Wrapper>
-      {children}
+      {children && <div className="ml-7">{children}</div>}
     </div>
   );
 }

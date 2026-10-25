@@ -131,7 +131,34 @@ export function useChatSend({
 
       let conversationId = activeConversationId;
       if (!conversationId) {
-        conversationId = createConversation(projectId);
+        const extensions = useExtensionsStore.getState();
+        const draftSkill = extensions.resolveActiveSkillSelection("new-chat", projectId);
+        const draftSkillId = extensions.activeSkillIds["new-chat"];
+        const draftWorkflowId = extensions.activeSkillWorkflowIds["new-chat"];
+        const draftDisabledMcpIds = extensions.chatDisabledMcpServerIds["new-chat"];
+        const draftEnabledMcpIds = extensions.chatEnabledMcpServerIds["new-chat"];
+        const newConversationId = createConversation(projectId);
+        conversationId = newConversationId;
+        useExtensionsStore.setState((state) => {
+          const activeSkillIds = { ...state.activeSkillIds };
+          const activeSkillWorkflowIds = { ...state.activeSkillWorkflowIds };
+          const chatDisabledMcpServerIds = { ...state.chatDisabledMcpServerIds };
+          const chatEnabledMcpServerIds = { ...state.chatEnabledMcpServerIds };
+          delete activeSkillIds["new-chat"];
+          delete activeSkillWorkflowIds["new-chat"];
+          delete chatDisabledMcpServerIds["new-chat"];
+          delete chatEnabledMcpServerIds["new-chat"];
+          if (draftSkill) {
+            activeSkillIds[newConversationId] = draftSkill.skill.id;
+            if (draftSkill.workflowId) activeSkillWorkflowIds[newConversationId] = draftSkill.workflowId;
+          } else if (draftSkillId !== undefined) {
+            activeSkillIds[newConversationId] = draftSkillId;
+            if (draftWorkflowId) activeSkillWorkflowIds[newConversationId] = draftWorkflowId;
+          }
+          if (draftDisabledMcpIds) chatDisabledMcpServerIds[newConversationId] = draftDisabledMcpIds;
+          if (draftEnabledMcpIds) chatEnabledMcpServerIds[newConversationId] = draftEnabledMcpIds;
+          return { activeSkillIds, activeSkillWorkflowIds, chatDisabledMcpServerIds, chatEnabledMcpServerIds };
+        });
       }
 
       const userMessage: ChatMessage = {

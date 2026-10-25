@@ -27,6 +27,7 @@ let activeSearch: Promise<SearchContextBundle> | null = null;
  * the engine result, or hang entirely.
  */
 const DIRECT_PROVIDER_TIMEOUT_MS = 5_000;
+const FAST_CONTEXT_TOKEN_LIMIT = 1_500;
 
 function withSoftTimeout(
   promise: Promise<SearchResult[]>,
@@ -128,16 +129,10 @@ export async function runSearch(
         settings.webSearchFetchMaxCharsPerSource,
     ),
   );
-  const tokenLimit = isFast
-    ? 1500
-    : Math.max(
-        500,
-        Math.min(
-          8000,
-          projectSettings?.webSearchContextTokenLimit ??
-            settings.webSearchContextTokenLimit,
-        ),
-      );
+  const tokenLimit = resolveSearchContextTokenLimit({
+    projectId,
+    ...(opts.speedPreset ? { speedPreset: opts.speedPreset } : {}),
+  });
 
   const run = async (): Promise<SearchContextBundle> => {
     const maxResults = isFast ? 3 : Math.min(12, settings.webSearchMaxResults ?? 8);
@@ -387,9 +382,34 @@ function buildContextBlock(
   return header + lines.join("\n\n") + footer;
 }
 
-export function buildSearchContextBlock(bundle: SearchContextBundle): string {
+/**
+ * Resolve the context budget for a search bundle. Shared by the search run and by
+ * the block actually injected into the model, so the fast preset and project
+ * overrides are honoured in both places.
+ */
+export function resolveSearchContextTokenLimit(
+  options: { projectId?: string; speedPreset?: "fast" | "normal" } = {},
+): number {
   const settings = useSettingsStore.getState();
-  const maxContextTokens = settings.webSearchContextTokenLimit ?? 4000;
+  const speedPreset = options.speedPreset ?? settings.webSearchSpeedPreset;
+  if (speedPreset === "fast") {
+    return FAST_CONTEXT_TOKEN_LIMIT;
+  }
+  const projectRecord = options.projectId
+    ? useProjectStore.getState().projects.find((p) => p.id === options.projectId)
+    : undefined;
+  const configured =
+    projectRecord?.settings?.webSearchContextTokenLimit ??
+    settings.webSearchContextTokenLimit ??
+    4000;
+  return Math.max(500, Math.min(8000, configured));
+}
+
+export function buildSearchContextBlock(
+  bundle: SearchContextBundle,
+  options: { tokenLimit?: number } = {},
+): string {
+  const maxContextTokens = options.tokenLimit ?? resolveSearchContextTokenLimit();
   const fetchedByUrl = new Map<string, FetchedPageSummary>();
   for (const page of bundle.fetchedPages ?? []) {
     fetchedByUrl.set(page.url, page);
