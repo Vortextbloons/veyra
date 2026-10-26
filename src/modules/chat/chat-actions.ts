@@ -82,7 +82,7 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
               message.role !== "assistant" || getAssistantVisibleText(message).trim(),
           )
           .map((message) => {
-            const { artifact, ...providerMessage } = message;
+            const { artifact, artifactReplacement: _artifactReplacement, ...providerMessage } = message;
             if (
               message.role === "assistant" &&
               !message.content.trim() &&

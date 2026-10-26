@@ -14,6 +14,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import { type MessageAttachment } from "@/lib/message-attachments";
 import { FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
 import { InteractiveAnswerBlock } from "@/modules/chat/components/interactive-answer-block";
+import { ArtifactBlock } from "@/modules/chat/components/artifact-block";
 
 const MarkdownRenderer = lazy(() =>
   import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
@@ -183,6 +184,7 @@ export const MessageBubble = memo(function MessageBubble({
             onFollowUp={onFollowUp}
           />
         )}
+        {message.artifact && <ArtifactBlock artifact={message.artifact} messageId={message.id} />}
         </div>
         {!isStreaming && message.performance && (
           <MessagePerformanceBar performance={message.performance} />

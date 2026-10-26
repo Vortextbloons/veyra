@@ -44,15 +44,30 @@ export function useChatRegeneration({
       if (msgIndex === 0) return;
       const userMsg = conversation.messages[msgIndex - 1];
       if (userMsg.role !== "user") return;
-      removeLastMessagePair(activeConversationId);
+      const selectedAssistant = conversation.messages[msgIndex];
+      const pendingReplacement = selectedAssistant.artifactReplacement;
+      const keepPreviousArtifact = Boolean(selectedAssistant.artifact || pendingReplacement);
+      if (!keepPreviousArtifact || pendingReplacement) removeLastMessagePair(activeConversationId);
 
-      const trimmed = userMsg.content.trim();
+      const replacementUserMessage = keepPreviousArtifact
+        ? { ...userMsg, id: crypto.randomUUID(), timestamp: Date.now() }
+        : userMsg;
+
+      const trimmed = replacementUserMessage.content.trim();
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
         content: "",
         timestamp: Date.now(),
         modelId: selectedModel,
+        ...(keepPreviousArtifact
+          ? {
+              artifactReplacement: pendingReplacement ?? {
+                userMessageId: userMsg.id,
+                assistantMessageId: messageId,
+              },
+            }
+          : {}),
       };
 
       const liveConversation = useChatStore
@@ -60,13 +75,13 @@ export function useChatRegeneration({
         .conversations.find((c) => c.id === activeConversationId);
       if (!liveConversation) return;
 
-      addMessagePair(activeConversationId, userMsg, assistantMessage, {
+      addMessagePair(activeConversationId, replacementUserMessage, assistantMessage, {
         deferTitle: useSettingsStore.getState().autoNameEnabled,
       });
 
       runChatJob({
         conversationId: activeConversationId,
-        userMessage: userMsg,
+        userMessage: replacementUserMessage,
         assistantMessage,
         trimmed,
         previousResponseId: undefined,

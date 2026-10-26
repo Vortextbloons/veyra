@@ -59,4 +59,50 @@ describe("chat store assistant append", () => {
     });
     expect(mocks.saveConversationSnapshot).toHaveBeenCalledOnce();
   });
+
+  it("keeps an existing artifact until a valid regenerated artifact is stored", () => {
+    const previousArtifact = {
+      id: "old-artifact",
+      format: "document" as const,
+      title: "Original plan",
+      content: "# Original",
+      createdAt: 1,
+    };
+    const nextArtifact = {
+      id: "new-artifact",
+      format: "document" as const,
+      title: "Revised plan",
+      content: "# Revised",
+      createdAt: 2,
+    };
+    const previousUser: ChatMessage = { id: "old-user", role: "user", content: "Make a plan", timestamp: 1 };
+    const previousAssistant: ChatMessage = {
+      id: "old-assistant",
+      role: "assistant",
+      content: "",
+      timestamp: 2,
+      artifact: previousArtifact,
+    };
+    const replacementUser: ChatMessage = { id: "new-user", role: "user", content: "Make a plan", timestamp: 3 };
+    const replacementAssistant: ChatMessage = {
+      id: "new-assistant",
+      role: "assistant",
+      content: "",
+      timestamp: 4,
+      artifactReplacement: { userMessageId: previousUser.id, assistantMessageId: previousAssistant.id },
+    };
+    useChatStore.setState({ conversations: [conversation([previousUser, previousAssistant, replacementUser, replacementAssistant])] });
+
+    const rejected = useChatStore.getState().setAssistantArtifact("conversation-1", replacementAssistant.id, {
+      ...nextArtifact,
+      content: "x".repeat(256 * 1024 + 1),
+    });
+    expect(rejected).toBe(false);
+    expect(useChatStore.getState().conversations[0]?.messages[1]?.artifact).toEqual(previousArtifact);
+
+    const saved = useChatStore.getState().setAssistantArtifact("conversation-1", replacementAssistant.id, nextArtifact);
+    expect(saved).toBe(true);
+    expect(useChatStore.getState().conversations[0]?.messages.map((message) => message.id)).toEqual(["new-user", "new-assistant"]);
+    expect(useChatStore.getState().conversations[0]?.messages[1]?.artifact).toEqual(nextArtifact);
+  });
 });

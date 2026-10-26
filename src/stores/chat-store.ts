@@ -414,12 +414,28 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const conversations = state.conversations.map((conversation) => {
         if (conversation.id !== conversationId) return conversation;
         let conversationUpdated = false;
+        let replacement: ChatMessage["artifactReplacement"];
         const messages = conversation.messages.map((message) => {
           if (message.id !== messageId || message.role !== "assistant" || message.artifact) return message;
           updated = conversationUpdated = true;
-          return { ...message, artifact };
+          replacement = message.artifactReplacement;
+          const { artifactReplacement: _artifactReplacement, ...storedMessage } = message;
+          return { ...storedMessage, artifact };
         });
-        return conversationUpdated ? { ...conversation, messages, updatedAt: Date.now() } : conversation;
+        if (!conversationUpdated) return conversation;
+
+        const replacementTarget = replacement;
+        const oldUserIndex = replacementTarget
+          ? conversation.messages.findIndex((message) => message.id === replacementTarget.userMessageId)
+          : -1;
+        const oldAssistant = oldUserIndex >= 0 ? conversation.messages[oldUserIndex + 1] : undefined;
+        const committedMessages = replacementTarget &&
+          oldAssistant?.id === replacementTarget.assistantMessageId &&
+          oldAssistant.role === "assistant" &&
+          oldAssistant.artifact
+          ? messages.filter((message) => message.id !== replacementTarget.userMessageId && message.id !== replacementTarget.assistantMessageId)
+          : messages;
+        return { ...conversation, messages: committedMessages, updatedAt: Date.now() };
       });
       if (!updated) return state;
       void saveConversationSnapshot(conversations);

@@ -23,9 +23,24 @@ interface ChatMessage {
   webSearchState?: WebSearchState;
   toolStates?: ToolCallState[];
   scratchpadContent?: string;
+  artifact?: Artifact;
   modelId?: string;
 }
+
+type ArtifactFormat = "html" | "code" | "document";
+
+type Artifact = {
+  id: string;
+  format: ArtifactFormat;
+  title: string;
+  content: string;
+  language?: string;
+  filename?: string;
+  createdAt: number;
+};
 ```
+
+Artifact rendering, validation, and document editing are described in [07-artifacts.md](07-artifacts.md).
 
 ## Tool Call Types
 

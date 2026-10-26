@@ -33,6 +33,7 @@ fn reveal_main_window(app: &tauri::AppHandle, focus: bool) {
 }
 
 mod agents;
+mod artifact_preview;
 mod app_update;
 mod connectivity;
 mod document_extraction;
@@ -313,6 +314,10 @@ fn app_ready(app: tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(artifact_preview::ArtifactPreviewState::default())
+        .register_uri_scheme_protocol("artifact-preview", |context, request| {
+            artifact_preview::serve_preview(&request, context.app_handle())
+        })
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -324,6 +329,7 @@ pub fn run() {
             load_provider_credential,
             delete_provider_credential,
             app_ready,
+            artifact_preview::register_artifact_preview,
             exit_app,
             app_update::install_app_update,
             agents::commands::check_pi_available,

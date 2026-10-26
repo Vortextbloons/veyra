@@ -51,11 +51,17 @@ export function normalizeArtifact(
   }
 
   const filename = typeof raw.filename === "string" ? raw.filename.trim() : undefined;
+  const filenameHasControlCharacter = filename
+    ? [...filename].some((character) => {
+        const code = character.charCodeAt(0);
+        return code < 0x20 || code === 0x7f;
+      })
+    : false;
   if (
     filename &&
     (filename.length > MAX_FILENAME_LENGTH ||
       filename === "." || filename === ".." ||
-      /[\\/:\u0000-\u001f\u007f]/.test(filename))
+      /[\\/:]/.test(filename) || filenameHasControlCharacter)
   ) {
     return { ok: false, error: "Use a single safe filename without a folder path." };
   }

@@ -324,6 +324,23 @@ body {
   margin-bottom: 0;
 }
 
+.artifact-document-preview.markdown-rendered h1,
+.artifact-document-preview.markdown-rendered h2,
+.artifact-document-preview.markdown-rendered h3 {
+  margin: 1.25em 0 0.5em;
+  color: #f5f5f5;
+  font-weight: 600;
+}
+
+.artifact-document-preview.markdown-rendered h1 { font-size: 1.65em; }
+.artifact-document-preview.markdown-rendered h2 { font-size: 1.3em; }
+.artifact-document-preview.markdown-rendered h3 { font-size: 1.1em; }
+.artifact-document-preview.markdown-rendered table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.artifact-document-preview.markdown-rendered th,
+.artifact-document-preview.markdown-rendered td { border: 1px solid #3a3a3a; padding: 0.45rem 0.65rem; }
+.artifact-document-preview.markdown-rendered th { background: #202020; color: #fff; text-align: left; }
+.artifact-document-preview.markdown-rendered blockquote { border-left: 2px solid var(--color-accent); color: var(--color-text-dim); margin-left: 0; padding-left: 1rem; }
+
 /* Print styles */
 @media print {
   /* Hide everything except document content */

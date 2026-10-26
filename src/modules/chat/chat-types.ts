@@ -93,6 +93,8 @@ export interface ChatMessage {
   interactiveAnswer?: InteractiveAnswer;
   /** Finished HTML, code, or document output owned by this assistant message. */
   artifact?: Artifact;
+  /** Internal regeneration link; removed from provider history and consumed when replacement output saves. */
+  artifactReplacement?: { userMessageId: string; assistantMessageId: string };
   /** Model id that produced this assistant message. Used to render the
    *  correct avatar/label even when the active model changes later. */
   modelId?: string;

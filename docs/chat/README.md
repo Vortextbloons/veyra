@@ -10,3 +10,4 @@ Core AI chat pipeline with streaming, tool calls, and context window management.
 - [04-streaming.md](04-streaming.md) — Streaming behavior
 - [05-storage.md](05-storage.md) — Conversation encryption and persistence
 - [06-types.md](06-types.md) — Key type definitions
+- [07-artifacts.md](07-artifacts.md) — Message-owned HTML, code, and editable document artifacts

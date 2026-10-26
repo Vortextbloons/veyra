@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Globe, LayoutDashboard, TerminalSquare, X, Zap } from "lucide-react";
+import { FileText, Globe, LayoutDashboard, TerminalSquare, X, Zap } from "lucide-react";
 import { DialogSurface } from "@/components/dialog-surface";
 import { ChatExtensionsSettings } from "@/modules/extensions/components/chat-extensions-settings";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -158,6 +158,8 @@ export function ChatOptionsMenu({
   const speedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
   const interactiveAnswersEnabled = useSettingsStore((s) => s.interactiveAnswersEnabled);
   const setInteractiveAnswersEnabled = useSettingsStore((s) => s.setInteractiveAnswersEnabled);
+  const artifactsEnabled = useSettingsStore((s) => s.artifactsEnabled);
+  const setArtifactsEnabled = useSettingsStore((s) => s.setArtifactsEnabled);
   const webSearchOn = webSearchEnabled && !webSearchDisabled;
   const webSearchIconClass = speedPreset === "fast" ? "text-cyan-300" : "text-emerald-300";
 
@@ -226,6 +228,14 @@ export function ChatOptionsMenu({
             <div className="mx-2 my-1.5 h-px bg-white/[0.06]" />
 
             <SectionLabel>Tools</SectionLabel>
+            <SettingRow
+              icon={<FileText className="size-4" />}
+              label="Artifacts"
+              description="Create visual outputs, documents, and downloadable code"
+              active={artifactsEnabled}
+              onToggle={setArtifactsEnabled}
+              iconActiveClass="text-violet-300"
+            />
             {onWebSearchChange && (
               <>
                 <SettingRow
