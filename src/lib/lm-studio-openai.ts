@@ -10,6 +10,7 @@ import { withFetchTimeout } from "@/lib/abort-utils";
 import { parseToolArguments, stableToolCallId, extractToolCalls } from "@/lib/lm-studio-v1";
 import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
 import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
+import { lmStudioReasoningEffort } from "@/lib/providers/lm-studio-reasoning";
 import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import {
@@ -67,6 +68,7 @@ function buildOpenAiMessage(message: ChatMessage): Record<string, unknown> {
 function buildOpenAiChatBody(options: {
   model: string;
   messages: ChatMessage[];
+  baseUrl?: string;
   temperature?: number;
   maxTokens?: number;
   topP?: number;
@@ -94,14 +96,17 @@ function buildOpenAiChatBody(options: {
     body.tool_choice = options.toolChoice ?? "auto";
   }
   if (options.reasoningLevel && !options.omitUnsupportedFields) {
-    // Pi already limits these levels to what the model advertises. Collapse
-    // values older OpenAI-compatible APIs do not understand.
-    body.reasoning_effort =
-      options.reasoningLevel === "off"
+    // Prefer the exact options the endpoint advertises; unknown support sends
+    // nothing so a model is never rejected for an unsupported effort value.
+    const advertised = lmStudioReasoningEffort(options.model, options.reasoningLevel, options.baseUrl);
+    const effort =
+      advertised ??
+      (options.reasoningLevel === "off"
         ? "none"
         : options.reasoningLevel === "xhigh" || options.reasoningLevel === "max"
           ? "high"
-          : options.reasoningLevel;
+          : options.reasoningLevel);
+    body.reasoning_effort = effort;
   } else if (options.reasoningEnabled === false && !options.omitUnsupportedFields) {
     body.reasoning_effort = "none";
   }

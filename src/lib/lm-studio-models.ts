@@ -2,6 +2,7 @@ import type { ModelInfo } from "@/modules/chat/chat-types";
 import type { LmStudioModelEntry, LoadedLmStudioModelInstance } from "@/lib/lm-studio-types";
 import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
 import { inferSupportsImages } from "@/lib/message-attachments";
+import { rememberLmStudioReasoningOptions } from "@/lib/providers/lm-studio-reasoning";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 function modelIdFromEntry(entry: LmStudioModelEntry): string {
@@ -53,12 +54,42 @@ async function fetchModelEntries(url: string): Promise<LmStudioModelEntry[]> {
   return parseModelEntries(await res.json());
 }
 
+function reasoningOptionsFromEntry(entry: LmStudioModelEntry): { modelId: string; options: string[] } | null {
+  const record = entry as Record<string, unknown>;
+  const selected = typeof record.selected_variant === "string" ? record.selected_variant : "";
+  const keyed = typeof record.key === "string" ? record.key : "";
+  const modelId = (selected || keyed).trim();
+  if (!modelId) return null;
+  const capabilities = record.capabilities;
+  if (!capabilities || typeof capabilities !== "object") return null;
+  const reasoning = (capabilities as Record<string, unknown>).reasoning;
+  if (!reasoning || typeof reasoning !== "object") return null;
+  const allowed = (reasoning as Record<string, unknown>).allowed_options;
+  const options = Array.isArray(allowed)
+    ? allowed.filter((option): option is string => typeof option === "string")
+    : [];
+  return options.length > 0 ? { modelId, options } : null;
+}
+
+/**
+ * Cache the reasoning options LM Studio advertises per model so request bodies
+ * only carry values the endpoint accepts.
+ */
+async function cacheReasoningOptions(baseUrl?: string): Promise<void> {
+  const entries = await fetchModelEntries(`${baseUrl || DEFAULT_LM_STUDIO_BASE_URL}/api/v1/models`);
+  for (const entry of entries) {
+    const found = reasoningOptionsFromEntry(entry);
+    if (found) rememberLmStudioReasoningOptions(found.modelId, found.options, baseUrl);
+  }
+}
+
 export async function fetchModels(baseUrl?: string): Promise<ModelInfo[]> {
   try {
     const url = `${baseUrl || DEFAULT_LM_STUDIO_BASE_URL}/v1/models`;
     const res = await tauriFetch(url);
     if (!res.ok) return [];
     const json = await res.json();
+    void cacheReasoningOptions(baseUrl);
     return (json.data ?? []).map((m: { id: string }) => ({
       id: m.id,
       name: m.id,

@@ -11,3 +11,4 @@ Core AI chat pipeline with streaming, tool calls, and context window management.
 - [05-storage.md](05-storage.md) — Conversation encryption and persistence
 - [06-types.md](06-types.md) — Key type definitions
 - [07-artifacts.md](07-artifacts.md) — Message-owned HTML, code, and editable document artifacts
+- [08-reasoning-levels.md](08-reasoning-levels.md) — How the composer's reasoning control resolves model capabilities

@@ -14,10 +14,43 @@ import {
   stopPiAgent,
 } from "@/modules/agents/pi-runtime";
 import { asRecord } from "@/lib/utils";
-import { agentSessionPrompt } from "./agent-session-context";
+import { notifyMemoryDeletion } from "@/modules/memory/memory-lifecycle";
+import { useProjectStore } from "@/modules/projects/project-store";
+import {
+  agentPromptWithMemory,
+  resolveAgentProjectId,
+} from "./agent-session-context";
 
 const sessionAbortControllers = new Map<string, AbortController>();
 let startSessionChain: Promise<void> = Promise.resolve();
+
+/**
+ * Resolves a workspace to a project only after project hydration. Undefined is
+ * the fail-closed result: the caller must not persist workspace facts globally.
+ */
+async function resolveHydratedAgentProjectId(projectPath: string): Promise<string | undefined> {
+  if (!projectPath.trim()) return undefined;
+  try {
+    const projectStore = useProjectStore.getState();
+    if (projectStore.hydrationState !== "ready") {
+      await projectStore.hydrateProjects();
+    }
+    const hydrated = useProjectStore.getState();
+    if (hydrated.hydrationState !== "ready") return undefined;
+    return resolveAgentProjectId(projectPath, hydrated.projects);
+  } catch {
+    return undefined;
+  }
+}
+
+async function isMemoryInjectionEnabled(): Promise<boolean> {
+  try {
+    const { useMemoryStore } = await import("@/modules/memory/memory-store");
+    return useMemoryStore.getState().enabled;
+  } catch {
+    return false;
+  }
+}
 
 function abortAgentSession(sessionId: string): void {
   const controller = sessionAbortControllers.get(sessionId);
@@ -422,6 +455,7 @@ export const useAgentStore = create<AgentStore>()(
       deleteSession: async (sessionId) => {
         const current = get().sessions.find((session) => session.id === sessionId);
         if (!current) return;
+        notifyMemoryDeletion({ sourceType: "agent", sourceId: sessionId });
         if (current.status === "running") {
           abortAgentSession(sessionId);
         }
@@ -444,6 +478,9 @@ export const useAgentStore = create<AgentStore>()(
         });
       },
       startSession: async (input) => {
+    const userPrompt = input.prompt.trim();
+    const selectedModel = input.model;
+    const providerId = input.providerId ?? "";
     const waitFor = startSessionChain;
     let unlock: () => void = () => {};
     startSessionChain = new Promise<void>((resolve) => {
@@ -480,6 +517,12 @@ export const useAgentStore = create<AgentStore>()(
           activeSession.mode === mode,
       );
       const id = shouldContinue && activeSession ? activeSession.id : crypto.randomUUID();
+      const turnId = crypto.randomUUID();
+      // Capture project scope once; later navigation must not change this turn.
+      const scopeProjectId = await resolveHydratedAgentProjectId(projectPath);
+      // A nonempty workspace that does not resolve to exactly one project must
+      // not fall back to global personal memory for extraction.
+      const mayExtractAgentMemory = !projectPath.trim() || scopeProjectId !== undefined;
       const now = Date.now();
       const session: AgentSession = {
         id,
@@ -487,9 +530,9 @@ export const useAgentStore = create<AgentStore>()(
         mode,
         status: "running",
         projectPath,
-        prompt: input.prompt.trim(),
-        model: input.model,
-        title: titleFromPrompt(input.prompt),
+        prompt: userPrompt,
+        model: selectedModel,
+        title: titleFromPrompt(userPrompt),
         startedAt: now,
         events: [
           ...(shouldContinue && activeSession ? activeSession.events : []),
@@ -498,12 +541,12 @@ export const useAgentStore = create<AgentStore>()(
             shouldContinue ? "Message sent" : "Session started",
             [
               projectPath ? `Workspace: ${projectPath}` : null,
-              modelDetail(input.model),
+              modelDetail(selectedModel),
             ]
               .filter(Boolean)
               .join("\n") || undefined,
           ),
-          event("status", "Prompt", input.prompt.trim()),
+          event("status", "Prompt", userPrompt),
         ],
       };
 
@@ -511,10 +554,10 @@ export const useAgentStore = create<AgentStore>()(
         sessions: shouldContinue
           ? patchSession(state.sessions, id, {
               status: "running",
-              prompt: input.prompt.trim(),
+              prompt: userPrompt,
               mode,
               projectPath,
-              model: input.model,
+              model: selectedModel,
               events: session.events,
               exitCode: undefined,
               endedAt: undefined,
@@ -526,85 +569,135 @@ export const useAgentStore = create<AgentStore>()(
       try {
         const abortController = new AbortController();
         sessionAbortControllers.set(id, abortController);
-
-        const result = await runPiAgent(
-          {
-            sessionId: id,
-            mode,
-            projectPath,
-            prompt: agentSessionPrompt(shouldContinue ? activeSession ?? null : null, input.prompt.trim(), input.contextLength),
-            model: input.model,
-            contextLength: input.contextLength,
-            reservedOutputTokens: input.reservedOutputTokens,
-            providerId: input.providerId,
-            providerBaseUrl: input.providerBaseUrl,
-            reasoningEnabled: input.reasoningEnabled,
-            reasoningLevel: input.reasoningLevel,
-          },
-          (rawEvent) => {
-            const parsedEvent = parsePiEvent(rawEvent);
-            if (!parsedEvent) return;
-            if (parsedEvent.type === "token_update") {
-              const tokens = parseInt(parsedEvent.detail ?? "0", 10);
-              if (tokens > 0) {
-                set((state) => {
-                  const current = state.sessions.find((item) => item.id === id);
-                  if (!current || current.status !== "running") return state;
-                  return {
-                    sessions: patchSession(state.sessions, id, {
-                      contextTokens: tokens,
-                    }),
-                  };
-                });
-              }
-              return;
-            }
-            set((state) => {
-              const current = state.sessions.find((item) => item.id === id);
-              if (!current || current.status !== "running") return state;
-              return {
-                sessions: patchSession(state.sessions, id, {
-                  events: appendLiveOutput(current.events, parsedEvent),
-                }),
-              };
+        try {
+          let memoryBlock = "";
+          try {
+            const { retrieveMemoryContext } = await import("@/modules/memory/memory-service");
+            const retrieved = await retrieveMemoryContext({
+              query: userPrompt,
+              projectId: scopeProjectId,
+              signal: abortController.signal,
             });
-          },
-          { signal: abortController.signal },
-        );
+            memoryBlock = retrieved.block;
+          } catch {
+            // Memory is optional; retrieval failures must not block the agent run.
+          }
+          if (abortController.signal.aborted) return id;
 
-        sessionAbortControllers.delete(id);
+          // Retrieval may have happened while memory was enabled. Re-check the
+          // live global switch immediately before dispatch so a stale snapshot
+          // cannot be injected after the user turns memory off.
+          if (memoryBlock && !(await isMemoryInjectionEnabled())) {
+            memoryBlock = "";
+          }
+          if (abortController.signal.aborted) return id;
 
-        const currentSession = get().sessions.find((item) => item.id === id);
-        if (currentSession?.status === "stopped" || abortController.signal.aborted) {
-          return id;
+          const result = await runPiAgent(
+            {
+              sessionId: id,
+              mode,
+              projectPath,
+              prompt: agentPromptWithMemory(userPrompt, memoryBlock, {
+                session: shouldContinue ? activeSession ?? null : null,
+                contextLength: input.contextLength,
+                reservedOutputTokens: input.reservedOutputTokens,
+              }),
+              model: selectedModel,
+              contextLength: input.contextLength,
+              reservedOutputTokens: input.reservedOutputTokens,
+              providerId: input.providerId,
+              providerBaseUrl: input.providerBaseUrl,
+              reasoningEnabled: input.reasoningEnabled,
+              reasoningLevel: input.reasoningLevel,
+            },
+            (rawEvent) => {
+              const parsedEvent = parsePiEvent(rawEvent);
+              if (!parsedEvent) return;
+              if (parsedEvent.type === "token_update") {
+                const tokens = parseInt(parsedEvent.detail ?? "0", 10);
+                if (tokens > 0) {
+                  set((state) => {
+                    const current = state.sessions.find((item) => item.id === id);
+                    if (!current || current.status !== "running") return state;
+                    return {
+                      sessions: patchSession(state.sessions, id, {
+                        contextTokens: tokens,
+                      }),
+                    };
+                  });
+                }
+                return;
+              }
+              set((state) => {
+                const current = state.sessions.find((item) => item.id === id);
+                if (!current || current.status !== "running") return state;
+                return {
+                  sessions: patchSession(state.sessions, id, {
+                    events: appendLiveOutput(current.events, parsedEvent),
+                  }),
+                };
+              });
+            },
+            { signal: abortController.signal },
+          );
+
+          const currentSession = get().sessions.find((item) => item.id === id);
+          if (currentSession?.status === "stopped" || abortController.signal.aborted) {
+            return id;
+          }
+
+          const failed = result.exitCode !== 0;
+          const stderrText = stripAnsi(result.stderr);
+          const currentSessionEvents = get().sessions.find((item) => item.id === id);
+          const currentEvents = currentSessionEvents?.events ?? [];
+          const events = [
+            ...currentEvents,
+            ...(stderrText
+              ? [event(failed ? "error" : "output", "Pi stderr", stderrText)]
+              : []),
+            event(
+              failed ? "error" : "result",
+              failed ? "Turn failed" : "Turn completed",
+              failed ? `Exit code: ${result.exitCode ?? "unknown"}` : undefined,
+            ),
+          ];
+          set((state) => ({
+            sessions: patchSession(state.sessions, id, {
+              status: failed ? "failed" : "ready",
+              summary: failed ? "Pi could not complete the turn." : undefined,
+              endedAt: Date.now(),
+              exitCode: failed ? result.exitCode : undefined,
+              events,
+            }),
+          }));
+
+          if (!failed && mayExtractAgentMemory) {
+            try {
+              const { queueMemoryExtraction } = await import("@/modules/memory/memory-service");
+              // Only the user's prompt is durable memory here. Pi stdout, tool
+              // output, and reasoning are never promoted into memory.
+              queueMemoryExtraction({
+                sourceType: "agent",
+                sourceId: id,
+                turnId,
+                userText: userPrompt,
+                assistantText: "",
+                projectId: scopeProjectId,
+                model: selectedModel,
+                providerId,
+              });
+            } catch {
+              // Memory extraction is best-effort and never changes agent results.
+            }
+          }
+        } finally {
+          // Cancellation during retrieval used to leave a stale controller in
+          // the map. Always release this run's entry, but never a newer one.
+          if (sessionAbortControllers.get(id) === abortController) {
+            sessionAbortControllers.delete(id);
+          }
         }
-
-        const failed = result.exitCode !== 0;
-        const stderrText = stripAnsi(result.stderr);
-        const currentSessionEvents = get().sessions.find((item) => item.id === id);
-        const currentEvents = currentSessionEvents?.events ?? [];
-        const events = [
-          ...currentEvents,
-          ...(stderrText
-            ? [event(failed ? "error" : "output", "Pi stderr", stderrText)]
-            : []),
-          event(
-            failed ? "error" : "result",
-            failed ? "Turn failed" : "Turn completed",
-            failed ? `Exit code: ${result.exitCode ?? "unknown"}` : undefined,
-          ),
-        ];
-        set((state) => ({
-          sessions: patchSession(state.sessions, id, {
-            status: failed ? "failed" : "ready",
-            summary: failed ? "Pi could not complete the turn." : undefined,
-            endedAt: Date.now(),
-            exitCode: failed ? result.exitCode : undefined,
-            events,
-          }),
-        }));
       } catch (error) {
-        sessionAbortControllers.delete(id);
         const current = get().sessions.find((item) => item.id === id);
         if (current?.status === "stopped") {
           return id;
@@ -649,6 +742,7 @@ export const useAgentStore = create<AgentStore>()(
       },
       clearSessions: () => {
         for (const session of get().sessions) {
+          notifyMemoryDeletion({ sourceType: "agent", sourceId: session.id });
           if (session.status === "running") {
             abortAgentSession(session.id);
           }

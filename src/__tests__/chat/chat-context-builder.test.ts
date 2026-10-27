@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import {
   buildRoundMessages,
   formatToolResultsMessage,
@@ -6,6 +6,29 @@ import {
 } from "@/modules/chat/chat-context-builder";
 import type { ChatMessage } from "@/modules/chat/chat-types";
 import type { RoundMessagesContext } from "@/modules/chat/chat-context-builder";
+import type { LmChatCompleteResult } from "@/lib/lm-studio";
+import type { ProviderAdapter, ProviderChatOptions } from "@/lib/providers/types";
+
+const mocks = vi.hoisted(() => {
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    },
+  });
+  return { memoryEnabled: true };
+});
+
+vi.mock("@/modules/memory/memory-store", () => ({
+  useMemoryStore: {
+    getState: () => ({ enabled: mocks.memoryEnabled }),
+  },
+}));
+
+import { rePromptWithTools } from "@/modules/chat/chat-tool-loop";
 
 describe("formatToolResultsMessage", () => {
   it("returns fallback for empty sections", () => {
@@ -54,6 +77,86 @@ describe("buildRoundMessages", () => {
     const result = buildRoundMessages(chain, ["Source: http://example.com"], baseContext);
     const allContent = result.map((m) => m.content).join(" ");
     expect(allContent).toContain("Source: http://example.com");
+  });
+});
+
+describe("provider-round memory re-check", () => {
+  const memoryBlock = "<veyra_memory_context>\nMEMORY_SNAPSHOT\n</veyra_memory_context>";
+  const chain: ChatMessage[] = [
+    { id: "1", role: "user", content: "hi", timestamp: 1 },
+  ];
+
+  function runRound(): Promise<{ messages: ChatMessage[] }> {
+    return new Promise((resolve, reject) => {
+      const provider = {
+        id: "test",
+        name: "Test",
+        connectivityRequirement: "local",
+        isAvailable: async () => true,
+        fetchModels: async () => [],
+        sendChat: async (options: ProviderChatOptions) => {
+          const result: LmChatCompleteResult = {
+            performance: {
+              tokensPerSecond: 0,
+              timeToFirstToken: 0,
+              generationTime: 0,
+              totalTime: 0,
+              outputTokens: 0,
+            },
+            toolCalls: [],
+          };
+          resolve({ messages: options.messages });
+          options.onComplete?.(result);
+        },
+      } as ProviderAdapter;
+
+      void rePromptWithTools({
+        provider,
+        providerChatBase: () => ({
+          model: "test-model",
+          onChunk: () => {},
+          onError: () => {},
+        }),
+        chainMessages: chain,
+        round: 0,
+        accumulatedSearchSources: [],
+        accumulatedContextBlocks: [],
+        accumulatedContent: "",
+        enhancedMode: false,
+        model: "test-model",
+        modelSupportsImages: true,
+        onChunk: () => {},
+        onError: () => {},
+        finalizeToUser: () => {},
+        executeToolRoundLocal: async () => ({
+          toolResultSections: [],
+          webSearchSources: [],
+          webSearchContextBlocks: [],
+          streamedChunks: [],
+        }),
+        roundMessagesContext: {
+          resolvedUserPrompt: undefined,
+          resolvedReservedOutputTokens: 128,
+          resolvedContextLength: 8_192,
+          memoryContextBlock: memoryBlock,
+        },
+      }).catch(reject);
+    });
+  }
+
+  beforeEach(() => {
+    mocks.memoryEnabled = true;
+  });
+
+  it("keeps memory when the global switch is on", async () => {
+    const { messages: built } = await runRound();
+    expect(built.map((message) => message.content).join("\n")).toContain("MEMORY_SNAPSHOT");
+  });
+
+  it("drops the snapshot before dispatch when the global switch turned off", async () => {
+    mocks.memoryEnabled = false;
+    const { messages: built } = await runRound();
+    expect(built.map((message) => message.content).join("\n")).not.toContain("MEMORY_SNAPSHOT");
   });
 });
 

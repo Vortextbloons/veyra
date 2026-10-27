@@ -68,6 +68,16 @@ function buildSystemBlocks(options: BuildChatContextOptions): {
     });
   }
 
+  const memoryContextBlock = options.memoryContextBlock?.trim();
+  if (memoryContextBlock) {
+    blocks.push({
+      category: "retrieved_memory",
+      label: "Retrieved Memory",
+      tokenCount: estimateTokens(memoryContextBlock),
+      dropped: false,
+    });
+  }
+
   const webSearchContextBlock = options.webSearchContextBlock?.trim();
   if (webSearchContextBlock) {
     blocks.push({

@@ -26,6 +26,8 @@ export interface BuildChatContextOptions {
   contextAnchoringBlock?: string | null;
   /** Project-level instructions and context. */
   projectPromptBlock?: string | null;
+  /** Retrieved local memory, injected as bounded non-authoritative context. */
+  memoryContextBlock?: string | null;
   /** One explicitly selected local Skill. */
   skillContextBlock?: string | null;
   /** Custom user preferences block appended after the core prompt. */
@@ -61,6 +63,8 @@ function estimateMessageTokens(message: ChatMessage): number {
 function buildContextContents(options: BuildChatContextOptions): {
   systemContent: string;
   referenceContent: string;
+  nonMemoryReferenceContent: string;
+  memoryContent: string | undefined;
 } {
   const summaryText = options.conversationSummary?.trim() ?? "";
   const summaryCovers = Math.max(0, options.summaryCoversMessageCount ?? 0);
@@ -77,6 +81,7 @@ function buildContextContents(options: BuildChatContextOptions): {
   const projectPromptBlock = options.projectPromptBlock?.trim() || undefined;
   const skillContextBlock = options.skillContextBlock?.trim() || undefined;
   const userPrompt = options.userPrompt?.trim() || undefined;
+  const memoryContent = options.memoryContextBlock?.trim() || undefined;
 
   const systemContent = composeMainSystemPrompt({
     userPrompt,
@@ -86,11 +91,16 @@ function buildContextContents(options: BuildChatContextOptions): {
     modelName: options.modelName ?? undefined,
     providerName: options.providerName ?? undefined,
   });
-  const referenceContent = composeReferenceContext({
+  const nonMemoryReferenceContent = composeReferenceContext({
     summaryBlock,
     toolsBlock: webSearchBlock,
   });
-  return { systemContent, referenceContent };
+  const referenceContent = composeReferenceContext({
+    summaryBlock,
+    memoryBlock: memoryContent,
+    toolsBlock: webSearchBlock,
+  });
+  return { systemContent, referenceContent, nonMemoryReferenceContent, memoryContent };
 }
 
 /**
@@ -108,7 +118,12 @@ export function buildChatContext(
   options: BuildChatContextOptions = {},
   contextLimit?: number,
 ): ChatMessage[] {
-  const { systemContent, referenceContent } = buildContextContents(options);
+  const {
+    systemContent,
+    referenceContent,
+    nonMemoryReferenceContent,
+    memoryContent,
+  } = buildContextContents(options);
   const systemMessage: ChatMessage = {
     id: "system",
     role: "system",
@@ -146,15 +161,22 @@ export function buildChatContext(
 
   included.reverse();
 
-  const referenceMessage: ChatMessage | undefined =
-    referenceContent && estimateTokens(referenceContent) <= remaining
-      ? {
+  const referenceMessage: ChatMessage | undefined = (() => {
+    // Prefer the complete reference when it fits. If memory makes the combined
+    // block overflow, keep the pre-existing summary/tool evidence first and
+    // only fall back to memory alone when no evidence fits at all.
+    for (const content of [referenceContent, nonMemoryReferenceContent, memoryContent]) {
+      if (content && estimateTokens(content) <= remaining) {
+        return {
           id: "veyra-reference-context",
           role: "user",
-          content: referenceContent,
+          content,
           timestamp: 0,
-        }
-      : undefined;
+        };
+      }
+    }
+    return undefined;
+  })();
 
   return referenceMessage
     ? [systemMessage, referenceMessage, ...included]

@@ -16,6 +16,8 @@ import {
 import { sendOpenAiCompatibleChat } from "@/lib/lm-studio-openai";
 import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
 import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
+import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
+import { lmStudioReasoningValue } from "@/lib/providers/lm-studio-reasoning";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 export type LmStudioChatOptions = {
@@ -33,6 +35,7 @@ export type LmStudioChatOptions = {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  reasoningLevel?: ReasoningLevel;
   responseFormat?: { type: "json_object" | "text" };
   signal?: AbortSignal;
   onChunk: (content: string, done: boolean) => void;
@@ -68,6 +71,7 @@ async function sendLmStudioChatImpl(options: LmStudioChatOptions): Promise<void>
     tools,
     toolChoice,
     reasoningEnabled,
+    reasoningLevel,
     responseFormat,
     signal,
     onChunk,
@@ -96,6 +100,7 @@ async function sendLmStudioChatImpl(options: LmStudioChatOptions): Promise<void>
       tools,
       toolChoice,
       reasoningEnabled,
+      reasoningLevel,
       responseFormat,
       signal,
       startedAt,
@@ -129,6 +134,7 @@ async function sendLmStudioChatImpl(options: LmStudioChatOptions): Promise<void>
             tools,
             toolChoice,
             reasoningEnabled,
+            reasoning: reasoningLevel ? lmStudioReasoningValue(model, reasoningLevel, baseUrl) : undefined,
             responseFormat,
           }),
         ),

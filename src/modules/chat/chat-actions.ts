@@ -3,12 +3,22 @@ import type { SendChatCompleteContext } from "@/modules/chat/chat-orchestrator";
 import type { LmChatCompleteResult } from "@/lib/lm-studio";
 import { summarizeInteractiveAnswer } from "@/modules/chat/interactive-answer";
 import { summarizeArtifact } from "@/modules/chat/artifact";
+import { buildMemoryReferenceBlock } from "@/lib/prompts";
 import { useChatStore } from "@/stores/chat-store";
 import { useProviderStore } from "@/stores/provider-store";
 
 function getAssistantVisibleText(message: ChatMessage | undefined): string {
   const content = message?.content?.trim();
   return content || (message?.artifact ? summarizeArtifact(message.artifact) : "") || (message?.interactiveAnswer ? summarizeInteractiveAnswer(message.interactiveAnswer) : "") || message?.reasoning?.trim() || "";
+}
+
+/** Memory extraction must never use reasoning traces or hidden model state. */
+function getAssistantMemoryText(message: ChatMessage | undefined): string {
+  const content = message?.content?.trim();
+  if (content) return content;
+  if (message?.artifact) return summarizeArtifact(message.artifact).trim();
+  if (message?.interactiveAnswer) return summarizeInteractiveAnswer(message.interactiveAnswer).trim();
+  return "";
 }
 
 type ChatSendParams = {
@@ -37,10 +47,12 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     { sendChatRequest },
     { handoffAfterUserChat, queuePostChatJobs },
     { prepareProviderModel },
+    { retrieveMemoryContext, queueMemoryExtraction },
   ] = await Promise.all([
     import("@/modules/chat/chat-orchestrator"),
     import("@/lib/post-chat-jobs"),
     import("@/lib/providers"),
+    import("@/modules/memory/memory-service"),
   ]);
 
   const {
@@ -63,14 +75,37 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     onComplete,
   } = params;
 
-  await prepareProviderModel(selectedProvider, selectedModel, {
-    signal,
-    onProgress: onModelLoadProgress,
-  });
-
   const liveConversation = useChatStore
     .getState()
     .conversations.find((item) => item.id === conversationId);
+  // Capture scope before any async work so navigation cannot change it mid-turn.
+  const scopeProjectId = projectId || liveConversation?.projectId || undefined;
+  const turnId = userMessage.id;
+  const userText = trimmed;
+  let memoryContextBlock: string | undefined;
+
+  await Promise.all([
+    prepareProviderModel(selectedProvider, selectedModel, {
+      signal,
+      onProgress: onModelLoadProgress,
+    }),
+    (async () => {
+      if (signal.aborted) return;
+      try {
+        const retrieved = await retrieveMemoryContext({
+          query: userText,
+          projectId: scopeProjectId,
+          signal,
+        });
+        memoryContextBlock = buildMemoryReferenceBlock(retrieved.block) || undefined;
+      } catch {
+        // Memory is optional context. A retrieval failure must not block the turn.
+      }
+    })(),
+  ]);
+
+  if (signal.aborted) return undefined;
+
   const userMessageIndex =
     liveConversation?.messages.findIndex((message) => message.id === userMessage.id) ?? -1;
   const messages =
@@ -100,6 +135,9 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
           })
       : [userMessage];
 
+  let turnSucceeded = false;
+  let turnFailed = false;
+
   await sendChatRequest({
     providerId: selectedProvider,
     messages,
@@ -111,11 +149,18 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
     codeExecutionEnabled,
     enhancedMode,
     conversationId,
-    projectId: projectId ?? undefined,
+    projectId: scopeProjectId,
+    memoryContextBlock,
     onChunk,
     onReasoningChunk,
-    onError,
-    onComplete,
+    onError: (error) => {
+      turnFailed = true;
+      onError(error);
+    },
+    onComplete: (result, context) => {
+      onComplete(result, context);
+      turnSucceeded = true;
+    },
     onModelLoadProgress,
   });
 
@@ -143,6 +188,26 @@ export async function executeChatSend(params: ChatSendParams): Promise<string | 
       assistantMessageId: assistantMessage.id,
       isFirstExchange,
     });
+  }
+
+  if (turnSucceeded && !turnFailed && !signal.aborted && userText) {
+    const assistantMemoryText = getAssistantMemoryText(assistantMsg);
+    if (assistantMemoryText) {
+      try {
+        queueMemoryExtraction({
+          sourceType: "chat",
+          sourceId: conversationId,
+          turnId,
+          userText,
+          assistantText: assistantMemoryText,
+          projectId: scopeProjectId,
+          model: selectedModel,
+          providerId: selectedProvider,
+        });
+      } catch {
+        // Memory extraction is best-effort and never changes chat behavior.
+      }
+    }
   }
 
   return assistantText || undefined;

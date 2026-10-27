@@ -45,6 +45,7 @@ export const lmStudioAdapter: ProviderAdapter = {
       onComplete: options.onComplete,
       onError: options.onError,
       reasoningEnabled: options.reasoningEnabled,
+      reasoningLevel: options.reasoningLevel,
       ...(options.responseFormat ? { responseFormat: options.responseFormat } : {}),
     } as Parameters<typeof sendLmStudioChat>[0]),
   reconnect: async () => {

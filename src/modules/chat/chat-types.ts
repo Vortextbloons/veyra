@@ -148,6 +148,7 @@ export type ContextBlockCategory =
   | "user_prompt"
   | "project"
   | "summary"
+  | "retrieved_memory"
   | "context_anchor"
   | "tool_definitions"
   | "web_search_results"
@@ -161,6 +162,7 @@ export const CONTEXT_BLOCK_ACCENTS: Record<ContextBlockCategory, string> = {
   user_prompt: "var(--color-accent)",
   project: "#60a5fa",
   summary: "#2dd4bf",
+  retrieved_memory: "#a78bfa",
   context_anchor: "#64748b",
   tool_definitions: "#22d3ee",
   web_search_results: "#22d3ee",

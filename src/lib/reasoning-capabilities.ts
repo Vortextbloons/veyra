@@ -108,6 +108,22 @@ export function invalidateReasoningCache(): void {
 }
 
 /**
+ * Record capabilities resolved from a provider's own API rather than Pi. Normal
+ * chat talks to the endpoint directly, so the endpoint's report is authoritative
+ * and must also drive request building.
+ */
+export function rememberReasoningCapabilities(
+  key: string,
+  control: ReasoningControl,
+  levels: readonly string[],
+): ReasoningLevel[] {
+  const normalized = normalizeReasoningLevels(levels);
+  knownControls.set(key, control);
+  knownLevels.set(key, normalized);
+  return normalized;
+}
+
+/**
  * Reads reasoning capabilities from the installed Pi SDK. This is the same
  * source the agents runtime uses, so new Pi levels appear here automatically.
  */

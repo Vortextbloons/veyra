@@ -13,6 +13,7 @@ import { resolveModelSettings, resolveProviderTooling } from "@/modules/chat/cha
 import {
   providerChatBase as buildProviderChatBase,
   formatToolResultsMessage,
+  isMemoryContextEnabled,
   stripImageAttachments,
 } from "@/modules/chat/chat-context-builder";
 import { rePromptWithTools, createExecuteToolRoundLocal } from "@/modules/chat/chat-tool-loop";
@@ -33,6 +34,8 @@ type SendChatRequest = Omit<ProviderChatOptions, "messages" | "onComplete"> & {
   conversationId?: string;
   assistantMessageId: string;
   projectId?: string;
+  /** Retrieved local memory, already bounded and marked non-authoritative. */
+  memoryContextBlock?: string;
   onComplete?: (
     result: LmChatCompleteResult,
     context: SendChatCompleteContext,
@@ -48,6 +51,7 @@ export async function sendChatRequest({
   conversationId,
   assistantMessageId,
   projectId,
+  memoryContextBlock,
   ...options
 }: SendChatRequest): Promise<void> {
   const provider = getProviderAdapter(providerId);
@@ -113,6 +117,16 @@ export async function sendChatRequest({
   const activeModelName = activeModelInfo?.name;
   const activeProviderName = activeProviderInfo?.name;
 
+  // Retrieval completed before provider preparation finished. Keep a mutable
+  // snapshot and refresh it before every provider round so disabling memory
+  // stops future injection without trying to recall an in-flight request.
+  let activeMemoryContextBlock = memoryContextBlock;
+  const refreshMemoryContext = async () => {
+    if (activeMemoryContextBlock && !(await isMemoryContextEnabled())) {
+      activeMemoryContextBlock = undefined;
+    }
+  };
+
   const roundMessagesContext = {
     conversation,
     resolvedUserPrompt: resolved.userPrompt,
@@ -122,6 +136,7 @@ export async function sendChatRequest({
     contextAnchoringBlock,
     projectPromptBlock,
     skillContextBlock,
+    memoryContextBlock: activeMemoryContextBlock,
     resolvedContextLength: resolved.contextLength,
   };
 
@@ -161,7 +176,10 @@ export async function sendChatRequest({
     chatStore.resetAfterRePrompt();
   };
 
-  const getRoundMessagesContext = () => ({ ...roundMessagesContext });
+  const getRoundMessagesContext = () => ({
+    ...roundMessagesContext,
+    memoryContextBlock: activeMemoryContextBlock,
+  });
   const providerChatBaseBound = () =>
     buildProviderChatBase(options, resolved, providerTools, handleToolCallDetected);
 
@@ -257,6 +275,11 @@ export async function sendChatRequest({
     })();
   };
 
+  // Provider preparation happens before this point; re-check before building
+  // the first round so a disabled switch removes the stale snapshot.
+  await refreshMemoryContext();
+  if (options.signal?.aborted) return;
+
   const contextMessages = buildChatContext(
     messages,
     {
@@ -265,6 +288,7 @@ export async function sendChatRequest({
       contextAnchoringBlock,
       projectPromptBlock,
       skillContextBlock,
+      memoryContextBlock: activeMemoryContextBlock,
       userPrompt: resolved.userPrompt,
       reservedOutputTokens: resolved.reservedOutputTokens,
       modelName: activeModelName,

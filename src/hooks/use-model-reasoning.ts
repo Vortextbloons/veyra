@@ -7,8 +7,13 @@ import {
   inspectModelReasoning,
   invalidateReasoningCache,
   reasoningModelKey,
+  rememberReasoningCapabilities,
   type ModelReasoning,
 } from "@/lib/reasoning-capabilities";
+import {
+  inspectLmStudioReasoning,
+  invalidateLmStudioReasoningCache,
+} from "@/lib/providers/lm-studio-reasoning";
 
 function hasTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -22,8 +27,12 @@ export type ModelReasoningState = {
 };
 
 /**
- * Resolves the reasoning levels Pi advertises for the currently selected
- * model, and refreshes when Pi's models.json changes on disk.
+ * Resolves the reasoning levels the selected model actually accepts.
+ *
+ * Normal chat talks to the provider endpoint directly, so a local LM Studio
+ * model's own `/api/v1/models` report is authoritative and takes precedence.
+ * Everything else falls back to Pi's model registry, which is also what the Pi
+ * agent runtime consumes.
  */
 export function useModelReasoning(): ModelReasoningState {
   const providerId = useProviderStore((state) => state.selectedProvider);
@@ -43,13 +52,30 @@ export function useModelReasoning(): ModelReasoningState {
     let cancelled = false;
     const forceRefresh = refreshToken !== previousRefresh.current;
     previousRefresh.current = refreshToken;
-    inspectModelReasoning(providerId, model, baseUrl, forceRefresh)
-      .then((result) => {
-        if (!cancelled) setLookup({ key: requestKey, result });
+
+    const localEndpoint = providerId === "lm-studio";
+    const endpointLookup = localEndpoint
+      ? inspectLmStudioReasoning(model, baseUrl, forceRefresh).catch(() => null)
+      : Promise.resolve(null);
+
+    const registryLookup = inspectModelReasoning(providerId, model, baseUrl, forceRefresh)
+      .catch(() => fallbackModelReasoning());
+
+    Promise.all([endpointLookup, registryLookup])
+      .then(([endpoint, registry]) => {
+        if (cancelled) return;
+        if (!endpoint) {
+          setLookup({ key: requestKey, result: registry });
+          return;
+        }
+        // Keep request building in sync with what the endpoint accepts.
+        rememberReasoningCapabilities(modelKey, endpoint.control ?? "unknown", endpoint.levels);
+        setLookup({ key: requestKey, result: endpoint });
       })
       .catch(() => {
         if (!cancelled) setLookup({ key: requestKey, result: fallbackModelReasoning() });
       });
+
     return () => {
       cancelled = true;
     };
@@ -61,6 +87,7 @@ export function useModelReasoning(): ModelReasoningState {
     let unlisten: (() => void) | undefined;
     listen(REASONING_CHANGED_EVENT, () => {
       invalidateReasoningCache();
+      invalidateLmStudioReasoningCache();
       setRefreshToken((token) => token + 1);
     })
       .then((dispose) => {
@@ -76,6 +103,7 @@ export function useModelReasoning(): ModelReasoningState {
 
   const refresh = useCallback(() => {
     invalidateReasoningCache();
+    invalidateLmStudioReasoningCache();
     setRefreshToken((token) => token + 1);
   }, []);
 

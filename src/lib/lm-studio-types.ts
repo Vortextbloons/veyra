@@ -47,6 +47,10 @@ export type LmStudioModelEntry = {
   state?: unknown;
   status?: unknown;
   loaded_instances?: unknown;
+  /** `/api/v1/models` exposes per-model capabilities, including reasoning options. */
+  capabilities?: unknown;
+  selected_variant?: unknown;
+  variants?: unknown;
 };
 
 export type LoadedLmStudioModelInstance = {

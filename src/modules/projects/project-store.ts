@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { notifyMemoryDeletion } from "@/modules/memory/memory-lifecycle";
 import type {
   ProjectRecord,
   ProjectKind,
@@ -116,6 +117,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   deleteProject: async (id) => {
     await deleteProjectApi(id);
+    notifyMemoryDeletion({ projectId: id });
     set((state) => ({
       projects: state.projects.filter((p) => p.id !== id),
       activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,

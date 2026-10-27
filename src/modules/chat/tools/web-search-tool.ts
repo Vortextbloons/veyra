@@ -79,6 +79,7 @@ export async function executeWebSearchCall(
         sources: [],
       });
       searchBundle = await runSearch(query, {
+        workflow: "chat",
         signal: opts.signal,
         projectId: opts.projectId,
         request: {

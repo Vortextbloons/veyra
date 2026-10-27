@@ -7,6 +7,7 @@ import { artifactByteLength, MAX_ARTIFACT_BYTES, normalizeArtifact } from "@/mod
 import { loadConversationSnapshot, saveConversationSnapshot } from "@/lib/conversation-storage";
 import { normalizeAttachment } from "@/lib/message-attachments";
 import { abortPendingQuestion } from "@/modules/chat/pending-question-registry";
+import { notifyMemoryDeletion } from "@/modules/memory/memory-lifecycle";
 
 type ConversationHydrationState = "loading" | "ready";
 
@@ -212,6 +213,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     return conversation.id;
   },
   deleteConversation: (id) => {
+    notifyMemoryDeletion({ sourceType: "chat", sourceId: id });
     set((state) => {
       const conversations = state.conversations.filter((conversation) => conversation.id !== id);
       void saveConversationSnapshot(conversations);
@@ -225,6 +227,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     });
   },
   deleteAllConversations: () => {
+    for (const conversation of get().conversations) {
+      notifyMemoryDeletion({ sourceType: "chat", sourceId: conversation.id });
+    }
     void saveConversationSnapshot([]);
     set({ conversations: [], activeConversationId: null, streamingBuffer: null });
   },

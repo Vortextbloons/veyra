@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Cpu, FlaskConical, MessageCircle, Puzzle, Settings, Shield, Wrench, type LucideIcon } from "lucide-react";
+import { Brain, Cpu, FlaskConical, MessageCircle, Puzzle, Settings, Shield, Wrench, type LucideIcon } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
 import { ChatSettings } from "./chat-settings";
@@ -7,10 +7,12 @@ import { ModelsSettings } from "./models-settings";
 import { ToolsSettings } from "./tools-settings";
 import { ResearchSettings } from "./research-settings";
 import { ExtensionsSettings } from "./extensions-settings";
+import { MemorySettings } from "@/modules/memory/components/memory-settings";
 type SettingsTab =
   | "general"
   | "privacy"
   | "chat"
+  | "memory"
   | "models"
   | "tools"
   | "research"
@@ -20,6 +22,7 @@ const TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "general", label: "General", icon: Settings },
   { id: "privacy", label: "Privacy", icon: Shield },
   { id: "chat", label: "Chat", icon: MessageCircle },
+  { id: "memory", label: "Memory", icon: Brain },
   { id: "models", label: "Models", icon: Cpu },
   { id: "tools", label: "Tools", icon: Wrench },
   { id: "research", label: "Research", icon: FlaskConical },
@@ -60,6 +63,7 @@ export function SettingsPage() {
           {activeTab === "general" && <GeneralSettings />}
           {activeTab === "privacy" && <PrivacyConnectivitySettings />}
           {activeTab === "chat" && <ChatSettings />}
+          {activeTab === "memory" && <MemorySettings />}
           {activeTab === "models" && <ModelsSettings />}
           {activeTab === "tools" && <ToolsSettings />}
           {activeTab === "research" && <ResearchSettings />}

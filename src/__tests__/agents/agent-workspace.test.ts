@@ -77,7 +77,8 @@ describe("agent session context", () => {
   it("bounds long histories and leaves new sessions unchanged", () => {
     const previous = session("a", "/project");
     previous.events[1].detail = "x".repeat(100_000);
-    expect(agentSessionPrompt(previous, "Next task", 1_000).length).toBeLessThan(1_700);
+    expect(agentSessionPrompt(previous, "Next task", 1_000).length).toBeLessThan(4_500);
+    expect(agentSessionPrompt(previous, "Next task", 1_000, 900).length).toBeLessThan(600);
     expect(agentSessionPrompt(null, "New task")).toBe("New task");
     expect(agentSessionPrompt(previous, "x".repeat(100), 10)).toBe("x".repeat(100));
   });

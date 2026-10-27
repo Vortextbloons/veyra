@@ -104,6 +104,7 @@ export function buildV1ChatBody(options: {
   tools?: ProviderToolDefinition[];
   toolChoice?: "auto" | "none";
   reasoningEnabled?: boolean;
+  reasoning?: string;
   responseFormat?: { type: "json_object" | "text" };
 }): Record<string, unknown> {
   const {
@@ -118,6 +119,7 @@ export function buildV1ChatBody(options: {
     tools,
     toolChoice,
     reasoningEnabled,
+    reasoning,
   } = options;
   const systemPrompt = messages
     .filter((m) => m.role === "system" && m.content.trim())
@@ -152,7 +154,11 @@ export function buildV1ChatBody(options: {
     body.tool_choice = toolChoice ?? "auto";
   }
 
-  if (reasoningEnabled === false) {
+  // LM Studio's native endpoint takes a single `reasoning` value and errors on
+  // options the model does not advertise, so `reasoning` wins when resolved.
+  if (reasoning) {
+    body.reasoning = reasoning;
+  } else if (reasoningEnabled === false) {
     body.reasoning = "off";
   }
 

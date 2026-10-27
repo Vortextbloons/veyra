@@ -6,6 +6,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { executeToolRound } from "@/modules/chat/chat-tool-rounds";
 import {
   buildRoundMessages,
+  isMemoryContextEnabled,
   formatToolResultsMessage,
   stripImageAttachments,
   type RoundMessagesContext,
@@ -80,6 +81,21 @@ export async function rePromptWithTools(params: {
     return;
   }
 
+  // Re-check the live global switch for this round. The snapshot was taken
+  // before model preparation and may be stale after a settings change.
+  const activeRoundContext = {
+    ...(params.getRoundMessagesContext?.() ?? roundMessagesContext),
+  };
+  if (activeRoundContext.memoryContextBlock && !(await isMemoryContextEnabled())) {
+    activeRoundContext.memoryContextBlock = undefined;
+  }
+  if (signal?.aborted) return;
+  const roundMessages = buildRoundMessages(
+    chainMessages,
+    accumulatedContextBlocks,
+    activeRoundContext,
+  );
+
   let roundContent = "";
   const roundOnChunk = (content: string, done: boolean) => {
     roundContent += content;
@@ -145,8 +161,8 @@ export async function rePromptWithTools(params: {
         })();
       },
       messages: params.modelSupportsImages
-        ? buildRoundMessages(chainMessages, accumulatedContextBlocks, params.getRoundMessagesContext?.() ?? roundMessagesContext)
-        : stripImageAttachments(buildRoundMessages(chainMessages, accumulatedContextBlocks, params.getRoundMessagesContext?.() ?? roundMessagesContext)),
+        ? roundMessages
+        : stripImageAttachments(roundMessages),
     }).catch(reject);
   });
 }

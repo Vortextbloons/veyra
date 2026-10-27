@@ -22,9 +22,7 @@ import { rankSearchPassages } from "../passage-ranker";
 let activeSearch: Promise<SearchContextBundle> | null = null;
 
 /**
- * Supplementary providers (ArXiv/Wikipedia) must never extend the critical path
- * of a search: they are rate-limited and can otherwise add seconds on top of
- * the engine result, or hang entirely.
+ * Bound the extra wait for rate-limited supplementary providers.
  */
 const DIRECT_PROVIDER_TIMEOUT_MS = 5_000;
 const FAST_CONTEXT_TOKEN_LIMIT = 1_500;
@@ -54,6 +52,8 @@ function withSoftTimeout(
 }
 
 export type RunSearchOptions = {
+  /** Bound ordinary chat reading costs without changing research depth settings. */
+  workflow?: "chat";
   projectId?: string;
   signal?: AbortSignal;
   onFetchProgress?: (completed: number, total: number) => void;
@@ -83,6 +83,7 @@ export async function runSearch(
   const { signal, projectId, onFetchProgress, skipFetch, directArxivSearch, directWikipediaSearch } =
     opts;
   const request = opts.request ?? { query };
+  const isChat = opts.workflow === "chat";
 
   if (signal?.aborted) {
     throw new DOMException("Aborted", "AbortError");
@@ -109,14 +110,14 @@ export async function runSearch(
     : Math.max(
         1,
         Math.min(
-          10,
+          isChat ? 3 : 10,
           projectSettings?.webSearchFetchCount ?? settings.webSearchFetchCount,
         ),
       );
   const perPageTimeoutSecs = Math.max(
     2,
     Math.min(
-      30,
+      isChat ? 4 : 30,
       projectSettings?.webSearchPerPageTimeoutSecs ??
         settings.webSearchPerPageTimeoutSecs,
     ),
@@ -148,8 +149,13 @@ export async function runSearch(
           advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
           bundleArxivSearch: settings.bundleArxivSearch,
           bundleWikipediaSearch: settings.bundleWikipediaSearch,
-          directArxivSearch,
-          directWikipediaSearch,
+          directArxivSearch: isChat
+            ? request.intent === "academic"
+            : directArxivSearch,
+          directWikipediaSearch: isChat
+            ? (!request.intent || request.intent === "general") &&
+              /\b(what (?:is|are|was|were)|who (?:is|was|were)|explain|overview|background|history of|definition of)\b/i.test(query)
+            : directWikipediaSearch,
         });
 
     const providerResultCounts: Record<string, number> = {};
@@ -219,7 +225,7 @@ export async function runSearch(
           maxCharsPerSource,
           {
             advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
-            waybackFallbackEnabled: settings.bundleWaybackFallback,
+            waybackFallbackEnabled: !isChat && settings.bundleWaybackFallback,
           },
         );
         onFetchProgress?.(pages.length, topForFetch.length);

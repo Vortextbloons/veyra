@@ -12,8 +12,32 @@ export type RoundMessagesContext = {
   contextAnchoringBlock?: string;
   projectPromptBlock?: string;
   skillContextBlock?: string;
+  memoryContextBlock?: string;
   resolvedContextLength: number;
 };
+
+let memoryEnabledResolver: (() => boolean) | null = null;
+
+/**
+ * Reads the live global memory switch without a static memory-store import.
+ * Provider rounds must re-check it because retrieval can complete while the
+ * user is changing settings or preparing a model.
+ */
+export async function isMemoryContextEnabled(): Promise<boolean> {
+  if (!memoryEnabledResolver) {
+    try {
+      const { useMemoryStore } = await import("@/modules/memory/memory-store");
+      memoryEnabledResolver = () => useMemoryStore.getState().enabled;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    return memoryEnabledResolver();
+  } catch {
+    return false;
+  }
+}
 
 export function stripImageAttachments(messages: ChatMessage[]): ChatMessage[] {
   let changed = false;
@@ -46,6 +70,7 @@ export function buildRoundMessages(
       contextAnchoringBlock: context.contextAnchoringBlock,
       projectPromptBlock: context.projectPromptBlock,
       skillContextBlock: context.skillContextBlock,
+      memoryContextBlock: context.memoryContextBlock,
       userPrompt: context.resolvedUserPrompt,
       reservedOutputTokens: context.resolvedReservedOutputTokens,
       modelName: context.activeModelName,

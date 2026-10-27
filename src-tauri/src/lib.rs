@@ -49,6 +49,11 @@ const CONVERSATIONS_BACKUP_FILE: &str = "conversations.json.bak";
 const CONVERSATIONS_TEMP_FILE: &str = "conversations.json.tmp";
 const CONVERSATION_KEY_FILE: &str = "conversation.key";
 const MAX_CONVERSATIONS_JSON_BYTES: usize = 50 * 1024 * 1024;
+const MEMORY_FILE: &str = "memory.json";
+const MEMORY_BACKUP_FILE: &str = "memory.json.bak";
+const MEMORY_TEMP_FILE: &str = "memory.json.tmp";
+const MEMORY_BACKUP_TEMP_FILE: &str = "memory.json.bak.tmp";
+const MAX_MEMORY_JSON_BYTES: usize = 4 * 1024 * 1024;
 const KEYRING_SERVICE: &str = "com.veyra.app";
 const KEYRING_USER: &str = "conversation-key";
 const PROVIDER_KEYRING_PREFIX: &str = "provider:";
@@ -260,6 +265,171 @@ fn load_conversation_snapshots(
     })
 }
 
+fn write_memory_snapshot_files(
+    dir: &std::path::Path,
+    contents: &str,
+    preserve_backup: bool,
+    mirror_both: bool,
+) -> Result<(), String> {
+    fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+    let primary = dir.join(MEMORY_FILE);
+    let backup = dir.join(MEMORY_BACKUP_FILE);
+    let temporary = dir.join(MEMORY_TEMP_FILE);
+    let backup_temporary = dir.join(MEMORY_BACKUP_TEMP_FILE);
+
+    let write_temp = |path: &std::path::Path| -> Result<(), String> {
+        let mut file = fs::File::create(path).map_err(|error| error.to_string())?;
+        file.write_all(contents.as_bytes())
+            .map_err(|error| error.to_string())?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        Ok(())
+    };
+    write_temp(&temporary)?;
+
+    if mirror_both {
+        if let Err(error) = write_temp(&backup_temporary) {
+            let _ = fs::remove_file(&temporary);
+            return Err(error);
+        }
+        // For restrictive changes, update the recovery copy first. If the
+        // second rename fails, recovery still selects the newer revision.
+        if backup.exists() {
+            if let Err(error) = fs::remove_file(&backup) {
+                let _ = fs::remove_file(&temporary);
+                let _ = fs::remove_file(&backup_temporary);
+                return Err(error.to_string());
+            }
+        }
+        if let Err(error) = fs::rename(&backup_temporary, &backup) {
+            let _ = fs::remove_file(&temporary);
+            let _ = fs::remove_file(&backup_temporary);
+            return Err(error.to_string());
+        }
+        if primary.exists() {
+            if let Err(error) = fs::remove_file(&primary) {
+                let _ = fs::remove_file(&temporary);
+                return Err(error.to_string());
+            }
+        }
+        if let Err(error) = fs::rename(&temporary, &primary) {
+            let _ = fs::remove_file(&temporary);
+            return Err(error.to_string());
+        }
+        return Ok(());
+    }
+
+    if preserve_backup {
+        // Hydration selected the backup as the newest valid copy. Keep it until
+        // the repaired primary has been written successfully.
+        if primary.exists() {
+            fs::remove_file(&primary).map_err(|error| error.to_string())?;
+        }
+    } else {
+        if backup.exists() {
+            fs::remove_file(&backup).map_err(|error| error.to_string())?;
+        }
+        if primary.exists() {
+            fs::rename(&primary, &backup).map_err(|error| error.to_string())?;
+        }
+    }
+
+    if let Err(error) = fs::rename(&temporary, &primary) {
+        if !preserve_backup && !primary.exists() && backup.exists() {
+            let _ = fs::rename(&backup, &primary);
+        }
+        let _ = fs::remove_file(&temporary);
+        return Err(error.to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn save_memory_snapshot(
+    app: tauri::AppHandle,
+    memory_json: String,
+    preserve_backup: bool,
+    mirror_both: bool,
+) -> Result<(), String> {
+    if memory_json.len() > MAX_MEMORY_JSON_BYTES {
+        return Err("memory payload exceeds the 4 MB limit".into());
+    }
+    let parsed = serde_json::from_str::<serde_json::Value>(&memory_json)
+        .map_err(|error| error.to_string())?;
+    let envelope = parsed
+        .as_object()
+        .ok_or_else(|| "memory payload must be an encrypted snapshot envelope".to_string())?;
+    if envelope.get("version").and_then(serde_json::Value::as_u64) != Some(1)
+        || envelope
+            .get("revision")
+            .and_then(serde_json::Value::as_u64)
+            .is_none()
+        || envelope
+            .get("iv")
+            .and_then(serde_json::Value::as_str)
+            .is_none()
+        || envelope
+            .get("data")
+            .and_then(serde_json::Value::as_str)
+            .is_none()
+    {
+        return Err("memory payload must be an encrypted snapshot envelope".into());
+    }
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        write_memory_snapshot_files(&dir, &memory_json, preserve_backup, mirror_both)
+    })
+    .await
+    .map_err(|error| format!("memory save task failed: {error}"))?
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MemorySnapshotCandidates {
+    primary: Option<String>,
+    backup: Option<String>,
+    primary_error: Option<String>,
+    backup_error: Option<String>,
+}
+
+fn read_memory_file(path: &std::path::Path) -> (Option<String>, Option<String>) {
+    if !path.exists() {
+        return (None, None);
+    }
+    if let Ok(metadata) = fs::metadata(path) {
+        if metadata.len() > MAX_MEMORY_JSON_BYTES as u64 {
+            return (None, Some("memory snapshot exceeds the 4 MB limit".into()));
+        }
+    }
+    match fs::read_to_string(path) {
+        Ok(contents) => (Some(contents), None),
+        Err(error) => (None, Some(error.to_string())),
+    }
+}
+
+#[tauri::command]
+async fn load_memory_snapshots(app: tauri::AppHandle) -> Result<MemorySnapshotCandidates, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (primary, primary_error) = read_memory_file(&dir.join(MEMORY_FILE));
+        let (backup, backup_error) = read_memory_file(&dir.join(MEMORY_BACKUP_FILE));
+        MemorySnapshotCandidates {
+            primary,
+            backup,
+            primary_error,
+            backup_error,
+        }
+    })
+    .await
+    .map_err(|error| format!("memory load task failed: {error}"))
+}
+
 #[cfg(test)]
 mod conversation_storage_tests {
     use super::*;
@@ -299,6 +469,69 @@ mod conversation_storage_tests {
         assert!(validate_conversation_key(&short).is_err());
         assert!(validate_conversation_key("not base64").is_err());
     }
+
+    #[test]
+    fn memory_snapshot_writes_have_a_separate_atomic_backup() {
+        let dir = unique_test_dir();
+        write_memory_snapshot_files(&dir, r#"{"version":1,"revision":1}"#, false, false)
+            .expect("write first memory snapshot");
+        write_memory_snapshot_files(&dir, r#"{"version":1,"revision":2}"#, false, false)
+            .expect("write second memory snapshot");
+
+        assert_eq!(
+            fs::read_to_string(dir.join(MEMORY_FILE)).expect("read memory primary"),
+            r#"{"version":1,"revision":2}"#
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join(MEMORY_BACKUP_FILE)).expect("read memory backup"),
+            r#"{"version":1,"revision":1}"#
+        );
+        assert!(!dir.join(MEMORY_TEMP_FILE).exists());
+        assert!(!dir.join(MEMORY_BACKUP_TEMP_FILE).exists());
+        assert!(!dir.join(CONVERSATIONS_FILE).exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn memory_repair_preserves_the_recovered_backup() {
+        let dir = unique_test_dir();
+        fs::create_dir_all(&dir).expect("create test directory");
+        fs::write(dir.join(MEMORY_FILE), "corrupt primary").expect("write corrupt primary");
+        fs::write(dir.join(MEMORY_BACKUP_FILE), "valid recovered backup")
+            .expect("write valid backup");
+        write_memory_snapshot_files(&dir, "repaired primary", true, false).expect("repair primary");
+
+        assert_eq!(
+            fs::read_to_string(dir.join(MEMORY_FILE)).expect("read repaired primary"),
+            "repaired primary"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join(MEMORY_BACKUP_FILE)).expect("read recovered backup"),
+            "valid recovered backup"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn restrictive_memory_save_replaces_both_recovery_copies() {
+        let dir = unique_test_dir();
+        write_memory_snapshot_files(&dir, "old encrypted snapshot", false, false)
+            .expect("write initial snapshot");
+        write_memory_snapshot_files(&dir, "restricted encrypted snapshot", false, true)
+            .expect("write restrictive snapshot");
+
+        assert_eq!(
+            fs::read_to_string(dir.join(MEMORY_FILE)).expect("read primary"),
+            "restricted encrypted snapshot"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join(MEMORY_BACKUP_FILE)).expect("read backup"),
+            "restricted encrypted snapshot"
+        );
+        assert!(!dir.join(MEMORY_TEMP_FILE).exists());
+        assert!(!dir.join(MEMORY_BACKUP_TEMP_FILE).exists());
+        let _ = fs::remove_dir_all(dir);
+    }
 }
 
 #[tauri::command]
@@ -325,6 +558,8 @@ pub fn run() {
             save_conversations,
             load_conversation_snapshots,
             load_or_create_conversation_key,
+            save_memory_snapshot,
+            load_memory_snapshots,
             save_provider_credential,
             load_provider_credential,
             delete_provider_credential,
