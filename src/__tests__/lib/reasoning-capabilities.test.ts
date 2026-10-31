@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  chatModelReasoning,
   effectiveReasoningLevel,
   fallbackModelReasoning,
   normalizeReasoningLevels,
@@ -44,4 +45,14 @@ describe("reasoning capability helpers", () => {
     expect(fallback.levels).toEqual(["off", "low", "high"]);
     expect(fallback.control).toBe("effort");
   });
+});
+
+it("uses NVIDIA MiniMax M3.1 Flash's documented effort levels", () => {
+  const managed = { known: true, control: "none" as const, levels: [], message: "Managed" };
+  const result = chatModelReasoning(managed, "minimaxai/minimax-m3.1-flash", "https://integrate.api.nvidia.com/v1");
+  expect(result.levels).toEqual(["low", "medium", "high", "xhigh", "max"]);
+  expect(result.control).toBe("effort");
+  expect(result.message).not.toContain("managed");
+  expect(chatModelReasoning(managed, "other", "https://integrate.api.nvidia.com/v1")).toBe(managed);
+  expect(chatModelReasoning(managed, "minimaxai/minimax-m3.1-flash", "https://example.com/v1")).toBe(managed);
 });

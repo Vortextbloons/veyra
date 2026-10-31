@@ -103,9 +103,7 @@ function buildOpenAiChatBody(options: {
       advertised ??
       (options.reasoningLevel === "off"
         ? "none"
-        : options.reasoningLevel === "xhigh" || options.reasoningLevel === "max"
-          ? "high"
-          : options.reasoningLevel);
+        : options.reasoningLevel);
     body.reasoning_effort = effort;
   } else if (options.reasoningEnabled === false && !options.omitUnsupportedFields) {
     body.reasoning_effort = "none";

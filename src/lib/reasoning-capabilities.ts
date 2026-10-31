@@ -165,3 +165,21 @@ export function inspectModelReasoning(
   cache.set(key, { at: Date.now(), value });
   return value;
 }
+
+/** Provider documentation can supply capabilities missing from Pi's registry. */
+export function chatModelReasoning(result: ModelReasoning, model: string, baseUrl?: string): ModelReasoning {
+  const nvidia = (() => {
+    try { return new URL(baseUrl ?? "").hostname === "integrate.api.nvidia.com"; }
+    catch { return false; }
+  })();
+  if (nvidia && model.toLowerCase() === "minimaxai/minimax-m3.1-flash") {
+    return {
+      known: true,
+      model,
+      levels: ["low", "medium", "high", "xhigh", "max"],
+      control: "effort",
+      message: "This model supports Low through Max reasoning effort. Reasoning is always enabled.",
+    };
+  }
+  return result;
+}

@@ -138,5 +138,5 @@ export function resolveModelReasoning(models, { providerId, modelId, baseUrl, re
   if (toggleOnly && effectiveLevel !== "off") effectiveLevel = levels.find((level) => level !== "off") ?? "off";
   return { known: true, provider: model.provider, model: model.id, levels, effectiveLevel,
     control: managed || !model.reasoning ? "none" : toggleOnly ? "toggle" : "effort",
-    message: managed ? "Reasoning is managed by this endpoint; no reasoning control is configured in Pi." : !model.reasoning ? "This model does not advertise reasoning support in Pi." : toggleOnly ? "This Pi adapter supports reasoning on/off, not effort levels." : "" };
+    message: !model.reasoning ? "This model does not advertise reasoning support in Pi." : toggleOnly ? "This Pi adapter supports reasoning on/off, not effort levels." : "" };
 }

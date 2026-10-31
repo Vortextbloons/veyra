@@ -4,6 +4,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import {
   REASONING_CHANGED_EVENT,
   fallbackModelReasoning,
+  chatModelReasoning,
   inspectModelReasoning,
   invalidateReasoningCache,
   reasoningModelKey,
@@ -65,7 +66,9 @@ export function useModelReasoning(): ModelReasoningState {
       .then(([endpoint, registry]) => {
         if (cancelled) return;
         if (!endpoint) {
-          setLookup({ key: requestKey, result: registry });
+          const result = localEndpoint ? registry : chatModelReasoning(registry, model, baseUrl);
+          rememberReasoningCapabilities(modelKey, result.control ?? "unknown", result.levels);
+          setLookup({ key: requestKey, result });
           return;
         }
         // Keep request building in sync with what the endpoint accepts.

@@ -17,7 +17,7 @@ import { sendOpenAiCompatibleChat } from "@/lib/lm-studio-openai";
 import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
 import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
 import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
-import { lmStudioReasoningValue } from "@/lib/providers/lm-studio-reasoning";
+import { inspectLmStudioReasoning, lmStudioReasoningValue } from "@/lib/providers/lm-studio-reasoning";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 export type LmStudioChatOptions = {
@@ -114,6 +114,9 @@ async function sendLmStudioChatImpl(options: LmStudioChatOptions): Promise<void>
   }
 
   try {
+    // Resolve capabilities independently of composer lookup timing.
+    if (reasoningLevel) await inspectLmStudioReasoning(model, baseUrl);
+    if (signal?.aborted) return;
     const { signal: fetchSignal, cleanup: cleanupFetchTimeout } = withFetchTimeout(signal);
     try {
       const res = await tauriFetch(`${baseUrl || DEFAULT_LM_STUDIO_BASE_URL}${CHAT_PATH}`, {
