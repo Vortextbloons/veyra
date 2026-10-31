@@ -2,7 +2,7 @@
 
 [![GitHub](https://img.shields.io/github/license/Vortextbloons/veyra)](https://github.com/Vortextbloons/veyra/blob/main/LICENSE)
 
-An AI desktop workspace that runs on your machine. Have real conversations with AI, research topics, build characters, and more — all private and local-first.
+An AI desktop workspace that runs on your machine. Have conversations with AI, research topics, create interactive artifacts, and run agents in a local-first workspace.
 
 ## Quick start
 
@@ -23,10 +23,11 @@ Grab the latest installer on the [releases page](https://github.com/Vortextbloon
 
 - **Chat** — talk to local models (LM Studio) or cloud providers with streaming and tool calls
 - **Research** — deep research pipeline with citations and source auditing
-- **Characters** — roleplay personas with lorebooks, group chats, and character card support
+- **Artifacts** - interactive HTML previews attached to chat messages
+- **Memory** - persistent local memory integrated into chat context
 - **Agents** — plan-building and code-writing agents
 - **Web Search** — bundled local search engine (DonSeTch), ArXiv, Wikipedia — no Docker or extra install
 - **Projects** — scope chats and settings per project
 - **Code Execution** — run code inside your workspace with AI
 
-Your data stays on your machine — no accounts, no telemetry, no cloud.
+Workspace data is stored locally. Cloud providers and online tools send the context needed for their requests to the services you configure.

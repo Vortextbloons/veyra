@@ -34,6 +34,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          npm run version:check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = (Get-Content version.json | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw "Release tag must match version.json (v$version)" }
+
+      - name: Run tests
+        run: npm test
+
       - name: Build and publish Windows release
         uses: tauri-apps/tauri-action@v0
         env:
