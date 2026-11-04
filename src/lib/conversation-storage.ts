@@ -85,10 +85,6 @@ async function getEncryptionKey(): Promise<CryptoKey> {
   return encryptionKeyPromise;
 }
 
-async function getLegacyEncryptionKey(): Promise<CryptoKey> {
-  return deriveLegacyConversationKey(LEGACY_KEY_MATERIAL, LEGACY_KEY_SALT);
-}
-
 function getDecryptWorker(): Worker {
   decryptWorker ??= new DecryptWorker();
   return decryptWorker;
@@ -142,7 +138,7 @@ async function decryptSnapshotOnMainThread(raw: string): Promise<DecodedSnapshot
     conversations: await decryptSnapshotPayload<Conversation[]>(
       parsed,
       await getEncryptionKey(),
-      await getLegacyEncryptionKey(),
+      await deriveLegacyConversationKey(LEGACY_KEY_MATERIAL, LEGACY_KEY_SALT),
     ),
     revision: parsed.revision ?? 0,
   };

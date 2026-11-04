@@ -1,10 +1,9 @@
-import { useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+﻿import { useRef, useState } from "react";
+import { ChevronDown, Check, Loader2 } from "lucide-react";
 import type { ProviderInfo } from "@/modules/chat/chat-types";
 import { providerSupportsStartServer } from "@/lib/providers";
 import type { ProviderConnectionPhase } from "@/stores/provider-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
-import { SelectorMenu, SelectorOption, SelectorTrigger } from "@/components/ui/selector";
 
 type ProviderSelectorProps = {
   value: string;
@@ -36,53 +35,92 @@ export function ProviderSelector({
 
   return (
     <div ref={ref} className="relative">
-      <SelectorTrigger
-        label={current?.name ?? "Provider"}
-        labelMaxWidth="max-w-[140px]"
-        open={open}
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        badge={
-          current && (
-            <span
-              className={`size-1.5 rounded-full ${
-                connecting
-                  ? "animate-pulse bg-amber-400"
-                  : current.status === "connected"
-                    ? "bg-emerald-400"
-                    : "bg-red-400"
-              }`}
-            />
-          )
-        }
-      />
+        className={`flex h-8 items-center gap-2 rounded-md border px-2.5 text-[12px] transition-colors ${
+          open
+            ? "border-[var(--color-border-strong)] bg-white/[0.04] text-white"
+            : "border-[var(--color-border)] bg-[var(--color-panel)] text-white hover:border-[var(--color-border-strong)]"
+        }`}
+      >
+        <span className="max-w-[140px] truncate font-medium">
+          {current?.name ?? "Provider"}
+        </span>
+        {current && (
+          <span
+            className={`size-1.5 rounded-full ${
+              connecting
+                ? "animate-pulse bg-amber-400"
+                : current.status === "connected"
+                  ? "bg-emerald-400"
+                  : "bg-red-400"
+            }`}
+          />
+        )}
+        <ChevronDown
+          className={`size-3 text-[var(--color-text-dim)] transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
       {open && (
-        <SelectorMenu>
+        <div
+          role="listbox"
+          className="absolute bottom-full left-0 z-50 mb-1.5 w-64 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-xl shadow-black/40"
+        >
           <div className="px-2 py-1.5 text-[10.5px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
             Provider
           </div>
           <div className="space-y-0.5 p-1">
-            {providers.map((p) => (
-              <SelectorOption
-                key={p.id}
-                active={p.id === value}
-                onSelect={() => {
-                  onChange?.(p.id);
-                  setOpen(false);
-                }}
-                primary={p.name}
-                meta={
-                  <>
-                    <span
-                      className={`size-1.5 rounded-full ${
-                        p.status === "connected" ? "bg-emerald-400" : "bg-red-400"
+            {providers.map((p) => {
+              const active = p.id === value;
+              return (
+                <button
+                  type="button"
+                  key={p.id}
+                  role="option"
+                  aria-selected={active}
+                  className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
+                    active
+                      ? "bg-[var(--color-accent-soft)]"
+                      : "hover:bg-white/[0.04]"
+                  }`}
+                  onClick={() => {
+                    onChange?.(p.id);
+                    setOpen(false);
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={`truncate text-[12.5px] font-medium ${
+                        active ? "text-white" : "text-[var(--color-text)]"
                       }`}
-                    />
-                    <span>{p.status === "connected" ? "Connected" : "Disconnected"}</span>
-                  </>
-                }
-              />
-            ))}
+                    >
+                      {p.name}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10.5px] text-[var(--color-text-dim)]">
+                      <span
+                        className={`size-1.5 rounded-full ${
+                          p.status === "connected"
+                            ? "bg-emerald-400"
+                            : "bg-red-400"
+                        }`}
+                      />
+                      <span>
+                        {p.status === "connected" ? "Connected" : "Disconnected"}
+                      </span>
+                    </div>
+                  </div>
+                  {active && (
+                    <Check className="size-3.5 shrink-0 text-[var(--color-accent)]" />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {showActions && current && (
@@ -122,7 +160,7 @@ export function ProviderSelector({
               </div>
             </div>
           )}
-        </SelectorMenu>
+        </div>
       )}
     </div>
   );

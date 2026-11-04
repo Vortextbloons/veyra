@@ -2799,7 +2799,6 @@ The UI displays:
 |------|---------|
 | `src/lib/context.ts` | Context window estimation |
 | `src/lib/context-breakdown.ts` | Context usage breakdown |
-| `src/lib/context-panel-options.ts` | Context panel UI options |
 
 ---
 

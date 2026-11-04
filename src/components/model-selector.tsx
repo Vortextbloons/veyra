@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Star } from "lucide-react";
-import { useClickOutside } from "@/hooks/use-click-outside";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  SelectorMenu,
-  SelectorMetaSeparator,
-  SelectorOption,
-  SelectorTrigger,
-} from "@/components/ui/selector";
+  ChevronDown,
+  Search,
+  Star,
+  Check,
+} from "lucide-react";
+import { useClickOutside } from "@/hooks/use-click-outside";
 
 export type Model = {
   id: string;
@@ -64,22 +63,38 @@ export function ModelSelector({
 
   return (
     <div ref={ref} className="relative min-w-0">
-      <SelectorTrigger
+      <button
+        type="button"
         title={current?.id}
-        label={current?.name ?? "Select model"}
-        open={open}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        badge={
-          current?.contextWindow ? (
-            <span className="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)]">
-              {formatContext(current.contextWindow)}
-            </span>
-          ) : undefined
-        }
-      />
+        className={`flex h-8 items-center gap-2 rounded-md border px-2.5 text-[12px] transition-colors ${
+          open
+            ? "border-[var(--color-border-strong)] bg-white/[0.04] text-white"
+            : "border-[var(--color-border)] bg-[var(--color-panel)] text-white hover:border-[var(--color-border-strong)]"
+        }`}
+      >
+        <span className="max-w-[160px] truncate font-medium">
+          {current?.name ?? "Select model"}
+        </span>
+        {current?.contextWindow && (
+          <span className="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)]">
+            {formatContext(current.contextWindow)}
+          </span>
+        )}
+        <ChevronDown
+          className={`size-3 text-[var(--color-text-dim)] transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
 
       {open && (
-        <SelectorMenu widthClassName="w-80">
+        <div
+          role="listbox"
+          className="absolute bottom-full left-0 z-50 mb-1.5 w-80 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-xl shadow-black/40"
+        >
           <div className="border-b border-[var(--color-border)] p-2">
             <div className="flex items-center gap-2 rounded-md bg-[var(--color-bg)] px-2 py-1.5">
               <Search className="size-3.5 text-[var(--color-text-dim)]" />
@@ -87,7 +102,7 @@ export function ModelSelector({
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search models…"
+                placeholder="Search modelsΓÇª"
                 className="w-full bg-transparent text-[12px] placeholder:text-[var(--color-text-dim)] focus:outline-none"
               />
             </div>
@@ -114,7 +129,7 @@ export function ModelSelector({
                     onToggleFavorite={onToggleFavorite}
                   />
                 )}
-                {favorites.length > 0 && rest.length > 0 && (
+                {(favorites.length > 0 && rest.length > 0) && (
                   <div className="my-1 h-px bg-[var(--color-border)]" />
                 )}
                 {rest.length > 0 && (
@@ -132,7 +147,7 @@ export function ModelSelector({
               </>
             )}
           </div>
-        </SelectorMenu>
+        </div>
       )}
     </div>
   );
@@ -159,37 +174,60 @@ function ModelGroup({
         </div>
       )}
       <div className="space-y-0.5">
-        {models.map((m) => (
-          <SelectorOption
-            key={m.id}
-            title={m.id}
-            active={m.id === value}
-            onSelect={() => onSelect(m.id)}
-            primary={m.name}
-            meta={
-              <>
-                <span className="truncate">{m.provider}</span>
-                {m.size && (
-                  <>
-                    <SelectorMetaSeparator />
-                    <span className="font-mono">{m.size}</span>
-                  </>
-                )}
-                {m.contextWindow && (
-                  <>
-                    <SelectorMetaSeparator />
-                    <span className="font-mono">{formatContext(m.contextWindow)} ctx</span>
-                  </>
-                )}
-                {m.supportsImages && (
-                  <>
-                    <SelectorMetaSeparator />
-                    <span>Vision</span>
-                  </>
-                )}
-              </>
-            }
-            trailing={
+        {models.map((m) => {
+          const active = m.id === value;
+          return (
+            <div
+              key={m.id}
+              title={m.id}
+              role="option"
+              tabIndex={0}
+              aria-selected={active}
+              className={`group flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
+                active
+                  ? "bg-[var(--color-accent-soft)]"
+                  : "hover:bg-white/[0.04]"
+              }`}
+              onClick={() => onSelect(m.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect(m.id);
+                }
+              }}
+            >
+              <div className="min-w-0 flex-1">
+                <div
+                  className={`truncate text-[12.5px] font-medium ${
+                    active ? "text-white" : "text-[var(--color-text)]"
+                  }`}
+                >
+                  {m.name}
+                </div>
+                <div className="flex items-center gap-1.5 text-[10.5px] text-[var(--color-text-dim)]">
+                  <span className="truncate">{m.provider}</span>
+                  {m.size && (
+                    <>
+                      <span className="opacity-50">┬╖</span>
+                      <span className="font-mono">{m.size}</span>
+                    </>
+                  )}
+                  {m.contextWindow && (
+                    <>
+                      <span className="opacity-50">┬╖</span>
+                      <span className="font-mono">
+                        {formatContext(m.contextWindow)} ctx
+                      </span>
+                    </>
+                  )}
+                  {m.supportsImages && (
+                    <>
+                      <span className="opacity-50">┬╖</span>
+                      <span>Vision</span>
+                    </>
+                  )}
+                </div>
+              </div>
               <button
                 type="button"
                 aria-label={m.isFavorite ? "Unfavorite" : "Favorite"}
@@ -203,11 +241,17 @@ function ModelGroup({
                     : "text-[var(--color-text-dim)] opacity-40 group-hover:opacity-100 group-focus-within:opacity-100"
                 } hover:bg-white/[0.06]`}
               >
-                <Star className="size-3" fill={m.isFavorite ? "currentColor" : "none"} />
+                <Star
+                  className="size-3"
+                  fill={m.isFavorite ? "currentColor" : "none"}
+                />
               </button>
-            }
-          />
-        ))}
+              {active && (
+                <Check className="size-3.5 shrink-0 text-[var(--color-accent)]" />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

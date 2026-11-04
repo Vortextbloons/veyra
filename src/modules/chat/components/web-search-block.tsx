@@ -6,7 +6,8 @@ import {
   AlertTriangle,
   Minus,
 } from "lucide-react";
-import type { SourceFetchStatus, ToolCallState, WebSearchRound } from "@/modules/chat/chat-types";
+import type { FetchStatus } from "@/lib/fetch-status";
+import type { ToolCallState, WebSearchRound } from "@/modules/chat/chat-types";
 import { ToolCallShell } from "@/modules/chat/components/tool-call-shell";
 import { toolCallPhaseLabel } from "@/lib/tool-call-ui";
 import {
@@ -23,7 +24,7 @@ type WebSearchToolCallBlockProps = {
   roundTotal?: number;
 };
 
-function fetchStatusLabel(status: SourceFetchStatus | string | undefined): string {
+function fetchStatusLabel(status: FetchStatus | string | undefined): string {
   switch (status) {
     case "ok":
       return "Full content read";

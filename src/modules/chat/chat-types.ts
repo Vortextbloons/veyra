@@ -2,29 +2,15 @@
 
 import type { MessageAttachment } from "@/lib/message-attachments";
 import type { AgentSession } from "@/modules/agents/agent-types";
-import type { SearchResult } from "@/modules/web-search/types";
-import type { FetchStatus } from "@/lib/fetch-status";
+import type { SearchResult, SourceFetch } from "@/modules/web-search/types";
 import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
 import type { Artifact } from "@/modules/chat/artifact";
 
 export type ChatRole = "user" | "assistant" | "system";
 
-
 export type WebSearchSource = Pick<SearchResult, "id" | "title" | "url"> & {
   snippet: string;
   fetch?: SourceFetch;
-};
-
-export type SourceFetchStatus =
-  FetchStatus;
-
-export type SourceFetch = {
-  status: SourceFetchStatus | string;
-  error_reason?: string;
-  extraction_method?: string;
-  via_wayback?: boolean;
-  char_count?: number;
-  source_type?: string;
 };
 
 export type WebSearchPhase = "searching" | "fetching" | "reading" | "done" | "error";

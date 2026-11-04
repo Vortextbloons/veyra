@@ -1,9 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import type { FetchStatus, FetchedPageSummary } from "./types";
-
-/** Tauri response shape for `fetch_and_extract_pages`. */
-export type FetchedPage = FetchedPageSummary;
+import type { FetchedPageSummary } from "./types";
 
 const inflightDirectSearches = new Map<string, Promise<unknown>>();
 
@@ -73,19 +70,8 @@ export async function invokeGetSearchEngineLogs(): Promise<string> {
   return invoke<string>("get_search_engine_logs");
 }
 
-export type FetchStatus = BaseFetchStatus;
-
-export type FetchedPage = {
-  url: string;
-  status: FetchStatus | string;
-  title: string | null;
-  content: string | null;
-  error_reason: string | null;
-  source_type?: string | null;
-  extraction_method?: string | null;
-  via_wayback?: boolean | null;
-  char_count?: number | null;
-};
+/** Tauri response shape for `fetch_and_extract_pages`. */
+export type FetchedPage = FetchedPageSummary;
 
 export type WebFetchCacheStats = {
   entries: number;
