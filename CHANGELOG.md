@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-04
+
+Minor release since [2.0.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.0.0). Chat now runs entirely on a bundled Pi runtime, projects move into the primary sidebar with browsable resources, and OpenCode Go joins the cloud provider presets. Pi and Node ship with the app, so no global runtime installation is required.
+
+### Added
+
+- **Bundled Pi runtime** — Pi and its Node runtime are packaged with Veyra. `scripts/prepare-pi.mjs` installs the pinned production dependencies into `src-tauri/resources/pi`, copies the build machine's Node executable, and runs automatically for the development and build commands. Installed apps no longer depend on a global Pi or Node installation. See `docs/bundled-pi.md`.
+- **OpenCode Go** — New cloud provider preset served from `https://opencode.ai/inference/go/v1`, with catalog model normalization and display-name handling. Presets shipped after a configuration was saved are merged into it without touching existing providers.
+- **Project sidebar** — Projects, their chats, and their resources are managed from the primary sidebar. Create a project, open a folder as a project, rename or delete it, attach files and folders, browse resource contents, and add a resource file to the composer as an attachment.
+- **Project chats** — Assign a chat to a project from the composer, or start a project chat from the sidebar. Projects now store resources and a system-prompt version. Legacy project records migrate, and their previously project-scoped chats become unassigned.
+- **Chat steering** — Send a text message while a response is running to steer the active Pi run. Successfully submitted steering messages are saved in conversation history; attachments can be sent after the response finishes.
+- **Math rendering** — KaTeX rendering for math in chat messages.
+- **Reasoning metadata** — NVIDIA reasoning corrections for Nemotron, MiniMax, and DeepSeek models, with explicit effort levels and token limits preserved in reasoning route configuration.
+
+### Changed
+
+- **Unified chat runtime** — Chat, research, and project work all run through Pi. The provider-driven chat orchestrator, duplicate tool loop, standalone agent composer, Plan/Build selector, and chat/plan mode switching are gone. Web search now runs through Veyra's `SearchOrchestrator` and a Pi host-tool bridge.
+- **Conversation storage** — The encrypted snapshot envelope moved into shared helpers used by the encrypt/decrypt workers and the main-thread fallback, with revision-bound authenticated data and decryption fallback for legacy snapshots. Existing conversations and agent sessions migrate to the unified runtime.
+- **Reasoning lookups** — A long-lived Node worker replaces per-request spawns for model capability lookups. Pi's model catalog refreshes once at launch, cached reasoning lookups are invalidated when it changes, and failed lookups are retried instead of cached as unavailable.
+- **Web search** — The bundled engine gains the adaptive-recall patch and source bundling, with a build/benchmark pipeline under `scripts/search-engine`. Automatic query variants and official-source recalls can finish early when primary results are already strong, while thin results keep the original recovery path.
+- **Model and provider selectors** — The shared selector component is removed and markup is inlined. Context breakdown is simplified, web search fetch types are consolidated into the web-search module, and the conversation storage legacy-key helper is cleaned up.
+
+### Fixed
+
+- **Pi discovery** — Fixed Pi SDK discovery around Cargo's bundled `pi` directory and stale `PATH` entries.
+- **Pi configuration** — Pi configuration files prefixed with a UTF-8 BOM now parse correctly.
+- **Reasoning levels** — Failed capability lookups no longer leave a model stuck at "unavailable", and explicit effort levels survive reasoning route configuration.
+
+### Removed
+
+- **Agents navigation** — The separate Agents nav entry and workspace mode switching. Agent sessions now appear in the chat sidebar and run on the same bundled runtime.
+- **Chat controls** — The Plan/Build selector and the in-chat code execution UI.
+- **Legacy chat pipeline** — `chat-actions`, `chat-context-builder`, `chat-orchestrator`, `chat-provider-options`, `chat-tool-loop`, `chat-tool-rounds`, `chat-tool-utils`, the standalone agent composer, and the built-in chat tools (`artifact`, `ask-question`, `code-execution`, `interactive-answer`, `scratchpad`, `web-search`) that Pi host tools now replace.
+
 ## [2.0.0] - 2026-10-30
 
 Major release since [1.5.2](https://github.com/Vortextbloons/veyra/releases/tag/v1.5.2). Veyra refocuses on chat, research, agents, and projects: Studio and Characters are gone, Memory returns in a new form, and web search is fully bundled. Chat gains reasoning controls, deliverable artifacts, and interactive in-message experiences.
