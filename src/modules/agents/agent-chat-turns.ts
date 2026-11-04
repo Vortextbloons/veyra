@@ -4,6 +4,7 @@ export type AgentChatTurnModel = {
   id: string;
   role: "user" | "assistant" | "error";
   content: string;
+  reasoning?: string;
   title?: string;
   kind?: "reasoning" | "tool" | "step";
   pending?: boolean;
@@ -14,6 +15,15 @@ export type AgentChatTurnModel = {
   artifact?: AgentEvent["artifact"];
   interactiveAnswer?: AgentEvent["interactiveAnswer"];
 };
+
+function isAssistantReplyTurn(turn: AgentChatTurnModel | undefined): turn is AgentChatTurnModel {
+  return (
+    turn?.role === "assistant" &&
+    !turn.kind &&
+    !turn.artifact &&
+    !turn.interactiveAnswer
+  );
+}
 
 export function shouldAnimateAgentText(event: AgentEvent) {
   return Date.now() - event.at < 60_000;
@@ -44,8 +54,14 @@ export function buildAgentChatTurns(
       const content = evt.detail?.trim();
       if (!content) continue;
       const last = turns.at(-1);
-      if (last?.role === "assistant" && !last.kind && previousEventType === "output") {
-        last.content = [last.content, content].filter(Boolean).join("\n\n");
+      if (
+        isAssistantReplyTurn(last) &&
+        (previousEventType === "output" || previousEventType === "reasoning")
+      ) {
+        last.content =
+          previousEventType === "output"
+            ? [last.content, content].filter(Boolean).join("\n\n")
+            : content;
         last.animate = last.animate || shouldAnimateAgentText(evt);
       } else {
         turns.push({
@@ -72,19 +88,19 @@ export function buildAgentChatTurns(
     }
 
     if (evt.type === "reasoning") {
+      const chunk = evt.detail?.trim() || "";
       const last = turns.at(-1);
-      if (last?.kind === "reasoning" && previousEventType === "reasoning") {
-        const content = evt.detail?.trim() || "";
-        if (content) {
-          last.content = [last.content, content].filter(Boolean).join("\n\n");
+      if (isAssistantReplyTurn(last) && previousEventType === "reasoning") {
+        if (chunk) {
+          last.reasoning = [last.reasoning, chunk].filter(Boolean).join("\n\n");
         }
       } else {
         turns.push({
           id: evt.id,
           role: "assistant",
-          kind: "reasoning",
-          title: "Reasoning",
-          content: evt.detail?.trim() || "Thinking",
+          content: "",
+          reasoning: chunk || undefined,
+          model,
         });
       }
       previousEventType = evt.type;

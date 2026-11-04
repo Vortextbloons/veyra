@@ -27,7 +27,7 @@ export function AgentChatTurn({
   }
 
   if (!isError && !turn.artifact && !turn.interactiveAnswer) {
-    return <MessageBubble message={{ id: turn.id, role: "assistant", content: turn.content, modelId: turn.model, timestamp: 0 }} isStreaming={turn.pending === true || isStreaming} layout={{ messagesPx: "px-5", messageText: "text-[15px]", userMaxW: "max-w-[85%]", composerText: "text-[14px]", footerPx: "px-4" }} onCopy={() => void navigator.clipboard.writeText(turn.content)} />;
+    return <MessageBubble message={{ id: turn.id, role: "assistant", content: turn.content, reasoning: turn.reasoning, modelId: turn.model, timestamp: 0 }} isStreaming={turn.pending === true || isStreaming} layout={{ messagesPx: "px-5", messageText: "text-[15px]", userMaxW: "max-w-[85%]", composerText: "text-[14px]", footerPx: "px-4" }} onCopy={() => void navigator.clipboard.writeText(turn.content)} />;
   }
 
   const modelShortId = turn.model?.split("/").pop()?.trim() || "";

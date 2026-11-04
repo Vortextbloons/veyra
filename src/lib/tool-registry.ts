@@ -156,7 +156,8 @@ export function buildProviderTools(options: {
             "Choose the most useful response for the task: plain text, one focused interactive answer, or a composed experience with 2–6 distinct sections. Supported sections are short text, chart, comparison, calculator, step explainer, and a selectable relationship/process diagram. Combine sections when they genuinely help (for example, a comparison plus a chart); avoid duplicating the surrounding prose. Calculator controls update locally and can drive multiple outputs. Use only values provided by the user or established by available tools; label assumptions and sample data. Controls cannot run arbitrary code or access files.",
           parameters: {
             type: "object",
-            anyOf: variantClauses(true),
+            // Providers reject composition keywords at the function schema root.
+            // Kind-specific fields are checked by interactive answer normalization.
             properties: {
               kind: {
                 type: "string",

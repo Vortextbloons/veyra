@@ -634,6 +634,7 @@ pub fn run() {
             app.manage(search_engine_state);
 
             agents::reasoning::start_reasoning_watcher(app.handle().clone());
+            agents::reasoning::warm_reasoning_worker();
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -661,6 +662,7 @@ pub fn run() {
                 }
                 RunEvent::ExitRequested { .. } => {
                     agents::commands::stop_all_pi_agents();
+                    agents::reasoning::stop_reasoning_worker();
                     if let Some(state) =
                         app_handle.try_state::<web_search::engine::SearchEngineState>()
                     {

@@ -92,9 +92,84 @@ describe("Pi reasoning routing", () => {
     const route = configureModelRoute({}, { providerId: "lm-studio", modelId: "qwen/model", contextLength: "1024", maxTokens: "5000" });
     expect(route.config.providers[route.provider]).toMatchObject({ baseUrl: "http://localhost:1234/v1", apiKey: "lm-studio", models: [{ reasoning: true, maxTokens: 896, compat: { thinkingFormat: "qwen-chat-template" } }] });
   });
+  it("reloads the registry when the Pi catalog changes on disk", async () => {
+    const { serve } = await import(helperUrl) as { serve: (options: {
+      lines: AsyncIterable<string>;
+      output: { write: (chunk: string) => boolean };
+      load: () => Promise<{ sdk: unknown; ai: typeof ai }>;
+    }) => Promise<void> };
+    const fixture = mkdtempSync(join(tmpdir(), "veyra-pi-catalog-"));
+    const store = join(fixture, "models-store.json");
+    writeFileSync(store, "{}");
+    let reads = 0;
+    const written: string[] = [];
+    try {
+      // Each registry read sees the catalog as it exists at that moment.
+      const sdk = {
+        getAgentDir: () => fixture,
+        ModelRuntime: { create: async () => ({ getAll: async () => { reads += 1; return [model()]; } }) },
+      };
+      const requests = [
+        { id: 1, input: { providerId: "test", modelId: "org/model", baseUrl: "https://example.invalid/v1" } },
+        { id: 2, input: { providerId: "test", modelId: "org/model", baseUrl: "https://example.invalid/v1" } },
+        { id: 3, input: { providerId: "test", modelId: "org/model", baseUrl: "https://example.invalid/v1" } },
+      ];
+      await serve({
+        output: { write: (chunk: string) => { written.push(chunk); return true; } },
+        load: async () => ({ sdk, ai }),
+        lines: (async function* () {
+          yield JSON.stringify(requests[0]);
+          yield JSON.stringify(requests[1]);
+          // A catalog refresh rewrites the store between lookups.
+          writeFileSync(store, JSON.stringify({ refreshed: 1 }));
+          yield JSON.stringify(requests[2]);
+        })(),
+      });
+      expect(reads).toBe(2);
+      expect(written.map((line) => JSON.parse(line)).filter((reply) => reply.id).length).toBe(3);
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  });
   it("refuses invalid configuration and never guesses a missing cloud endpoint", () => {
     expect(() => configureModelRoute([], { providerId: "custom", modelId: "m", baseUrl: "https://example.invalid" })).toThrow();
     expect(() => configureModelRoute({}, { providerId: "custom", modelId: "m" })).toThrow();
+  });
+  it("keeps one warm runtime and answers repeated lookups without reloading Pi", async () => {
+    const { serve } = await import(helperUrl) as { serve: (options: {
+      lines: AsyncIterable<string>;
+      output: { write: (chunk: string) => boolean };
+      load: () => Promise<{ sdk: { getAgentDir: () => string }; ai: typeof ai }>;
+    }) => Promise<void> };
+    let loads = 0;
+    const requests = [
+      { id: 1, input: { providerId: "test", modelId: "org/model", baseUrl: "https://example.invalid/v1", requested: "high" } },
+      { id: 2, input: { providerId: "test", modelId: "org/model", baseUrl: "https://example.invalid/v1", requested: "low" } },
+    ];
+    const written: string[] = [];
+    const fixture = mkdtempSync(join(tmpdir(), "veyra-pi-worker-"));
+    try {
+      await serve({
+        lines: (async function* () { for (const request of requests) yield JSON.stringify(request); })(),
+        output: { write: (chunk: string) => { written.push(chunk); return true; } },
+        load: async () => {
+          loads += 1;
+          return {
+            sdk: {
+              getAgentDir: () => join(fixture, "agent"),
+              ModelRuntime: { create: async () => ({ getAll: async () => [model()] }) },
+            },
+            ai,
+          };
+        },
+      });
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+    const replies = written.map((line) => JSON.parse(line));
+    expect(loads).toBe(1);
+    expect(replies[0]).toMatchObject({ ready: true });
+    expect(replies.slice(1).map((reply) => [reply.id, reply.result.effectiveLevel])).toEqual([[1, "high"], [2, "low"]]);
   });
   it("maps legacy effort preferences to a binary toggle while respecting mandatory reasoning", () => {
     expect(reasoningToggleState("high", ["off", "low", "medium", "high"])).toEqual({ enabled: true, canToggle: true });

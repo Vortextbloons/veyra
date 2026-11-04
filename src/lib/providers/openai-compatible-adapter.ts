@@ -3,12 +3,31 @@ import { inferSupportsImages } from "@/lib/message-attachments";
 import { sendOpenAiCompatibleChat } from "@/lib/lm-studio-openai";
 import type { ModelInfo } from "@/modules/chat/chat-types";
 import type { ProviderAdapter } from "@/lib/providers/types";
-import { loadCloudCredential, type CloudProviderConfig } from "@/lib/providers/cloud-config";
+import { loadCloudCredential, type CloudProviderConfig, type CloudProviderPreset } from "@/lib/providers/cloud-config";
 import { formatModelDisplayName } from "@/lib/providers/model-display-name";
 
 const ZEN_CHAT_MODELS = new Set([
   "deepseek", "minimax", "glm", "kimi", "grok", "big-pickle", "mimo", "north-mini", "nemotron",
 ]);
+
+/** OpenCode catalogs advertise each model's native API; the gateway translates the rest. */
+const OPENCODE_TEXT_APIS = ["chat-completions", "responses", "messages", "generate-content"];
+
+type CatalogModel = {
+  id?: string;
+  name?: string;
+  /** Legacy OpenAI-compatible field, still returned by several providers. */
+  context_length?: number;
+  architecture?: { input_modalities?: string[] };
+  /** OpenCode catalog metadata. */
+  limit?: { context?: number };
+  modalities?: { input?: string[] };
+  api?: Record<string, unknown>;
+};
+
+export function isOpenCodePreset(preset: CloudProviderPreset): boolean {
+  return preset === "opencode-zen" || preset === "opencode-go";
+}
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
@@ -28,15 +47,52 @@ export function validateCloudBaseUrl(value: string): string | null {
   }
 }
 
+/** One stable session per provider so OpenCode can reuse routing and prompt cache. */
+let openCodeSessionId: string | null = null;
+
+function openCodeSession(): string {
+  openCodeSessionId ??= `ses_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
+  return openCodeSessionId;
+}
+
 function headers(config: CloudProviderConfig, key: string): Record<string, string> {
   const result: Record<string, string> = { Authorization: `Bearer ${key}` };
   if (config.preset === "openrouter") result["X-OpenRouter-Title"] = "Veyra";
+  if (isOpenCodePreset(config.preset)) result["x-opencode-session"] = openCodeSession();
   return result;
 }
 
 export function isZenChatCompatible(modelId: string): boolean {
   const normalized = modelId.toLowerCase();
   return [...ZEN_CHAT_MODELS].some((prefix) => normalized.startsWith(prefix));
+}
+
+/**
+ * OpenCode serves every text model through Chat Completions by translating the
+ * request, so keep each text model and drop utility endpoints such as System One.
+ * Catalogs without API metadata fall back to the legacy prefix list.
+ */
+export function isOpenCodeTextModel(model: CatalogModel): boolean {
+  const api = model.api;
+  if (!api || typeof api !== "object" || Array.isArray(api)) {
+    return isZenChatCompatible(model.id ?? "");
+  }
+  return OPENCODE_TEXT_APIS.some((name) => name in api);
+}
+
+/** Reads the OpenAI-compatible and OpenCode catalog shapes into one model entry. */
+export function normalizeCatalogModel(model: CatalogModel): ModelInfo | null {
+  const id = typeof model.id === "string" ? model.id.trim() : "";
+  if (!id) return null;
+  const modalities = model.modalities?.input ?? model.architecture?.input_modalities;
+  return {
+    id,
+    name: formatModelDisplayName(id, model.name),
+    contextWindow: model.limit?.context ?? model.context_length,
+    supportsImages: modalities?.length
+      ? modalities.some((modality) => modality.startsWith("image"))
+      : inferSupportsImages(id),
+  };
 }
 
 async function credential(config: CloudProviderConfig): Promise<string> {
@@ -49,9 +105,8 @@ async function fetchModels(config: CloudProviderConfig): Promise<ModelInfo[]> {
   const key = await credential(config);
   const manual = config.manualModels
     .map((id) => ({ id: id.trim(), name: formatModelDisplayName(id.trim()) }))
-    .filter((model) => model.id)
-    .filter((model) => config.preset !== "opencode-zen" || isZenChatCompatible(model.id));
-  let json: { data?: Array<{ id?: string; name?: string; context_length?: number; architecture?: { input_modalities?: string[] } }> };
+    .filter((model) => model.id);
+  let json: { data?: CatalogModel[] };
   try {
     const response = await tauriFetch(`${normalizeBaseUrl(config.baseUrl)}/models`, {
       headers: headers(config, key),
@@ -66,14 +121,9 @@ async function fetchModels(config: CloudProviderConfig): Promise<ModelInfo[]> {
     throw error;
   }
   const discovered: ModelInfo[] = (json.data ?? [])
-    .filter((model): model is typeof model & { id: string } => typeof model.id === "string" && Boolean(model.id.trim()))
-    .filter((model) => config.preset !== "opencode-zen" || isZenChatCompatible(model.id))
-    .map((model) => ({
-      id: model.id,
-      name: formatModelDisplayName(model.id, model.name),
-      contextWindow: model.context_length,
-      supportsImages: model.architecture?.input_modalities?.includes("image") ?? inferSupportsImages(model.id),
-    }));
+    .filter((model) => !isOpenCodePreset(config.preset) || isOpenCodeTextModel(model))
+    .map(normalizeCatalogModel)
+    .filter((model): model is ModelInfo => model !== null);
   const byId = new Map<string, ModelInfo>(discovered.map((model) => [model.id, model]));
   for (const model of manual) {
     if (!byId.has(model.id)) byId.set(model.id, model);

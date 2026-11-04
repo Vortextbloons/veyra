@@ -108,7 +108,8 @@ function ProviderEditor({ config, apiKey, busy, onKeyChange, onChange, onCancel,
       </div>
       <label className="block space-y-1 text-[11px] text-[var(--color-text-dim)]">Base URL<input className={inputClass} value={config.baseUrl} disabled={config.preset !== "custom"} onChange={(event) => update({ baseUrl: event.target.value })} /></label>
       <label className="block space-y-1 text-[11px] text-[var(--color-text-dim)]">Manual model IDs <span className="opacity-60">(comma separated)</span><input className={inputClass} placeholder="model-id, another-model" value={config.manualModels.join(", ")} onChange={(event) => update({ manualModels: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} /></label>
-      {config.preset === "opencode-zen" && <p className="text-[10.5px] text-amber-300/80">Only Zen models served through Chat Completions are shown in this release.</p>}
+      {config.preset === "opencode-zen" && <p className="text-[10.5px] text-amber-300/80">Models are read from the OpenCode catalog. Free-tier models only work from the OpenCode client.</p>}
+      {config.preset === "opencode-go" && <p className="text-[10.5px] text-amber-300/80">Models are read from the OpenCode Go catalog and need an active Go, Go Plus, or Go Teams subscription.</p>}
       <div className="flex justify-end gap-2"><button type="button" onClick={onCancel} className="rounded-md px-3 py-1.5 text-[11px] text-[var(--color-text-dim)] hover:text-white">Cancel</button><button type="button" disabled={busy} onClick={onSave} className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[11px] font-medium text-white disabled:opacity-50">{busy ? "Testing…" : "Save & test"}</button></div>
     </div>
   );

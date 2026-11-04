@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { ModelInfo, ProviderInfo } from "@/modules/chat/chat-types";
 import { isProviderAllowedForConnectivity } from "@/lib/connectivity/provider-connectivity";
 import { configureCloudProviderAdapters, getInitialProviders, getProviderAdapter } from "@/lib/providers";
-import { defaultCloudProviders, type CloudProviderConfig } from "@/lib/providers/cloud-config";
+import { defaultCloudProviders, mergeCloudProviderPresets, type CloudProviderConfig } from "@/lib/providers/cloud-config";
 
 export type ProviderConnectionPhase = "idle" | "connecting" | "error";
 
@@ -365,7 +365,9 @@ export const useProviderStore = create<ProviderStore>()(
       }),
       merge: (persisted, current) => {
         const saved = persisted as Partial<ProviderStore>;
-        const cloudProviders = saved.cloudProviders?.length ? saved.cloudProviders : current.cloudProviders;
+        const cloudProviders = saved.cloudProviders?.length
+          ? mergeCloudProviderPresets(saved.cloudProviders)
+          : current.cloudProviders;
         configureCloudProviderAdapters(cloudProviders);
         return {
           ...current,

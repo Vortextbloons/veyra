@@ -26,6 +26,7 @@ export function flushPiConversations(): void {
     const messages: ChatMessage[] = buildAgentChatTurns(session.events, session.model).filter((turn) => !turn.kind).map((turn) => ({
       ...existingMessages.get(turn.id),
       id: turn.id, role: turn.role === "user" ? "user" : "assistant", content: turn.content,
+      reasoning: turn.reasoning,
       timestamp: eventTimes.get(turn.id) ?? session.startedAt,
       modelId: turn.model, attachments: turn.attachments, artifact: turn.artifact, interactiveAnswer: turn.interactiveAnswer,
     }));
