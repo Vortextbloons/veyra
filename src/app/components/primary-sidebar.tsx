@@ -1,10 +1,9 @@
 import type { PrimarySidebarProps } from "@/modules/chat/chat-types";
 import type { ReactNode } from "react";
-import { Folder, MessageCircle, Search, Settings, SquarePen, type LucideIcon } from "lucide-react";
+import { MessageCircle, Search, Settings, SquarePen, type LucideIcon } from "lucide-react";
 
 const NAV: { id: string; label: string; icon: LucideIcon }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle },
-  { id: "projects", label: "Projects", icon: Folder },
   { id: "research", label: "Research", icon: Search },
 ];
 

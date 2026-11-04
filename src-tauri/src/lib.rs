@@ -571,6 +571,8 @@ pub fn run() {
             agents::reasoning::inspect_agent_reasoning,
             agents::reasoning::refresh_agent_models,
             agents::workspace::inspect_agent_workspace,
+            agents::workspace::inspect_project_resource,
+            agents::workspace::read_project_resource,
             agents::commands::run_pi_agent,
             agents::commands::stop_pi_agent,
             agents::commands::respond_pi_ui,

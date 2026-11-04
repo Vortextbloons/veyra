@@ -55,7 +55,7 @@ export type AgentSession = {
 };
 
 export type StartAgentSessionInput = {
-  projectId?: string;
+  projectId?: string | null;
   displayPrompt?: string;
   /** Captured at dispatch, so navigation cannot redirect a queued follow-up. */
   continueSessionId?: string | null;

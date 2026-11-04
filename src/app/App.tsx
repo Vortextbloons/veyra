@@ -32,9 +32,9 @@ import { useChatPipeline } from "@/hooks/use-chat-pipeline";
 import { useAgentDispatch } from "@/hooks/use-agent-dispatch";
 import { useAgentStore } from "@/modules/agents/agent-store";
 import { initializePiConversations } from "@/modules/agents/pi-conversation-storage";
+import { ProjectSidebar } from "@/modules/projects/components/project-sidebar";
 
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
-const ProjectsPage = lazy(() => import("@/modules/projects/components/projects-page").then(m => ({ default: m.ProjectsPage })));
 const ResearchPage = lazy(() => import("@/modules/research/components/ResearchPage").then(m => ({ default: m.ResearchPage })));
 
 function ChatHydrationSkeleton() {
@@ -101,10 +101,11 @@ function App() {
 
     void (async () => {
       await ensureSettingsHydrated();
+      if (useSettingsStore.getState().activeNav === "projects") useSettingsStore.getState().setActiveNav("chat");
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
       await useChatStore.getState().hydrateConversations();
+      await useProjectStore.getState().hydrateProjects();
       initializePiConversations();
-      void useProjectStore.getState().hydrateProjects();
       void useResearchStore.getState().hydrateRuns();
       markStartup("veyra:hydration-ready");
       logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
@@ -191,12 +192,10 @@ function App() {
 
 
   const recentChats: RecentChatsItem[] = useMemo(() => {
-    const scoped = activeProjectId
-      ? conversations.filter((conversation) => conversation.projectId === activeProjectId)
-      : conversations;
+    const scoped = conversations.filter((conversation) => !conversation.projectId);
 
     const importedIds = new Set(agent.agentSessions.map((session) => session.sourceConversationId ?? session.id));
-    return [...agent.agentSessions.filter((session) => !activeProjectId || session.projectId === activeProjectId || session.projectPath === useProjectStore.getState().projects.find((project) => project.id === activeProjectId)?.settings.agentProjectPath).map((session) => ({
+    return [...agent.agentSessions.filter((session) => !session.projectId).map((session) => ({
       id: `pi:${session.id}`, title: session.title,
       meta: session.status === "running" ? "Working" : new Date(session.endedAt ?? session.startedAt).toLocaleDateString(),
     })), ...scoped.filter((conversation) => !importedIds.has(conversation.id)).map((conversation) => ({
@@ -204,7 +203,7 @@ function App() {
       title: conversation.title,
       meta: new Date(conversation.updatedAt).toLocaleDateString(),
     }))];
-  }, [activeProjectId, conversations, agent.agentSessions]);
+  }, [conversations, agent.agentSessions]);
 
 
   const sidebarsCollapsed = recentChatsCollapsed ? 1 : 0;
@@ -259,6 +258,21 @@ function App() {
           }}
           onNewChat={handleNewChat}
         >
+          <ProjectSidebar onOpenChat={(id) => {
+            const conversation = useChatStore.getState().conversations.find((item) => item.id === id);
+            if (!conversation) return;
+            useAgentStore.getState().importConversation(conversation, conversation.agentSession?.projectPath ?? "");
+            setActiveConversationId(id);
+            setActiveNav("chat");
+          }} onNewProjectChat={(id, workspacePath) => {
+            const project = useProjectStore.getState().projects.find((item) => item.id === id);
+            pipelineHandleNewChat();
+            useAgentStore.getState().newSession();
+            useAgentStore.getState().setProjectPath(workspacePath ?? project?.settings.resources?.find((resource) => resource.directory)?.path ?? "");
+            useAgentStore.getState().newSession();
+            useProjectStore.getState().setActiveProjectId(id);
+            setActiveNav("chat");
+          }} />
           <RecentChats
             chats={recentChats}
             activeId={agent.activeAgentSessionId ? `pi:${agent.activeAgentSessionId}` : undefined}
@@ -286,7 +300,6 @@ function App() {
         </PrimarySidebar>
         <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
           <Suspense fallback={null}>
-            {activeNav === "projects" && <ProjectsPage />}
             {activeNav === "research" && <ResearchPage />}
             {activeNav === "settings" && <SettingsPage />}
           </Suspense>

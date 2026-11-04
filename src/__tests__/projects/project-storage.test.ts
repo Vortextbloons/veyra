@@ -15,7 +15,7 @@ vi.mock("@/lib/id", () => ({
   nowIso: mocks.nowIso,
 }));
 
-import { createProject, deleteProject, updateProject } from "../../modules/projects/project-storage";
+import { createProject, deleteProject, listProjects, updateProject } from "../../modules/projects/project-storage";
 
 describe("project-storage", () => {
   beforeEach(() => {
@@ -82,5 +82,11 @@ describe("project-storage", () => {
     await deleteProject("proj-123");
 
     expect(mocks.invoke).toHaveBeenCalledWith("delete_project", { id: "proj-123" });
+  });
+
+  it("decodes stored project settings and linked resources", async () => {
+    mocks.invoke.mockResolvedValue([{ id: "p", settingsJson: JSON.stringify({ projectSystemVersion: 2, resources: [{ path: "C:\\work", directory: true }] }) }]);
+    const projects = await listProjects();
+    expect(projects[0].settings).toEqual({ projectSystemVersion: 2, resources: [{ path: "C:\\work", directory: true }] });
   });
 });

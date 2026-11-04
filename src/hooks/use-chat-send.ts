@@ -59,7 +59,7 @@ export function useChatSend({
           }
           if (signal.aborted) throw new DOMException("Chat cancelled", "AbortError");
           const id = await useAgentStore.getState().startSession({
-            continueSessionId, projectId, projectPath,
+            continueSessionId, projectId: projectId ?? null, projectPath,
             displayPrompt: trimmed || (effectiveAttachments.some((attachment) => attachment.fileType === "image") ? "Describe the attached image." : "Read the attached file."),
             prompt: prompt || "Describe the attached image.", model: selectedModel,
             contextLength: selectedModelContextSettings.contextLength,

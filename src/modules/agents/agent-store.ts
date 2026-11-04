@@ -420,8 +420,7 @@ export const useAgentStore = create<AgentStore>()(
             : {}),
         });
         if (session) {
-          const matching = useProjectStore.getState().projects.find((project) => project.settings.agentProjectPath === session.projectPath && session.projectPath);
-          useProjectStore.getState().setActiveProjectId(session.projectId ?? matching?.id ?? null);
+          useProjectStore.getState().setActiveProjectId(session.projectId ?? null);
         }
       },
       checkRuntime: async () => {
@@ -447,7 +446,7 @@ export const useAgentStore = create<AgentStore>()(
       },
       newSession: () => set({ activeSessionId: null }),
       importConversation: (conversation, projectPath = "") => {
-        const existing = get().sessions.find((session) => session.sourceConversationId === conversation.id);
+        const existing = get().sessions.find((session) => (session.sourceConversationId ?? session.id) === conversation.id);
         if (existing) {
           get().setActiveSessionId(existing.id);
           return;
@@ -530,7 +529,7 @@ export const useAgentStore = create<AgentStore>()(
       const id = shouldContinue && activeSession ? activeSession.id : crypto.randomUUID();
       const turnId = crypto.randomUUID();
       // Capture project scope once; later navigation must not change this turn.
-      const scopeProjectId = input.projectId ?? activeSession?.projectId ?? await resolveHydratedAgentProjectId(projectPath);
+      const scopeProjectId = input.projectId === null ? undefined : input.projectId ?? activeSession?.projectId ?? await resolveHydratedAgentProjectId(projectPath);
       // A nonempty workspace that does not resolve to exactly one project must
       // not fall back to global personal memory for extraction.
       const mayExtractAgentMemory = !projectPath.trim() || scopeProjectId !== undefined;

@@ -6,8 +6,16 @@ import type {
   UpdateProjectInput,
 } from "@/modules/projects/project-types";
 
+type ProjectRow = Omit<ProjectRecord, "settings"> & { settingsJson: string };
+
+function fromRow(row: ProjectRow): ProjectRecord {
+  let settings: ProjectRecord["settings"] = {};
+  try { settings = JSON.parse(row.settingsJson) as ProjectRecord["settings"]; } catch { /* Preserve access to projects with invalid settings. */ }
+  return { ...row, settings: settings ?? {} };
+}
+
 export async function listProjects(status?: string): Promise<ProjectRecord[]> {
-  return invoke<ProjectRecord[]>("list_projects", { status: status ?? null });
+  return (await invoke<ProjectRow[]>("list_projects", { status: status ?? null })).map(fromRow);
 }
 
 export async function createProject(
@@ -28,7 +36,7 @@ export async function createProject(
     createdAt: now,
     updatedAt: now,
   };
-  return invoke<ProjectRecord>("create_project", { input: JSON.stringify(payload) });
+  return fromRow(await invoke<ProjectRow>("create_project", { input: JSON.stringify(payload) }));
 }
 
 export async function updateProject(input: UpdateProjectInput): Promise<ProjectRecord> {
@@ -45,7 +53,7 @@ export async function updateProject(input: UpdateProjectInput): Promise<ProjectR
   if (input.systemPrompt !== undefined) payload.systemPrompt = input.systemPrompt;
   if (input.settings !== undefined) payload.settingsJson = JSON.stringify(input.settings);
   if (input.lastOpenedAt !== undefined) payload.lastOpenedAt = input.lastOpenedAt;
-  return invoke<ProjectRecord>("update_project", { input: JSON.stringify(payload) });
+  return fromRow(await invoke<ProjectRow>("update_project", { input: JSON.stringify(payload) }));
 }
 
 export async function deleteProject(id: string): Promise<void> {

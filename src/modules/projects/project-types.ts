@@ -14,6 +14,8 @@ export type ProjectKind =
 export type ProjectStatus = "active" | "paused" | "archived";
 
 export interface ProjectSettings {
+  projectSystemVersion?: number;
+  resources?: { path: string; directory: boolean }[];
   webSearchEnabled?: boolean;
   webSearchMode?: "auto" | "always" | "off";
   webSearchFetchEnabled?: boolean | null;

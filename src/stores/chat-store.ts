@@ -36,6 +36,8 @@ type ChatStore = {
   hydrateConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
   createConversation: (projectId?: string) => string;
+  moveConversation: (id: string, projectId?: string) => void;
+  clearProject: (projectId: string) => void;
   deleteConversation: (id: string) => void;
   deleteAllConversations: () => void;
   addMessagePair: (
@@ -203,6 +205,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     await hydratePromise;
   },
   setActiveConversationId: (id) => set({ activeConversationId: id }),
+  moveConversation: (id, projectId) => set((state) => {
+    const conversations = state.conversations.map((conversation) => conversation.id === id ? { ...conversation, projectId, agentSession: conversation.agentSession ? { ...conversation.agentSession, projectId } : undefined } : conversation);
+    void saveConversationSnapshot(conversations);
+    return { conversations };
+  }),
+  clearProject: (projectId) => set((state) => {
+    const conversations = state.conversations.map((conversation) => conversation.projectId === projectId ? { ...conversation, projectId: undefined, agentSession: conversation.agentSession ? { ...conversation.agentSession, projectId: undefined } : undefined } : conversation);
+    void saveConversationSnapshot(conversations);
+    return { conversations };
+  }),
   createConversation: (projectId?: string) => {
     const conversation = newConversation(projectId);
     set((state) => {

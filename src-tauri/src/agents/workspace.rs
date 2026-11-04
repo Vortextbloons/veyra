@@ -93,6 +93,30 @@ pub async fn inspect_agent_workspace(
     .map_err(|error| error.to_string())?
 }
 
+#[tauri::command]
+pub async fn inspect_project_resource(root_path: String, relative_path: String) -> Result<WorkspaceListing, String> {
+    tauri::async_runtime::spawn_blocking(move || inspect(Path::new(&root_path), &relative_path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn read_project_resource(root_path: String, relative_path: String) -> Result<Vec<u8>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = Path::new(&root_path).canonicalize().map_err(|_| "Resource is unavailable")?;
+        let target = root.join(relative_path).canonicalize().map_err(|_| "File is unavailable")?;
+        if !target.starts_with(&root) || !target.is_file() {
+            return Err("File must be inside the attached resource".to_string());
+        }
+        let file = std::fs::File::open(target).map_err(|error| error.to_string())?;
+        use std::io::Read;
+        let mut bytes = Vec::new();
+        file.take(30 * 1024 * 1024 + 1).read_to_end(&mut bytes).map_err(|error| error.to_string())?;
+        if bytes.len() > 30 * 1024 * 1024 { return Err("File must be under 30 MB".into()); }
+        Ok(bytes)
+    }).await.map_err(|error| error.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

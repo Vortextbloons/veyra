@@ -30,6 +30,8 @@ import { useAgentStore } from "@/modules/agents/agent-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useChatStore } from "@/stores/chat-store";
+import { invoke } from "@tauri-apps/api/core";
 
 type FileAttachmentPreviewProps = {
   attachment: MessageAttachment;
@@ -219,6 +221,8 @@ export function Composer({
   const piConversationId = useAgentStore((state) => state.activeSessionId);
   const conversationId = piConversationId ?? "new-chat";
   const projectId = useProjectStore((state) => state.activeProjectId) ?? undefined;
+  const projects = useProjectStore((state) => state.projects);
+  const activeSession = useAgentStore((state) => state.sessions.find((session) => session.id === state.activeSessionId));
   const skills = useExtensionsStore((state) => state.skills);
   const skillsEnabled = useExtensionsStore((state) => state.featureFlags.skills);
   const policies = useExtensionsStore((state) => state.policies);
@@ -274,6 +278,31 @@ export function Composer({
     setHighlightedSkillIndex(0);
     textareaRef.current?.focus();
   };
+
+  useEffect(() => {
+    const attach = (event: Event) => {
+      const { rootPath, relativePath, name } = (event as CustomEvent<{ rootPath: string; relativePath: string; name: string }>).detail;
+      void (async () => {
+        try {
+          if (attachments.length >= MAX_FILE_ATTACHMENTS) throw new Error(`You can attach up to ${MAX_FILE_ATTACHMENTS} files total.`);
+          setExtractingFile(name);
+          const bytes = await invoke<number[]>("read_project_resource", { rootPath, relativePath });
+          const ext = name.split(".").pop()?.toLowerCase();
+          const imageTypes: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+          const attachment = await fileToAttachment(new File([new Uint8Array(bytes)], name, { type: imageTypes[ext ?? ""] ?? "" }));
+          if (attachment.fileType === "image" && attachments.filter((item) => item.fileType === "image").length >= MAX_IMAGE_ATTACHMENTS) throw new Error(`You can attach up to ${MAX_IMAGE_ATTACHMENTS} images.`);
+          setAttachments((current) => {
+            if (current.length >= MAX_FILE_ATTACHMENTS || (attachment.fileType === "image" && current.filter((item) => item.fileType === "image").length >= MAX_IMAGE_ATTACHMENTS)) return current;
+            return [...current, attachment];
+          });
+          setAttachError(null);
+        } catch (cause) { setAttachError(`${name}: ${String(cause)}`); }
+        finally { setExtractingFile(null); }
+      })();
+    };
+    window.addEventListener("veyra:attach-project-file", attach);
+    return () => window.removeEventListener("veyra:attach-project-file", attach);
+  }, [attachments]);
 
   useEffect(() => {
     if (!busy || !onStop) return;
@@ -351,11 +380,11 @@ export function Composer({
       : "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15 hover:text-emerald-200";
 
   const canSend =
-    (value.trim().length > 0 || activeAttachments.length > 0) && !isInputBlocked;
+    (value.trim().length > 0 || activeAttachments.length > 0) && !isInputBlocked && !extractingFile;
 
   const handleSend = () => {
     let text = value.trim();
-    if ((!text && activeAttachments.length === 0) || isInputBlocked) return;
+    if ((!text && activeAttachments.length === 0) || isInputBlocked || extractingFile) return;
     if (busy && onSteer) {
       if (activeAttachments.length) { setAttachError("Send steering as text. Attach files after this response finishes."); return; }
       setSendingSteer(true);
@@ -492,6 +521,23 @@ export function Composer({
         />
       )}
       <div className="flex flex-col gap-1.5">
+        {!isEditMode && <label className="flex items-center gap-2 px-2 text-xs text-[var(--color-text-dim)]">Project
+          <select aria-label="Chat project" value={projectId ?? ""} disabled={busy} onChange={(event) => {
+            const next = event.target.value || undefined;
+            const agent = useAgentStore.getState();
+            const session = agent.sessions.find((item) => item.id === agent.activeSessionId);
+            if (session) {
+              useAgentStore.setState({ sessions: agent.sessions.map((item) => item.id === session.id ? { ...item, projectId: next } : item) });
+              useChatStore.getState().moveConversation(session.sourceConversationId ?? session.id, next);
+            } else {
+              const folder = projects.find((project) => project.id === next)?.settings.resources?.find((resource) => resource.directory)?.path ?? "";
+              agent.setProjectPath(folder);
+              agent.newSession();
+            }
+            useProjectStore.getState().setActiveProjectId(next ?? null);
+          }} className="max-w-48 rounded bg-transparent py-1 text-[var(--color-text)]"><option value="">No project</option>{projects.filter((project) => project.status === "active").map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
+          {activeSession?.status === "running" && <span>Available after this response</span>}
+        </label>}
         {isEditMode && (
           <div className="flex items-center justify-between px-2 pb-0.5">
             <span className="text-[11px] font-medium text-amber-300/80">Editing message</span>

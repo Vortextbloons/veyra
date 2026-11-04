@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { notifyMemoryDeletion } from "@/modules/memory/memory-lifecycle";
+import { useChatStore } from "@/stores/chat-store";
+import { flushConversationSave, getConversationStorageIssue, saveConversationSnapshot } from "@/lib/conversation-storage";
 import type {
   ProjectRecord,
   ProjectKind,
@@ -65,7 +67,25 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   hydrateProjects: async () => {
     if (get().hydrationState === "ready") return;
     hydratePromise ??= (async () => {
-      const projects = await listProjects();
+      const allProjects = await listProjects();
+      const legacy = allProjects.filter((project) => project.settings.projectSystemVersion !== 2);
+      const projects = allProjects.filter((project) => project.settings.projectSystemVersion === 2);
+      if (legacy.length && useChatStore.getState().hydrationState === "ready" && getConversationStorageIssue()?.severity !== "error") {
+        const ids = new Set(legacy.map((project) => project.id));
+        const conversations = useChatStore.getState().conversations.map((conversation) => ({
+          ...conversation,
+          projectId: conversation.projectId && ids.has(conversation.projectId) ? undefined : conversation.projectId,
+          agentSession: conversation.agentSession && conversation.agentSession.projectId && ids.has(conversation.agentSession.projectId)
+            ? { ...conversation.agentSession, projectId: undefined }
+            : conversation.agentSession,
+        }));
+        useChatStore.setState({ conversations });
+        void saveConversationSnapshot(conversations);
+        await flushConversationSave();
+        if (getConversationStorageIssue()?.severity !== "error") {
+          await Promise.all(legacy.map((project) => deleteProjectApi(project.id)));
+        }
+      }
       set({
         projects,
         hydrationState: "ready",
@@ -86,7 +106,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       color: options?.color,
       icon: options?.icon,
       systemPrompt: options?.systemPrompt,
-      settings: options?.settings,
+      settings: { ...options?.settings, projectSystemVersion: 2, resources: options?.settings?.resources ?? [] },
     });
     set((state) => ({
       projects: [project, ...state.projects],

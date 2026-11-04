@@ -36,4 +36,13 @@ describe("encrypted Pi conversation history", () => {
     expect(useChatStore.getState().conversations.some((item) => item.id === session.id)).toBe(false);
     expect(useChatStore.getState().conversations.some((item) => item.id === "legacy")).toBe(true);
   });
+  it("persists a moved Pi session with its new project assignment", () => {
+    useAgentStore.setState({ sessions: [{ ...session, status: "stopped", projectId: "old" }] });
+    useAgentStore.setState((state) => ({ sessions: state.sessions.map((item) => ({ ...item, projectId: "new" })) }));
+    flushPiConversations();
+    const saved = useChatStore.getState().conversations.find((item) => item.id === session.id);
+    expect(saved?.projectId).toBe("new");
+    expect(saved?.agentSession?.projectId).toBe("new");
+    expect(saved?.messages.map((message) => message.content)).toEqual(["Question", "Answer"]);
+  });
 });
