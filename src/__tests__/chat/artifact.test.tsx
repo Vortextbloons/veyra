@@ -39,7 +39,7 @@ describe("artifact validation", () => {
     const rejected = normalizeArtifact({ format: "html", title: "Large page", content: "x".repeat(MAX_ARTIFACT_BYTES + 1) }, "id");
 
     expect(accepted.ok).toBe(true);
-    expect(rejected).toEqual({ ok: false, error: "Artifacts must be 256 KB or smaller. Nothing was truncated." });
+    expect(rejected).toEqual({ ok: false, error: "Artifacts must be 5 MB or smaller. Nothing was truncated." });
   });
 
   it("accepts a single safe filename and rejects path traversal", () => {

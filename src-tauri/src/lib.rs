@@ -574,6 +574,7 @@ pub fn run() {
             agents::commands::run_pi_agent,
             agents::commands::stop_pi_agent,
             agents::commands::respond_pi_ui,
+            agents::commands::steer_pi_agent,
             connectivity::commands::probe_internet_connectivity,
             web_search::engine::web_search,
             web_search::engine::get_search_engine_status,
@@ -620,6 +621,7 @@ pub fn run() {
             extensions::commands::call_stdio_mcp,
         ])
         .setup(|app| {
+            agents::runtime::initialize(app.path().resource_dir()?);
             let project_db_state = projects::db::ProjectDbState::new(app.handle().clone());
             project_db_state.spawn_background_init();
             app.manage(project_db_state);

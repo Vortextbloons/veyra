@@ -50,6 +50,10 @@ export async function stopPiAgent(sessionId: string): Promise<void> {
   await invoke<void>("stop_pi_agent", { sessionId });
 }
 
+export async function steerPiAgent(sessionId: string, message: string): Promise<void> {
+  await invoke<void>("steer_pi_agent", { sessionId, message });
+}
+
 export async function runPiAgent(
   input: StartPiAgentInput,
   onEvent?: (event: PiRunEvent) => void,

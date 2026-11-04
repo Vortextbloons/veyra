@@ -5,6 +5,7 @@ import { delimiter, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export function locatePi(searchPath = process.env.PATH ?? "", platform = process.platform) {
+  if (process.env.VEYRA_PI_ROOT) return process.env.VEYRA_PI_ROOT;
   for (const directory of searchPath.split(delimiter)) {
     if (!directory.trim()) continue;
     for (const executable of platform === "win32" ? ["pi.cmd", "pi"] : ["pi"]) {

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Stdio};
 use std::sync::{mpsc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 use tauri::Emitter;
@@ -46,7 +46,7 @@ struct ReasoningWorker {
 impl ReasoningWorker {
     fn spawn() -> Result<Self, String> {
         let script = format!("{}\nawait serve();", include_str!("model-capabilities.mjs"));
-        let mut command = Command::new("node");
+        let mut command = super::runtime::node_command()?;
         command
             .args(["--input-type=module", "-e", &script])
             .env("PI_OFFLINE", "1")
@@ -55,7 +55,7 @@ impl ReasoningWorker {
             .stderr(Stdio::null());
         crate::shared::process::hide_console(&mut command);
         let mut child = command.spawn().map_err(|_| {
-            "Node and an installed Pi SDK are required to inspect model capabilities".to_string()
+            "Could not start the bundled Pi capability runtime".to_string()
         })?;
         let stdin = child.stdin.take().ok_or("Pi capability worker stdin unavailable")?;
         let stdout = child.stdout.take().ok_or("Pi capability worker stdout unavailable")?;
@@ -287,7 +287,7 @@ pub async fn refresh_agent_models(app: tauri::AppHandle) -> Result<ModelReasonin
 
 fn refresh_catalog() -> Result<ModelReasoning, String> {
     let script = format!("{}\nawait main();", include_str!("model-capabilities.mjs"));
-    let mut command = Command::new("node");
+    let mut command = super::runtime::node_command()?;
     command
         .args([
             "--input-type=module",
@@ -307,7 +307,7 @@ fn refresh_catalog() -> Result<ModelReasoning, String> {
         .stderr(Stdio::null());
     crate::shared::process::hide_console(&mut command);
     let output = command.output().map_err(|_| {
-        "Node and an installed Pi SDK are required to inspect model capabilities".to_string()
+        "Could not start the bundled Pi capability runtime".to_string()
     })?;
     serde_json::from_slice(&output.stdout)
         .map_err(|_| "Installed Pi did not return valid model capabilities".into())
@@ -319,7 +319,7 @@ fn resolve_pi_agent_dir() -> Option<PathBuf> {
         "{}\nawait printAgentDir();",
         include_str!("model-capabilities.mjs")
     );
-    let mut command = Command::new("node");
+    let mut command = super::runtime::node_command().ok()?;
     command
         .args(["--input-type=module", "-e", &script])
         .env("PI_OFFLINE", "1")

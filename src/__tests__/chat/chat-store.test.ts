@@ -95,7 +95,7 @@ describe("chat store assistant append", () => {
 
     const rejected = useChatStore.getState().setAssistantArtifact("conversation-1", replacementAssistant.id, {
       ...nextArtifact,
-      content: "x".repeat(256 * 1024 + 1),
+      content: "x".repeat(5 * 1024 * 1024 + 1),
     });
     expect(rejected).toBe(false);
     expect(useChatStore.getState().conversations[0]?.messages[1]?.artifact).toEqual(previousArtifact);

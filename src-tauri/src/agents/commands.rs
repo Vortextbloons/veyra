@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -8,7 +8,7 @@ use std::sync::{
 use tauri::Emitter;
 
 use super::pi_runner::{
-    pi_candidates, resolve_thinking_level, run_pi_agent_blocking,
+    resolve_thinking_level, run_pi_agent_blocking,
     validate_pi_agent_input, PiRunFinishedEvent, PiRunResult,
 };
 use super::process::AGENT_CANCELLATION;
@@ -39,6 +39,17 @@ pub struct StartPiAgentInput {
 }
 
 #[tauri::command]
+pub async fn steer_pi_agent(session_id: String, message: String) -> Result<(), String> {
+    if message.trim().is_empty() { return Err("Steering message is required".into()); }
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut streams = RUNNING_AGENT_STDIN.lock();
+        let stream = streams.get_mut(&session_id).ok_or("Chat is no longer running")?;
+        writeln!(stream, "{}", serde_json::json!({ "type": "steer", "message": message }))
+            .map_err(|error| error.to_string())
+    }).await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn respond_pi_ui(session_id: String, request_id: String, value: Option<String>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let response = serde_json::json!({ "type": "extension_ui_response", "id": request_id,
@@ -56,17 +67,10 @@ pub async fn respond_pi_ui(session_id: String, request_id: String, value: Option
 #[tauri::command]
 pub async fn check_pi_available() -> bool {
     tauri::async_runtime::spawn_blocking(|| {
-        pi_candidates().iter().any(|candidate| {
-            let mut command = Command::new(candidate);
-            command
-                .arg("--version")
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            crate::shared::process::hide_console(&mut command);
-            command
-                .output()
-                .is_ok_and(|output| output.status.success())
-        })
+        let Ok(mut command) = super::runtime::pi_command() else { return false; };
+        command.arg("--version").stdout(Stdio::null()).stderr(Stdio::null());
+        crate::shared::process::hide_console(&mut command);
+        command.output().is_ok_and(|output| output.status.success())
     })
     .await
     .unwrap_or(false)

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -42,14 +42,6 @@ pub(crate) struct PiRunFinishedEvent {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-pub(crate) fn pi_candidates() -> Vec<&'static str> {
-    if cfg!(windows) {
-        vec!["pi.cmd", "pi"]
-    } else {
-        vec!["pi"]
-    }
-}
 
 pub(crate) fn validate_pi_agent_input(
     input: &super::commands::StartPiAgentInput,
@@ -152,36 +144,13 @@ pub(crate) fn run_pi_agent_blocking(
         return Err("Agent run cancelled".into());
     }
 
-    let mut last_error = String::new();
-    let mut child = None;
-    for candidate in pi_candidates() {
-        let mut command = Command::new(candidate);
-        command
-            .args(&args)
-            .env("VEYRA_PI_API_KEY", api_key)
-            .env("VEYRA_CHAT_TOOLS", serde_json::to_string(tools).unwrap_or_else(|_| "[]".to_string()))
-            .current_dir(cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        crate::shared::process::hide_console(&mut command);
-        match command.spawn() {
-            Ok(c) => {
-                child = Some(c);
-                break;
-            }
-            Err(e) => {
-                last_error = format!("{candidate}: {e}");
-            }
-        }
-    }
-    let mut child = child.ok_or_else(|| {
-        format!(
-            "failed to spawn pi. Tried candidates: {:?}. Last error: {}",
-            pi_candidates(),
-            last_error
-        )
-    })?;
+    let mut command = super::runtime::pi_command()?;
+    command.args(&args)
+        .env("VEYRA_PI_API_KEY", api_key)
+        .env("VEYRA_CHAT_TOOLS", serde_json::to_string(tools).unwrap_or_else(|_| "[]".to_string()))
+        .current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    crate::shared::process::hide_console(&mut command);
+    let mut child = command.spawn().map_err(|error| format!("Could not start bundled Pi: {error}"))?;
 
     register_agent_process(session_id, child.id());
     if cancelled.load(Ordering::Relaxed) {

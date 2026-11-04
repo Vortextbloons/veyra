@@ -15,6 +15,7 @@ import {
   checkPiAvailable,
   runPiAgent,
   stopPiAgent,
+  steerPiAgent,
 } from "@/modules/agents/pi-runtime";
 import { asRecord } from "@/lib/utils";
 import { notifyMemoryDeletion } from "@/modules/memory/memory-lifecycle";
@@ -83,6 +84,7 @@ type AgentStore = {
   deleteSession: (sessionId: string) => Promise<void>;
   startSession: (input: StartAgentSessionInput) => Promise<string>;
   stopSession: (id: string) => void;
+  steerSession: (id: string, text: string) => Promise<void>;
   clearSessions: () => void;
   importConversation: (conversation: Conversation, projectPath?: string) => void;
 };
@@ -753,6 +755,16 @@ export const useAgentStore = create<AgentStore>()(
     } finally {
       unlock();
     }
+      },
+      steerSession: async (id, text) => {
+        const message = text.trim();
+        if (!message || !get().sessions.some((session) => session.id === id && session.status === "running")) {
+          throw new Error("Chat is no longer running");
+        }
+        await steerPiAgent(id, message);
+        set((state) => ({ sessions: state.sessions.map((session) => session.id === id
+          ? { ...session, events: [...session.events, event("status", "Prompt", message)] }
+          : session) }));
       },
       stopSession: (id) => {
         abortAgentSession(id);

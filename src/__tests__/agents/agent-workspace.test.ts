@@ -9,9 +9,9 @@ const mocks = vi.hoisted(() => {
     setItem: (key: string, value: string) => values.set(key, value),
     removeItem: (key: string) => values.delete(key),
   } });
-  return { stop: vi.fn(), run: vi.fn() };
+  return { stop: vi.fn(), run: vi.fn(), steer: vi.fn() };
 });
-vi.mock("@/modules/agents/pi-runtime", () => ({ checkPiAvailable: vi.fn(), runPiAgent: mocks.run, stopPiAgent: mocks.stop }));
+vi.mock("@/modules/agents/pi-runtime", () => ({ checkPiAvailable: vi.fn(), runPiAgent: mocks.run, stopPiAgent: mocks.stop, steerPiAgent: mocks.steer }));
 import { useAgentStore } from "@/modules/agents/agent-store";
 
 function session(id: string, projectPath: string, status: AgentSession["status"] = "completed"): AgentSession {
@@ -27,6 +27,17 @@ describe("agent project navigation", () => {
     mocks.run.mockReset();
     mocks.run.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
     useAgentStore.setState({ sessions: [session("a", "/project-a", "running"), session("b", "/project-b")], activeSessionId: "a", projectPath: "/project-a", projects: [] });
+  });
+  it("steers only running sessions and preserves successful messages in context", async () => {
+    mocks.steer.mockResolvedValueOnce(undefined);
+    await useAgentStore.getState().steerSession("a", "Focus on tests");
+    expect(mocks.steer).toHaveBeenCalledWith("a", "Focus on tests");
+    expect(agentSessionPrompt(useAgentStore.getState().sessions[0], "Continue")).toContain("Focus on tests");
+    await expect(useAgentStore.getState().steerSession("b", "Change direction")).rejects.toThrow("no longer running");
+    const count = useAgentStore.getState().sessions[0].events.length;
+    mocks.steer.mockRejectedValueOnce(new Error("Pipe closed"));
+    await expect(useAgentStore.getState().steerSession("a", "Retry")).rejects.toThrow("Pipe closed");
+    expect(useAgentStore.getState().sessions[0].events).toHaveLength(count);
   });
   it("switches projects without stopping running work and remembers empty projects", () => {
     useAgentStore.getState().setProjectPath("/project-b");

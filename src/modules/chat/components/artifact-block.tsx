@@ -81,7 +81,7 @@ export function ArtifactBlock({ artifact, messageId, onDocumentSave }: ArtifactB
 
   const saveDocument = () => {
     const saved = onDocumentSave ? onDocumentSave(titleDraft, contentDraft) : useChatStore.getState().updateAssistantDocument(messageId, titleDraft, contentDraft);
-    setStatus(saved ? "Document saved" : "The document could not be saved. Check its title and 256 KB size limit.");
+    setStatus(saved ? "Document saved" : "The document could not be saved. Check its title and 5 MB size limit.");
     if (saved) setEditing(false);
   };
 

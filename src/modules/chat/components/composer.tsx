@@ -162,6 +162,7 @@ type ComposerProps = {
     attachments?: MessageAttachment[],
   ) => void;
   onStop?: () => void;
+  onSteer?: (text: string) => Promise<void>;
   disabled?: boolean;
   controlsDisabled?: boolean;
   busy?: boolean;
@@ -183,6 +184,7 @@ export function Composer({
   suggestedPrompt,
   onSend,
   onStop,
+  onSteer,
   disabled,
   controlsDisabled = false,
   busy = false,
@@ -194,6 +196,7 @@ export function Composer({
   onEditSave,
 }: ComposerProps) {
   const [value, setValue] = useState("");
+  const [sendingSteer, setSendingSteer] = useState(false);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [extractingFile, setExtractingFile] = useState<string | null>(null);
@@ -339,7 +342,7 @@ export function Composer({
 
   const activeAttachments = attachments;
   const activeAttachError = attachError;
-  const isInputBlocked = Boolean(disabled || busy);
+  const isInputBlocked = Boolean(disabled || (busy && !onSteer) || sendingSteer);
   const isControlsBlocked = Boolean(controlsDisabled);
   const webSearchActive = webSearchEnabled && !webSearchDisabled;
   const webSearchToggleClass =
@@ -353,6 +356,14 @@ export function Composer({
   const handleSend = () => {
     let text = value.trim();
     if ((!text && activeAttachments.length === 0) || isInputBlocked) return;
+    if (busy && onSteer) {
+      if (activeAttachments.length) { setAttachError("Send steering as text. Attach files after this response finishes."); return; }
+      setSendingSteer(true);
+      void onSteer(text).then(() => { setValue(""); setAttachError(null); })
+        .catch((error: unknown) => setAttachError(String(error)))
+        .finally(() => setSendingSteer(false));
+      return;
+    }
     if (isEditMode && editMessageId && onEditSave) {
       onEditSave(editMessageId, text);
       setValue("");
@@ -552,7 +563,7 @@ export function Composer({
             onKeyDown={handleKeyDown}
             onKeyUp={(e) => updateSkillMenu(e.currentTarget)}
             onClick={(e) => updateSkillMenu(e.currentTarget)}
-            placeholder={isEditMode ? "Edit your message..." : skillCommands.length > 0 ? "Ask anything... (type / for Skills)" : "Ask anything..."}
+            placeholder={busy && onSteer ? "Guide the current response..." : isEditMode ? "Edit your message..." : skillCommands.length > 0 ? "Ask anything... (type / for Skills)" : "Ask anything..."}
             aria-label={isEditMode ? "Edit message" : "Message"}
             aria-autocomplete="list"
             aria-controls={skillMenuQuery !== null ? "skill-slash-listbox" : undefined}
@@ -641,12 +652,12 @@ export function Composer({
               </>
             )}
             <button
-              aria-label={isEditMode ? "Save edit" : "Send"}
+              aria-label={busy && onSteer ? "Steer response" : isEditMode ? "Save edit" : "Send"}
               disabled={!canSend}
               onClick={handleSend}
               className="group/send grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-text)] text-[var(--color-bg)] transition-all hover:brightness-90 active:scale-95 disabled:opacity-30 disabled:hover:brightness-100 disabled:active:scale-100"
             >
-              {busy ? (
+              {busy && !onSteer || sendingSteer ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : isEditMode ? (
                 <Check className="size-4" />

@@ -14,7 +14,7 @@ export type ArtifactNormalization =
   | { ok: true; artifact: Artifact }
   | { ok: false; error: string };
 
-export const MAX_ARTIFACT_BYTES = 256 * 1024;
+export const MAX_ARTIFACT_BYTES = 5 * 1024 * 1024;
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_FILENAME_LENGTH = 128;
@@ -42,7 +42,7 @@ export function normalizeArtifact(
     return { ok: false, error: "Artifact content cannot be empty." };
   }
   if (artifactByteLength(raw.content) > MAX_ARTIFACT_BYTES) {
-    return { ok: false, error: "Artifacts must be 256 KB or smaller. Nothing was truncated." };
+    return { ok: false, error: "Artifacts must be 5 MB or smaller. Nothing was truncated." };
   }
 
   const language = typeof raw.language === "string" ? raw.language.trim() : undefined;

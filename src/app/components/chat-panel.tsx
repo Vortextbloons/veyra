@@ -8,6 +8,7 @@ import { AgentsPanel } from "@/modules/agents/components/agents-panel";
 import { Composer } from "@/modules/chat/components/composer";
 import { ContextMeterButton } from "@/modules/chat/components/context-meter";
 import { aiScheduler } from "@/lib/ai-scheduler";
+import { useAgentStore } from "@/modules/agents/agent-store";
 
 export function ChatPanel({
   onSend, supportsImages = false, providers = [], selectedProvider = "", onProviderChange,
@@ -47,7 +48,8 @@ export function ChatPanel({
       {modelLoadProgress && modelLoadProgress.phase !== "ready" && <div className="px-1 pb-2"><ModelLoadingBar progress={modelLoadProgress} /></div>}
       <Composer key={activeAgentSessionId ?? "new"}
         suggestedPrompt={suggestedPrompt} onSend={onSend} onStop={stop}
-        busy={busy} disabled={agentRuntimeAvailable !== true || !selectedModel || busy} controlsDisabled={busy}
+        busy={busy} disabled={agentRuntimeAvailable !== true || !selectedModel || (busy && !running)} controlsDisabled={busy}
+        onSteer={running ? (text) => useAgentStore.getState().steerSession(running.id, text) : undefined}
         supportsImages={supportsImages} composerTextClass={sidebarsCollapsed ? "text-[14.5px]" : "text-[14px]"}
         webSearchEnabled={webSearchEnabled} onWebSearchChange={onWebSearchChange}
         webSearchDisabled={webSearchDisabled} webSearchDisabledReason={webSearchDisabledReason}

@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "node scripts/fetch-search-engine.mjs && npm run build"
+    "beforeBuildCommand": "node scripts/prepare-pi.mjs && node scripts/fetch-search-engine.mjs && npm run build"
   },
   "app": {
     "windows": [
@@ -29,7 +29,8 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "resources/search-engine/": "search-engine/"
+      "resources/search-engine/": "search-engine/",
+      "resources/pi/": "pi/"
     },
     "icon": [
       "icons/32x32.png",
