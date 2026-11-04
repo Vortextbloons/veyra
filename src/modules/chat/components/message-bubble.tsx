@@ -88,10 +88,10 @@ export const MessageBubble = memo(function MessageBubble({
               isUser
               isStreaming={isStreaming}
               isLastAssistant={isLastAssistant}
-              onEdit={() => onEdit?.(message.id)}
-              onCopy={() => onCopy?.(message.id)}
-              onFork={() => onFork?.(message.id)}
-              onDelete={() => onDelete?.(message.id)}
+              onEdit={onEdit ? () => onEdit(message.id) : undefined}
+              onCopy={onCopy ? () => onCopy(message.id) : undefined}
+              onFork={onFork ? () => onFork(message.id) : undefined}
+              onDelete={onDelete ? () => onDelete(message.id) : undefined}
             />
             <div
               className={`rounded-3xl bg-[var(--color-accent-soft)] px-5 py-3 text-white transition-[font-size] duration-200 ease-out ${layout.messageText}`}
@@ -140,11 +140,11 @@ export const MessageBubble = memo(function MessageBubble({
           isUser={false}
           isStreaming={isStreaming}
           isLastAssistant={isLastAssistant}
-          onRegenerate={() => onRegenerate?.(message.id)}
-          onRetry={() => onRetry?.(message.id)}
-          onCopy={() => onCopy?.(message.id)}
-          onFork={() => onFork?.(message.id)}
-          onDelete={() => onDelete?.(message.id)}
+          onRegenerate={onRegenerate ? () => onRegenerate(message.id) : undefined}
+          onRetry={onRetry ? () => onRetry(message.id) : undefined}
+          onCopy={onCopy ? () => onCopy(message.id) : undefined}
+          onFork={onFork ? () => onFork(message.id) : undefined}
+          onDelete={onDelete ? () => onDelete(message.id) : undefined}
         />
         {hasReasoning && (
           <ReasoningBlock

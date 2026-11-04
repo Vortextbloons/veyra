@@ -30,6 +30,7 @@ function ToolbarButton({
   disabled?: boolean;
   children: React.ReactNode;
 }) {
+  if (!onClick) return null;
   return (
     <button
       type="button"
@@ -96,7 +97,7 @@ export function MessageToolbar({
       <ToolbarButton label="Fork" onClick={onFork} disabled={isStreaming}>
         <GitFork className="size-3.5" />
       </ToolbarButton>
-      <ToolbarButton label="Delete" onClick={handleDelete} disabled={isStreaming}>
+      <ToolbarButton label="Delete" onClick={onDelete ? handleDelete : undefined} disabled={isStreaming}>
         <Trash2 className="size-3.5" />
       </ToolbarButton>
     </div>

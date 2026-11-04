@@ -11,9 +11,11 @@ import { useAgentStore } from "../agent-store";
 export function AgentChatTurn({
   turn,
   onFollowUp,
+  isStreaming = false,
 }: {
   turn: AgentChatTurnModel;
   onFollowUp?: (prompt: string) => void;
+  isStreaming?: boolean;
 }) {
   if (turn.role === "user") {
     return <MessageBubble message={{ id: turn.id, role: "user", content: turn.content, attachments: turn.attachments, timestamp: 0 }} isStreaming={false} layout={{ messagesPx: "px-5", messageText: "text-[15px]", userMaxW: "max-w-[85%]", composerText: "text-[14px]", footerPx: "px-4" }} onCopy={() => void navigator.clipboard.writeText(turn.content)} />;
@@ -22,6 +24,10 @@ export function AgentChatTurn({
   const isError = turn.role === "error";
   if (turn.kind) {
     return <AgentActivityCard turn={turn} />;
+  }
+
+  if (!isError && !turn.artifact && !turn.interactiveAnswer) {
+    return <MessageBubble message={{ id: turn.id, role: "assistant", content: turn.content, modelId: turn.model, timestamp: 0 }} isStreaming={turn.pending === true || isStreaming} layout={{ messagesPx: "px-5", messageText: "text-[15px]", userMaxW: "max-w-[85%]", composerText: "text-[14px]", footerPx: "px-4" }} onCopy={() => void navigator.clipboard.writeText(turn.content)} />;
   }
 
   const modelShortId = turn.model?.split("/").pop()?.trim() || "";

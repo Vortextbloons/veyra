@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
+import { describe, expect, it, vi } from "vitest";
 import {
+  refreshPiModelCatalog,
+  inspectModelReasoning,
+  invalidateReasoningCache,
   chatModelReasoning,
   effectiveReasoningLevel,
   fallbackModelReasoning,
@@ -7,7 +11,21 @@ import {
   reasoningModelKey,
 } from "@/lib/reasoning-capabilities";
 
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+
 describe("reasoning capability helpers", () => {
+  it("retries failed capability lookups instead of caching unavailable options", async () => {
+    invalidateReasoningCache();
+    const mockedInvoke = vi.mocked(invoke);
+    mockedInvoke.mockResolvedValueOnce({ known: false, levels: [], message: "Unavailable" })
+      .mockResolvedValueOnce({ known: true, levels: ["off", "medium"], control: "toggle", message: "" });
+    expect((await inspectModelReasoning("test", "retry-model")).known).toBe(false);
+    expect(await inspectModelReasoning("test", "retry-model")).toMatchObject({ known: true, levels: ["off", "medium"] });
+    await inspectModelReasoning("test", "retry-model");
+    expect(mockedInvoke).toHaveBeenCalledTimes(2);
+    mockedInvoke.mockReset();
+    invalidateReasoningCache();
+  });
   it("keeps supported levels and normalizes them into Pi's canonical order", () => {
     expect(normalizeReasoningLevels(["high", "off", "medium"])).toEqual([
       "off",
@@ -61,4 +79,14 @@ it("exposes NVIDIA Nemotron's documented toggle when Pi reports managed", () => 
   expect(chatModelReasoning(managed, "nvidia/nemotron-3.5-super-vl-120b-a12b", "https://integrate.api.nvidia.com/v1"))
     .toMatchObject({ control: "toggle", levels: ["off", "medium"] });
   expect(chatModelReasoning(managed, "nvidia/nemotron-3.5-super-vl-120b-a12b", "https://example.com/v1")).toBe(managed);
+});
+
+it("refreshes the Pi catalog only once per launch", async () => {
+  const mockedInvoke = vi.mocked(invoke);
+  mockedInvoke.mockResolvedValueOnce({ known: true, levels: [], message: "" });
+  await Promise.all([refreshPiModelCatalog(), refreshPiModelCatalog()]);
+  await refreshPiModelCatalog();
+  expect(mockedInvoke).toHaveBeenCalledTimes(1);
+  expect(mockedInvoke).toHaveBeenCalledWith("refresh_agent_models");
+  mockedInvoke.mockReset();
 });

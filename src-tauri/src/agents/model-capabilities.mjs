@@ -1,25 +1,33 @@
 // Bridge to the same installed Pi registry and reasoning helpers used by its CLI.
-import { existsSync, readFileSync, realpathSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
+import { existsSync, statSync, readFileSync, realpathSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { delimiter, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-function locatePi() {
-  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
-    for (const executable of process.platform === "win32" ? ["pi.cmd", "pi"] : ["pi"]) {
+export function locatePi(searchPath = process.env.PATH ?? "", platform = process.platform) {
+  for (const directory of searchPath.split(delimiter)) {
+    if (!directory.trim()) continue;
+    for (const executable of platform === "win32" ? ["pi.cmd", "pi"] : ["pi"]) {
       const bin = join(directory, executable);
       if (!existsSync(bin)) continue;
-      const real = realpathSync(bin);
-      const direct = join(dirname(dirname(real)), "package.json");
-      if (existsSync(direct)) {
-        const name = JSON.parse(readFileSync(direct, "utf8")).name;
-        if (name?.endsWith("/pi-coding-agent")) return dirname(direct);
-      }
-      const wrapper = readFileSync(bin, "utf8");
-      const match = wrapper.match(/node_modules[\\/](@[^\\/]+[\\/]pi-coding-agent)[\\/]/);
-      if (match) {
-        const root = join(directory, "node_modules", ...match[1].split(/[\\/]/));
-        if (existsSync(join(root, "package.json"))) return root;
+      // Cargo adds target/debug to PATH, where Tauri bundles a directory named
+      // "pi". A directory (or broken shim) must not hide a later installation.
+      try {
+        if (!statSync(bin).isFile()) continue;
+        const real = realpathSync(bin);
+        const direct = join(dirname(dirname(real)), "package.json");
+        if (existsSync(direct)) {
+          const name = parsePiJson(readFileSync(direct, "utf8")).name;
+          if (name?.endsWith("/pi-coding-agent")) return dirname(direct);
+        }
+        const wrapper = readFileSync(bin, "utf8");
+        const match = wrapper.match(/node_modules[\\/](@[^\\/]+[\\/]pi-coding-agent)[\\/]/);
+        if (match) {
+          const root = join(directory, "node_modules", ...match[1].split(/[\\/]/));
+          if (existsSync(join(root, "package.json"))) return root;
+        }
+      } catch {
+        // Keep searching when an unrelated or stale PATH entry cannot be read.
       }
     }
   }
@@ -27,6 +35,30 @@ function locatePi() {
 }
 
 const normalizeUrl = (value) => value?.replace(/\/+$/, "");
+
+// Windows editors and PowerShell may prefix JSON files with a UTF-8 BOM.
+export function parsePiJson(text) {
+  return JSON.parse(text.replace(/^\uFEFF/, ""));
+}
+
+// Endpoint corrections for gaps in the installed Pi catalog. These metadata
+// fields are consumed by Pi itself for both level selection and request bodies.
+function nvidiaReasoningMetadata({ modelId, baseUrl }) {
+  try {
+    if (new URL(baseUrl).hostname !== "integrate.api.nvidia.com") return null;
+  } catch { return null; }
+  switch (modelId.toLowerCase()) {
+    case "nvidia/nemotron-3.5-super-vl-120b-a12b":
+      return { compat: { supportsReasoningEffort: false, thinkingFormat: "qwen-chat-template" } };
+    // https://docs.api.nvidia.com/nim/reference/minimaxai-minimax-m3-1-flash
+    case "minimaxai/minimax-m3.1-flash":
+      return { compat: { supportsReasoningEffort: true, thinkingFormat: "openai" },
+        thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" } };
+    case "deepseek-ai/deepseek-v4.1-flash":
+      return { compat: { supportsReasoningEffort: true, thinkingFormat: "deepseek" } };
+    default: return null;
+  }
+}
 
 /** Print the directory Pi uses for its model registry (models.json lives here). */
 export async function printAgentDir() {
@@ -53,6 +85,12 @@ try {
   const [providerId, modelId, baseUrl, requested, contextLength, maxTokens] = process.argv.slice(1);
   const root = locatePi();
   const sdk = await import(pathToFileURL(join(root, "dist/index.js")).href);
+  if (providerId === "__refresh_catalog__") {
+    if (typeof sdk.ModelRuntime?.create !== "function") throw new Error("Pi catalog refresh unavailable");
+    await sdk.ModelRuntime.create({ allowModelNetwork: true, modelRefreshTimeoutMs: 8000 });
+    console.log(JSON.stringify({ known: true, levels: [], message: "" }));
+    return;
+  }
   const scope = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).name.split("/")[0];
   const aiRoots = [join(root, "node_modules", scope, "pi-ai"), join(dirname(dirname(root)), scope, "pi-ai")];
   const aiPath = aiRoots.flatMap((directory) => [join(directory, "dist/compat.js"), join(directory, "dist/index.js")]).find(existsSync);
@@ -62,15 +100,18 @@ try {
   let models = await registry.getAll();
   const input = { providerId, modelId, baseUrl, requested, contextLength, maxTokens };
   let result = resolveModelReasoning(models, input, ai);
-  if (!result.known || (result.provider?.startsWith("veyra-") && contextLength)) {
+  if (!result.known || (result.provider?.startsWith("veyra-") && contextLength) ||
+      nvidiaReasoningMetadata(input)) {
     const directory = sdk.getAgentDir();
     const path = join(directory, "models.json");
-    const existing = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+    const existing = existsSync(path) ? parsePiJson(readFileSync(path, "utf8")) : {};
     const configured = configureModelRoute(existing, input, models);
-    mkdirSync(directory, { recursive: true });
-    const temporary = `${path}.${process.pid}.tmp`;
-    writeFileSync(temporary, JSON.stringify(configured.config, null, 2), { mode: 0o600 });
-    renameSync(temporary, path);
+    if (JSON.stringify(existing) !== JSON.stringify(configured.config)) {
+      mkdirSync(directory, { recursive: true });
+      const temporary = `${path}.${process.pid}.tmp`;
+      writeFileSync(temporary, JSON.stringify(configured.config, null, 2), { mode: 0o600 });
+      renameSync(temporary, path);
+    }
     registry = await createRegistry(sdk);
     models = await registry.getAll();
     result = resolveModelReasoning(models, { ...input, providerId: configured.provider }, ai);
@@ -102,6 +143,9 @@ export function configureModelRoute(config, { providerId, modelId, baseUrl, cont
     (model.id === modelId || `${model.provider}/${model.id}` === modelId));
   const template = matches.find((model) => model.provider === alias) ??
     (matches.length === 1 ? matches[0] : undefined);
+  // Apply documented endpoint metadata through Pi on an isolated route.
+  // Keep this adapter on Veyra's isolated route, leaving user providers intact.
+  const correction = nvidiaReasoningMetadata({ modelId, baseUrl: endpoint });
   const entry = config.providers[provider] ??= {
     baseUrl: endpoint, api: "openai-completions",
     apiKey: local ? "lm-studio" : "$VEYRA_PI_API_KEY",
@@ -109,15 +153,16 @@ export function configureModelRoute(config, { providerId, modelId, baseUrl, cont
   };
   if (normalizeUrl(entry.baseUrl) !== endpoint || !Array.isArray(entry.models)) throw new Error("Invalid Pi route");
   const model = {
-    id: modelId, name: modelId, reasoning: template?.reasoning ?? true,
+    id: modelId, name: modelId, reasoning: correction ? true : template?.reasoning ?? true,
     input: template?.input ?? ["text"], contextWindow, maxTokens: output,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    compat: local ? { supportsDeveloperRole: false, supportsReasoningEffort: false, thinkingFormat: "qwen-chat-template" } : template?.compat,
-    ...(template?.thinkingLevelMap ? { thinkingLevelMap: template.thinkingLevelMap } : {}),
+    compat: local ? { supportsDeveloperRole: false, supportsReasoningEffort: false, thinkingFormat: "qwen-chat-template" } : correction ? { ...template?.compat, ...correction.compat } : template?.compat,
+    ...((correction?.thinkingLevelMap ?? template?.thinkingLevelMap) ? { thinkingLevelMap: correction?.thinkingLevelMap ?? template?.thinkingLevelMap } : {}),
   };
   const existing = entry.models.find((item) => item.id === modelId);
-  if (existing) Object.assign(existing, { contextWindow, maxTokens: output,
-    ...(template ? { reasoning: model.reasoning, compat: model.compat, thinkingLevelMap: model.thinkingLevelMap } : {}),
+  if (existing) Object.assign(existing, {
+    ...(contextLength ? { contextWindow } : {}), ...(maxTokens || contextLength ? { maxTokens: output } : {}),
+    ...(template || correction ? { reasoning: model.reasoning, compat: model.compat, thinkingLevelMap: model.thinkingLevelMap } : {}),
   });
   else entry.models.push(model);
   return { config, provider };
@@ -133,7 +178,11 @@ export function resolveModelReasoning(models, { providerId, modelId, baseUrl, re
   const model = candidates[0];
   const format = model.compat?.thinkingFormat;
   const managed = model.reasoning && model.api === "openai-completions" && model.compat?.supportsReasoningEffort === false && !format;
-  const toggleOnly = model.api === "openai-completions" && (["qwen", "qwen-chat-template", "together"].includes(format) || (["deepseek", "zai"].includes(format) && model.compat?.supportsReasoningEffort === false));
+  const mappedEfforts = Object.entries(model.thinkingLevelMap ?? {}).filter(([level, value]) => level !== "off" && value !== null);
+  const hasMappedEfforts = new Set(mappedEfforts.map(([, value]) => value)).size > 1;
+  const toggleOnly = !hasMappedEfforts && model.api === "openai-completions" &&
+    (format === "qwen-chat-template" ||
+      (["qwen", "together", "deepseek", "zai"].includes(format) && model.compat?.supportsReasoningEffort === false));
   let levels = managed ? [] : ai.getSupportedThinkingLevels(model);
   if (toggleOnly) {
     const on = levels.includes("medium") ? "medium" : levels.find((level) => level !== "off");

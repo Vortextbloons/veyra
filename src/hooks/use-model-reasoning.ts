@@ -46,7 +46,7 @@ export function useModelReasoning(runtime: "chat" | "pi" = "chat"): ModelReasoni
   const [lookup, setLookup] = useState<{ key: string; result: ModelReasoning } | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const previousRefresh = useRef(0);
-  const requestKey = `${modelKey}:${refreshToken}`;
+  const requestKey = `${runtime}:${modelKey}:${refreshToken}`;
 
   useEffect(() => {
     if (!model) return;
@@ -67,7 +67,7 @@ export function useModelReasoning(runtime: "chat" | "pi" = "chat"): ModelReasoni
         if (cancelled) return;
         if (!endpoint) {
           const result = runtime === "pi" || localEndpoint ? registry : chatModelReasoning(registry, model, baseUrl);
-          rememberReasoningCapabilities(modelKey, result.control ?? "unknown", result.levels);
+          if (result.known) rememberReasoningCapabilities(modelKey, result.control ?? "unknown", result.levels);
           setLookup({ key: requestKey, result });
           return;
         }

@@ -3,11 +3,9 @@ import { ChevronRight, Sparkles, TerminalSquare } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { AgentChatTurn } from "@/modules/agents/components/agent-chat-turn";
 import { buildAgentChatTurns, type AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
-import { StatusDot } from "@/modules/agents/agent-status-dot";
 
 export function AgentOutputView({
   session,
-  onStop,
   onFollowUp,
 }: {
   session: AgentSession;
@@ -31,28 +29,10 @@ export function AgentOutputView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="agent-work-status">
-        <div className="flex min-w-0 items-center gap-2">
-          <StatusDot status={session.status} />
-          <span className="truncate text-[12.5px] font-medium text-white">
-            {session.status === "running" ? "Working" : session.status === "completed" ? "Task completed" : session.status}
-          </span>
-        </div>
-        {isRunning && (
-          <button
-            type="button"
-            onClick={() => onStop(session.id)}
-            className="flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300 transition-colors hover:border-red-500/30 hover:bg-red-500/15"
-          >
-            Stop
-          </button>
-        )}
-      </div>
-
       <div ref={outputRef} onScroll={() => { const el = outputRef.current; if (el) followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="agent-work-log">
+        <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-7 px-5 pb-8 pt-6">
           {turns.map((turn) => (
-            <AgentChatTurn key={turn.id} turn={turn} onFollowUp={onFollowUp} />
+            <AgentChatTurn key={turn.id} turn={turn} isStreaming={isRunning && turn === turns.at(-1)} onFollowUp={onFollowUp} />
           ))}
 
           {showWorkingTurn && (

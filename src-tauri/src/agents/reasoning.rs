@@ -52,10 +52,14 @@ pub(crate) fn inspect_model(
             &context_length.map(|value| value.to_string()).unwrap_or_default(),
             &max_tokens.map(|value| value.to_string()).unwrap_or_default(),
         ])
-        .env("PI_OFFLINE", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    if provider == "__refresh_catalog__" {
+        command.env_remove("PI_OFFLINE");
+    } else {
+        command.env("PI_OFFLINE", "1");
+    }
     crate::shared::process::hide_console(&mut command);
     let mut child = command.spawn().map_err(|_| {
         "Node and an installed Pi SDK are required to inspect model capabilities".to_string()
@@ -97,6 +101,18 @@ pub async fn inspect_agent_reasoning(
     })
     .await
     .map_err(|_| "Pi model capability task failed")?
+}
+
+/// Refresh Pi's persisted catalog once at application launch, off the UI thread.
+#[tauri::command]
+pub async fn refresh_agent_models(app: tauri::AppHandle) -> Result<ModelReasoning, String> {
+    let result = tauri::async_runtime::spawn_blocking(|| {
+        inspect_model("__refresh_catalog__", "", "", "", None, None)
+    }).await.map_err(|_| "Pi catalog refresh task failed")??;
+    if result.known {
+        let _ = app.emit(REASONING_CHANGED_EVENT, ());
+    }
+    Ok(result)
 }
 
 /// Ask the installed Pi SDK where it keeps its model registry.

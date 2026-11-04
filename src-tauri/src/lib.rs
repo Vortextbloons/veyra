@@ -569,6 +569,7 @@ pub fn run() {
             app_update::install_app_update,
             agents::commands::check_pi_available,
             agents::reasoning::inspect_agent_reasoning,
+            agents::reasoning::refresh_agent_models,
             agents::workspace::inspect_agent_workspace,
             agents::commands::run_pi_agent,
             agents::commands::stop_pi_agent,

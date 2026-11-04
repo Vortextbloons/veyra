@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { FolderOpen, PanelRightClose, PanelRightOpen, RefreshCw, X } from "lucide-react";
+import { FileText, Folder, PencilLine, FolderOpen, PanelRightClose, PanelRightOpen, RefreshCw, X } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { AgentSession } from "../agent-types";
 import { AgentOutputView } from "./agent-output-view";
@@ -19,6 +19,7 @@ type AgentsPanelProps = {
 
 export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, projectPath, onProjectPathChange, onCheckRuntime, onStopSession, composer, connection, onSuggestion }: AgentsPanelProps) {
   const active = sessions.find((session) => session.id === activeSessionId) ?? null;
+  const empty = !active || active.events.length === 0;
   const running = sessions.some((session) => session.status === "running" && session.projectPath === projectPath);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [error, setError] = useState("");
@@ -47,7 +48,7 @@ export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, proje
   };
   return <main className="agent-workspace">
     <section className="agent-main">
-      <header className="agent-workspace-header">
+      <header className={`flex shrink-0 items-center gap-2 bg-[var(--color-bg)] px-6 ${empty ? "h-16" : "h-14"}`}>
         <div className="agent-breadcrumb"><strong>{active?.title || "New chat"}</strong></div>
         <select aria-label="Project" value={activeProjectId ?? ""} disabled={running} onChange={(event) => selectProject(event.target.value)} className="max-w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs">
           <option value="">No project</option>
@@ -63,17 +64,20 @@ export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, proje
         <button className="flex items-center gap-2" onClick={onCheckRuntime}><RefreshCw size={13} />Retry</button>
       </div>}
       {error && <div className="agent-inline-error" role="alert">{error}</div>}
-      {active ? <AgentOutputView key={active.id} session={active} onStop={onStopSession} onFollowUp={onSuggestion} /> : <div className="agent-start">
-        <div className="agent-start-content"><h1>What’s on your mind?</h1><p className="agent-start-description">Ask a question, explore an idea, or work on a project.</p>
-          <div className="agent-starters">{[
-            { title: "Think through an idea", text: "Help me think through an idea. Ask me what I have in mind." },
-            { title: "Find an answer", text: "Help me research a question. Ask me what I want to find out." },
-            { title: "Work on a project", text: projectPath ? "Explore this project and briefly explain what it does and how to run it." : "Help me work on a project. Ask me what I want to make or change." },
-          ].map((item) => <button key={item.title} onClick={() => onSuggestion(item.text)}>{item.title}</button>)}</div>
-        </div>
+      {!empty && active ? <AgentOutputView key={active.id} session={active} onStop={onStopSession} onFollowUp={onSuggestion} /> : <div className="flex min-h-0 flex-1 flex-col justify-end overflow-y-auto px-6 pb-8 pt-8 text-center">
+        <h2 className="text-[clamp(24px,3vw,32px)] font-normal leading-tight tracking-tight text-[var(--color-text)]">What's on your mind today?</h2>
       </div>}
       <PiQuestion sessionId={activeSessionId} />
       {composer}
+      {empty && <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5">
+        <div className="mx-auto flex w-full max-w-[1052px] flex-col gap-1">
+          {[
+            { icon: FileText, text: "Summarize the document I'm working on" },
+            { icon: Folder, text: "Help me plan my next project milestone" },
+            { icon: PencilLine, text: "Turn my notes into a clear first draft" },
+          ].map(({ icon: Icon, text }) => <button key={text} onClick={() => onSuggestion(text)} className="flex min-h-12 items-center gap-4 rounded-xl px-4 py-2 text-left text-[14px] text-[var(--color-text-dim)] transition-colors hover:bg-white/[.04]"><Icon size={18} className="shrink-0" />{text}</button>)}
+        </div>
+      </div>}
     </section>
     {inspectorOpen && projectPath && <AgentInspector projectPath={projectPath} session={active} />}
   </main>;

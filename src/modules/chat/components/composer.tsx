@@ -300,7 +300,7 @@ export function Composer({
 
   useEffect(() => {
     const result = modelReasoning.result;
-    if (!result || !modelReasoning.modelKey) return;
+    if (!result?.known || !modelReasoning.modelKey) return;
     // Nothing to normalize when the endpoint is managed or the lookup failed;
     // keep the stored preference so it applies again when levels are readable.
     if (result.levels.length === 0) return;

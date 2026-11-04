@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { pathToFileURL } from "node:url";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { effectiveReasoningLevel, reasoningToggleState } from "@/modules/agents/agent-reasoning";
 import type { AgentReasoningLevel } from "@/modules/agents/agent-types";
 
-type Model = { provider: string; id: string; api: string; baseUrl: string; reasoning: boolean; levels: AgentReasoningLevel[]; compat?: { supportsReasoningEffort?: boolean; thinkingFormat?: string } };
+type Model = { provider: string; id: string; api: string; baseUrl: string; reasoning: boolean; levels: AgentReasoningLevel[]; thinkingLevelMap?: Record<string, string | null>; compat?: { supportsReasoningEffort?: boolean; thinkingFormat?: string } };
 const helperUrl = pathToFileURL(join(process.cwd(), "src-tauri/src/agents/model-capabilities.mjs")).href;
 const { resolveModelReasoning } = await import(helperUrl) as { resolveModelReasoning: (models: Model[], input: { providerId: string; modelId: string; baseUrl?: string; requested?: string }, ai: unknown) => { known: boolean; levels: string[]; effectiveLevel: string; provider: string; model: string; control: string } };
 type RouteConfig = { providers: Record<string, { baseUrl?: string; apiKey?: string; models?: Array<{ id: string; reasoning: boolean; contextWindow: number; maxTokens: number; compat?: { thinkingFormat?: string } }> }> };
@@ -13,6 +15,57 @@ const ai = { getSupportedThinkingLevels: (model: Model) => model.reasoning ? mod
 function model(overrides: Partial<Model> = {}): Model { return { provider: "test", id: "org/model", api: "openai-completions", baseUrl: "https://example.invalid/v1", reasoning: true, levels: ["off", "low", "medium", "high"], ...overrides }; }
 
 describe("Pi reasoning routing", () => {
+  it("finds Pi after Cargo's bundled pi directory and stale PATH entries", async () => {
+    const { locatePi } = await import(helperUrl);
+    const fixture = mkdtempSync(join(tmpdir(), "veyra-pi-discovery-"));
+    try {
+      const bundled = join(fixture, "target", "debug");
+      const stale = join(fixture, "stale");
+      const npm = join(fixture, "npm");
+      const sdk = join(npm, "node_modules", "@fixture", "pi-coding-agent");
+      mkdirSync(join(bundled, "pi"), { recursive: true });
+      mkdirSync(stale, { recursive: true });
+      writeFileSync(join(stale, "pi.cmd"), "unrelated shim");
+      mkdirSync(sdk, { recursive: true });
+      writeFileSync(join(sdk, "package.json"), JSON.stringify({ name: "@fixture/pi-coding-agent" }));
+      writeFileSync(join(npm, "pi.cmd"), 'node "%dp0%/node_modules/@fixture/pi-coding-agent/dist/cli.js"');
+      expect(locatePi([bundled, stale, npm].join(delimiter), "win32")).toBe(sdk);
+      expect(() => locatePi(bundled, "win32")).toThrow("Pi SDK not found");
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
+  it("reads Windows BOM-prefixed Pi configuration without losing providers", async () => {
+    const { parsePiJson } = await import(helperUrl);
+    expect(parsePiJson('\uFEFF{"providers":{"custom":{"baseUrl":"https://example.invalid"}}}')).toEqual({ providers: { custom: { baseUrl: "https://example.invalid" } } });
+    expect(parsePiJson('{"providers":{}}')).toEqual({ providers: {} });
+    expect(() => parsePiJson('\uFEFFinvalid')).toThrow();
+  });
+  it("routes NVIDIA Nemotron through Pi's documented chat-template toggle", () => {
+    const input = { providerId: "nvidia", modelId: "nvidia/nemotron-3.5-super-vl-120b-a12b", baseUrl: "https://integrate.api.nvidia.com/v1" };
+    const template = model({ provider: "nvidia", id: input.modelId, compat: { supportsReasoningEffort: false } });
+    const route = configureModelRoute({}, input, [template]);
+    const entry = route.config.providers[route.provider];
+    expect(entry.models?.[0].compat).toMatchObject({ supportsReasoningEffort: false, thinkingFormat: "qwen-chat-template" });
+    const registered = model({ ...entry.models?.[0], provider: route.provider, baseUrl: entry.baseUrl });
+    expect(resolveModelReasoning([registered], { ...input, requested: "high" }, ai)).toMatchObject({ known: true, control: "toggle", levels: ["off", "medium"], effectiveLevel: "medium" });
+    expect(resolveModelReasoning([registered], { ...input, requested: "off" }, ai).effectiveLevel).toBe("off");
+    const other = configureModelRoute({}, { ...input, baseUrl: "https://example.invalid/v1" }, [template]);
+    expect(other.config.providers[other.provider].models?.[0].compat?.thinkingFormat).toBeUndefined();
+  });
+  it("keeps all explicit Pi effort levels instead of collapsing DeepSeek to a toggle", () => {
+    const template = model({ levels: ["off", "high", "max"], thinkingLevelMap: { minimal: null, low: null, medium: null, high: "high", max: "max" }, compat: { thinkingFormat: "deepseek", supportsReasoningEffort: false } });
+    expect(resolveModelReasoning([template], { providerId: "test", modelId: template.id, requested: "max" }, ai)).toMatchObject({ levels: ["off", "high", "max"], effectiveLevel: "max", control: "effort" });
+  });
+  it("corrects MiniMax effort metadata on its isolated NVIDIA route and preserves token limits", () => {
+    const input = { providerId: "nvidia", modelId: "minimaxai/minimax-m3.1-flash", baseUrl: "https://integrate.api.nvidia.com/v1", contextLength: "32768", maxTokens: "4096" };
+    const template = model({ provider: "nvidia", id: input.modelId, compat: { supportsReasoningEffort: false } });
+    const route = configureModelRoute({}, input, [template]);
+    expect(route.config.providers[route.provider].models?.[0]).toMatchObject({ compat: { supportsReasoningEffort: true, thinkingFormat: "openai" }, thinkingLevelMap: { off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: "max" } });
+    const { contextLength: _context, maxTokens: _tokens, ...lookup } = input;
+    expect(configureModelRoute(route.config, lookup, [template]).config).toEqual(route.config);
+  });
   it("inherits registry reasoning metadata for a custom endpoint and refreshes existing routes", () => {
     const input = { providerId: "custom", modelId: "org/model", baseUrl: "https://custom.invalid/v1" };
     const initial = configureModelRoute({}, input);
@@ -68,6 +121,12 @@ describe("Pi reasoning routing", () => {
   it("collapses boolean adapters to on/off and does not invent effort levels", () => {
     const result = resolveModelReasoning([model({compat:{thinkingFormat:"qwen",supportsReasoningEffort:false}})], {providerId:"test",modelId:"org/model",requested:"high"}, ai);
     expect(result).toMatchObject({levels:["off","medium"],effectiveLevel:"medium",control:"toggle"});
+  });
+  it("keeps effort levels when a toggle-capable adapter also supports reasoning effort", () => {
+    for (const thinkingFormat of ["qwen", "together", "deepseek", "zai"]) {
+      const result = resolveModelReasoning([model({ compat: { thinkingFormat, supportsReasoningEffort: true } })], { providerId: "test", modelId: "org/model", requested: "high" }, ai);
+      expect(result).toMatchObject({ levels: ["off", "low", "medium", "high"], effectiveLevel: "high", control: "effort" });
+    }
   });
   it("disables controls for nonreasoning models and endpoint-managed thinking", () => {
     expect(resolveModelReasoning([model({reasoning:false})], {providerId:"test",modelId:"org/model"}, ai).levels).toEqual(["off"]);

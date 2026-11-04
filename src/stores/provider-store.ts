@@ -21,7 +21,7 @@ type ProviderStore = {
   connectionError: string | null;
   cloudProviders: CloudProviderConfig[];
   initializeProvider: () => void;
-  ensureProviderReady: () => Promise<void>;
+  ensureProviderReady: (refresh?: boolean) => Promise<void>;
   selectProvider: (providerId: string) => Promise<void>;
   reconnectProvider: (providerId?: string) => Promise<void>;
   startProviderServer: (providerId?: string) => Promise<void>;
@@ -227,10 +227,11 @@ export const useProviderStore = create<ProviderStore>()(
         set({ models: cached, selectedModel });
       },
 
-      ensureProviderReady: async () => {
+      ensureProviderReady: async (refresh = false) => {
         const providerId = get().selectedProvider;
         const cached = loadCachedModels(providerId);
-        if (cached?.length) {
+        if (!isProviderAllowedForConnectivity(providerId)) return;
+        if (cached?.length && !refresh) {
           const selectedModel = resolveModelId(cached, get().selectedModel);
           set({ models: cached, selectedModel });
           return;

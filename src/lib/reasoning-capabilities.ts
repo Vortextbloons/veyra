@@ -145,8 +145,12 @@ export function inspectModelReasoning(
     .then((result) => {
       const levels = normalizeReasoningLevels(result.levels);
       const control: ReasoningControl = result.control ?? "unknown";
-      knownControls.set(key, control);
-      knownLevels.set(key, levels);
+      if (result.known) {
+        knownControls.set(key, control);
+        knownLevels.set(key, levels);
+      } else if (cache.get(key)?.value === value) {
+        cache.delete(key);
+      }
       return {
         ...result,
         levels,
@@ -193,4 +197,14 @@ export function usesNvidiaThinkingToggle(model: string, baseUrl?: string): boole
     return new URL(baseUrl ?? "").hostname === "integrate.api.nvidia.com" &&
       model.toLowerCase() === "nvidia/nemotron-3.5-super-vl-120b-a12b";
   } catch { return false; }
+}
+
+// One background refresh per launch. Capability lookups continue using local
+// Pi data; startup is the only place that requests a network catalog update.
+let catalogRefresh: Promise<void> | undefined;
+export function refreshPiModelCatalog(): Promise<void> {
+  catalogRefresh ??= invoke<ModelReasoning>("refresh_agent_models").then(() => {
+    invalidateReasoningCache();
+  }).catch(() => undefined);
+  return catalogRefresh;
 }

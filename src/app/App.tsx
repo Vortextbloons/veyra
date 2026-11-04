@@ -1,3 +1,4 @@
+import { refreshPiModelCatalog } from "@/lib/reasoning-capabilities";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TitleBar } from "@/app/components/title-bar";
 import { PrimarySidebar } from "@/app/components/primary-sidebar";
@@ -119,7 +120,10 @@ function App() {
 
   useEffect(() => {
     return deferUntilIdle(() => {
-      void useProviderStore.getState().ensureProviderReady();
+      void useProviderStore.getState().ensureProviderReady(true).catch(() => undefined);
+      if (useConnectivityStore.getState().effectiveConnectivity === "online") {
+        void refreshPiModelCatalog();
+      }
     }, 3000);
   }, []);
 
