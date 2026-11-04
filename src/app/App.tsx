@@ -4,10 +4,8 @@ import { PrimarySidebar } from "@/app/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
 import { ChatPanel } from "@/app/components/chat-panel";
 import { aiScheduler } from "@/lib/ai-scheduler";
-import { ensureProviderReady } from "@/modules/chat/chat-actions";
 import type { ContextStats, RecentChatsItem } from "@/modules/chat/chat-types";
 import { isChatModeNav } from "@/modules/chat/chat-types";
-import { useWorkspaceModeChange } from "@/lib/workspace-mode";
 import { ShutdownOverlay } from "@/app/components/shutdown-overlay";
 import { registerAppShutdownHandler } from "@/lib/app-shutdown";
 import {
@@ -69,20 +67,16 @@ function App() {
 
   const activeNav = useSettingsStore((state) => state.activeNav);
   const recentChatsCollapsed = useSettingsStore((state) => state.recentChatsCollapsed);
-  const codeExecutionDefaultEnabled = useSettingsStore((state) => state.codeExecutionEnabled);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
-  const workspaceChatMode = "agents" as const;
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
   const defaultWebSearchEnabled = useSettingsStore(
     (state) => state.defaultWebSearchEnabled,
   );
   const [webSearchEnabled, setWebSearchEnabled] = useState(defaultWebSearchEnabled);
-  const [codeExecutionActive, setCodeExecutionActive] = useState(codeExecutionDefaultEnabled);
   const effectiveConnectivity = useConnectivityStore((state) => state.effectiveConnectivity);
   const startProbeListener = useConnectivityStore((state) => state.startProbeListener);
 
   const webSearchAvailability = useIsFeatureAvailable("webSearch");
-  const codeExecutionAvailability = useIsFeatureAvailable("codeExecution");
 
   const isChatMode = isChatModeNav(activeNav);
 
@@ -107,7 +101,6 @@ function App() {
     void (async () => {
       await ensureSettingsHydrated();
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
-      setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
       await useChatStore.getState().hydrateConversations();
       initializePiConversations();
       void useProjectStore.getState().hydrateProjects();
@@ -126,7 +119,7 @@ function App() {
 
   useEffect(() => {
     return deferUntilIdle(() => {
-      void ensureProviderReady();
+      void useProviderStore.getState().ensureProviderReady();
     }, 3000);
   }, []);
 
@@ -141,7 +134,6 @@ function App() {
     prevEffectiveConnectivityRef.current = effectiveConnectivity;
     if (prev === "offline" && effectiveConnectivity === "online") {
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
-      setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
     }
   }, [effectiveConnectivity]);
 
@@ -162,17 +154,14 @@ function App() {
 
   // ── Hooks ────────────────────────────────────────────────────────────────
 
-  const agent = useAgentDispatch({
-    workspaceChatMode,
-  });
+  const agent = useAgentDispatch();
 
   const {
     displayContextStats,
-    displayContextBreakdown,
     resolvedContextLength,
     resolvedReservedOutputTokens,
     supportsImages,
-  } = useChatContextPanel({ workspaceChatMode, activeAgentSession: agent.activeAgentSession });
+  } = useChatContextPanel({ activeAgentSession: agent.activeAgentSession });
 
   // New chats have no conversation yet — still show the context meter at 0%.
   const composerContextStats: ContextStats = useMemo(
@@ -190,17 +179,12 @@ function App() {
 
   const pipeline = useChatPipeline({
     projectId: activeProjectId ?? undefined,
-    agentModeEnabled: workspaceChatMode === "agents",
     webSearchEnabled,
-    onWebSearchChange: setWebSearchEnabled,
-    codeExecutionEnabled: codeExecutionActive,
   });
 
-  const handleModeChange = useWorkspaceModeChange();
 
   // ── Derived ──────────────────────────────────────────────────────────────
 
-  const activeConversation = pipeline.activeConversation;
 
   const recentChats: RecentChatsItem[] = useMemo(() => {
     const scoped = activeProjectId
@@ -218,12 +202,6 @@ function App() {
     }))];
   }, [activeProjectId, conversations, agent.agentSessions]);
 
-  const codeExecutionPanelDisabled =
-    !codeExecutionAvailability.available || workspaceChatMode === "agents";
-  const codeExecutionPanelDisabledReason =
-    workspaceChatMode === "agents"
-      ? "Code execution is only available in chat mode."
-      : codeExecutionAvailability.reason;
 
   const sidebarsCollapsed = recentChatsCollapsed ? 1 : 0;
 
@@ -231,7 +209,6 @@ function App() {
     handleNewChat: pipelineHandleNewChat,
     handleDeleteChat: pipelineHandleDeleteChat,
     handleSend: pipelineHandleSend,
-    handleStopStreaming: pipelineHandleStopStreaming,
     ...pipelineRest
   } = pipeline;
 
@@ -242,7 +219,7 @@ function App() {
     agent.setAgentProjectPath("");
     agent.newAgentSession();
     useProjectStore.getState().setActiveProjectId(null);
-    setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
+    setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
     setActiveNav("chat");
   }, [pipelineHandleNewChat, setActiveNav, agent]);
 
@@ -274,10 +251,7 @@ function App() {
         <PrimarySidebar
           activeNav={isChatMode ? "chat" : activeNav}
           onNavChange={(nav) => {
-            if (nav === "agents" || nav === "chat") {
-              handleModeChange(nav === "agents" ? "agents" : "chat");
-              setActiveNav("chat");
-            } else setActiveNav(nav);
+            setActiveNav(nav);
           }}
           onNewChat={handleNewChat}
         >
@@ -316,11 +290,7 @@ function App() {
         {isChatMode && activeNav !== "projects" && hydrationState === "loading" && <ChatHydrationSkeleton />}
         {isChatMode && activeNav !== "projects" && hydrationState === "ready" && (
           <ChatPanel
-            title={activeConversation?.title}
-            messages={pipelineRest.visibleMessages}
             onSend={pipelineHandleSend}
-            isStreaming={pipelineRest.isStreaming}
-            streamingMessageId={pipelineRest.streamingMessageId}
             providers={pipelineRest.providers}
             selectedProvider={pipelineRest.selectedProvider}
             onProviderChange={selectProvider}
@@ -334,43 +304,20 @@ function App() {
             favoriteModels={pipelineRest.favoriteModels}
             onToggleFavorite={(id) => useSettingsStore.getState().toggleFavoriteModel(id)}
             supportsImages={supportsImages}
-            onStop={pipelineHandleStopStreaming}
             sidebarsCollapsed={sidebarsCollapsed}
             contextStats={composerContextStats}
-            contextBreakdown={displayContextBreakdown}
             webSearchEnabled={webSearchEnabled}
             onWebSearchChange={setWebSearchEnabled}
             webSearchDisabled={!webSearchAvailability.available}
             webSearchDisabledReason={webSearchAvailability.reason}
-            codeExecutionEnabled={codeExecutionActive}
-            onCodeExecutionChange={setCodeExecutionActive}
-            codeExecutionDisabled={codeExecutionPanelDisabled}
-            codeExecutionDisabledReason={codeExecutionPanelDisabledReason}
             modelLoadProgress={pipelineRest.modelLoadProgress}
-            mode={workspaceChatMode}
-            onModeChange={handleModeChange}
             agentSessions={agent.agentSessions}
             activeAgentSessionId={agent.activeAgentSessionId}
             agentRuntimeAvailable={agent.agentRuntimeAvailable}
-            agentMode={agent.agentMode}
             agentProjectPath={agent.agentProjectPath}
-            onAgentModeChange={agent.setAgentMode}
             onAgentProjectPathChange={agent.setAgentProjectPath}
             onAgentRuntimeCheck={() => void agent.checkAgentRuntime()}
-            onAgentNewSession={agent.newAgentSession}
-            onAgentSessionSelect={agent.handleAgentSessionSelect}
             onAgentSessionStop={agent.stopAgentSession}
-            onAgentSessionDelete={(id) => void agent.deleteAgentSession(id)}
-            onEditMessage={pipelineRest.handleEditMessage}
-            onRegenerate={pipelineRest.handleRegenerate}
-            onRetry={pipelineRest.handleRetry}
-            onCopyMessage={pipelineRest.handleCopyMessage}
-            onForkMessage={pipelineRest.handleForkMessage}
-            onDeleteMessage={pipelineRest.handleDeleteMessage}
-            editingMessageId={pipelineRest.editingMessageId}
-            editInitialValue={pipelineRest.editInitialValue}
-            onEditCancel={pipelineRest.handleEditCancel}
-            onEditSave={pipelineRest.handleEditSave}
           />
         )}
       </div>

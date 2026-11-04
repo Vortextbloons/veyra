@@ -3,7 +3,7 @@ import type { SearchContextBundle } from "@/modules/web-search/types";
 import { runWithConcurrency } from "@/lib/async-pool";
 import type { CreateResearchSourceInput, ResearchPlanStep } from "./research-types";
 import type { ResearchRuntimeContext } from "./research-runtime-context";
-import { guessSourceType } from "./research-source-utils";
+import { buildSourceInput } from "./research-source-utils";
 
 const RESEARCH_SEARCH_CONCURRENCY = 6;
 const RESEARCH_SOURCE_CREATE_CONCURRENCY = 8;
@@ -100,18 +100,9 @@ export async function searchPhase(
         if (sources.length + pendingSources.length >= config.maxSources) break;
         if (roundDiscovered + pendingSources.length >= config.maxSourcesPerRound) break;
         discoveredUrls.add(src.url);
-        pendingSources.push({
-          runId: run.id,
-          stepId: searchStep.id,
-          url: src.url,
-          title: src.title,
-          snippet: src.snippet,
-          sourceType: guessSourceType(src.url),
-          engine: run.searchProvider ?? "donsetch",
-          score: src.score ?? 0,
-          rank: src.rank ?? (sources.length + pendingSources.length + 1),
-          ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
-        });
+        pendingSources.push(
+          buildSourceInput(run, searchStep.id, src, sources.length + pendingSources.length + 1),
+        );
       }
 
       if (pendingSources.length > 0) {
@@ -161,18 +152,9 @@ export async function searchPhase(
           discoveredUrls.add(src.url);
           added++;
 
-          const source = await store.createSource({
-            runId: run.id,
-            stepId: adaptiveStep.id,
-            url: src.url,
-            title: src.title,
-            snippet: src.snippet,
-            sourceType: guessSourceType(src.url),
-            engine: run.searchProvider ?? "donsetch",
-            score: src.score ?? 0,
-            rank: src.rank ?? (sources.length + 1),
-            ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
-          });
+          const source = await store.createSource(
+            buildSourceInput(run, adaptiveStep.id, src, sources.length + 1),
+          );
           sources.push(source);
         }
         await ctx.completeStep(adaptiveStep, `Adaptive: ${added} additional sources`);

@@ -103,7 +103,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     bundleWaybackFallback: state.bundleWaybackFallback,
     bundleArxivSearch: state.bundleArxivSearch,
     bundleWikipediaSearch: state.bundleWikipediaSearch,
-    workspaceChatMode: state.workspaceChatMode,
     contextAnchoringEnabled: state.contextAnchoringEnabled,
     enhancedModeEnabled: state.enhancedModeEnabled,
     interactiveAnswersEnabled: state.interactiveAnswersEnabled,

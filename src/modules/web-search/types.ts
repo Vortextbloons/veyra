@@ -49,6 +49,16 @@ export type FetchedPageSummary = {
   char_count?: number | null;
 };
 
+/** Metadata about how a search source was fetched/extracted. */
+export type SourceFetch = {
+  status: FetchStatus | string;
+  error_reason?: string;
+  extraction_method?: string;
+  via_wayback?: boolean;
+  char_count?: number;
+  source_type?: string;
+};
+
 export type SearchSource = {
   id: string;
   title: string;
@@ -64,14 +74,7 @@ export type SearchSource = {
   rankReason?: string;
   queryLane?: string;
   passages?: SearchPassage[];
-  fetch?: {
-    status: FetchStatus | string;
-    error_reason?: string;
-    extraction_method?: string;
-    via_wayback?: boolean;
-    char_count?: number;
-    source_type?: string;
-  };
+  fetch?: SourceFetch;
 };
 
 export type SearchContextBundle = {

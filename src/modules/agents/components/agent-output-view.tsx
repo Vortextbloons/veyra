@@ -52,7 +52,7 @@ export function AgentOutputView({
       <div ref={outputRef} onScroll={() => { const el = outputRef.current; if (el) followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }} className="min-h-0 flex-1 overflow-y-auto">
         <div className="agent-work-log">
           {turns.map((turn) => (
-            <AgentChatTurn key={turn.id} turn={turn} mode={session.mode} onFollowUp={onFollowUp} />
+            <AgentChatTurn key={turn.id} turn={turn} onFollowUp={onFollowUp} />
           ))}
 
           {showWorkingTurn && (
@@ -64,7 +64,6 @@ export function AgentOutputView({
                 pending: true,
                 model: session.model,
               }}
-              mode={session.mode}
             />
           )}
 

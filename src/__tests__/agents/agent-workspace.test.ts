@@ -41,7 +41,8 @@ describe("agent project navigation", () => {
     useAgentStore.setState({ sessions: [session("plain", "")], activeSessionId: "plain", projectPath: "" });
     const id = await useAgentStore.getState().startSession({ continueSessionId: "plain", projectPath: "", mode: "chat", model: "test", prompt: "What is a closure?" });
     expect(id).toBe("plain");
-    expect(mocks.run.mock.calls[0]?.[0]).toMatchObject({ mode: "chat", projectPath: "" });
+    expect(mocks.run.mock.calls[0]?.[0]).toMatchObject({ projectPath: "" });
+    expect(mocks.run.mock.calls[0]?.[0]).not.toHaveProperty("mode");
     expect(mocks.run.mock.calls[0]?.[0].prompt).toContain("The entry point is main.ts");
   });
   it("attaches a folder to an existing discussion without losing its history", () => {
@@ -65,10 +66,10 @@ describe("agent project navigation", () => {
     await useAgentStore.getState().loadProjectSessions("/project-a");
     expect(useAgentStore.getState().activeSessionId).toBeNull();
   });
-  it("restores the session's project and mode when selected", () => {
+  it("restores the session's project when selected", () => {
     useAgentStore.getState().setActiveSessionId("b");
     expect(useAgentStore.getState().projectPath).toBe("/project-b");
-    expect(useAgentStore.getState().mode).toBe("plan");
+    expect(useAgentStore.getState()).not.toHaveProperty("mode");
   });
   it("continues the captured session without redirecting project navigation", async () => {
     useAgentStore.getState().setProjectPath("/empty-project");

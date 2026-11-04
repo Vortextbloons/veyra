@@ -1,8 +1,6 @@
 import type { StateCreator } from "zustand";
-import type { WorkspaceChatMode } from "@/modules/chat/chat-types";
 
 export type ChatSliceState = {
-  workspaceChatMode: WorkspaceChatMode;
   contextAnchoringEnabled: boolean;
   enhancedModeEnabled: boolean;
   interactiveAnswersEnabled: boolean;
@@ -10,7 +8,6 @@ export type ChatSliceState = {
 };
 
 export type ChatSliceActions = {
-  setWorkspaceChatMode: (mode: WorkspaceChatMode) => void;
   setContextAnchoringEnabled: (enabled: boolean) => void;
   setEnhancedModeEnabled: (enabled: boolean) => void;
   setInteractiveAnswersEnabled: (enabled: boolean) => void;
@@ -18,7 +15,6 @@ export type ChatSliceActions = {
 };
 
 export const DEFAULT_CHAT_STATE: ChatSliceState = {
-  workspaceChatMode: "chat",
   contextAnchoringEnabled: true,
   enhancedModeEnabled: false,
   interactiveAnswersEnabled: false,
@@ -29,7 +25,6 @@ export type ChatSlice = ChatSliceState & ChatSliceActions;
 
 export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set) => ({
   ...DEFAULT_CHAT_STATE,
-  setWorkspaceChatMode: (workspaceChatMode) => set({ workspaceChatMode }),
   setContextAnchoringEnabled: (contextAnchoringEnabled) => set({ contextAnchoringEnabled }),
   setEnhancedModeEnabled: (enhancedModeEnabled) => set({ enhancedModeEnabled }),
   setInteractiveAnswersEnabled: (interactiveAnswersEnabled) => set({ interactiveAnswersEnabled }),

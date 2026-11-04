@@ -1,21 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Conversation } from "@/modules/chat/chat-types";
+import {
+  base64ToBytes,
+  decryptSnapshotPayload,
+  deriveLegacyConversationKey,
+  encryptConversationsPayload,
+  importConversationKey,
+  toArrayBuffer,
+  type EncryptedSnapshot,
+} from "@/lib/conversation-crypto";
 import DecryptWorker from "@/workers/conversation-decrypt.worker?worker";
 import EncryptWorker from "@/workers/conversation-encrypt.worker?worker";
 
 const STORAGE_KEY = "veyra.conversations";
-const ENCRYPTION_VERSION = 2;
 const LEGACY_KEY_MATERIAL = "veyra-local-conversation-storage-v1";
 const LEGACY_KEY_SALT = "veyra-conversations";
 const KEY_BYTES = 32;
 const SAVE_DEBOUNCE_MS = 500;
-
-type EncryptedSnapshot = {
-  version: number;
-  revision?: number;
-  iv: string;
-  data: string;
-};
 
 type ConversationSnapshotCandidates = {
   primary: string | null;
@@ -65,21 +66,6 @@ export function subscribeConversationStorageIssue(listener: () => void): () => v
   return () => storageIssueListeners.delete(listener);
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function base64ToBytes(value: string): Uint8Array {
-  const binary = atob(value);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-}
-
 async function loadKeyBytes(): Promise<ArrayBuffer> {
   const encoded = await invoke<string>("load_or_create_conversation_key");
   const bytes = base64ToBytes(encoded);
@@ -91,12 +77,7 @@ async function loadKeyBytes(): Promise<ArrayBuffer> {
 
 async function getEncryptionKey(): Promise<CryptoKey> {
   encryptionKeyPromise ??= loadKeyBytes()
-    .then((bytes) =>
-      crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, [
-        "encrypt",
-        "decrypt",
-      ]),
-    )
+    .then((bytes) => importConversationKey(bytes, ["encrypt", "decrypt"]))
     .catch((error) => {
       encryptionKeyPromise = null;
       throw error;
@@ -105,27 +86,7 @@ async function getEncryptionKey(): Promise<CryptoKey> {
 }
 
 async function getLegacyEncryptionKey(): Promise<CryptoKey> {
-  const encoder = new TextEncoder();
-  const material = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(LEGACY_KEY_MATERIAL),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
-
-  return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: encoder.encode(LEGACY_KEY_SALT),
-      iterations: 150000,
-      hash: "SHA-256",
-    },
-    material,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["decrypt"],
-  );
+  return deriveLegacyConversationKey(LEGACY_KEY_MATERIAL, LEGACY_KEY_SALT);
 }
 
 function getDecryptWorker(): Worker {
@@ -173,37 +134,16 @@ function parseSnapshot(raw: string): EncryptedSnapshot | Conversation[] {
   return snapshot;
 }
 
-function encryptionAlgorithm(snapshot: EncryptedSnapshot): AesGcmParams {
-  const iv = toArrayBuffer(base64ToBytes(snapshot.iv));
-  if (snapshot.version < 2) return { name: "AES-GCM", iv };
-  return {
-    name: "AES-GCM",
-    iv,
-    additionalData: new TextEncoder().encode(
-      `veyra-conversations-v2:${snapshot.revision}`,
-    ),
-  };
-}
-
 async function decryptSnapshotOnMainThread(raw: string): Promise<DecodedSnapshot> {
   const parsed = parseSnapshot(raw);
   if (Array.isArray(parsed)) return { conversations: parsed, revision: 0 };
-  const data = toArrayBuffer(base64ToBytes(parsed.data));
-  const algorithm = encryptionAlgorithm(parsed);
-
-  let decrypted: ArrayBuffer;
-  try {
-    decrypted = await crypto.subtle.decrypt(algorithm, await getEncryptionKey(), data);
-  } catch {
-    decrypted = await crypto.subtle.decrypt(
-      algorithm,
-      await getLegacyEncryptionKey(),
-      data,
-    );
-  }
 
   return {
-    conversations: JSON.parse(new TextDecoder().decode(decrypted)) as Conversation[],
+    conversations: await decryptSnapshotPayload<Conversation[]>(
+      parsed,
+      await getEncryptionKey(),
+      await getLegacyEncryptionKey(),
+    ),
     revision: parsed.revision ?? 0,
   };
 }
@@ -256,24 +196,7 @@ async function encryptSnapshotOnMainThread(
   conversations: Conversation[],
   revision: number,
 ): Promise<string> {
-  const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt(
-    {
-      name: "AES-GCM",
-      iv,
-      additionalData: encoder.encode(`veyra-conversations-v2:${revision}`),
-    },
-    await getEncryptionKey(),
-    encoder.encode(JSON.stringify(conversations)),
-  );
-
-  return JSON.stringify({
-    version: ENCRYPTION_VERSION,
-    revision,
-    iv: bytesToBase64(iv),
-    data: bytesToBase64(new Uint8Array(encrypted)),
-  } satisfies EncryptedSnapshot);
+  return encryptConversationsPayload(conversations, await getEncryptionKey(), revision);
 }
 
 async function encryptSnapshot(conversations: Conversation[]): Promise<string> {

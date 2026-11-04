@@ -9,7 +9,6 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import type { ChatMode } from "@/modules/chat/chat-types";
 import {
   fileToAttachment,
   formatFileSize,
@@ -17,7 +16,6 @@ import {
   MAX_IMAGE_ATTACHMENTS,
   type MessageAttachment,
 } from "@/lib/message-attachments";
-import { ModeSelector } from "@/modules/chat/components/mode-selector";
 import { FileTypeIcon, FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
 import { ChatOptionsMenu } from "@/modules/chat/components/chat-options-menu";
 import { ReasoningSlider } from "@/modules/chat/components/reasoning-slider";
@@ -28,7 +26,6 @@ import {
 } from "@/lib/reasoning-capabilities";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { missingRequiredCapabilities } from "@/modules/extensions/skill-runtime";
-import { useChatStore } from "@/stores/chat-store";
 import { useAgentStore } from "@/modules/agents/agent-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
@@ -153,20 +150,12 @@ export function IconButton({
 }
 
 type ComposerProps = {
-  enhancedMode: boolean;
-  onEnhancedModeChange: (on: boolean) => void;
-  mode: ChatMode;
-  onModeChange?: (mode: ChatMode) => void;
   selectorControls?: React.ReactNode;
   contextIndicator?: React.ReactNode;
   webSearchEnabled?: boolean;
   onWebSearchChange?: (on: boolean) => void;
   webSearchDisabled?: boolean;
   webSearchDisabledReason?: string;
-  codeExecutionEnabled?: boolean;
-  onCodeExecutionChange?: (on: boolean) => void;
-  codeExecutionDisabled?: boolean;
-  codeExecutionDisabledReason?: string;
   suggestedPrompt?: string;
   onSend?: (
     text: string,
@@ -185,20 +174,12 @@ type ComposerProps = {
 };
 
 export function Composer({
-  enhancedMode,
-  onEnhancedModeChange,
-  mode,
-  onModeChange,
   selectorControls,
   contextIndicator,
   webSearchEnabled = false,
   onWebSearchChange,
   webSearchDisabled = false,
   webSearchDisabledReason,
-  codeExecutionEnabled = false,
-  onCodeExecutionChange,
-  codeExecutionDisabled = false,
-  codeExecutionDisabledReason,
   suggestedPrompt,
   onSend,
   onStop,
@@ -227,14 +208,13 @@ export function Composer({
   const defaultReasoningLevel = useSettingsStore((s) => s.reasoningLevel);
   const reasoningLevelByModel = useSettingsStore((s) => s.reasoningLevelByModel);
   const setModelReasoningLevel = useSettingsStore((s) => s.setModelReasoningLevel);
-  const modelReasoning = useModelReasoning(mode === "agents" ? "pi" : "chat");
+  const modelReasoning = useModelReasoning("pi");
   const reasoningLevels = modelReasoning.result?.levels ?? [];
   const preferredReasoningLevel = reasoningLevelByModel[modelReasoning.modelKey] ?? defaultReasoningLevel;
   const reasoningLevel = effectiveReasoningLevel(preferredReasoningLevel, reasoningLevels);
   const reasoningControl = modelReasoning.result?.control ?? "unknown";
-  const chatConversationId = useChatStore((state) => state.activeConversationId);
   const piConversationId = useAgentStore((state) => state.activeSessionId);
-  const conversationId = (mode === "agents" ? piConversationId : chatConversationId) ?? "new-chat";
+  const conversationId = piConversationId ?? "new-chat";
   const projectId = useProjectStore((state) => state.activeProjectId) ?? undefined;
   const skills = useExtensionsStore((state) => state.skills);
   const skillsEnabled = useExtensionsStore((state) => state.featureFlags.skills);
@@ -616,7 +596,6 @@ export function Composer({
                   }
                   onRefresh={modelReasoning.refresh}
                 />
-                {mode !== "agents" && <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />}
                 {contextIndicator}
                 {onWebSearchChange && (
                   <button
@@ -651,19 +630,12 @@ export function Composer({
                     <SlidersHorizontal className="size-3.5" />
                   </IconButton>
                   <ChatOptionsMenu
-                    unified={mode === "agents"}
                     open={optionsOpen}
                     onClose={() => setOptionsOpen(false)}
-                    enhancedMode={enhancedMode}
-                    onEnhancedModeChange={onEnhancedModeChange}
                     webSearchEnabled={webSearchEnabled}
                     onWebSearchChange={onWebSearchChange}
                     webSearchDisabled={webSearchDisabled}
                     webSearchDisabledReason={webSearchDisabledReason}
-                    codeExecutionEnabled={codeExecutionEnabled}
-                    onCodeExecutionChange={onCodeExecutionChange}
-                    codeExecutionDisabled={codeExecutionDisabled}
-                    codeExecutionDisabledReason={codeExecutionDisabledReason}
                   />
                 </div>
               </>

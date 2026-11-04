@@ -1,5 +1,4 @@
-import type { ChatMessage } from "@/modules/chat/chat-types";
-import type { ProviderToolCall, ProviderToolDefinition } from "@/lib/providers/types";
+import type { ProviderChatOptions } from "@/lib/providers/types";
 import type { LmChatCompleteResult, StreamState } from "@/lib/lm-studio-types";
 import { runLmStudioBackground, runLmStudioExclusive } from "@/lib/lm-studio-session";
 import { withFetchTimeout } from "@/lib/abort-utils";
@@ -16,35 +15,14 @@ import {
 import { sendOpenAiCompatibleChat } from "@/lib/lm-studio-openai";
 import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
 import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
-import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
 import { inspectLmStudioReasoning, lmStudioReasoningValue } from "@/lib/providers/lm-studio-reasoning";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
-export type LmStudioChatOptions = {
-  messages: ChatMessage[];
-  model: string;
+export type LmStudioChatOptions = Omit<ProviderChatOptions, "onComplete"> & {
   baseUrl?: string;
-  temperature?: number;
-  contextLength?: number;
-  maxTokens?: number;
-  topP?: number;
-  repetitionPenalty?: number;
-  stopSequences?: string[];
   store?: boolean;
-  previousResponseId?: string;
-  tools?: ProviderToolDefinition[];
-  toolChoice?: "auto" | "none";
-  reasoningEnabled?: boolean;
-  reasoningLevel?: ReasoningLevel;
-  responseFormat?: { type: "json_object" | "text" };
-  signal?: AbortSignal;
-  onChunk: (content: string, done: boolean) => void;
-  onReasoningChunk?: (content: string, done: boolean) => void;
-  onModelLoadProgress?: (phase: string, percent?: number) => void;
-  onToolCallDetected?: (call: Pick<ProviderToolCall, "id" | "name">) => void;
-  onComplete?: (result: LmChatCompleteResult) => void;
-  onError: (error: string) => void;
   background?: boolean;
+  onComplete?: (result: LmChatCompleteResult) => void;
 };
 
 export async function sendLmStudioChat(options: LmStudioChatOptions): Promise<void> {

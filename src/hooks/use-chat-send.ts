@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { aiScheduler } from "@/lib/ai-scheduler";
-import type { ChatMessage, RequestStatus } from "@/modules/chat/chat-types";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import { useChatStore } from "@/stores/chat-store";
 import { useAgentStore } from "@/modules/agents/agent-store";
@@ -8,228 +7,74 @@ import { useProviderStore } from "@/stores/provider-store";
 import { reasoningModelKey } from "@/modules/agents/agent-reasoning";
 import { useSettingsStore } from "@/stores/settings-store";
 import { filterAttachments } from "@/hooks/use-chat-attachments";
-import { runChatJob } from "@/hooks/run-chat-job";
-import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 
 interface UseChatSendOptions {
-  activeConversationId: string | null;
   projectId?: string;
-  agentModeEnabled: boolean;
   selectedModel: string;
   selectedProvider: string;
   supportsImages: boolean;
   effectiveWebSearchEnabled: boolean;
-  effectiveCodeExecutionEnabled: boolean;
-  enhancedModeEnabled: boolean;
   selectedModelContextSettings: { contextLength: number; reservedOutputTokens: number };
-  setRequestStatus: React.Dispatch<React.SetStateAction<RequestStatus>>;
-  setStreamingMessageId: (id: string | null) => void;
-  activeChatJobIdRef: React.MutableRefObject<string | null>;
 }
 
 export function useChatSend({
-  activeConversationId,
-  projectId,
-  agentModeEnabled,
-  selectedModel,
-  selectedProvider,
-  supportsImages,
-  effectiveWebSearchEnabled,
-  effectiveCodeExecutionEnabled,
-  enhancedModeEnabled,
-  selectedModelContextSettings,
-  setRequestStatus,
-  setStreamingMessageId,
-  activeChatJobIdRef,
+  projectId, selectedModel, selectedProvider, supportsImages,
+  effectiveWebSearchEnabled, selectedModelContextSettings,
 }: UseChatSendOptions) {
-  const createConversation = useChatStore((state) => state.createConversation);
-  const addMessagePair = useChatStore((state) => state.addMessagePair);
   const setModelLoadProgress = useChatStore((state) => state.setModelLoadProgress);
-
-  const handleSend = useCallback(
-    (text: string, attachments?: MessageAttachment[]) => {
-      const trimmed = text.trim();
-      const { effectiveAttachments, blocked } = filterAttachments(attachments, supportsImages, trimmed);
-      const allAttachments = attachments ?? [];
-      if (!trimmed && allAttachments.length === 0) return;
-      if (blocked) return;
-
-      if (agentModeEnabled) {
-        const agentPrompt = [trimmed, ...effectiveAttachments.filter((attachment) => attachment.fileType === "text").map((attachment) => `Attached file: ${attachment.name}\n${attachment.textContent ?? ""}`)].filter(Boolean).join("\n\n");
-        const agentState = useAgentStore.getState();
-        const agentProviderBaseUrl = useProviderStore.getState().cloudProviders.find((provider) => provider.id === selectedProvider)?.baseUrl;
-        const settings = useSettingsStore.getState();
-        const agentReasoningLevel = settings.reasoningLevelByModel[reasoningModelKey(selectedProvider, selectedModel, agentProviderBaseUrl)] ?? settings.reasoningLevel;
-        if (agentState.runtimeAvailable !== true) return;
-        const agentProjectKey = agentState.projectPath.trim();
-        const runningAgentSession = agentState.sessions.some(
-          (session: { status: string; projectPath: string }) =>
-            session.status === "running" && session.projectPath.trim() === agentProjectKey,
-        );
-        if (runningAgentSession) return;
-        aiScheduler.abortActiveBackgroundJob();
-        aiScheduler.enqueueAiJob({
-          type: "agent_pi",
-          conversationId: `agent:${agentProjectKey}`,
-          priority: 0,
-          title: "Running Pi agent",
-          description: trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed,
-          prompt: trimmed,
-          model: selectedModel,
-          run: async (signal) => {
-            if (signal.aborted) throw new DOMException("Agent job aborted", "AbortError");
-            if (selectedProvider === "lm-studio") {
-              const { prepareAgentLmStudioModel } = await import("@/lib/lm-model-session");
-              await prepareAgentLmStudioModel(
-                selectedModel,
-                selectedModelContextSettings.contextLength,
-                signal,
-                (phase: string, percent?: number) => {
-                  setModelLoadProgress(
-                    phase === "ready" ? null : { phase: phase as "unloading" | "loading", percent },
-                  );
-                },
-              );
-            }
-            if (signal.aborted) throw new DOMException("Agent job aborted", "AbortError");
-            const onAbort = () => {
-              const state = useAgentStore.getState();
-              for (const session of state.sessions) {
-                if (session.status === "running" && session.projectPath.trim() === agentProjectKey) state.stopSession(session.id);
-              }
-            };
-            signal.addEventListener("abort", onAbort, { once: true });
-            let sessionId: string;
-            try {
-              const { startSession } = useAgentStore.getState();
-              sessionId = await startSession({
-                continueSessionId: agentState.activeSessionId,
-                projectId,
-                displayPrompt: trimmed || (effectiveAttachments.some((attachment) => attachment.fileType === "image") ? "Describe the attached image." : "Read the attached file."),
-                mode: "chat",
-                projectPath: agentState.projectPath,
-                prompt: agentPrompt || "Describe the attached image.",
-                model: selectedModel,
-                contextLength: selectedModelContextSettings.contextLength,
-                reservedOutputTokens: selectedModelContextSettings.reservedOutputTokens,
-                providerId: selectedProvider,
-                providerBaseUrl: agentProviderBaseUrl,
-                images: effectiveAttachments.filter((attachment) => attachment.fileType === "image").map((attachment) => ({ data: attachment.dataUrl.split(",")[1], mimeType: attachment.mimeType })),
-                attachments: effectiveAttachments,
-                webSearchEnabled: effectiveWebSearchEnabled,
-                reasoningLevel: agentReasoningLevel,
-              });
-            } finally {
-              signal.removeEventListener("abort", onAbort);
-            }
-            const session = useAgentStore.getState().sessions.find(
-              (item: { id: string }) => item.id === sessionId,
-            );
-            return {
-              prompt: trimmed,
-              output: session?.summary,
-            };
-          },
-        });
-        return;
-      }
-
-      let conversationId = activeConversationId;
-      if (!conversationId) {
-        const extensions = useExtensionsStore.getState();
-        const draftSkill = extensions.resolveActiveSkillSelection("new-chat", projectId);
-        const draftSkillId = extensions.activeSkillIds["new-chat"];
-        const draftWorkflowId = extensions.activeSkillWorkflowIds["new-chat"];
-        const draftDisabledMcpIds = extensions.chatDisabledMcpServerIds["new-chat"];
-        const draftEnabledMcpIds = extensions.chatEnabledMcpServerIds["new-chat"];
-        const newConversationId = createConversation(projectId);
-        conversationId = newConversationId;
-        useExtensionsStore.setState((state) => {
-          const activeSkillIds = { ...state.activeSkillIds };
-          const activeSkillWorkflowIds = { ...state.activeSkillWorkflowIds };
-          const chatDisabledMcpServerIds = { ...state.chatDisabledMcpServerIds };
-          const chatEnabledMcpServerIds = { ...state.chatEnabledMcpServerIds };
-          delete activeSkillIds["new-chat"];
-          delete activeSkillWorkflowIds["new-chat"];
-          delete chatDisabledMcpServerIds["new-chat"];
-          delete chatEnabledMcpServerIds["new-chat"];
-          if (draftSkill) {
-            activeSkillIds[newConversationId] = draftSkill.skill.id;
-            if (draftSkill.workflowId) activeSkillWorkflowIds[newConversationId] = draftSkill.workflowId;
-          } else if (draftSkillId !== undefined) {
-            activeSkillIds[newConversationId] = draftSkillId;
-            if (draftWorkflowId) activeSkillWorkflowIds[newConversationId] = draftWorkflowId;
+  const handleSend = useCallback((text: string, attachments?: MessageAttachment[]) => {
+    const trimmed = text.trim();
+    const { effectiveAttachments, blocked } = filterAttachments(attachments, supportsImages, trimmed);
+    if (blocked || (!trimmed && effectiveAttachments.length === 0) || !selectedModel) return;
+    const state = useAgentStore.getState();
+    if (state.runtimeAvailable !== true) return;
+    const projectPath = state.projectPath.trim();
+    const scheduler = aiScheduler.getSchedulerSnapshot();
+    if ([scheduler.activeJob, ...scheduler.queuedJobs].some((job) => job?.type === "agent_pi" && job.conversationId === `agent:${projectPath}`)) return;
+    if (state.sessions.some((session) => session.status === "running" && session.projectPath.trim() === projectPath)) return;
+    const continueSessionId = state.activeSessionId;
+    const providerBaseUrl = useProviderStore.getState().cloudProviders.find((provider) => provider.id === selectedProvider)?.baseUrl;
+    const settings = useSettingsStore.getState();
+    const reasoningLevel = settings.reasoningLevelByModel[reasoningModelKey(selectedProvider, selectedModel, providerBaseUrl)] ?? settings.reasoningLevel;
+    const prompt = [trimmed, ...effectiveAttachments.filter((attachment) => attachment.fileType === "text").map((attachment) => `Attached file: ${attachment.name}\n${attachment.textContent ?? ""}`)].filter(Boolean).join("\n\n");
+    aiScheduler.abortActiveBackgroundJob();
+    aiScheduler.enqueueAiJob({
+      type: "agent_pi", conversationId: `agent:${projectPath}`, priority: 0,
+      title: "Responding in Chat", description: trimmed.slice(0, 80) || "Reading attachments",
+      prompt, model: selectedModel,
+      run: async (signal) => {
+        const onAbort = () => {
+          for (const session of useAgentStore.getState().sessions) {
+            if (session.status === "running" && session.projectPath.trim() === projectPath) useAgentStore.getState().stopSession(session.id);
           }
-          if (draftDisabledMcpIds) chatDisabledMcpServerIds[newConversationId] = draftDisabledMcpIds;
-          if (draftEnabledMcpIds) chatEnabledMcpServerIds[newConversationId] = draftEnabledMcpIds;
-          return { activeSkillIds, activeSkillWorkflowIds, chatDisabledMcpServerIds, chatEnabledMcpServerIds };
-        });
-      }
-
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: trimmed,
-        attachments: effectiveAttachments.length > 0 ? effectiveAttachments : undefined,
-        timestamp: Date.now(),
-        skillSnapshot: (() => {
-          const selection = useExtensionsStore.getState().resolveActiveSkillSelection(conversationId ?? "new-chat", projectId);
-          return selection ? { id: selection.skill.id, version: selection.skill.version, workflowId: selection.workflowId } : undefined;
-        })(),
-      };
-      const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "",
-        timestamp: Date.now(),
-        modelId: selectedModel,
-      };
-
-      const previousResponseId = useChatStore
-        .getState()
-        .conversations.find((item) => item.id === conversationId)?.lmResponseId;
-
-      addMessagePair(conversationId, userMessage, assistantMessage, {
-        deferTitle: useSettingsStore.getState().autoNameEnabled,
-      });
-
-      runChatJob({
-        conversationId,
-        userMessage,
-        assistantMessage,
-        trimmed,
-        previousResponseId,
-        selectedProvider,
-        selectedModel,
-        effectiveWebSearchEnabled,
-        effectiveCodeExecutionEnabled,
-        enhancedModeEnabled,
-        projectId,
-        setRequestStatus,
-        setStreamingMessageId,
-        activeChatJobIdRef,
-      });
-    },
-    [
-      activeConversationId,
-      activeChatJobIdRef,
-      addMessagePair,
-      createConversation,
-      effectiveWebSearchEnabled,
-      effectiveCodeExecutionEnabled,
-      enhancedModeEnabled,
-      selectedModel,
-      selectedProvider,
-      setModelLoadProgress,
-      setRequestStatus,
-      setStreamingMessageId,
-      supportsImages,
-      agentModeEnabled,
-      projectId,
-      selectedModelContextSettings.contextLength,
-      selectedModelContextSettings.reservedOutputTokens,
-    ],
-  );
-
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        try {
+          if (signal.aborted) throw new DOMException("Chat cancelled", "AbortError");
+          if (selectedProvider === "lm-studio") {
+            const { prepareAgentLmStudioModel } = await import("@/lib/lm-model-session");
+            await prepareAgentLmStudioModel(selectedModel, selectedModelContextSettings.contextLength, signal, (phase: string, percent?: number) => {
+              setModelLoadProgress(phase === "ready" ? null : { phase: phase as "unloading" | "loading", percent });
+            });
+          }
+          if (signal.aborted) throw new DOMException("Chat cancelled", "AbortError");
+          const id = await useAgentStore.getState().startSession({
+            continueSessionId, projectId, projectPath,
+            displayPrompt: trimmed || (effectiveAttachments.some((attachment) => attachment.fileType === "image") ? "Describe the attached image." : "Read the attached file."),
+            prompt: prompt || "Describe the attached image.", model: selectedModel,
+            contextLength: selectedModelContextSettings.contextLength,
+            reservedOutputTokens: selectedModelContextSettings.reservedOutputTokens,
+            providerId: selectedProvider, providerBaseUrl, reasoningLevel,
+            images: effectiveAttachments.filter((attachment) => attachment.fileType === "image").map((attachment) => ({ data: attachment.dataUrl.split(",")[1], mimeType: attachment.mimeType })),
+            attachments: effectiveAttachments, webSearchEnabled: effectiveWebSearchEnabled,
+          });
+          return { prompt, output: useAgentStore.getState().sessions.find((session) => session.id === id)?.summary };
+        } finally {
+          signal.removeEventListener("abort", onAbort);
+          setModelLoadProgress(null);
+        }
+      },
+    });
+  }, [projectId, selectedModel, selectedProvider, supportsImages, effectiveWebSearchEnabled, selectedModelContextSettings.contextLength, selectedModelContextSettings.reservedOutputTokens, setModelLoadProgress]);
   return { handleSend };
 }

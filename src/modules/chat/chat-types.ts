@@ -1,8 +1,7 @@
 // ── Core chat types ──────────────────────────────────────────────────────────
 
-import type { ReactNode } from "react";
 import type { MessageAttachment } from "@/lib/message-attachments";
-import type { AgentMode, AgentSession } from "@/modules/agents/agent-types";
+import type { AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult } from "@/modules/web-search/types";
 import type { FetchStatus } from "@/lib/fetch-status";
 import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
@@ -10,9 +9,6 @@ import type { Artifact } from "@/modules/chat/artifact";
 
 export type ChatRole = "user" | "assistant" | "system";
 
-export type ChatMode = "chat" | "agents" | "research";
-
-export type WorkspaceChatMode = "chat" | "agents";
 
 export type WebSearchSource = Pick<SearchResult, "id" | "title" | "url"> & {
   snippet: string;
@@ -222,19 +218,11 @@ export type ModelLoadProgress = {
 // ── Component prop interfaces ───────────────────────────────────────────────
 
 export interface ChatPanelProps {
-  title?: string;
-  /** Optional node rendered next to the title. */
-  titleAccessory?: ReactNode;
-  /** Optional right-side action buttons rendered in the title bar. */
-  headerActions?: ReactNode;
-  messages?: ChatMessage[];
   onSend?: (
     text: string,
     attachments?: MessageAttachment[],
   ) => void;
   supportsImages?: boolean;
-  isStreaming?: boolean;
-  streamingMessageId?: string | null;
   providers?: ProviderInfo[];
   selectedProvider?: string;
   onProviderChange?: (id: string) => void;
@@ -250,42 +238,18 @@ export interface ChatPanelProps {
   /** 0 = all side panels open, 1 = recent chats collapsed */
   sidebarsCollapsed?: number;
   contextStats?: ContextStats;
-  contextBreakdown?: ContextBreakdown;
   webSearchEnabled?: boolean;
   onWebSearchChange?: (enabled: boolean) => void;
   webSearchDisabled?: boolean;
   webSearchDisabledReason?: string;
-  codeExecutionEnabled?: boolean;
-  onCodeExecutionChange?: (enabled: boolean) => void;
-  codeExecutionDisabled?: boolean;
-  codeExecutionDisabledReason?: string;
-  onStop?: () => void;
   modelLoadProgress?: ModelLoadProgress;
-  mode?: ChatMode;
-  defaultMode?: ChatMode;
-  onModeChange?: (mode: ChatMode) => void;
   agentSessions?: AgentSession[];
   activeAgentSessionId?: string | null;
   agentRuntimeAvailable?: boolean | null;
-  agentMode?: AgentMode;
   agentProjectPath?: string;
-  onAgentModeChange?: (mode: AgentMode) => void;
   onAgentProjectPathChange?: (path: string) => void;
   onAgentRuntimeCheck?: () => void;
-  onAgentNewSession?: () => void;
-  onAgentSessionSelect?: (id: string) => void;
   onAgentSessionStop?: (id: string) => void;
-  onAgentSessionDelete?: (id: string) => void;
-  onEditMessage?: (messageId: string) => void;
-  onRegenerate?: (messageId: string) => void;
-  onRetry?: (messageId: string) => void;
-  onCopyMessage?: (messageId: string) => void;
-  onForkMessage?: (messageId: string) => void;
-  onDeleteMessage?: (messageId: string) => void;
-  editingMessageId?: string | null;
-  editInitialValue?: string;
-  onEditCancel?: () => void;
-  onEditSave?: (messageId: string, newContent: string) => void;
 }
 
 export interface RecentChatsItem {

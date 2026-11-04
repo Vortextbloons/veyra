@@ -6,7 +6,6 @@ import { buildSkillContext } from "@/modules/extensions/skill-runtime";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AgentEvent,
-  AgentMode,
   AgentReasoningLevel,
   AgentSession,
   AgentStatus,
@@ -68,7 +67,6 @@ type AgentStore = {
   activeSessionId: string | null;
   runtimeAvailable: boolean | null;
   runtimeStatus: AgentStatus;
-  mode: AgentMode;
   projectPath: string;
   projects: string[];
   selectedModel: string;
@@ -76,7 +74,6 @@ type AgentStore = {
   reasoningLevelByModel: Record<string, AgentReasoningLevel>;
   setModelReasoningLevel: (key: string, level: AgentReasoningLevel) => void;
   setReasoningLevel: (level: AgentReasoningLevel) => void;
-  setMode: (mode: AgentMode) => void;
   setProjectPath: (projectPath: string) => void;
   setSelectedModel: (model: string) => void;
   setActiveSessionId: (id: string | null) => void;
@@ -388,7 +385,6 @@ export const useAgentStore = create<AgentStore>()(
       activeSessionId: null,
       runtimeAvailable: null,
       runtimeStatus: "idle",
-      mode: "chat",
       projectPath: "",
       projects: [],
       selectedModel: "",
@@ -396,18 +392,6 @@ export const useAgentStore = create<AgentStore>()(
       reasoningLevelByModel: {},
       setModelReasoningLevel: (key, level) => set((state) => ({ reasoningLevelByModel: { ...state.reasoningLevelByModel, [key]: level } })),
       setReasoningLevel: (reasoningLevel) => set({ reasoningLevel }),
-      setMode: (mode) => set((state) => {
-        const active = state.activeSessionId
-          ? state.sessions.find((s) => s.id === state.activeSessionId)
-          : null;
-        const currentProjectPath = state.projectPath.trim();
-        return {
-          mode,
-          ...(active && active.status !== "running" && active.projectPath.trim() === currentProjectPath
-            ? { sessions: patchSession(state.sessions, active.id, { mode }) }
-            : {}),
-        };
-      }),
       setProjectPath: (projectPath) => {
         const path = projectPath.trim();
         set((state) => {
@@ -429,7 +413,6 @@ export const useAgentStore = create<AgentStore>()(
           activeSessionId,
           ...(session
             ? {
-                mode: session.mode,
                 projectPath: session.projectPath,
               }
             : {}),
@@ -454,13 +437,9 @@ export const useAgentStore = create<AgentStore>()(
           const activeSessionId = state.activeSessionId === null ? null : visibleSessions.some((session) => session.id === state.activeSessionId)
             ? state.activeSessionId
             : visibleSessions[0]?.id ?? null;
-          const activeSession = activeSessionId
-            ? visibleSessions.find((session) => session.id === activeSessionId)
-            : null;
           return {
             projectPath,
             activeSessionId,
-            ...(activeSession ? { mode: activeSession.mode } : {}),
           };
         });
       },
@@ -480,7 +459,7 @@ export const useAgentStore = create<AgentStore>()(
             title: message.role === "user" ? "Prompt" : "Pi", detail: message.content, at: message.timestamp, attachments: message.attachments, artifact: message.artifact, interactiveAnswer: message.interactiveAnswer,
           })),
         };
-        set((state) => ({ sessions: [imported, ...state.sessions], activeSessionId: id, projectPath, mode: "chat" }));
+        set((state) => ({ sessions: [imported, ...state.sessions], activeSessionId: id, projectPath }));
         useProjectStore.getState().setActiveProjectId(conversation.projectId ?? null);
       },
       deleteSession: async (sessionId) => {
@@ -503,7 +482,7 @@ export const useAgentStore = create<AgentStore>()(
             sessions,
             activeSessionId,
             ...(activeSession
-              ? { mode: activeSession.mode, projectPath: activeSession.projectPath }
+              ? { projectPath: activeSession.projectPath }
               : {}),
           };
         });
@@ -540,12 +519,11 @@ export const useAgentStore = create<AgentStore>()(
         : null;
       const activeProjectPath = activeSession?.projectPath.trim() ?? "";
       const projectPath = activeSession && requestedProjectPath === "" ? activeProjectPath : requestedProjectPath;
-      const mode = input.mode;
+      const mode = "chat";
       const shouldContinue = Boolean(
         activeSession &&
           activeSession.status !== "running" &&
-          activeProjectPath === projectPath &&
-          (mode === "chat" || activeSession.mode === mode),
+          activeProjectPath === projectPath,
       );
       const id = shouldContinue && activeSession ? activeSession.id : crypto.randomUUID();
       const turnId = crypto.randomUUID();
@@ -644,7 +622,6 @@ export const useAgentStore = create<AgentStore>()(
           const result = await runPiAgent(
             {
               sessionId: id,
-              mode,
               projectPath,
               prompt: agentPromptWithMemory(contextualPrompt, memoryBlock, {
                 session: shouldContinue ? activeSession ?? null : null,
@@ -810,7 +787,6 @@ export const useAgentStore = create<AgentStore>()(
         )
           ? state.activeSessionId
           : null,
-        mode: state.mode,
         projectPath: state.projectPath,
         projects: state.projects,
         selectedModel: state.selectedModel,

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { FolderOpen, PanelRightClose, PanelRightOpen, RefreshCw, X } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { AgentMode, AgentSession } from "../agent-types";
+import type { AgentSession } from "../agent-types";
 import { AgentOutputView } from "./agent-output-view";
 import { AgentInspector } from "./agent-inspector";
 import "./agent-workspace.css";
@@ -12,9 +12,8 @@ import { resolveAgentProjectId } from "../agent-session-context";
 
 type AgentsPanelProps = {
   sessions: AgentSession[]; activeSessionId: string | null; runtimeAvailable: boolean | null;
-  mode: AgentMode; projectPath: string; onProjectPathChange: (path: string) => void;
-  onCheckRuntime: () => void; onNewSession: () => void; onSelectSession: (id: string) => void;
-  onStopSession: (id: string) => void; onDeleteSession: (id: string) => void;
+  projectPath: string; onProjectPathChange: (path: string) => void;
+  onCheckRuntime: () => void; onStopSession: (id: string) => void;
   composer: ReactNode; connection: ReactNode; onSuggestion: (text: string) => void;
 };
 

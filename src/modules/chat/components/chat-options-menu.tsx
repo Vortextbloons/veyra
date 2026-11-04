@@ -1,23 +1,16 @@
 import { useState, type ReactNode } from "react";
-import { FileText, Globe, LayoutDashboard, TerminalSquare, X, Zap } from "lucide-react";
+import { FileText, Globe, LayoutDashboard, X } from "lucide-react";
 import { DialogSurface } from "@/components/dialog-surface";
 import { ChatExtensionsSettings } from "@/modules/extensions/components/chat-extensions-settings";
 import { useSettingsStore } from "@/stores/settings-store";
 
 export type ChatOptionsMenuProps = {
-  unified?: boolean;
   open: boolean;
   onClose: () => void;
-  enhancedMode: boolean;
-  onEnhancedModeChange: (on: boolean) => void;
   webSearchEnabled: boolean;
   onWebSearchChange?: (on: boolean) => void;
   webSearchDisabled?: boolean;
   webSearchDisabledReason?: string;
-  codeExecutionEnabled: boolean;
-  onCodeExecutionChange?: (on: boolean) => void;
-  codeExecutionDisabled?: boolean;
-  codeExecutionDisabledReason?: string;
 };
 
 function SettingSwitch({ active, muted = false }: { active: boolean; muted?: boolean }) {
@@ -142,19 +135,12 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 export function ChatOptionsMenu({
-  unified = false,
   open,
   onClose,
-  enhancedMode,
-  onEnhancedModeChange,
   webSearchEnabled,
   onWebSearchChange,
   webSearchDisabled = false,
   webSearchDisabledReason,
-  codeExecutionEnabled,
-  onCodeExecutionChange,
-  codeExecutionDisabled = false,
-  codeExecutionDisabledReason,
 }: ChatOptionsMenuProps) {
   const [activeTab, setActiveTab] = useState<"chat" | "skills">("chat");
   const speedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
@@ -207,15 +193,6 @@ export function ChatOptionsMenu({
         {activeTab === "chat" ? (
           <div id="chat-settings-panel" role="tabpanel" aria-label="Chat">
             <SectionLabel>Conversation</SectionLabel>
-            {!unified && <SettingRow
-              icon={<Zap className="size-4" />}
-              label="Enhanced"
-              description="More tool rounds, notes, and follow-up questions"
-              active={enhancedMode}
-              onToggle={onEnhancedModeChange}
-            />}
-            {(unified || enhancedMode) && (
-              <div className="ml-4 border-l border-white/[0.08] pl-2">
                 <SettingRow
                   icon={<LayoutDashboard className="size-4" />}
                   label="Interactive answers"
@@ -224,8 +201,6 @@ export function ChatOptionsMenu({
                   onToggle={setInteractiveAnswersEnabled}
                   iconActiveClass="text-violet-300"
                 />
-              </div>
-            )}
 
             <div className="mx-2 my-1.5 h-px bg-white/[0.06]" />
 
@@ -252,18 +227,6 @@ export function ChatOptionsMenu({
                 />
                 <SearchSpeedToggle on={webSearchOn} />
               </>
-            )}
-            {onCodeExecutionChange && (
-              <SettingRow
-                icon={<TerminalSquare className="size-4" />}
-                label="Code execution"
-                description="Run Python for calculations and data"
-                active={codeExecutionEnabled}
-                onToggle={onCodeExecutionChange}
-                iconActiveClass="text-amber-300"
-                disabled={codeExecutionDisabled}
-                disabledReason={codeExecutionDisabledReason}
-              />
             )}
           </div>
         ) : (

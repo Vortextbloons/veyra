@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import type { FetchStatus as BaseFetchStatus } from "@/lib/fetch-status";
+import type { FetchStatus, FetchedPageSummary } from "./types";
+
+/** Tauri response shape for `fetch_and_extract_pages`. */
+export type FetchedPage = FetchedPageSummary;
 
 const inflightDirectSearches = new Map<string, Promise<unknown>>();
 

@@ -1,8 +1,12 @@
-import type { ResearchDepth, ResearchSourceType } from "./research-types";
+import type { CreateResearchSourceInput, ResearchDepth, ResearchRun, ResearchSourceType } from "./research-types";
 import type { FetchedPage } from "@/modules/web-search/tauri-commands";
+import type { SearchSource } from "@/modules/web-search/types";
 import { isPdfUrl, isYouTubeUrl, isDocxUrl, isPptxUrl, isXlsxUrl, isEpubUrl, isArxivUrl, isWikipediaUrl } from "@/lib/url-classifiers";
 import { estimateTokens } from "@/lib/context";
+import { nowIso } from "@/lib/id";
 import type { FetchedSource } from "./research-storage";
+
+export { nowIso };
 
 // ── Source type classification & mapping ───────────────────────────────────
 
@@ -25,8 +29,24 @@ export function guessSourceType(url: string): ResearchSourceType {
   return "webpage";
 }
 
-export function nowIso(): string {
-  return new Date().toISOString();
+export function buildSourceInput(
+  run: Pick<ResearchRun, "id" | "searchProvider">,
+  stepId: string | undefined,
+  source: SearchSource,
+  rankFallback: number,
+): CreateResearchSourceInput {
+  return {
+    runId: run.id,
+    stepId,
+    url: source.url,
+    title: source.title,
+    snippet: source.snippet,
+    sourceType: guessSourceType(source.url),
+    engine: run.searchProvider ?? "donsetch",
+    score: source.score ?? 0,
+    rank: source.rank ?? rankFallback,
+    ...(source.fetch?.status ? { fetchStatus: source.fetch.status } : {}),
+  };
 }
 
 export function mapFetchedPageToSource(page: FetchedPage): FetchedSource {

@@ -1,15 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ResearchRun, ResearchRunStatus } from "./research-types";
 import { formatElapsedTime } from "./research-duration";
-
-const ACTIVE_STATUSES: ResearchRunStatus[] = [
-  "planning",
-  "searching",
-  "reading",
-  "extracting",
-  "verifying",
-  "synthesizing",
-];
+import { isActiveResearchRunStatus } from "./research-lifecycle";
 
 function isTerminal(status: ResearchRunStatus): boolean {
   return status === "completed" || status === "failed";
@@ -23,7 +15,7 @@ function computeElapsed(run: ResearchRun, now: number): string {
   if (isTerminal(run.status) && run.completedAt) {
     const ms = new Date(run.completedAt).getTime();
     endMs = Number.isNaN(ms) ? startMs : ms;
-  } else if (ACTIVE_STATUSES.includes(run.status) || run.status === "paused") {
+  } else if (isActiveResearchRunStatus(run.status) || run.status === "paused") {
     endMs = now;
   } else {
     return "0s";

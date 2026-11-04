@@ -1,5 +1,4 @@
 import { Loader2 } from "lucide-react";
-import type { AgentMode } from "@/modules/agents/agent-types";
 import type { AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
 import { AgentActivityCard } from "@/modules/agents/components/agent-output-view";
 import { TypewriterMarkdown } from "@/modules/agents/components/typewriter-markdown";
@@ -14,7 +13,6 @@ export function AgentChatTurn({
   onFollowUp,
 }: {
   turn: AgentChatTurnModel;
-  mode: AgentMode;
   onFollowUp?: (prompt: string) => void;
 }) {
   if (turn.role === "user") {

@@ -1,4 +1,8 @@
 /// <reference lib="webworker" />
+import {
+  encryptConversationsPayload,
+  importConversationKey,
+} from "@/lib/conversation-crypto";
 
 type Conversation = {
   id: string;
@@ -14,42 +18,13 @@ type EncryptRequest = {
   revision: number;
 };
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i] ?? 0);
-  }
-  return btoa(binary);
-}
-
-async function importAesKey(keyBytes: ArrayBuffer): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
-}
-
 self.onmessage = async (event: MessageEvent<EncryptRequest>) => {
   try {
     const { conversations, keyBytes, revision } = event.data;
-    const encoder = new TextEncoder();
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await importAesKey(keyBytes);
-    const encrypted = await crypto.subtle.encrypt(
-      {
-        name: "AES-GCM",
-        iv,
-        additionalData: encoder.encode(`veyra-conversations-v2:${revision}`),
-      },
-      key,
-      encoder.encode(JSON.stringify(conversations)),
-    );
-
+    const key = await importConversationKey(keyBytes, ["encrypt"]);
     self.postMessage({
       ok: true,
-      snapshot: JSON.stringify({
-        version: 2,
-        revision,
-        iv: bytesToBase64(iv),
-        data: bytesToBase64(new Uint8Array(encrypted)),
-      }),
+      snapshot: await encryptConversationsPayload(conversations, key, revision),
     });
   } catch (error) {
     self.postMessage({

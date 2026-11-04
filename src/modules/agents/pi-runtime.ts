@@ -1,11 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AgentMode, AgentReasoningLevel, PiRunResult } from "@/modules/agents/agent-types";
+import type { AgentReasoningLevel, PiRunResult } from "@/modules/agents/agent-types";
 import type { ProviderToolDefinition } from "@/lib/providers/types";
 
 type StartPiAgentInput = {
   sessionId: string;
-  mode: AgentMode;
   projectPath: string;
   prompt: string;
   model: string;

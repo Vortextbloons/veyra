@@ -59,7 +59,8 @@ export type StartAgentSessionInput = {
   displayPrompt?: string;
   /** Captured at dispatch, so navigation cannot redirect a queued follow-up. */
   continueSessionId?: string | null;
-  mode: AgentMode;
+  /** Accepted only for older callers; execution always uses unified Chat. */
+  mode?: AgentMode;
   projectPath: string;
   prompt: string;
   model: string;

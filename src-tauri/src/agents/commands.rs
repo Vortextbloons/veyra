@@ -25,7 +25,6 @@ use super::sessions::resolve_workspace_path;
 #[allow(dead_code)]
 pub struct StartPiAgentInput {
     pub session_id: String,
-    pub mode: String,
     pub project_path: String,
     pub prompt: String,
     pub model: String,
@@ -146,7 +145,6 @@ pub async fn run_pi_agent(
                     .provider
                     .as_deref()
                     .ok_or("Pi provider route is unavailable")?,
-                &input.mode,
                 capability.effective_level.as_deref().unwrap_or("off"),
                 &api_key,
                 input.images.as_deref().unwrap_or(&[]),

@@ -3,7 +3,7 @@ import type { ResearchSource } from "./research-types";
 import type { ResearchRuntimeContext } from "./research-runtime-context";
 import { callResearchAi, getTemporalContext } from "./research-ai";
 import { safeJsonParse } from "./research-json-utils";
-import { guessSourceType } from "./research-source-utils";
+import { buildSourceInput } from "./research-source-utils";
 import { fetchAndReadSources } from "./research-read-phase";
 import { validateSources, runClaimVerificationPass } from "./research-verify-phase";
 import { extractFromSourcesBatch } from "./research-extract-phase";
@@ -110,18 +110,9 @@ Return ONLY a JSON object:
         discoveredUrls.add(src.url);
         added++;
 
-        const source = await store.createSource({
-          runId: run.id,
-          stepId: gapStep.id,
-          url: src.url,
-          title: src.title,
-          snippet: src.snippet,
-          sourceType: guessSourceType(src.url),
-          engine: run.searchProvider ?? "donsetch",
-          score: src.score ?? 0,
-          rank: src.rank ?? (sources.length + 1),
-          ...(src.fetch?.status ? { fetchStatus: src.fetch.status } : {}),
-        });
+        const source = await store.createSource(
+          buildSourceInput(run, gapStep.id, src, sources.length + 1),
+        );
         sources.push(source);
         followUpSources.push(source);
       }
