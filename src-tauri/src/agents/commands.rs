@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::io::Write;
 use std::process::{Command, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -34,6 +35,19 @@ pub struct StartPiAgentInput {
     pub provider_base_url: Option<String>,
     pub reasoning_enabled: Option<bool>,
     pub reasoning_level: Option<String>,
+    pub images: Option<Vec<serde_json::Value>>,
+    pub tools: Option<Vec<serde_json::Value>>,
+}
+
+#[tauri::command]
+pub async fn respond_pi_ui(session_id: String, request_id: String, value: Option<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let response = serde_json::json!({ "type": "extension_ui_response", "id": request_id,
+            "value": value, "confirmed": value.as_deref() == Some("true"), "cancelled": value.is_none() });
+        let mut streams = RUNNING_AGENT_STDIN.lock();
+        let stream = streams.get_mut(&session_id).ok_or("Chat is no longer running")?;
+        writeln!(stream, "{}", response).map_err(|error| error.to_string())
+    }).await.map_err(|error| error.to_string())?
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +149,9 @@ pub async fn run_pi_agent(
                 &input.mode,
                 capability.effective_level.as_deref().unwrap_or("off"),
                 &api_key,
+                input.images.as_deref().unwrap_or(&[]),
+                input.tools.as_deref().unwrap_or(&[]),
+                !input.project_path.trim().is_empty(),
                 &cancelled,
             )
         })();

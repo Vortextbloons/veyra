@@ -1,5 +1,8 @@
 import { memo } from "react";
 import Markdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { MARKDOWN_COMPONENTS } from "@/components/markdown-components";
@@ -17,8 +20,8 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   return (
     <div className={cn("markdown-rendered", className)}>
       <Markdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeHighlight, rehypeKatex]}
         components={MARKDOWN_COMPONENTS}
       >
         {children}

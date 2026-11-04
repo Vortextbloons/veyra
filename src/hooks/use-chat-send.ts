@@ -55,10 +55,11 @@ export function useChatSend({
       if (blocked) return;
 
       if (agentModeEnabled) {
-        if (!trimmed) return;
+        const agentPrompt = [trimmed, ...effectiveAttachments.filter((attachment) => attachment.fileType === "text").map((attachment) => `Attached file: ${attachment.name}\n${attachment.textContent ?? ""}`)].filter(Boolean).join("\n\n");
         const agentState = useAgentStore.getState();
         const agentProviderBaseUrl = useProviderStore.getState().cloudProviders.find((provider) => provider.id === selectedProvider)?.baseUrl;
-        const agentReasoningLevel = agentState.reasoningLevelByModel[reasoningModelKey(selectedProvider, selectedModel, agentProviderBaseUrl)] ?? agentState.reasoningLevel;
+        const settings = useSettingsStore.getState();
+        const agentReasoningLevel = settings.reasoningLevelByModel[reasoningModelKey(selectedProvider, selectedModel, agentProviderBaseUrl)] ?? settings.reasoningLevel;
         if (agentState.runtimeAvailable !== true) return;
         const agentProjectKey = agentState.projectPath.trim();
         const runningAgentSession = agentState.sessions.some(
@@ -103,15 +104,19 @@ export function useChatSend({
               const { startSession } = useAgentStore.getState();
               sessionId = await startSession({
                 continueSessionId: agentState.activeSessionId,
-                mode: agentState.mode,
+                projectId,
+                displayPrompt: trimmed || (effectiveAttachments.some((attachment) => attachment.fileType === "image") ? "Describe the attached image." : "Read the attached file."),
+                mode: "chat",
                 projectPath: agentState.projectPath,
-                prompt: trimmed,
+                prompt: agentPrompt || "Describe the attached image.",
                 model: selectedModel,
                 contextLength: selectedModelContextSettings.contextLength,
                 reservedOutputTokens: selectedModelContextSettings.reservedOutputTokens,
                 providerId: selectedProvider,
                 providerBaseUrl: agentProviderBaseUrl,
-                reasoningEnabled: agentReasoningLevel !== "off",
+                images: effectiveAttachments.filter((attachment) => attachment.fileType === "image").map((attachment) => ({ data: attachment.dataUrl.split(",")[1], mimeType: attachment.mimeType })),
+                attachments: effectiveAttachments,
+                webSearchEnabled: effectiveWebSearchEnabled,
                 reasoningLevel: agentReasoningLevel,
               });
             } finally {

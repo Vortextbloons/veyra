@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { aiScheduler } from "@/lib/ai-scheduler";
-import { ArrowUp, ListTodo, Hammer, Square, Brain, RefreshCw } from "lucide-react";
+import { ArrowUp, Square, Brain, RefreshCw } from "lucide-react";
 import type { AgentMode } from "../agent-types";
 import { useAgentStore } from "../agent-store";
 import { useProviderStore } from "@/stores/provider-store";
 import { reasoningToggleState, inspectAgentReasoning, reasoningModelKey, type ModelReasoning } from "../agent-reasoning";
 
-export function AgentComposer({ projectPath, draftKey, mode, onModeChange, onSend, onStop, busy: running, unavailable, controls, suggestion }: {
+export function AgentComposer({ projectPath, draftKey, onSend, onStop, busy: running, unavailable, controls, suggestion }: {
   projectPath: string; draftKey: string; mode: AgentMode; onModeChange: (mode: AgentMode) => void;
   onSend?: (text: string) => void; onStop: () => void; busy: boolean;
   unavailable: boolean; controls: ReactNode;
@@ -67,18 +67,13 @@ export function AgentComposer({ projectPath, draftKey, mode, onModeChange, onSen
   };
   return <div className="agent-compose-wrap">
     <div className="agent-composer">
-      <textarea ref={input} rows={2} value={text} aria-label="Agent task" placeholder={mode === "plan" ? "Describe what you want to plan…" : "Ask the agent to build, fix, or explore…"}
+      <textarea ref={input} rows={2} value={text} aria-label="Message" placeholder="Ask anything, or describe what you want to do…"
         onChange={(event) => setDrafts((values) => ({ ...values, [draftKey]: event.target.value }))}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
           if (event.key === "Escape" && busy) stop();
         }} />
       <div className="agent-composer-controls">
-        <div className="agent-mode-switch" role="group" aria-label="Agent mode">
-          {(["plan", "build"] as const).map((value) => <button key={value} type="button" aria-pressed={mode === value} disabled={busy} onClick={() => onModeChange(value)} title={value === "plan" ? "Read files and plan without making changes" : "Edit files and run commands"}>
-            {value === "plan" ? <ListTodo size={14} /> : <Hammer size={14} />}{value === "plan" ? "Plan" : "Build"}
-          </button>)}
-        </div>
         <fieldset disabled={busy} className="agent-model-controls">{controls}</fieldset>
         <button type="button" role="switch" aria-label="Agent reasoning" aria-checked={reasoning.enabled}
           className="agent-reasoning-control" title={capabilities?.message || "Turn reasoning on or off"}
@@ -93,6 +88,6 @@ export function AgentComposer({ projectPath, draftKey, mode, onModeChange, onSen
         </button>
       </div>
     </div>
-    <div className="agent-compose-hint"><span>{busy ? running ? "Agent is working · Esc to stop" : "Task queued or preparing model · Esc to cancel" : unavailable ? "Choose a model and check the agent runtime" : mode === "plan" ? "Plan mode · read-only tools" : "Build mode · can edit files and run commands"}</span><span>Enter to run · Shift + Enter for a new line</span></div>
+    <div className="agent-compose-hint"><span>{busy ? running ? "Working · Esc to stop" : "Preparing · Esc to cancel" : unavailable ? "Choose a model and check the runtime" : projectPath ? "Can edit files and run commands in your project" : "Attach a project to work with files"}</span><span>Enter to send · Shift + Enter for a new line</span></div>
   </div>;
 }

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { AgentMode, AgentReasoningLevel, PiRunResult } from "@/modules/agents/agent-types";
+import type { ProviderToolDefinition } from "@/lib/providers/types";
 
 type StartPiAgentInput = {
   sessionId: string;
@@ -14,6 +15,8 @@ type StartPiAgentInput = {
   providerBaseUrl?: string;
   reasoningEnabled?: boolean;
   reasoningLevel?: AgentReasoningLevel;
+  images?: { data: string; mimeType: string }[];
+  tools?: ProviderToolDefinition[];
 };
 
 type PiRunFinishedEvent = {
@@ -31,6 +34,7 @@ type PiRunEvent = {
 export type RunPiAgentOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
+  onUiRequest?: (request: Record<string, unknown>) => Promise<string | undefined>;
 };
 
 const DEFAULT_AGENT_EVENT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -114,6 +118,19 @@ export async function runPiAgent(
     });
     unlistenEvent = await listen<PiRunEvent>("agent://run-event", (event) => {
       if (event.payload.sessionId !== input.sessionId) return;
+      if (event.payload.stream === "stdout") {
+        try {
+          const request = JSON.parse(event.payload.line) as Record<string, unknown>;
+          if (request.type === "extension_ui_request" && typeof request.id === "string" && ["input", "editor", "select", "confirm"].includes(String(request.method))) {
+            void (async () => {
+              let value: string | undefined;
+              try { value = await options?.onUiRequest?.(request); } catch { value = undefined; }
+              if (!settled && !signal?.aborted) await invoke("respond_pi_ui", { sessionId: input.sessionId, requestId: request.id, value: value ?? null });
+            })().catch(() => undefined);
+            return;
+          }
+        } catch { /* Normal streaming output is handled below. */ }
+      }
       onEvent?.(event.payload);
     });
   } catch (error) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processOpenAiStreamData } from "@/lib/lm-studio-openai";
+import { buildOpenAiChatBody, processOpenAiStreamData } from "@/lib/lm-studio-openai";
 import type { OpenAiStreamState } from "@/lib/lm-studio-types";
 
 function makeState(): OpenAiStreamState {
@@ -57,4 +57,13 @@ describe("OpenAI-compatible reasoning protocol normalization", () => {
     expect(result.reasoning).toBe("Plan first.");
     expect(result.content).toBe("Hello!");
   });
+});
+
+it("sends NVIDIA Nemotron's documented thinking toggle instead of effort", () => {
+  for (const level of ["off", "medium"] as const) {
+    const body = buildOpenAiChatBody({ model: "nvidia/nemotron-3.5-super-vl-120b-a12b",
+      baseUrl: "https://integrate.api.nvidia.com/v1", messages: [], reasoningLevel: level });
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: level !== "off" });
+    expect(body).not.toHaveProperty("reasoning_effort");
+  }
 });

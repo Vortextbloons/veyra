@@ -1,4 +1,8 @@
 import { create } from "zustand";
+import type { Conversation } from "@/modules/chat/chat-types";
+import { createPiChatTools } from "./pi-chat-tools";
+import { useExtensionsStore } from "@/modules/extensions/extensions-store";
+import { buildSkillContext } from "@/modules/extensions/skill-runtime";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AgentEvent,
@@ -83,6 +87,7 @@ type AgentStore = {
   startSession: (input: StartAgentSessionInput) => Promise<string>;
   stopSession: (id: string) => void;
   clearSessions: () => void;
+  importConversation: (conversation: Conversation, projectPath?: string) => void;
 };
 
 function titleFromPrompt(prompt: string) {
@@ -383,7 +388,7 @@ export const useAgentStore = create<AgentStore>()(
       activeSessionId: null,
       runtimeAvailable: null,
       runtimeStatus: "idle",
-      mode: "plan",
+      mode: "chat",
       projectPath: "",
       projects: [],
       selectedModel: "",
@@ -405,11 +410,15 @@ export const useAgentStore = create<AgentStore>()(
       }),
       setProjectPath: (projectPath) => {
         const path = projectPath.trim();
-        set((state) => ({
+        set((state) => {
+          const active = state.sessions.find((session) => session.id === state.activeSessionId);
+          const attachToDiscussion = active && !active.projectPath && path && active.status !== "running";
+          return {
           projectPath: path,
           projects: [...new Set([...state.projects, path])],
-          activeSessionId: state.sessions.find((session) => session.projectPath.trim() === path)?.id ?? null,
-        }));
+          activeSessionId: attachToDiscussion ? active.id : state.sessions.find((session) => session.projectPath.trim() === path)?.id ?? null,
+          sessions: attachToDiscussion ? patchSession(state.sessions, active.id, { projectPath: path, projectId: useProjectStore.getState().activeProjectId ?? undefined }) : state.sessions,
+        }; });
       },
       setSelectedModel: (selectedModel) => set({ selectedModel }),
       setActiveSessionId: (activeSessionId) => {
@@ -425,6 +434,10 @@ export const useAgentStore = create<AgentStore>()(
               }
             : {}),
         });
+        if (session) {
+          const matching = useProjectStore.getState().projects.find((project) => project.settings.agentProjectPath === session.projectPath && session.projectPath);
+          useProjectStore.getState().setActiveProjectId(session.projectId ?? matching?.id ?? null);
+        }
       },
       checkRuntime: async () => {
         set({ runtimeStatus: "checking_runtime" });
@@ -452,6 +465,24 @@ export const useAgentStore = create<AgentStore>()(
         });
       },
       newSession: () => set({ activeSessionId: null }),
+      importConversation: (conversation, projectPath = "") => {
+        const existing = get().sessions.find((session) => session.sourceConversationId === conversation.id);
+        if (existing) {
+          get().setActiveSessionId(existing.id);
+          return;
+        }
+        const id = crypto.randomUUID();
+        const imported: AgentSession = {
+          id, sourceConversationId: conversation.id, projectId: conversation.projectId, runtime: "pi", mode: "chat", status: "ready",
+          projectPath, prompt: "", model: "", title: conversation.title, startedAt: conversation.createdAt,
+          events: conversation.messages.filter((message) => message.role === "user" || message.role === "assistant").map((message) => ({
+            id: message.id, type: message.role === "user" ? "status" : "output",
+            title: message.role === "user" ? "Prompt" : "Pi", detail: message.content, at: message.timestamp, attachments: message.attachments, artifact: message.artifact, interactiveAnswer: message.interactiveAnswer,
+          })),
+        };
+        set((state) => ({ sessions: [imported, ...state.sessions], activeSessionId: id, projectPath, mode: "chat" }));
+        useProjectStore.getState().setActiveProjectId(conversation.projectId ?? null);
+      },
       deleteSession: async (sessionId) => {
         const current = get().sessions.find((session) => session.id === sessionId);
         if (!current) return;
@@ -514,12 +545,12 @@ export const useAgentStore = create<AgentStore>()(
         activeSession &&
           activeSession.status !== "running" &&
           activeProjectPath === projectPath &&
-          activeSession.mode === mode,
+          (mode === "chat" || activeSession.mode === mode),
       );
       const id = shouldContinue && activeSession ? activeSession.id : crypto.randomUUID();
       const turnId = crypto.randomUUID();
       // Capture project scope once; later navigation must not change this turn.
-      const scopeProjectId = await resolveHydratedAgentProjectId(projectPath);
+      const scopeProjectId = input.projectId ?? activeSession?.projectId ?? await resolveHydratedAgentProjectId(projectPath);
       // A nonempty workspace that does not resolve to exactly one project must
       // not fall back to global personal memory for extraction.
       const mayExtractAgentMemory = !projectPath.trim() || scopeProjectId !== undefined;
@@ -530,6 +561,7 @@ export const useAgentStore = create<AgentStore>()(
         mode,
         status: "running",
         projectPath,
+        projectId: scopeProjectId,
         prompt: userPrompt,
         model: selectedModel,
         title: titleFromPrompt(userPrompt),
@@ -546,7 +578,7 @@ export const useAgentStore = create<AgentStore>()(
               .filter(Boolean)
               .join("\n") || undefined,
           ),
-          event("status", "Prompt", userPrompt),
+          { ...event("status", "Prompt", input.displayPrompt || userPrompt), attachments: input.attachments },
         ],
       };
 
@@ -557,6 +589,7 @@ export const useAgentStore = create<AgentStore>()(
               prompt: userPrompt,
               mode,
               projectPath,
+              projectId: scopeProjectId,
               model: selectedModel,
               events: session.events,
               exitCode: undefined,
@@ -592,12 +625,28 @@ export const useAgentStore = create<AgentStore>()(
           }
           if (abortController.signal.aborted) return id;
 
+          const scopeId = shouldContinue && activeSession ? activeSession.id : "new-chat";
+          const bridge = createPiChatTools({ sessionId: id, scopeId, projectId: scopeProjectId, webSearchEnabled: input.webSearchEnabled ?? false, signal: abortController.signal, onOutput: (output) => {
+            if (abortController.signal.aborted) return;
+            set((state) => {
+              const current = state.sessions.find((item) => item.id === id);
+              return current ? { sessions: patchSession(state.sessions, id, { events: [...current.events, output] }) } : state;
+            });
+          } });
+          const extensions = useExtensionsStore.getState();
+          const selectedSkill = extensions.resolveActiveSkillSelection(scopeId, scopeProjectId);
+          const project = scopeProjectId ? useProjectStore.getState().projects.find((item) => item.id === scopeProjectId) : undefined;
+          const contextualPrompt = [project?.systemPrompt ? `Project guidance:\n${project.systemPrompt}` : "", selectedSkill ? buildSkillContext(selectedSkill.skill, selectedSkill.workflowId) : "", userPrompt].filter(Boolean).join("\n\n");
+          if (scopeId === "new-chat") {
+            extensions.setActiveSkill(id, selectedSkill?.skill.id ?? null, selectedSkill?.workflowId);
+            useExtensionsStore.setState((state) => ({ chatDisabledMcpServerIds: { ...state.chatDisabledMcpServerIds, [id]: state.chatDisabledMcpServerIds[scopeId] ?? [] }, chatEnabledMcpServerIds: { ...state.chatEnabledMcpServerIds, [id]: state.chatEnabledMcpServerIds[scopeId] ?? [] } }));
+          }
           const result = await runPiAgent(
             {
               sessionId: id,
               mode,
               projectPath,
-              prompt: agentPromptWithMemory(userPrompt, memoryBlock, {
+              prompt: agentPromptWithMemory(contextualPrompt, memoryBlock, {
                 session: shouldContinue ? activeSession ?? null : null,
                 contextLength: input.contextLength,
                 reservedOutputTokens: input.reservedOutputTokens,
@@ -609,6 +658,8 @@ export const useAgentStore = create<AgentStore>()(
               providerBaseUrl: input.providerBaseUrl,
               reasoningEnabled: input.reasoningEnabled,
               reasoningLevel: input.reasoningLevel,
+              images: input.images,
+              tools: bridge.tools,
             },
             (rawEvent) => {
               const parsedEvent = parsePiEvent(rawEvent);
@@ -638,7 +689,7 @@ export const useAgentStore = create<AgentStore>()(
                 };
               });
             },
-            { signal: abortController.signal },
+            { signal: abortController.signal, onUiRequest: bridge.handle },
           );
 
           const currentSession = get().sessions.find((item) => item.id === id);
@@ -754,7 +805,6 @@ export const useAgentStore = create<AgentStore>()(
       name: "veyra-agent-store",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        sessions: state.sessions.filter((session) => session.status !== "running"),
         activeSessionId: state.sessions.some(
           (session) => session.id === state.activeSessionId && session.status !== "running",
         )

@@ -44,3 +44,16 @@ describe("buildUserPreferencesBlock", () => {
     expect(buildUserPreferencesBlock("   ")).toBe("");
   });
 });
+
+describe("enabled tool guidance", () => {
+  it("includes guidance only for tools attached to the request", () => {
+    const prompt = composeMainSystemPrompt({ availableToolNames: ["web_search"] });
+    expect(prompt).toContain("Use web_search for explicit lookup requests");
+    expect(prompt).not.toContain("Use code_execution for");
+    expect(prompt).not.toContain("Use generate_interactive_answer when");
+  });
+  it("describes unavailable tools honestly", () => {
+    expect(composeMainSystemPrompt({ availableToolNames: [] })).toContain("No tools are available for this request");
+    expect(composeMainSystemPrompt({})).not.toContain("No tools are available for this request");
+  });
+});

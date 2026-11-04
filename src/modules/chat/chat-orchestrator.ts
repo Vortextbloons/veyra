@@ -128,6 +128,7 @@ export async function sendChatRequest({
   };
 
   const roundMessagesContext = {
+    availableToolNames: providerTools.map((tool) => tool.function.name),
     conversation,
     resolvedUserPrompt: resolved.userPrompt,
     resolvedReservedOutputTokens: resolved.reservedOutputTokens,

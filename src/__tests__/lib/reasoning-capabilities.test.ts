@@ -56,3 +56,9 @@ it("uses NVIDIA MiniMax M3.1 Flash's documented effort levels", () => {
   expect(chatModelReasoning(managed, "other", "https://integrate.api.nvidia.com/v1")).toBe(managed);
   expect(chatModelReasoning(managed, "minimaxai/minimax-m3.1-flash", "https://example.com/v1")).toBe(managed);
 });
+it("exposes NVIDIA Nemotron's documented toggle when Pi reports managed", () => {
+  const managed = { known: true, control: "none" as const, levels: [], message: "Managed" };
+  expect(chatModelReasoning(managed, "nvidia/nemotron-3.5-super-vl-120b-a12b", "https://integrate.api.nvidia.com/v1"))
+    .toMatchObject({ control: "toggle", levels: ["off", "medium"] });
+  expect(chatModelReasoning(managed, "nvidia/nemotron-3.5-super-vl-120b-a12b", "https://example.com/v1")).toBe(managed);
+});

@@ -112,6 +112,8 @@ export interface MessagePerformance {
 }
 
 export interface Conversation {
+  /** Pi run state shares the encrypted conversation snapshot. */
+  agentSession?: AgentSession;
   id: string;
   title: string;
   messages: ChatMessage[];

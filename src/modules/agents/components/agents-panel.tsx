@@ -1,16 +1,14 @@
 import { useState, type ReactNode } from "react";
-import { Bot, FolderOpen, Plus, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Search, ChevronRight, Folder, ArrowUpRight, RefreshCw, TerminalSquare, ListTodo, Code2, Square, Trash2 } from "lucide-react";
+import { FolderOpen, PanelRightClose, PanelRightOpen, RefreshCw, X } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { AgentMode, AgentSession } from "../agent-types";
-import { useAgentStore } from "../agent-store";
 import { AgentOutputView } from "./agent-output-view";
-import { StatusDot } from "../agent-status-dot";
 import { AgentInspector } from "./agent-inspector";
 import "./agent-workspace.css";
-
-function projectName(path: string) {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) || "Default workspace";
-}
+import { PiQuestion } from "../pi-questions";
+import { useProjectStore } from "@/modules/projects/project-store";
+import { useAgentStore } from "../agent-store";
+import { resolveAgentProjectId } from "../agent-session-context";
 
 type AgentsPanelProps = {
   sessions: AgentSession[]; activeSessionId: string | null; runtimeAvailable: boolean | null;
@@ -20,72 +18,64 @@ type AgentsPanelProps = {
   composer: ReactNode; connection: ReactNode; onSuggestion: (text: string) => void;
 };
 
-export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, projectPath, onProjectPathChange, onCheckRuntime, onNewSession, onSelectSession, onStopSession, onDeleteSession, composer, connection, onSuggestion }: AgentsPanelProps) {
-  const savedProjects = useAgentStore((state) => state.projects);
-  const projects = [...new Set([...savedProjects, ...sessions.map((session) => session.projectPath), projectPath])];
+export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, projectPath, onProjectPathChange, onCheckRuntime, onStopSession, composer, connection, onSuggestion }: AgentsPanelProps) {
   const active = sessions.find((session) => session.id === activeSessionId) ?? null;
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const running = sessions.some((session) => session.status === "running" && session.projectPath === projectPath);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [query, setQuery] = useState("");
   const [error, setError] = useState("");
-  const addProject = async () => {
+  const projects = useProjectStore((state) => state.projects);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const selectProject = (id: string) => {
+    const project = projects.find((item) => item.id === id);
+    useProjectStore.getState().setActiveProjectId(project?.id ?? null);
+    onProjectPathChange(project?.settings.agentProjectPath ?? "");
+    if (!project?.settings.agentProjectPath) useAgentStore.getState().newSession();
+  };
+  const attachProject = async () => {
     try {
-      const path = await open({ directory: true, title: "Open agent project" });
-      if (typeof path === "string") { onProjectPathChange(path); onNewSession(); setError(""); }
+      const path = await open({ directory: true, title: "Attach a project" });
+      if (typeof path === "string") {
+        const matchingId = resolveAgentProjectId(path, projects);
+        let project = projects.find((item) => item.id === matchingId);
+        const selected = projects.find((item) => item.id === activeProjectId);
+        if (!project && selected && !selected.settings.agentProjectPath) project = await useProjectStore.getState().updateProject(selected.id, { settings: { ...selected.settings, agentProjectPath: path } });
+        if (!project) project = await useProjectStore.getState().createProject(path.split(/[\\/]/).filter(Boolean).at(-1) || "Project", { kind: "codebase", settings: { agentProjectPath: path } });
+        useProjectStore.getState().setActiveProjectId(project.id);
+        onProjectPathChange(path);
+        setError("");
+      }
     } catch (cause) { setError(`Could not open a folder: ${String(cause)}`); }
   };
   return <main className="agent-workspace">
-    {sidebarOpen && <aside className="agent-projects">
-      <div className="agent-sidebar-heading"><span><Bot size={16} />Agents</span><button className="agent-icon-button" onClick={() => setSidebarOpen(false)} aria-label="Collapse projects"><PanelLeftClose size={16} /></button></div>
-      <button className="agent-new-task" onClick={onNewSession}><Plus size={15} />New session<span aria-hidden="true">↗</span></button>
-      <label className="agent-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a project or session" aria-label="Find a project or session" /></label>
-      <div className="agent-section-label">Projects<button className="agent-icon-button" onClick={() => void addProject()} aria-label="Add project"><Plus size={14} /></button></div>
-      <nav className="agent-project-tree" aria-label="Agent projects">
-        {projects.map((path) => {
-          const projectSessions = sessions.filter((session) => session.projectPath === path);
-          const match = projectName(path).toLowerCase().includes(query.toLowerCase());
-          const visible = projectSessions.filter((session) => match || session.title.toLowerCase().includes(query.toLowerCase()));
-          if (!match && visible.length === 0) return null;
-          return <div key={path} className="agent-project-group">
-            <button className={`agent-project-row ${path === projectPath ? "is-selected" : ""}`} title={path || "Default workspace"} onClick={() => onProjectPathChange(path)}>
-              <ChevronRight size={12} className={path === projectPath || query ? "is-expanded" : ""} /><Folder size={15} /><span>{projectName(path)}</span>
-              {projectSessions.some((session) => session.status === "running") && <StatusDot status="running" />}
-            </button>
-            {(path === projectPath || query) && <div className="agent-project-sessions">
-              {visible.length === 0 && <p className="agent-no-sessions">Your sessions will appear here</p>}
-              {visible.map((session) => <div key={session.id} className={`agent-session-row ${session.id === activeSessionId ? "is-selected" : ""}`}>
-                <button className="agent-session-select" onClick={() => onSelectSession(session.id)} title={session.title}><StatusDot status={session.status} /><span>{session.title}</span></button>
-                <button className="agent-session-action agent-icon-button" aria-label={session.status === "running" ? `Stop ${session.title}` : `Delete ${session.title}`} onClick={() => {
-                  if (session.status === "running") onStopSession(session.id);
-                  else if (window.confirm(`Delete session "${session.title}"? This cannot be undone.`)) onDeleteSession(session.id);
-                }}>{session.status === "running" ? <Square size={12} /> : <Trash2 size={12} />}</button>
-              </div>)}
-            </div>}
-          </div>;
-        })}
-      </nav>
-      <div className="agent-sidebar-footer"><button onClick={() => void addProject()}><FolderOpen size={15} />Open project</button><button onClick={onCheckRuntime} title="Check agent runtime"><span className={`agent-runtime-dot ${runtimeAvailable ? "is-ready" : ""}`} />{runtimeAvailable === true ? "Runtime ready" : runtimeAvailable === false ? "Runtime unavailable" : "Check runtime"}<RefreshCw size={12} /></button></div>
-    </aside>}
     <section className="agent-main">
       <header className="agent-workspace-header">
-        {!sidebarOpen && <button className="agent-icon-button" onClick={() => setSidebarOpen(true)} aria-label="Expand projects"><PanelLeftOpen size={16} /></button>}
-        <div className="agent-breadcrumb"><span title={projectPath}>{projectName(projectPath)}</span><ChevronRight size={12} /><strong>{active?.title || "New session"}</strong></div>
-        <button className="agent-icon-button" onClick={() => setInspectorOpen(!inspectorOpen)} aria-label={inspectorOpen ? "Close inspector" : "Open project inspector"} aria-expanded={inspectorOpen}>{inspectorOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}</button>
+        <div className="agent-breadcrumb"><strong>{active?.title || "New chat"}</strong></div>
+        <select aria-label="Project" value={activeProjectId ?? ""} disabled={running} onChange={(event) => selectProject(event.target.value)} className="max-w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs">
+          <option value="">No project</option>
+          {projects.filter((project) => project.status !== "archived").map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+        </select>
+        <button className="agent-icon-button flex items-center gap-2 text-xs" disabled={running} onClick={() => void attachProject()} title={projectPath || "Attach a folder to read, edit files, and run commands"}><FolderOpen size={15} />{projectPath.split(/[\\/]/).filter(Boolean).at(-1) || "Attach project"}</button>
+        {projectPath && <button className="agent-icon-button" disabled={running} aria-label="Detach project" onClick={() => { selectProject(""); setInspectorOpen(false); }}><X size={14} /></button>}
+        {projectPath && <button className="agent-icon-button" onClick={() => setInspectorOpen(!inspectorOpen)} aria-label={inspectorOpen ? "Close inspector" : "Open project inspector"} aria-expanded={inspectorOpen}>{inspectorOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}</button>}
       </header>
       {connection}
+      {runtimeAvailable !== true && <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-6 py-3 text-xs text-[var(--color-text-dim)]" role="status">
+        <span>{runtimeAvailable === null ? "Checking chat runtime…" : "Pi is unavailable. Install Pi or check that it is on your PATH, then retry."}</span>
+        <button className="flex items-center gap-2" onClick={onCheckRuntime}><RefreshCw size={13} />Retry</button>
+      </div>}
       {error && <div className="agent-inline-error" role="alert">{error}</div>}
-      {active ? <AgentOutputView key={active.id} session={active} onStop={onStopSession} /> : <div className="agent-start">
-        <div className="agent-start-content"><div className="agent-start-icon"><TerminalSquare size={25} strokeWidth={1.4} /></div>
-          <p className="agent-eyebrow">{projectName(projectPath)}</p><h1>What should we work on?</h1><p className="agent-start-description">Explore the code. Make a plan. Build something better.</p>
+      {active ? <AgentOutputView key={active.id} session={active} onStop={onStopSession} onFollowUp={onSuggestion} /> : <div className="agent-start">
+        <div className="agent-start-content"><h1>What’s on your mind?</h1><p className="agent-start-description">Ask a question, explore an idea, or work on a project.</p>
           <div className="agent-starters">{[
-            { icon: Code2, title: "Explore this project", text: "Inspect this project and explain its architecture, entry points, and development commands." },
-            { icon: ListTodo, title: "Plan a change", text: "Help me plan a change to this project. First inspect the code, then ask what I want to build." },
-            { icon: TerminalSquare, title: "Review the code", text: "Review this project for correctness issues and missing tests. Report concrete findings with file references." },
-          ].map((item) => <button key={item.title} onClick={() => onSuggestion(item.text)}><item.icon size={16} /><span>{item.title}</span><ArrowUpRight size={13} /></button>)}</div>
+            { title: "Think through an idea", text: "Help me think through an idea. Ask me what I have in mind." },
+            { title: "Find an answer", text: "Help me research a question. Ask me what I want to find out." },
+            { title: "Work on a project", text: projectPath ? "Explore this project and briefly explain what it does and how to run it." : "Help me work on a project. Ask me what I want to make or change." },
+          ].map((item) => <button key={item.title} onClick={() => onSuggestion(item.text)}>{item.title}</button>)}</div>
         </div>
       </div>}
+      <PiQuestion sessionId={activeSessionId} />
       {composer}
     </section>
-    {inspectorOpen && <AgentInspector projectPath={projectPath} session={active} />}
+    {inspectorOpen && projectPath && <AgentInspector projectPath={projectPath} session={active} />}
   </main>;
 }

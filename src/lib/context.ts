@@ -32,6 +32,7 @@ export interface BuildChatContextOptions {
   skillContextBlock?: string | null;
   /** Custom user preferences block appended after the core prompt. */
   userPrompt?: string | null;
+  availableToolNames?: string[];
   /** Number of tokens reserved for the model's response. */
   reservedOutputTokens?: number;
   /** Active model display name — injected into the system prompt so the
@@ -85,6 +86,7 @@ function buildContextContents(options: BuildChatContextOptions): {
 
   const systemContent = composeMainSystemPrompt({
     userPrompt,
+    availableToolNames: options.availableToolNames,
     projectPromptBlock,
     skillContextBlock,
     contextAnchoringBlock,

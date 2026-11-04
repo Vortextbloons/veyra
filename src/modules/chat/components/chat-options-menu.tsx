@@ -5,6 +5,7 @@ import { ChatExtensionsSettings } from "@/modules/extensions/components/chat-ext
 import { useSettingsStore } from "@/stores/settings-store";
 
 export type ChatOptionsMenuProps = {
+  unified?: boolean;
   open: boolean;
   onClose: () => void;
   enhancedMode: boolean;
@@ -141,6 +142,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 export function ChatOptionsMenu({
+  unified = false,
   open,
   onClose,
   enhancedMode,
@@ -205,14 +207,14 @@ export function ChatOptionsMenu({
         {activeTab === "chat" ? (
           <div id="chat-settings-panel" role="tabpanel" aria-label="Chat">
             <SectionLabel>Conversation</SectionLabel>
-            <SettingRow
+            {!unified && <SettingRow
               icon={<Zap className="size-4" />}
               label="Enhanced"
               description="More tool rounds, notes, and follow-up questions"
               active={enhancedMode}
               onToggle={onEnhancedModeChange}
-            />
-            {enhancedMode && (
+            />}
+            {(unified || enhancedMode) && (
               <div className="ml-4 border-l border-white/[0.08] pl-2">
                 <SettingRow
                   icon={<LayoutDashboard className="size-4" />}

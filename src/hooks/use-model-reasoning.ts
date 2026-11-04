@@ -35,7 +35,7 @@ export type ModelReasoningState = {
  * Everything else falls back to Pi's model registry, which is also what the Pi
  * agent runtime consumes.
  */
-export function useModelReasoning(): ModelReasoningState {
+export function useModelReasoning(runtime: "chat" | "pi" = "chat"): ModelReasoningState {
   const providerId = useProviderStore((state) => state.selectedProvider);
   const model = useProviderStore((state) => state.selectedModel);
   const baseUrl = useProviderStore(
@@ -54,7 +54,7 @@ export function useModelReasoning(): ModelReasoningState {
     const forceRefresh = refreshToken !== previousRefresh.current;
     previousRefresh.current = refreshToken;
 
-    const localEndpoint = providerId === "lm-studio";
+    const localEndpoint = providerId === "lm-studio" && runtime !== "pi";
     const endpointLookup = localEndpoint
       ? inspectLmStudioReasoning(model, baseUrl, forceRefresh).catch(() => null)
       : Promise.resolve(null);
@@ -66,7 +66,7 @@ export function useModelReasoning(): ModelReasoningState {
       .then(([endpoint, registry]) => {
         if (cancelled) return;
         if (!endpoint) {
-          const result = localEndpoint ? registry : chatModelReasoning(registry, model, baseUrl);
+          const result = runtime === "pi" || localEndpoint ? registry : chatModelReasoning(registry, model, baseUrl);
           rememberReasoningCapabilities(modelKey, result.control ?? "unknown", result.levels);
           setLookup({ key: requestKey, result });
           return;
@@ -82,7 +82,7 @@ export function useModelReasoning(): ModelReasoningState {
     return () => {
       cancelled = true;
     };
-  }, [providerId, model, baseUrl, modelKey, refreshToken, requestKey]);
+  }, [providerId, model, baseUrl, modelKey, refreshToken, requestKey, runtime]);
 
   useEffect(() => {
     if (!hasTauriRuntime()) return;

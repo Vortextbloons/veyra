@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Downloads the pinned DonSeTch release that Veyra bundles as its local search
- * engine, plus the rerank model so the first search does not need to download
- * 23 MB from Hugging Face.
+ * Downloads the pinned DonSeTch runtime, builds Veyra's adaptive-recall patch,
+ * and bundles the rerank model so the first search does not need to download
+ * 23 MB from Hugging Face. Native build prerequisites are documented in
+ * scripts/search-engine/README.md.
  *
  * The artifact is intentionally not committed. Run this once after cloning and
  * before `npm run dev:app` / `npm run build:app`; both scripts also call it.
@@ -13,11 +14,15 @@
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import {
+  buildPatchedSearchEngine,
+  isPatchedEngineCurrent,
+} from "./search-engine/build-patched-engine.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const TARGET = path.join(ROOT, "src-tauri", "resources", "search-engine");
@@ -133,15 +138,18 @@ async function main() {
   if (
     !force &&
     required.every((file) => existsSync(file)) &&
-    (await readFile(versionFile, "utf8")).trim() === VERSION
+    (await readFile(versionFile, "utf8")).trim() === VERSION &&
+    await isPatchedEngineCurrent(TARGET, platform.binary)
   ) {
-    log(`Already present (v${VERSION}).`);
+    log(`Already present (v${VERSION}, adaptive recall).`);
     return;
   }
 
   await mkdir(TARGET, { recursive: true });
   const temp = await mkdtemp(path.join(os.tmpdir(), "veyra-search-engine-"));
   try {
+    const staging = path.join(temp, "runtime");
+    await mkdir(staging);
     const archive = path.join(temp, platform.asset);
     log(`Downloading DonSeTch v${VERSION} (${platformKey})…`);
     const expected = platform.sha256 ?? (await releaseSha256(platform.asset));
@@ -152,22 +160,24 @@ async function main() {
     );
 
     log("Extracting…");
-    const extracted = spawnSync("tar", ["-xzf", archive, "-C", TARGET], {
+    const extracted = spawnSync("tar", ["-xzf", archive, "-C", staging], {
       stdio: "inherit",
     });
     if (extracted.status !== 0) {
       throw new Error("Could not extract the DonSeTch archive (tar failed).");
     }
     if (process.platform !== "win32") {
-      await chmod(binaryFile, 0o755);
+      await chmod(path.join(staging, platform.binary), 0o755);
     }
 
     const license = path.join(temp, "LICENSE");
     await download(`${REPO}/raw/v${VERSION}/LICENSE`, license);
-    await copyFile(license, path.join(TARGET, "LICENSE"));
+    await copyFile(license, path.join(staging, "LICENSE"));
+
+    await buildPatchedSearchEngine(staging, platform.binary, REPO, VERSION);
 
     await writeFile(
-      path.join(TARGET, "SOURCE-OFFER.txt"),
+      path.join(staging, "SOURCE-OFFER.txt"),
       [
         `DonSeTch v${VERSION} (git ${COMMIT})`,
         `Copyright (c) 2026 Bishesh Bhandari`,
@@ -176,9 +186,12 @@ async function main() {
         `Corresponding source for this exact release:`,
         `  ${REPO}/tree/v${VERSION}`,
         ``,
-        `This copy is unmodified. Veyra runs it as a separate process and does`,
-        `not link against it. If Veyra ever patches the engine, the patch must`,
-        `also be published under the AGPL-3.0.`,
+        `This copy includes Veyra's adaptive-recall patch (AGPL-3.0-only).`,
+        `Complete patched source: SOURCE.tar.gz beside this file.`,
+        `Patch: adaptive-recall.patch beside this file.`,
+        `Build identity and binary checksum: VEYRA-BUILD.json.`,
+        `Build: cargo build --release --locked --features ocr,rerank,http`,
+        `Veyra runs it as a separate process and does not link against it.`,
         ``,
         `Third-party components shipped beside the engine:`,
         `  - ONNX Runtime (MIT): https://github.com/microsoft/onnxruntime`,
@@ -187,20 +200,25 @@ async function main() {
       ].join("\n"),
     );
 
+    if (!force && existsSync(path.join(TARGET, "rerank"))) {
+      await cp(path.join(TARGET, "rerank"), path.join(staging, "rerank"), { recursive: true });
+    }
     await ensureModel(
-      path.join(TARGET, "rerank"),
+      path.join(staging, "rerank"),
       MODEL_URL,
       "model_quantized.onnx",
       MODEL_SHA256,
     );
     await ensureModel(
-      path.join(TARGET, "rerank"),
+      path.join(staging, "rerank"),
       TOKENIZER_URL,
       "tokenizer.json",
       TOKENIZER_SHA256,
     );
 
-    await writeFile(versionFile, `${VERSION}\n`);
+    await writeFile(path.join(staging, "VERSION"), `${VERSION}\n`);
+    // A failed download or native build leaves the previous runtime usable.
+    await cp(staging, TARGET, { recursive: true });
     log(`Ready: ${TARGET}`);
   } finally {
     await rm(temp, { recursive: true, force: true });

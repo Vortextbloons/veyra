@@ -7,6 +7,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import { invokeStopSearchEngine } from "@/modules/web-search/tauri-commands";
 import { useChatStore } from "@/stores/chat-store";
 import { useResearchStore } from "@/modules/research/research-store";
+import { flushPiConversations } from "@/modules/agents/pi-conversation-storage";
 
 const SHUTDOWN_STEP_TIMEOUT_MS = 6000;
 
@@ -122,6 +123,7 @@ async function withTimeout(promise: Promise<void>, label: string): Promise<void>
 }
 
 async function persistConversations(): Promise<void> {
+  flushPiConversations();
   const {
     streamingBuffer,
     activeConversationId,

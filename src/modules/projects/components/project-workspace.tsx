@@ -9,6 +9,7 @@ import type { ProjectRecord } from "@/modules/projects/project-types";
 import { PROJECT_KIND_LABELS } from "@/modules/projects/project-types";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useChatStore } from "@/stores/chat-store";
+import { useAgentStore } from "@/modules/agents/agent-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { ProjectSettingsPanel } from "./project-settings-panel";
 import { ProjectExportPanel } from "./project-export-panel";
@@ -132,7 +133,6 @@ function OverviewTab({ project }: { project: ProjectRecord }) {
 
 function ChatsTab({ project }: { project: ProjectRecord }) {
   const conversations = useChatStore((s) => s.conversations);
-  const createConversation = useChatStore((s) => s.createConversation);
   const setActiveConversationId = useChatStore((s) => s.setActiveConversationId);
   const setActiveNav = useSettingsStore((s) => s.setActiveNav);
 
@@ -142,12 +142,18 @@ function ChatsTab({ project }: { project: ProjectRecord }) {
   );
 
   const handleNewChat = () => {
-    createConversation(project.id);
+    useAgentStore.getState().setProjectPath(project.settings.agentProjectPath ?? "");
+    useAgentStore.getState().newSession();
+    useProjectStore.getState().setActiveProjectId(project.id);
     setActiveNav("chat");
   };
 
   const handleChatSelect = (id: string) => {
     setActiveConversationId(id);
+    const conversation = conversations.find((item) => item.id === id);
+    if (conversation?.agentSession) useAgentStore.getState().setActiveSessionId(conversation.agentSession.id);
+    else if (conversation) useAgentStore.getState().importConversation(conversation, project.settings.agentProjectPath ?? "");
+    useProjectStore.getState().setActiveProjectId(project.id);
     setActiveNav("chat");
   };
 

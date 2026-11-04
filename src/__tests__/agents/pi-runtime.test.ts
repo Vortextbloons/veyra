@@ -28,6 +28,18 @@ describe("runPiAgent", () => {
     mocks.invoke.mockReset();
     mocks.listen.mockReset();
   });
+  it("answers host tool requests through the matching RPC request id", async () => {
+    const handlers = new Map<string, (event: { payload: unknown }) => void>();
+    mocks.listen.mockImplementation(async (name, handler) => { handlers.set(name, handler); return vi.fn(); });
+    mocks.invoke.mockResolvedValue(undefined);
+    const onUiRequest = vi.fn().mockResolvedValue("search evidence");
+    const run = runPiAgent(input, undefined, { onUiRequest });
+    await vi.waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("run_pi_agent", { input }));
+    handlers.get("agent://run-event")?.({ payload: { sessionId: input.sessionId, stream: "stdout", line: JSON.stringify({ type: "extension_ui_request", id: "tool-request", method: "input", title: "veyra_tool", placeholder: "{}" }) } });
+    await vi.waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("respond_pi_ui", { sessionId: input.sessionId, requestId: "tool-request", value: "search evidence" }));
+    handlers.get("agent://run-finished")?.({ payload: { sessionId: input.sessionId, result: { stdout: "", stderr: "", exitCode: 0 } } });
+    await expect(run).resolves.toMatchObject({ exitCode: 0 });
+  });
 
   it("does not register listeners or invoke the backend for an already-aborted run", async () => {
     const controller = new AbortController();

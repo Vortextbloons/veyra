@@ -9,6 +9,7 @@ import { readV1SseStream } from "@/lib/lm-studio-sse";
 import { withFetchTimeout } from "@/lib/abort-utils";
 import { parseToolArguments, stableToolCallId, extractToolCalls } from "@/lib/lm-studio-v1";
 import { DEFAULT_LM_STUDIO_BASE_URL } from "@/lib/lm-studio-constants";
+import { usesNvidiaThinkingToggle } from "@/lib/reasoning-capabilities";
 import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
 import { lmStudioReasoningEffort } from "@/lib/providers/lm-studio-reasoning";
 import { formatLmStudioCaughtError, formatLmStudioRequestError } from "@/lib/lm-studio-request";
@@ -65,7 +66,7 @@ function buildOpenAiMessage(message: ChatMessage): Record<string, unknown> {
   };
 }
 
-function buildOpenAiChatBody(options: {
+export function buildOpenAiChatBody(options: {
   model: string;
   messages: ChatMessage[];
   baseUrl?: string;
@@ -95,7 +96,11 @@ function buildOpenAiChatBody(options: {
     body.tools = options.tools;
     body.tool_choice = options.toolChoice ?? "auto";
   }
-  if (options.reasoningLevel && !options.omitUnsupportedFields) {
+  if (usesNvidiaThinkingToggle(options.model, options.baseUrl) && !options.omitUnsupportedFields) {
+    body.chat_template_kwargs = {
+      enable_thinking: options.reasoningLevel ? options.reasoningLevel !== "off" : options.reasoningEnabled !== false,
+    };
+  } else if (options.reasoningLevel && !options.omitUnsupportedFields) {
     // Prefer the exact options the endpoint advertises; unknown support sends
     // nothing so a model is never rejected for an unsupported effort value.
     const advertised = lmStudioReasoningEffort(options.model, options.reasoningLevel, options.baseUrl);

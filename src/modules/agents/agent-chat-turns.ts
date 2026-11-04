@@ -10,6 +10,9 @@ export type AgentChatTurnModel = {
   animate?: boolean;
   /** Provider-qualified model id (e.g. "lmstudio/qwen2.5-7b"). */
   model?: string;
+  attachments?: AgentEvent["attachments"];
+  artifact?: AgentEvent["artifact"];
+  interactiveAnswer?: AgentEvent["interactiveAnswer"];
 };
 
 export function shouldAnimateAgentText(event: AgentEvent) {
@@ -25,9 +28,14 @@ export function buildAgentChatTurns(
   let previousEventType: AgentEvent["type"] | null = null;
 
   for (const evt of events) {
+    if (evt.artifact || evt.interactiveAnswer) {
+      turns.push({ id: evt.id, role: "assistant", content: evt.detail ?? "", artifact: evt.artifact, interactiveAnswer: evt.interactiveAnswer, model });
+      previousEventType = evt.type;
+      continue;
+    }
     if (evt.type === "status" && evt.title === "Prompt" && evt.detail?.trim()) {
       toolTurnIndexByCallId.clear();
-      turns.push({ id: evt.id, role: "user", content: evt.detail.trim() });
+      turns.push({ id: evt.id, role: "user", content: evt.detail.trim(), attachments: evt.attachments });
       previousEventType = evt.type;
       continue;
     }

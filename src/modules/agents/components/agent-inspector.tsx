@@ -13,7 +13,7 @@ export function AgentInspector({ projectPath, session }: { projectPath: string; 
       <button role="tab" aria-selected={tab === "activity"} onClick={() => setTab("activity")}>Activity</button>
     </div>
     {tab === "files" ? <WorkspaceFiles key={projectPath} projectPath={projectPath} /> : <div className="agent-inspector-scroll">
-      <div className="agent-session-facts"><span>Session</span><strong>{session?.status ?? "Not started"}</strong><span>Mode</span><strong>{session?.mode ?? "—"}</strong><span>Context tokens</span><strong>{session?.contextTokens?.toLocaleString() ?? "—"}</strong></div>
+      <div className="agent-session-facts"><span>Conversation</span><strong>{session?.status ?? "Not started"}</strong><span>Context tokens</span><strong>{session?.contextTokens?.toLocaleString() ?? "—"}</strong></div>
       <p className="agent-section-label">Tool activity</p>
       {!session?.events.some((event) => event.type === "tool") && <p className="agent-inspector-empty">File reads, commands, and edits will appear here when the agent uses tools.</p>}
       {session?.events.filter((event) => event.type === "tool").map((event) => <details key={event.id} className="agent-tool-log"><summary>{event.title}<time>{new Date(event.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></summary><pre>{event.detail || "Running tool…"}</pre></details>)}

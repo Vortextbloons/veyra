@@ -29,9 +29,10 @@ const MarkdownRenderer = lazy(() =>
 type ArtifactBlockProps = {
   artifact: Artifact;
   messageId: string;
+  onDocumentSave?: (title: string, content: string) => boolean;
 };
 
-export function ArtifactBlock({ artifact, messageId }: ArtifactBlockProps) {
+export function ArtifactBlock({ artifact, messageId, onDocumentSave }: ArtifactBlockProps) {
   const [expanded, setExpanded] = useState(true);
   const [fullScreen, setFullScreen] = useState(false);
   const [source, setSource] = useState(false);
@@ -79,7 +80,7 @@ export function ArtifactBlock({ artifact, messageId }: ArtifactBlockProps) {
   };
 
   const saveDocument = () => {
-    const saved = useChatStore.getState().updateAssistantDocument(messageId, titleDraft, contentDraft);
+    const saved = onDocumentSave ? onDocumentSave(titleDraft, contentDraft) : useChatStore.getState().updateAssistantDocument(messageId, titleDraft, contentDraft);
     setStatus(saved ? "Document saved" : "The document could not be saved. Check its title and 256 KB size limit.");
     if (saved) setEditing(false);
   };

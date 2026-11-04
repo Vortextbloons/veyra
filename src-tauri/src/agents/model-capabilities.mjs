@@ -98,7 +98,10 @@ export function configureModelRoute(config, { providerId, modelId, baseUrl, cont
   const contextWindow = Math.max(1024, Math.min(262144, Number(contextLength) || 8192));
   const output = Math.max(128, Math.min(contextWindow - 128, Number(maxTokens) || Math.max(256, Math.floor(contextWindow / 4))));
   const alias = { "lm-studio": "lmstudio", "opencode-zen": "opencode" }[providerId] ?? providerId;
-  const template = models.find((model) => model.provider === alias && model.id === modelId);
+  const matches = models.filter((model) => !model.provider.startsWith("veyra-") &&
+    (model.id === modelId || `${model.provider}/${model.id}` === modelId));
+  const template = matches.find((model) => model.provider === alias) ??
+    (matches.length === 1 ? matches[0] : undefined);
   const entry = config.providers[provider] ??= {
     baseUrl: endpoint, api: "openai-completions",
     apiKey: local ? "lm-studio" : "$VEYRA_PI_API_KEY",
@@ -113,7 +116,9 @@ export function configureModelRoute(config, { providerId, modelId, baseUrl, cont
     ...(template?.thinkingLevelMap ? { thinkingLevelMap: template.thinkingLevelMap } : {}),
   };
   const existing = entry.models.find((item) => item.id === modelId);
-  if (existing) Object.assign(existing, { contextWindow, maxTokens: output });
+  if (existing) Object.assign(existing, { contextWindow, maxTokens: output,
+    ...(template ? { reasoning: model.reasoning, compat: model.compat, thinkingLevelMap: model.thinkingLevelMap } : {}),
+  });
   else entry.models.push(model);
   return { config, provider };
 }

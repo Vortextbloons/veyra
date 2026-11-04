@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { FileText, Folder, PencilLine } from "lucide-react";
 import type { ChatMode, ChatPanelProps } from "@/modules/chat/chat-types";
@@ -11,7 +12,6 @@ import { ProviderConnectionBanner } from "@/components/provider-connection-banne
 import { ProviderSelector } from "@/components/provider-selector";
 import { ModelSelector, type Model } from "@/components/model-selector";
 import { ModelLoadingBar } from "@/components/model-loading-bar";
-import { AgentComposer } from "@/modules/agents/components/agent-composer";
 import { AgentsPanel } from "@/modules/agents/components/agents-panel";
 import { Composer } from "@/modules/chat/components/composer";
 import { ContextMeterButton } from "@/modules/chat/components/context-meter";
@@ -19,6 +19,7 @@ import { MessageBubble } from "@/modules/chat/components/message-bubble";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { resolvePendingQuestion } from "@/modules/chat/tools/ask-question-tool";
+import { aiScheduler } from "@/lib/ai-scheduler";
 
 const VIRTUALIZE_AFTER_MESSAGES = 80;
 const ESTIMATED_MESSAGE_HEIGHT = 180;
@@ -73,9 +74,8 @@ export function ChatPanel({
   agentSessions = [],
   activeAgentSessionId = null,
   agentRuntimeAvailable = null,
-  agentMode = "plan",
+  agentMode = "chat",
   agentProjectPath = "",
-  onAgentModeChange,
   onAgentProjectPathChange,
   onAgentRuntimeCheck,
   onAgentNewSession,
@@ -101,6 +101,8 @@ export function ChatPanel({
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const [agentSuggestion, setAgentSuggestion] = useState({ text: "", id: "" });
   const mode = controlledMode ?? internalMode;
+  const scheduler = useSyncExternalStore((listener) => aiScheduler.subscribeToScheduler(listener), () => aiScheduler.getSchedulerSnapshot());
+  const pendingPiJob = [scheduler.activeJob, ...scheduler.queuedJobs].find((job) => job?.type === "agent_pi" && job.conversationId === `agent:${agentProjectPath.trim()}`);
   const agentSessionRunning = mode === "agents" && agentSessions.some((session) => session.status === "running" && session.projectPath === agentProjectPath);
   const agentComposerInputDisabled =
     mode === "agents" &&
@@ -213,6 +215,7 @@ export function ChatPanel({
   const isEmptyChat = mode !== "agents" && messages.length === 0;
   if (mode === "agents") {
     const running = agentSessions.find((session) => session.projectPath === agentProjectPath && session.status === "running");
+    const busy = Boolean(running || pendingPiJob);
     return <AgentsPanel
       sessions={agentSessions} activeSessionId={activeAgentSessionId}
       runtimeAvailable={agentRuntimeAvailable} mode={agentMode} projectPath={agentProjectPath}
@@ -223,13 +226,18 @@ export function ChatPanel({
       connection={<ProviderConnectionBanner provider={currentProvider ?? null} phase={providerConnectionPhase} error={providerConnectionError} onReconnect={() => onProviderReconnect?.()} onStartServer={() => onProviderStartServer?.()} />}
       composer={<>
         {modelLoadProgress && modelLoadProgress.phase !== "ready" && <div className="px-6 pt-2"><ModelLoadingBar progress={modelLoadProgress} /></div>}
-        <AgentComposer projectPath={agentProjectPath} draftKey={agentProjectPath + ":" + (activeAgentSessionId ?? "new")}
-          mode={agentMode} onModeChange={(next) => onAgentModeChange?.(next)}
-          onSend={onSend} onStop={() => { if (running) onAgentSessionStop?.(running.id); }}
-          busy={Boolean(running)} unavailable={agentRuntimeAvailable !== true || !selectedModel}
-          suggestion={agentSuggestion}
-          controls={<><ProviderSelector value={selectedProvider} providers={providers} onChange={onProviderChange} connectionPhase={providerConnectionPhase} onReconnect={(id) => onProviderReconnect?.(id)} onStartServer={(id) => onProviderStartServer?.(id)} /><ModelSelector value={selectedModel} models={selectorModels} onChange={onModelChange} onToggleFavorite={onToggleFavorite} /></>}
+        <div className={`mx-auto w-full max-w-[1100px] pb-3 pt-2 ${layout.footerPx}`}>
+        <Composer key={activeAgentSessionId ?? "new"} mode="agents" enhancedMode={false} onEnhancedModeChange={() => {}}
+          suggestedPrompt={agentSuggestion.text}
+          onSend={onSend} onStop={() => { if (pendingPiJob) aiScheduler.cancelAiJob(pendingPiJob.id); if (running) onAgentSessionStop?.(running.id); }}
+          busy={busy} disabled={agentRuntimeAvailable !== true || !selectedModel || busy} controlsDisabled={busy}
+          supportsImages={supportsImages} composerTextClass={layout.composerText}
+          webSearchEnabled={webSearchEnabled} onWebSearchChange={onWebSearchChange} webSearchDisabled={webSearchDisabled} webSearchDisabledReason={webSearchDisabledReason}
+          contextIndicator={contextStats ? <ContextMeterButton stats={contextStats} /> : undefined}
+          selectorControls={<><ProviderSelector value={selectedProvider} providers={providers} onChange={onProviderChange} connectionPhase={providerConnectionPhase} onReconnect={(id) => onProviderReconnect?.(id)} onStartServer={(id) => onProviderStartServer?.(id)} /><ModelSelector value={selectedModel} models={selectorModels} onChange={onModelChange} onToggleFavorite={onToggleFavorite} /></>}
         />
+        <p className="mt-2 text-center text-[11px] text-[var(--color-muted)]">{agentProjectPath ? "Can edit project files and run commands" : "Ask anything · Attach a project when you need file access"}</p>
+        </div>
       </>}
     />;
   }

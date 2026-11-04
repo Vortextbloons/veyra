@@ -572,6 +572,7 @@ pub fn run() {
             agents::workspace::inspect_agent_workspace,
             agents::commands::run_pi_agent,
             agents::commands::stop_pi_agent,
+            agents::commands::respond_pi_ui,
             connectivity::commands::probe_internet_connectivity,
             web_search::engine::web_search,
             web_search::engine::get_search_engine_status,

@@ -1,0 +1,359 @@
+diff --git a/src/search/mod.rs b/src/search/mod.rs
+index 523e32e..e15bd68 100644
+--- a/src/search/mod.rs
++++ b/src/search/mod.rs
+@@ -18,6 +18,7 @@ pub mod verticals;
+ mod authority;
+ mod enrich;
+ mod persist;
++mod recall;
+ mod render;
+ mod tasks;
+ 
+@@ -732,7 +733,7 @@ impl Searcher {
+ 
+         // Fan out: engines each get their own egress
+         // (spreading is the anti-rate-limit move).
+-        let mut futures: Vec<TaskFut> = Vec::new();
++        let mut futures: Vec<(bool, TaskFut)> = Vec::new();
+         let mut used_egresses: Vec<String> = Vec::new();
+         let mut queries: Vec<String> = vec![query.to_string()];
+         if let Some(v) = intent::variant(query) {
+@@ -777,6 +778,8 @@ impl Searcher {
+             .iter()
+             .map(|e| (e.to_string(), query::for_engine(&compiled, e)))
+             .collect();
++        let primary_assignments: std::collections::HashSet<_> =
++            assignments.iter().cloned().collect();
+         // Recall variants spend lanes : only when the
+         // governor did NOT cut the roster (healthy pool).
+         if queries.len() > 1 && self.pool.stress() < 0.15 {
+@@ -816,7 +819,11 @@ impl Searcher {
+         };
+         for (engine, q, eg) in assign_egresses(self.pool.as_ref(), assignments, &mut used_egresses)
+         {
+-            futures.push(Box::pin(engine_task(engine, q, eg.id, eg.proxy, context)));
++            let primary = primary_assignments.contains(&(engine.clone(), q.clone()));
++            futures.push((
++                primary,
++                Box::pin(engine_task(engine, q, eg.id, eg.proxy, context)),
++            ));
+         }
+         // Verticals: direct, friendly APIs.
+         let verticals: Vec<&str> = verticals
+@@ -824,12 +831,15 @@ impl Searcher {
+             .filter(|v| !self.quarantined(v))
+             .collect();
+         for v in verticals {
+-            futures.push(Box::pin(vertical_task(
+-                v.to_string(),
+-                query.to_string(),
+-                &self.fetcher,
+-                None,
+-            )));
++            futures.push((
++                true,
++                Box::pin(vertical_task(
++                    v.to_string(),
++                    query.to_string(),
++                    &self.fetcher,
++                    None,
++                )),
++            ));
+         }
+ 
+         // C4 adaptive early-return: collect completions as they
+@@ -837,23 +847,7 @@ impl Searcher {
+         // drop the stragglers (their futures are cancelled). Kill:
+         // search.search_early=false / DONSETCH_NO_SEARCH_EARLY.
+         let early = crate::config::cfg().search.search_early;
+-        let outcomes: Vec<(String, EngineResult)> = if early {
+-            use futures_util::stream::{FuturesUnordered, StreamExt};
+-            let mut futs = FuturesUnordered::new();
+-            for f in futures {
+-                futs.push(f);
+-            }
+-            let mut acc: Vec<(String, EngineResult)> = Vec::new();
+-            while let Some(outcome) = futs.next().await {
+-                acc.push(outcome);
+-                if early_consensus_enough(&acc) {
+-                    break;
+-                }
+-            }
+-            acc
+-        } else {
+-            futures_util::future::join_all(futures).await
+-        };
++        let outcomes = recall::collect(futures, query, intent, max_results, early).await;
+ 
+         // ── Retry wave: failed engines get one more shot
+         // through a fresh egress : but ONLY when the first
+diff --git a/src/search/rank.rs b/src/search/rank.rs
+index 84f3d29..c732684 100644
+--- a/src/search/rank.rs
++++ b/src/search/rank.rs
+@@ -193,7 +193,6 @@ pub fn merge(
+ }
+ 
+ /// Complete consensus/lexical ranking when the semantic worker exceeds the caller budget.
+-#[cfg(feature = "rerank")]
+ pub(crate) fn merge_lexical(
+     per_engine: &[(String, Vec<Hit>)],
+     query: &str,
+diff --git a/src/search/recall.rs b/src/search/recall.rs
+new file mode 100644
+index 0000000..f6ada03
+--- /dev/null
++++ b/src/search/recall.rs
+@@ -0,0 +1,251 @@
++//! Keep automatic recall as a quality fallback rather than a mandatory wait.
++use super::{EngineResult, authority, intent::Intent, rank};
++use std::collections::HashMap;
++
++pub(super) fn needed(
++    query: &str,
++    intent: Intent,
++    requested: usize,
++    outcomes: &[(String, EngineResult)],
++) -> bool {
++    let primary: Vec<_> = outcomes
++        .iter()
++        .filter_map(|(engine, result)| {
++            result
++                .as_ref()
++                .ok()
++                .map(|(hits, ..)| (engine.clone(), hits.clone()))
++        })
++        .collect();
++    // A single working backend must retain the recovery opportunity.
++    if primary.iter().filter(|(_, hits)| !hits.is_empty()).count() < 2 {
++        return true;
++    }
++    let total = rank::merged_total(&primary);
++    let results = rank::merge_lexical(&primary, query, intent, &HashMap::new(), 12);
++    if results.len() < requested.clamp(1, 12) || rank::is_weak(&results, total, query) {
++        return true;
++    }
++    // Preserve scoped recall when a recognized primary source is absent.
++    // Explicit operators already suppress automatic official-source recalls.
++    if !super::query::compile(query).has_operators() {
++        for domain in authority::official_domains(query) {
++            if !results.iter().any(|result| {
++                url::Url::parse(&result.url).ok().is_some_and(|url| {
++                    url.host_str()
++                        .is_some_and(|host| host == domain || host.ends_with(&format!(".{domain}")))
++                })
++            }) {
++                return true;
++            }
++        }
++    }
++    false
++}
++
++pub(super) async fn collect(
++    futures: Vec<(bool, super::tasks::TaskFut<'_>)>,
++    query: &str,
++    intent: Intent,
++    max_results: usize,
++    early: bool,
++) -> Vec<(String, EngineResult)> {
++    use futures_util::stream::{FuturesUnordered, StreamExt};
++    let mut remaining_primary = futures.iter().filter(|(primary, _)| *primary).count();
++    let has_recall = remaining_primary < futures.len();
++    let mut futs = FuturesUnordered::new();
++    for (primary, task) in futures {
++        futs.push(async move { (primary, task.await) });
++    }
++    let mut acc: Vec<(String, EngineResult)> = Vec::new();
++    while let Some((primary, outcome)) = futs.next().await {
++        if primary {
++            remaining_primary -= 1;
++        }
++        acc.push(outcome);
++        if early && super::early_consensus_enough(&acc) {
++            break;
++        }
++        // Keep the original concurrent recovery path for weak results.
++        // Once ALL primary lanes finish with sufficient relevant evidence
++        // and recognized official sources, cancel only optional recalls.
++        // Dropping paced futures releases their gates without reserving
++        // future admission slots (EgressPool::pace is cancellation-safe).
++        if early
++            && has_recall
++            && remaining_primary == 0
++            && !needed(query, intent, max_results, &acc)
++        {
++            break;
++        }
++    }
++    acc
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::search::engines::Hit;
++
++    fn task(
++        primary: bool,
++        delay: u64,
++        outcome: (String, EngineResult),
++    ) -> (bool, super::super::tasks::TaskFut<'static>) {
++        (
++            primary,
++            Box::pin(async move {
++                tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
++                outcome
++            }),
++        )
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn returns_after_all_primary_lanes_without_waiting_for_optional_recall() {
++        let query = "James Webb Space Telescope";
++        let mut primary = outcomes(query, 12, "example.org");
++        let tasks = vec![
++            task(true, 20, primary.remove(0)),
++            task(true, 50, primary.remove(0)),
++            task(false, 2500, outcomes(query, 12, "example.org").remove(0)),
++        ];
++        let start = tokio::time::Instant::now();
++        let results = collect(tasks, query, Intent::Web, 8, true).await;
++        assert_eq!(results.len(), 2);
++        assert_eq!(start.elapsed(), std::time::Duration::from_millis(50));
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn disabling_early_return_preserves_full_recall() {
++        let query = "James Webb Space Telescope";
++        let mut primary = outcomes(query, 12, "example.org");
++        let tasks = vec![
++            task(true, 20, primary.remove(0)),
++            task(true, 50, primary.remove(0)),
++            task(false, 2500, outcomes(query, 12, "example.org").remove(0)),
++        ];
++        let start = tokio::time::Instant::now();
++        let results = collect(tasks, query, Intent::Web, 8, false).await;
++        assert_eq!(results.len(), 3);
++        assert_eq!(start.elapsed(), std::time::Duration::from_millis(2500));
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn weak_primary_results_wait_for_the_original_concurrent_recall() {
++        let query = "James Webb Space Telescope";
++        let mut primary = outcomes(query, 2, "example.org");
++        let tasks = vec![
++            task(true, 20, primary.remove(0)),
++            task(true, 50, primary.remove(0)),
++            task(false, 2500, outcomes(query, 12, "example.org").remove(0)),
++        ];
++        let start = tokio::time::Instant::now();
++        let results = collect(tasks, query, Intent::Web, 8, true).await;
++        assert_eq!(results.len(), 3);
++        assert_eq!(start.elapsed(), std::time::Duration::from_millis(2500));
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn completed_recall_is_retained_and_primary_verticals_are_awaited() {
++        let query = "James Webb Space Telescope";
++        let mut primary = outcomes(query, 12, "example.org");
++        let mut vertical = outcomes(query, 12, "example.org").remove(0);
++        vertical.0 = "wikipedia".into();
++        let tasks = vec![
++            task(true, 20, primary.remove(0)),
++            task(true, 50, primary.remove(0)),
++            task(true, 80, vertical),
++            task(false, 10, outcomes(query, 12, "example.org").remove(0)),
++            task(false, 2500, outcomes(query, 12, "example.org").remove(0)),
++        ];
++        let start = tokio::time::Instant::now();
++        let results = collect(tasks, query, Intent::Web, 8, true).await;
++        assert_eq!(results.len(), 4);
++        assert!(results.iter().any(|(engine, _)| engine == "wikipedia"));
++        assert_eq!(start.elapsed(), std::time::Duration::from_millis(80));
++    }
++
++    fn outcomes(query: &str, count: usize, host: &str) -> Vec<(String, EngineResult)> {
++        let hits: Vec<_> = (0..count)
++            .map(|i| Hit {
++                title: format!("{query} reference {i}"),
++                snippet: query.into(),
++                url: if i == 0 {
++                    format!("https://{host}/article")
++                } else {
++                    format!("https://example{i}.org/article")
++                },
++                rank: i + 1,
++                published: None,
++            })
++            .collect();
++        ["bing", "yahoo"]
++            .into_iter()
++            .map(|engine| {
++                (
++                    engine.into(),
++                    Ok((hits.clone(), 1, "direct".into(), true, None)),
++                )
++            })
++            .collect()
++    }
++
++    #[test]
++    fn healthy_primary_results_skip_paced_followups() {
++        let query = "what is the James Webb Space Telescope";
++        assert!(!needed(
++            query,
++            Intent::Web,
++            8,
++            &outcomes(query, 12, "example.org")
++        ));
++    }
++
++    #[test]
++    fn weak_thin_or_single_backend_results_keep_recall() {
++        let query = "James Webb Space Telescope";
++        assert!(needed(
++            query,
++            Intent::Web,
++            8,
++            &outcomes(query, 3, "example.org")
++        ));
++        assert!(needed(
++            query,
++            Intent::Web,
++            8,
++            &outcomes("unrelated recipe", 12, "example.org")
++        ));
++        assert!(needed(
++            query,
++            Intent::Web,
++            8,
++            &outcomes(query, 12, "example.org")[..1]
++        ));
++        assert!(needed(query, Intent::Web, 8, &[]));
++    }
++
++    #[test]
++    fn missing_official_sources_keep_recall_and_lookalikes_do_not_count() {
++        let query = "TypeScript discriminated union documentation";
++        assert!(needed(
++            query,
++            Intent::Code,
++            8,
++            &outcomes(query, 12, "example.org")
++        ));
++        assert!(needed(
++            query,
++            Intent::Code,
++            8,
++            &outcomes(query, 12, "typescriptlang.org.evil.example")
++        ));
++        assert!(!needed(
++            query,
++            Intent::Code,
++            8,
++            &outcomes(query, 12, "typescriptlang.org")
++        ));
++    }
++}

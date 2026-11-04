@@ -13,6 +13,13 @@ const ai = { getSupportedThinkingLevels: (model: Model) => model.reasoning ? mod
 function model(overrides: Partial<Model> = {}): Model { return { provider: "test", id: "org/model", api: "openai-completions", baseUrl: "https://example.invalid/v1", reasoning: true, levels: ["off", "low", "medium", "high"], ...overrides }; }
 
 describe("Pi reasoning routing", () => {
+  it("inherits registry reasoning metadata for a custom endpoint and refreshes existing routes", () => {
+    const input = { providerId: "custom", modelId: "org/model", baseUrl: "https://custom.invalid/v1" };
+    const initial = configureModelRoute({}, input);
+    const updated = configureModelRoute(initial.config, input, [model({ reasoning: false })]);
+    expect(updated.config.providers[updated.provider].models?.[0].reasoning).toBe(false);
+    expect(updated.config.providers[updated.provider].baseUrl).toBe(input.baseUrl);
+  });
   it("automatically registers a missing model at the exact endpoint without changing user providers", () => {
     const existing = { providers: { custom: { baseUrl: "https://original.invalid/v1" } } };
     const input = { providerId: "custom", modelId: "org/model", baseUrl: "https://selected.invalid/v1/", contextLength: "32768", maxTokens: "4096" };

@@ -1,5 +1,5 @@
 import { PlugZap, Sparkles } from "lucide-react";
-import { useChatStore } from "@/stores/chat-store";
+import { useAgentStore } from "@/modules/agents/agent-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { missingRequiredCapabilities } from "@/modules/extensions/skill-runtime";
 import { isMcpEnabledForChat, useExtensionsStore } from "@/modules/extensions/extensions-store";
@@ -24,7 +24,7 @@ function ChatSwitch({ active, onToggle, disabled = false }: { active: boolean; o
 }
 
 export function ChatExtensionsSettings() {
-  const chatId = useChatStore((state) => state.activeConversationId) ?? "new-chat";
+  const chatId = useAgentStore((state) => state.activeSessionId) ?? "new-chat";
   const projectId = useProjectStore((state) => state.activeProjectId) ?? undefined;
   const skills = useExtensionsStore((state) => state.skills);
   const skillsEnabled = useExtensionsStore((state) => state.featureFlags.skills);

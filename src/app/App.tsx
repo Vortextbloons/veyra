@@ -31,6 +31,8 @@ import { useAppZoom } from "@/hooks/use-app-zoom";
 import { useChatContextPanel } from "@/hooks/use-chat-context-panel";
 import { useChatPipeline } from "@/hooks/use-chat-pipeline";
 import { useAgentDispatch } from "@/hooks/use-agent-dispatch";
+import { useAgentStore } from "@/modules/agents/agent-store";
+import { initializePiConversations } from "@/modules/agents/pi-conversation-storage";
 
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
 const ProjectsPage = lazy(() => import("@/modules/projects/components/projects-page").then(m => ({ default: m.ProjectsPage })));
@@ -53,7 +55,6 @@ function App() {
   const { zoom, zoomIn, zoomOut, zoomReset } = useAppZoom();
 
   const conversations = useChatStore((state) => state.conversations);
-  const activeConversationId = useChatStore((state) => state.activeConversationId);
   const hydrationState = useChatStore((state) => state.hydrationState);
   const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
   const deleteAllConversations = useChatStore((state) => state.deleteAllConversations);
@@ -70,7 +71,7 @@ function App() {
   const recentChatsCollapsed = useSettingsStore((state) => state.recentChatsCollapsed);
   const codeExecutionDefaultEnabled = useSettingsStore((state) => state.codeExecutionEnabled);
   const setActiveNav = useSettingsStore((state) => state.setActiveNav);
-  const workspaceChatMode = useSettingsStore((state) => state.workspaceChatMode);
+  const workspaceChatMode = "agents" as const;
   const setRecentChatsCollapsed = useSettingsStore((state) => state.setRecentChatsCollapsed);
   const defaultWebSearchEnabled = useSettingsStore(
     (state) => state.defaultWebSearchEnabled,
@@ -108,6 +109,7 @@ function App() {
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
       setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
       await useChatStore.getState().hydrateConversations();
+      initializePiConversations();
       void useProjectStore.getState().hydrateProjects();
       void useResearchStore.getState().hydrateRuns();
       markStartup("veyra:hydration-ready");
@@ -205,12 +207,16 @@ function App() {
       ? conversations.filter((conversation) => conversation.projectId === activeProjectId)
       : conversations;
 
-    return scoped.map((conversation) => ({
+    const importedIds = new Set(agent.agentSessions.map((session) => session.sourceConversationId ?? session.id));
+    return [...agent.agentSessions.filter((session) => !activeProjectId || session.projectId === activeProjectId || session.projectPath === useProjectStore.getState().projects.find((project) => project.id === activeProjectId)?.settings.agentProjectPath).map((session) => ({
+      id: `pi:${session.id}`, title: session.title,
+      meta: session.status === "running" ? "Working" : new Date(session.endedAt ?? session.startedAt).toLocaleDateString(),
+    })), ...scoped.filter((conversation) => !importedIds.has(conversation.id)).map((conversation) => ({
       id: conversation.id,
       title: conversation.title,
       meta: new Date(conversation.updatedAt).toLocaleDateString(),
-    }));
-  }, [activeProjectId, conversations]);
+    }))];
+  }, [activeProjectId, conversations, agent.agentSessions]);
 
   const codeExecutionPanelDisabled =
     !codeExecutionAvailability.available || workspaceChatMode === "agents";
@@ -233,9 +239,12 @@ function App() {
 
   const handleNewChat = useCallback(() => {
     pipelineHandleNewChat();
+    agent.setAgentProjectPath("");
+    agent.newAgentSession();
+    useProjectStore.getState().setActiveProjectId(null);
     setCodeExecutionActive(useSettingsStore.getState().codeExecutionEnabled);
     setActiveNav("chat");
-  }, [pipelineHandleNewChat, setActiveNav]);
+  }, [pipelineHandleNewChat, setActiveNav, agent]);
 
   const handleDeleteAllChats = useCallback(() => {
     pipelineHandleNewChat();
@@ -244,6 +253,7 @@ function App() {
       aiScheduler.cancelAiJob(job.id);
     }
     deleteAllConversations();
+    useAgentStore.getState().clearSessions();
   }, [pipelineHandleNewChat, deleteAllConversations]);
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -262,25 +272,38 @@ function App() {
       />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <PrimarySidebar
-          compact={isChatMode && workspaceChatMode === "agents"}
-          activeNav={isChatMode && workspaceChatMode === "agents" ? "agents" : activeNav}
+          activeNav={isChatMode ? "chat" : activeNav}
           onNavChange={(nav) => {
             if (nav === "agents" || nav === "chat") {
               handleModeChange(nav === "agents" ? "agents" : "chat");
               setActiveNav("chat");
             } else setActiveNav(nav);
           }}
-          onNewChat={isChatMode && workspaceChatMode === "agents" ? agent.newAgentSession : handleNewChat}
+          onNewChat={handleNewChat}
         >
           <RecentChats
             chats={recentChats}
-            activeId={activeConversationId ?? undefined}
-            onSelect={setActiveConversationId}
-            onDelete={pipelineHandleDeleteChat}
+            activeId={agent.activeAgentSessionId ? `pi:${agent.activeAgentSessionId}` : undefined}
+            onSelect={(id) => {
+              if (id.startsWith("pi:")) agent.handleAgentSessionSelect(id.slice(3));
+              else {
+                const conversation = conversations.find((item) => item.id === id);
+                if (conversation) useAgentStore.getState().importConversation(conversation, useProjectStore.getState().projects.find((project) => project.id === conversation.projectId)?.settings.agentProjectPath ?? "");
+                setActiveConversationId(id);
+              }
+              setActiveNav("chat");
+            }}
+            onDelete={(id) => {
+              if (id.startsWith("pi:")) {
+                const sourceId = agent.agentSessions.find((session) => session.id === id.slice(3))?.sourceConversationId;
+                void agent.deleteAgentSession(id.slice(3));
+                if (sourceId) pipelineHandleDeleteChat(sourceId);
+              } else pipelineHandleDeleteChat(id);
+            }}
             onDeleteAll={handleDeleteAllChats}
             collapsed={recentChatsCollapsed}
             onCollapsedChange={setRecentChatsCollapsed}
-            hidden={!isChatMode || activeNav === "projects" || workspaceChatMode === "agents"}
+            hidden={!isChatMode || activeNav === "projects"}
           />
         </PrimarySidebar>
         <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>

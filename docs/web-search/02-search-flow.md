@@ -4,7 +4,11 @@
 
 `SearchOrchestrator.runSearch()` sends a single query to the bundled DonSeTch engine. Veyra's previous multi-query expansion, RRF fusion, and adaptive fallback pipeline has been removed; DonSeTch performs its own multi-engine consensus, semantic reranking, and authority placement internally.
 
-The model can supply an explicit `intent`, or omit it and let the engine infer one. Veyra maps its intent names to DonSeTch intents:
+The model can supply an explicit `intent`, or omit it and let the engine infer one.
+
+The bundled engine cancels pending automatic follow-up queries once all primary search lanes finish with enough relevant results and recognized official sources. Weak or incomplete results retain concurrent follow-up searches. This reduces waits behind repeated-engine pacing without changing result limits, semantic ranking, page fetching, or speed presets.
+
+Veyra maps its intent names to DonSeTch intents:
 
 | Veyra intent | DonSeTch intent | Adds |
 |--------------|-----------------|------|

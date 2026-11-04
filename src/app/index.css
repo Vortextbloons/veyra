@@ -436,3 +436,5 @@ body {
     0 1px 3px rgba(0, 0, 0, 0.45),
     0 0 0 3px color-mix(in srgb, var(--color-accent) 45%, transparent);
 }
+
+.markdown-rendered .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.25rem 0; }

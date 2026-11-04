@@ -29,6 +29,7 @@ import {
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { missingRequiredCapabilities } from "@/modules/extensions/skill-runtime";
 import { useChatStore } from "@/stores/chat-store";
+import { useAgentStore } from "@/modules/agents/agent-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -226,12 +227,14 @@ export function Composer({
   const defaultReasoningLevel = useSettingsStore((s) => s.reasoningLevel);
   const reasoningLevelByModel = useSettingsStore((s) => s.reasoningLevelByModel);
   const setModelReasoningLevel = useSettingsStore((s) => s.setModelReasoningLevel);
-  const modelReasoning = useModelReasoning();
+  const modelReasoning = useModelReasoning(mode === "agents" ? "pi" : "chat");
   const reasoningLevels = modelReasoning.result?.levels ?? [];
   const preferredReasoningLevel = reasoningLevelByModel[modelReasoning.modelKey] ?? defaultReasoningLevel;
   const reasoningLevel = effectiveReasoningLevel(preferredReasoningLevel, reasoningLevels);
   const reasoningControl = modelReasoning.result?.control ?? "unknown";
-  const conversationId = useChatStore((state) => state.activeConversationId) ?? "new-chat";
+  const chatConversationId = useChatStore((state) => state.activeConversationId);
+  const piConversationId = useAgentStore((state) => state.activeSessionId);
+  const conversationId = (mode === "agents" ? piConversationId : chatConversationId) ?? "new-chat";
   const projectId = useProjectStore((state) => state.activeProjectId) ?? undefined;
   const skills = useExtensionsStore((state) => state.skills);
   const skillsEnabled = useExtensionsStore((state) => state.featureFlags.skills);
@@ -569,7 +572,7 @@ export function Composer({
             onKeyDown={handleKeyDown}
             onKeyUp={(e) => updateSkillMenu(e.currentTarget)}
             onClick={(e) => updateSkillMenu(e.currentTarget)}
-            placeholder={isEditMode ? "Edit your message..." : mode === "agents" ? "Describe a task for the agent..." : skillCommands.length > 0 ? "Ask anything... (type / for Skills)" : "Ask anything..."}
+            placeholder={isEditMode ? "Edit your message..." : skillCommands.length > 0 ? "Ask anything... (type / for Skills)" : "Ask anything..."}
             aria-label={isEditMode ? "Edit message" : "Message"}
             aria-autocomplete="list"
             aria-controls={skillMenuQuery !== null ? "skill-slash-listbox" : undefined}
@@ -613,7 +616,7 @@ export function Composer({
                   }
                   onRefresh={modelReasoning.refresh}
                 />
-                <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />
+                {mode !== "agents" && <ModeSelector value={mode} onChange={onModeChange} disabled={isControlsBlocked} />}
                 {contextIndicator}
                 {onWebSearchChange && (
                   <button
@@ -648,6 +651,7 @@ export function Composer({
                     <SlidersHorizontal className="size-3.5" />
                   </IconButton>
                   <ChatOptionsMenu
+                    unified={mode === "agents"}
                     open={optionsOpen}
                     onClose={() => setOptionsOpen(false)}
                     enhancedMode={enhancedMode}

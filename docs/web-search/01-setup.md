@@ -14,9 +14,9 @@ The engine is [DonSeTch](https://github.com/dondai44423/donsetch), a Rust single
 | Log | `<app-data>/logs/search-engine.log` |
 | Fetch script | `scripts/fetch-search-engine.mjs` |
 
-`npm run dev:app` and `npm run build:app` call `fetch-search-engine.mjs` automatically. It downloads the pinned `donsetch-win32-x64.tar.gz` (or the asset for the current platform), verifies the published SHA256, and fetches the 23 MB rerank model from Hugging Face.
+`npm run dev:app` and `npm run build:app` call `fetch-search-engine.mjs` automatically. It downloads the pinned `donsetch-win32-x64.tar.gz` (or the asset for the current platform), verifies the published SHA256, builds the adaptive-recall patch, and fetches the 23 MB rerank model from Hugging Face. The first patched build needs Git, Rust, CMake, NASM, a C++ toolchain and libclang; subsequent launches reuse the verified binary. Build details and regression tests are in [scripts/search-engine/README.md](../../scripts/search-engine/README.md).
 
-The artifact is intentionally ignored by git. Run `npm run search-engine:fetch` after cloning if you are not using the npm scripts.
+The artifact is intentionally ignored by git. Run `node scripts/fetch-search-engine.mjs` after cloning if you are not using the npm scripts.
 
 ## Lifecycle
 
@@ -40,4 +40,4 @@ The artifact is intentionally ignored by git. Run `npm run search-engine:fetch` 
 
 ## Licensing
 
-DonSeTch is AGPL-3.0. The fetch script copies its `LICENSE` and a `SOURCE-OFFER.txt` into the resource directory. Keep both in the installer. If Veyra ever patches the engine, publish the patch under the AGPL.
+DonSeTch and Veyra's adaptive-recall patch are AGPL-3.0-only. The fetch script bundles `LICENSE`, `SOURCE-OFFER.txt`, `adaptive-recall.patch`, complete patched `SOURCE.tar.gz`, and `VEYRA-BUILD.json` with the executable. Keep them in the installer so recipients receive the corresponding source. Veyra runs the engine as a separate process.

@@ -1,6 +1,14 @@
 # Agents Module
 
-Optional Pi CLI integration for plan and build modes with streaming event output.
+Chat uses Pi as its main runtime for questions, research, and project work in one conversation. The separate Agents navigation and Plan/Build selector have been removed; legacy mode values remain readable in saved sessions.
+
+- A project is optional. Without a folder, Pi receives only enabled Veyra host tools; built-in file and command tools are excluded.
+- Attach a folder from Chat to enable file reads, edits, and commands. Folders are remembered as projects, and an existing project without a folder can gain one.
+- The familiar Chat composer supports attachments, model selection, reasoning, web search, Skills, and MCP settings. Pi host tools use the RPC extension UI channel, with live capability and permission checks in Veyra.
+- New run history shares Chat's encrypted conversation snapshot. Interrupted output is restored as stopped work. Legacy chat history can continue through Pi, and existing agent history is migrated when encrypted history hydrates.
+- Responses are concise by default. Planning-only instructions are honored within the conversation without a separate mode.
+
+The detailed pages below also document the earlier standalone agent interface; confirm current UI behavior against the code.
 
 ## Contents
 

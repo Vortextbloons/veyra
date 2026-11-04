@@ -14,6 +14,7 @@ export type RoundMessagesContext = {
   skillContextBlock?: string;
   memoryContextBlock?: string;
   resolvedContextLength: number;
+  availableToolNames?: string[];
 };
 
 let memoryEnabledResolver: (() => boolean) | null = null;
@@ -72,6 +73,7 @@ export function buildRoundMessages(
       skillContextBlock: context.skillContextBlock,
       memoryContextBlock: context.memoryContextBlock,
       userPrompt: context.resolvedUserPrompt,
+      availableToolNames: context.availableToolNames,
       reservedOutputTokens: context.resolvedReservedOutputTokens,
       modelName: context.activeModelName,
       providerName: context.activeProviderName,

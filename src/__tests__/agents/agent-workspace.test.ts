@@ -37,6 +37,29 @@ describe("agent project navigation", () => {
     expect(useAgentStore.getState().projects).toContain("/empty-project");
     expect(useAgentStore.getState().activeSessionId).toBeNull();
   });
+  it("answers without a project and resumes legacy discussions through chat", async () => {
+    useAgentStore.setState({ sessions: [session("plain", "")], activeSessionId: "plain", projectPath: "" });
+    const id = await useAgentStore.getState().startSession({ continueSessionId: "plain", projectPath: "", mode: "chat", model: "test", prompt: "What is a closure?" });
+    expect(id).toBe("plain");
+    expect(mocks.run.mock.calls[0]?.[0]).toMatchObject({ mode: "chat", projectPath: "" });
+    expect(mocks.run.mock.calls[0]?.[0].prompt).toContain("The entry point is main.ts");
+  });
+  it("attaches a folder to an existing discussion without losing its history", () => {
+    useAgentStore.setState({ sessions: [session("plain", "")], activeSessionId: "plain", projectPath: "" });
+    useAgentStore.getState().setProjectPath("/new-project");
+    expect(useAgentStore.getState().activeSessionId).toBe("plain");
+    expect(useAgentStore.getState().sessions[0]).toMatchObject({ projectPath: "/new-project" });
+    expect(useAgentStore.getState().sessions[0].events).toHaveLength(2);
+  });
+  it("imports chat history once and keeps attachments and rich outputs", () => {
+    const conversation = { id: "old-chat", title: "Existing discussion", createdAt: 1, updatedAt: 2, messages: [{ id: "u", role: "user" as const, content: "Our decision", timestamp: 1 }, { id: "a", role: "assistant" as const, content: "Use option two", timestamp: 2 }] };
+    useAgentStore.getState().importConversation(conversation);
+    const id = useAgentStore.getState().activeSessionId;
+    useAgentStore.getState().importConversation(conversation);
+    expect(useAgentStore.getState().sessions.filter((item) => item.sourceConversationId === "old-chat")).toHaveLength(1);
+    expect(useAgentStore.getState().activeSessionId).toBe(id);
+    expect(agentSessionPrompt(useAgentStore.getState().sessions.find((item) => item.id === id) ?? null, "Implement it")).toContain("Use option two");
+  });
   it("keeps a new session empty when project sessions are refreshed", async () => {
     useAgentStore.getState().newSession();
     await useAgentStore.getState().loadProjectSessions("/project-a");

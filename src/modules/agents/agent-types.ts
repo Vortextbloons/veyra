@@ -1,6 +1,10 @@
 import { REASONING_LEVELS, type ReasoningLevel } from "@/lib/reasoning-capabilities";
+import type { MessageAttachment } from "@/lib/message-attachments";
+import type { Artifact } from "@/modules/chat/artifact";
+import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
 
-export type AgentMode = "plan" | "build";
+/** Legacy values remain readable for saved sessions. New conversations use chat. */
+export type AgentMode = "chat" | "plan" | "build";
 export const AGENT_REASONING_LEVELS = REASONING_LEVELS;
 export type AgentReasoningLevel = ReasoningLevel;
 
@@ -25,6 +29,9 @@ export type AgentEvent = {
   at: number;
   sequence?: number;
   toolCallId?: string;
+  attachments?: MessageAttachment[];
+  artifact?: Artifact;
+  interactiveAnswer?: InteractiveAnswer;
 };
 
 export type AgentSession = {
@@ -43,9 +50,13 @@ export type AgentSession = {
   events: AgentEvent[];
   exitCode?: number | null;
   contextTokens?: number;
+  sourceConversationId?: string;
+  projectId?: string;
 };
 
 export type StartAgentSessionInput = {
+  projectId?: string;
+  displayPrompt?: string;
   /** Captured at dispatch, so navigation cannot redirect a queued follow-up. */
   continueSessionId?: string | null;
   mode: AgentMode;
@@ -59,6 +70,9 @@ export type StartAgentSessionInput = {
   piSessionId?: string;
   reasoningEnabled?: boolean;
   reasoningLevel?: AgentReasoningLevel;
+  images?: { data: string; mimeType: string }[];
+  attachments?: MessageAttachment[];
+  webSearchEnabled?: boolean;
 };
 
 export type PiRunResult = {

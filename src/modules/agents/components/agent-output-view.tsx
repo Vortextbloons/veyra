@@ -8,9 +8,11 @@ import { StatusDot } from "@/modules/agents/agent-status-dot";
 export function AgentOutputView({
   session,
   onStop,
+  onFollowUp,
 }: {
   session: AgentSession;
   onStop: (id: string) => void;
+  onFollowUp?: (prompt: string) => void;
 }) {
   const outputRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
@@ -35,9 +37,6 @@ export function AgentOutputView({
           <span className="truncate text-[12.5px] font-medium text-white">
             {session.status === "running" ? "Working" : session.status === "completed" ? "Task completed" : session.status}
           </span>
-          <span className="shrink-0 rounded-md bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-            {session.mode}
-          </span>
         </div>
         {isRunning && (
           <button
@@ -53,7 +52,7 @@ export function AgentOutputView({
       <div ref={outputRef} onScroll={() => { const el = outputRef.current; if (el) followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }} className="min-h-0 flex-1 overflow-y-auto">
         <div className="agent-work-log">
           {turns.map((turn) => (
-            <AgentChatTurn key={turn.id} turn={turn} mode={session.mode} />
+            <AgentChatTurn key={turn.id} turn={turn} mode={session.mode} onFollowUp={onFollowUp} />
           ))}
 
           {showWorkingTurn && (

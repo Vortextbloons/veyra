@@ -59,6 +59,13 @@ describe("buildRoundMessages", () => {
     resolvedContextLength: 8192,
   };
 
+  it("passes enabled tools into the authoritative system prompt", () => {
+    const messages = buildRoundMessages([], [], { ...baseContext, availableToolNames: ["code_execution"] });
+    expect(messages[0].role).toBe("system");
+    expect(messages[0].content).toContain("Use code_execution for calculations");
+    expect(messages[0].content).not.toContain("Use web_search for explicit lookup requests");
+  });
+
   it("returns the input chain when no web search blocks", () => {
     const chain: ChatMessage[] = [
       { id: "1", role: "user", content: "hi", timestamp: 1 },

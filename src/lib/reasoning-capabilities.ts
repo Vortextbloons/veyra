@@ -168,6 +168,10 @@ export function inspectModelReasoning(
 
 /** Provider documentation can supply capabilities missing from Pi's registry. */
 export function chatModelReasoning(result: ModelReasoning, model: string, baseUrl?: string): ModelReasoning {
+  if (usesNvidiaThinkingToggle(model, baseUrl)) {
+    return { known: true, model, levels: ["off", "medium"], control: "toggle",
+      message: "This NVIDIA endpoint supports reasoning on/off through its chat template." };
+  }
   const nvidia = (() => {
     try { return new URL(baseUrl ?? "").hostname === "integrate.api.nvidia.com"; }
     catch { return false; }
@@ -182,4 +186,11 @@ export function chatModelReasoning(result: ModelReasoning, model: string, baseUr
     };
   }
   return result;
+}
+/** NVIDIA documents a chat-template toggle for this endpoint/model pair. */
+export function usesNvidiaThinkingToggle(model: string, baseUrl?: string): boolean {
+  try {
+    return new URL(baseUrl ?? "").hostname === "integrate.api.nvidia.com" &&
+      model.toLowerCase() === "nvidia/nemotron-3.5-super-vl-120b-a12b";
+  } catch { return false; }
 }
