@@ -56,7 +56,7 @@ export async function buildPatchedSearchEngine(target, binary, repo, version) {
   const build = path.join(cache, "build");
   await mkdir(cache, { recursive: true });
   if (!existsSync(path.join(source, ".git"))) {
-    run("git", ["clone", "--depth", "1", "--branch", `v${version}`, repo, source], ROOT);
+    run("git", ["-c", "core.autocrlf=false", "clone", "--depth", "1", "--branch", `v${version}`, repo, source], ROOT);
   }
   if (run("git", ["rev-parse", "HEAD"], source, true) !== SOURCE_COMMIT) {
     throw new Error("Search engine source does not match the pinned commit.");

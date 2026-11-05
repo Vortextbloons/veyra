@@ -44,6 +44,8 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/prepare-pi.mjs
+      # cargo check validates Rust without packaging the runtime.
+      - run: node -e "require('node:fs').mkdirSync('src-tauri/resources/search-engine', { recursive: true })"
       - run: cargo check
         working-directory: src-tauri
 
@@ -62,5 +64,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node scripts/prepare-pi.mjs
+      # cargo check validates Rust without packaging the runtime.
+      - run: node -e "require('node:fs').mkdirSync('src-tauri/resources/search-engine', { recursive: true })"
       - run: cargo check
         working-directory: src-tauri
