@@ -40,6 +40,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/prepare-pi.mjs
       - run: cargo check
         working-directory: src-tauri
 
@@ -57,5 +61,6 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: npm run build
+      - run: node scripts/prepare-pi.mjs
       - run: cargo check
         working-directory: src-tauri
