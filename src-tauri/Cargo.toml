@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "2.1.0"
+version = "2.1.1"
 description = "Local-first AI desktop workspace (Tauri + React)"
 authors = ["Vortextbloons"]
 license = "MIT"
