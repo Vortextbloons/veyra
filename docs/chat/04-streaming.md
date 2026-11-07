@@ -1,28 +1,39 @@
 # Chat Streaming
 
-The UI supports real-time streaming of multiple content types during AI response generation.
+Streaming is event-shaped, not token-shaped. The Pi process writes lines on
+stdout, `pi_runner.rs` forwards them, and `agent-store` appends one `AgentEvent`
+per line. The UI renders whatever the event log currently contains.
 
 ## Stream Types
 
-| Type | Description |
-|------|-------------|
-| Content tokens | The AI's response text |
-| Reasoning tokens | Chain-of-thought (shown in expandable block) |
-| Web search state | Search/fetch/reading progress indicators |
-| Tool calls | Live tool execution indicators |
+| Type | Rendered by | Description |
+|------|-------------|-------------|
+| `output` (Pi / Pi stream) | `MessageBubble` via `TypewriterMarkdown` | Assistant prose, appended to the current turn |
+| `reasoning` | `ReasoningBlock` | Chain-of-thought, collapsible, collapsed once complete |
+| `tool` | `AgentActivityCard` | Tool name, arguments, and result summary |
+| `status` | `AgentChatTurn` | Prompt echo, session started/stopped, failures |
+| `error` | `AgentChatTurn` | Error card with the failing command or provider message |
 
-## Stream Architecture
+Artifacts and interactive answers arrive as their own events and are rendered by
+`ArtifactBlock` / `InteractiveAnswerBlock` on the owning turn.
 
-- Provider adapter streams tokens via callbacks
-- Content tokens update the message buffer character by character
-- Reasoning tokens are accumulated separately for display in expandable sections
-- Tool call updates are merged into the message's tool call state
-- Web search progress updates the search state indicator
+## Why There Is No Message Buffer
+
+The previous architecture accumulated tokens in `chat-store.streamingBuffer` and
+committed them at the end of a turn. That path was removed with the orchestrator:
+tokens already arrive as complete event payloads, so buffering would duplicate
+the transcript and force a second merge step. The event log is the single source
+of truth and is persisted as-is.
 
 ## Stop / Cancel
 
-While streaming, pressing **Escape** stops the active generation. The `Composer` component listens for `Escape` when `busy` and calls `onStop`, which cancels the AI job via `aiScheduler.cancelAiJob` and resets streaming state.
+Pressing **Escape** (or the stop button) while `busy` cancels the scheduled job
+and calls `agent-store.stopSession`, which aborts the request controller and
+terminates the Pi process. The session is marked `stopped` and its events remain
+readable.
 
-## Provider Compatibility
+## Scroll Behavior
 
-Both LM Studio and cloud providers use the same streaming interface, ensuring consistent UI behavior regardless of provider.
+`AgentOutputView` follows the tail while the user is within 100px of the bottom,
+and stops following as soon as they scroll up, so streaming never fights a user
+reading earlier turns.

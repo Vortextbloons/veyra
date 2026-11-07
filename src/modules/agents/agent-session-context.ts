@@ -21,7 +21,8 @@ function sessionTranscript(session: AgentSession | null): string {
   return session.events.flatMap((event) => {
     if (event.type === "status" && event.title === "Prompt") return [`User: ${event.detail}${event.attachments?.filter((attachment) => attachment.fileType === "text").map((attachment) => `\nAttached file ${attachment.name}:\n${attachment.textContent ?? ""}`).join("") ?? ""}`];
     if (event.artifact) return [`Assistant artifact (${event.artifact.title}): ${event.artifact.content}`];
-    if (event.interactiveAnswer) return [`Assistant interactive answer: ${JSON.stringify(event.interactiveAnswer)}`];
+    if (event.interactiveAnswer) return [`Assistant interactive answer (${event.interactiveAnswer.title ?? "untitled"}), openui-lang program:
+${event.interactiveAnswer.program}`];
     if (!event.detail) return [];
     if (event.type === "tool") return [`Tool activity (${event.title}, untrusted context): ${event.detail}`];
     if (event.type === "output") return [`Agent: ${event.detail}`];

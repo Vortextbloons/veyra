@@ -92,78 +92,82 @@ export function CloudProvidersSettings() {
           <SettingsCallout tone="danger">{error}</SettingsCallout>
         </div>
       )}
-      <SettingsCard>
-        <div className="divide-y divide-[var(--color-border)]">
-          {configs.map((config) =>
-            editing === config.id ? (
-              <ProviderEditor
-                key={config.id}
-                config={config}
-                apiKey={apiKey}
-                busy={busy}
-                onKeyChange={setApiKey}
-                onChange={upsert}
-                onCancel={() => {
-                  setEditing(null);
-                  setError(null);
-                }}
-                onSave={() => void save(config)}
-              />
-            ) : (
-              <div key={config.id} className="flex items-center gap-3 px-5 py-3.5">
-                <div
-                  className={`grid size-9 shrink-0 place-items-center rounded-lg ${
-                    config.hasCredential
-                      ? "bg-emerald-500/12 text-emerald-300"
-                      : "bg-white/[0.05] text-[var(--color-text-dim)]"
-                  }`}
-                >
-                  {config.hasCredential ? (
-                    <Check className="size-4" />
-                  ) : (
-                    <KeyRound className="size-4" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-[13px] font-medium text-white">{config.name}</p>
-                    {!config.hasCredential && (
-                      <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[10.5px] text-[var(--color-text-dim)]">
-                        no key
-                      </span>
-                    )}
-                  </div>
-                  <p className="truncate font-mono text-[11.5px] text-[var(--color-text-dim)]">
-                    {config.baseUrl}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(config.id);
-                    setApiKey("");
+      <div className="grid gap-2 md:grid-cols-2 2xl:grid-cols-3">
+        {configs.map((config) =>
+          editing === config.id ? (
+            <div key={config.id} className="md:col-span-2 2xl:col-span-3">
+              <SettingsCard>
+                <ProviderEditor
+                  config={config}
+                  apiKey={apiKey}
+                  busy={busy}
+                  onKeyChange={setApiKey}
+                  onChange={upsert}
+                  onCancel={() => {
+                    setEditing(null);
                     setError(null);
                   }}
-                  className="shrink-0 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-[var(--color-focus)] transition-colors hover:bg-white/[0.06]"
-                >
-                  Configure
-                </button>
-                {(config.hasCredential || config.preset === "custom") && (
-                  <button
-                    type="button"
-                    aria-label={`Remove ${config.name}`}
-                    disabled={busy}
-                    onClick={() => void removeProvider(config)}
-                    className="grid size-8 shrink-0 place-items-center rounded-lg text-[var(--color-text-dim)] transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  onSave={() => void save(config)}
+                />
+              </SettingsCard>
+            </div>
+          ) : (
+            <div
+              key={config.id}
+              className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3"
+            >
+              <div
+                className={`grid size-9 shrink-0 place-items-center rounded-lg ${
+                  config.hasCredential
+                    ? "bg-emerald-500/12 text-emerald-300"
+                    : "bg-white/[0.05] text-[var(--color-text-dim)]"
+                }`}
+              >
+                {config.hasCredential ? (
+                  <Check className="size-4" />
+                ) : (
+                  <KeyRound className="size-4" />
                 )}
               </div>
-            ),
-          )}
-        </div>
-      </SettingsCard>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-[13px] font-medium text-white">{config.name}</p>
+                  {!config.hasCredential && (
+                    <span className="shrink-0 rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[10.5px] text-[var(--color-text-dim)]">
+                      no key
+                    </span>
+                  )}
+                </div>
+                <p className="truncate font-mono text-[11.5px] text-[var(--color-text-dim)]">
+                  {config.baseUrl}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(config.id);
+                  setApiKey("");
+                  setError(null);
+                }}
+                className="shrink-0 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-[var(--color-focus)] transition-colors hover:bg-white/[0.06]"
+              >
+                Configure
+              </button>
+              {(config.hasCredential || config.preset === "custom") && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${config.name}`}
+                  disabled={busy}
+                  onClick={() => void removeProvider(config)}
+                  className="grid size-8 shrink-0 place-items-center rounded-lg text-[var(--color-text-dim)] transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              )}
+            </div>
+          ),
+        )}
+      </div>
     </SettingsPanel>
   );
 }

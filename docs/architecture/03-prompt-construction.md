@@ -21,4 +21,5 @@ Reference material is admitted only when it fits after the system instructions a
 |------|---------|
 | `src/lib/prompts.ts` | Prompt construction and assembly |
 | `src/lib/context.ts` | Context budgeting and message assembly |
-| `src/modules/chat/chat-context-builder.ts` | Tool-round context assembly |
+| `src/modules/agents/agent-session-context.ts` | Session transcript + memory budget composition |
+| `src/modules/agents/agent-store.ts` | Final prompt assembly: project guidance, skill block, system prompt |

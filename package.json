@@ -16,11 +16,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "vite",
-    "dev:app": "node scripts/prepare-pi.mjs && node scripts/fetch-search-engine.mjs && node scripts/dev-app.mjs",
-    "dev:full": "node scripts/prepare-pi.mjs && node scripts/fetch-search-engine.mjs && npm run tauri -- dev",
-    "build": "tsc -b && vite build",
-    "build:app": "node scripts/prepare-pi.mjs && node scripts/fetch-search-engine.mjs && npm run tauri -- build",
+    "dev": "node scripts/generate-interactive-prompt.mjs && vite",
+    "dev:app": "node scripts/generate-interactive-prompt.mjs && node scripts/prepare-pi.mjs && node scripts/fetch-search-engine.mjs && node scripts/dev-app.mjs",
+    "dev:full": "node scripts/generate-interactive-prompt.mjs && node scripts/prepare-pi.mjs && node scripts/fetch-search-engine.mjs && npm run tauri -- dev",
+    "build": "node scripts/generate-interactive-prompt.mjs && tsc -b && vite build",
+    "build:app": "node scripts/generate-interactive-prompt.mjs && node scripts/prepare-pi.mjs && node scripts/fetch-search-engine.mjs && npm run tauri -- build",
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",
@@ -30,9 +30,12 @@
     "docs:combine": "node scripts/combine-docs.mjs",
     "clean": "powershell -ExecutionPolicy Bypass -File scripts/clean-target.ps1",
     "clean:incremental": "powershell -ExecutionPolicy Bypass -File scripts/clean-target.ps1 -Incremental",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "prompt:ui": "node scripts/generate-interactive-prompt.mjs"
   },
   "dependencies": {
+    "@openuidev/lang-core": "^1.1.0",
+    "@openuidev/react-lang": "^1.1.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-http": "^2.5.9",
@@ -48,6 +51,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "tailwind-merge": "^3.6.0",
+    "zod": "^4.6.7",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

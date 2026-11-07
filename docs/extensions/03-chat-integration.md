@@ -14,7 +14,7 @@ Each MCP tool is namespaced as `mcp_<serverId>_<toolName>` to avoid collisions. 
 
 ## Tool Execution
 
-In `src/modules/chat/chat-tool-rounds.ts`, `executeToolRound()` routes any tool call starting with `mcp_` through the MCP adapter:
+Pi tool requests are handled by `src/modules/agents/pi-chat-tools.ts`, which routes any `mcp_` tool through the MCP adapter:
 
 1. **Resolve** — Match the tool name to an `McpServerRecord` and tool name.
 2. **Gate** — Check chat-level enable, server health, project scope, and transport feature flags.
@@ -26,14 +26,23 @@ Tool call results are rendered in the chat UI's tool call indicators, with `mcpA
 
 ## Skill Context Injection
 
-In `src/modules/chat/chat-orchestrator.ts`, `sendChatRequest()` resolves the active skill:
+`src/modules/agents/agent-store.ts` resolves the active skill when it starts a
+session:
 
 ```typescript
-const activeSkill = extensionState.resolveActiveSkillSelection(conversationId, projectId);
-const skillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
+const selectedSkill = extensions.resolveActiveSkillSelection(scopeId, scopeProjectId);
+const contextualPrompt = [
+  project?.systemPrompt ? `Project guidance:
+${project.systemPrompt}` : "",
+  selectedSkill ? buildSkillContext(selectedSkill.skill, selectedSkill.workflowId) : "",
+  userPrompt,
+].filter(Boolean).join("
+
+");
 ```
 
-The resulting `<veyra_active_skill>` XML block is added to the system prompt alongside other context blocks.
+The skill block is prepended to the user prompt (after project guidance), so it
+reaches Pi together with the turn it applies to.
 
 ## UI Components
 

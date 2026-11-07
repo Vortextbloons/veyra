@@ -26,8 +26,6 @@ export type ResolvedModelSettings = {
 
 export type ModelSliceState = {
   favoriteModels: string[];
-  autoNameEnabled: boolean;
-  autoNameModel: string;
   defaultTemperature: number;
   defaultContextLength: number;
   defaultMaxTokens: number;
@@ -45,14 +43,10 @@ export type ModelSliceState = {
   /** Per provider/model/endpoint reasoning level (see reasoningModelKey). */
   reasoningLevelByModel: Record<string, ReasoningLevel>;
   backgroundJobsEnabled: boolean;
-  autoSummarizeChats: boolean;
-  summaryModel: string;
 };
 
 export type ModelSliceActions = {
   toggleFavoriteModel: (modelId: string) => void;
-  setAutoNameEnabled: (enabled: boolean) => void;
-  setAutoNameModel: (modelId: string) => void;
   setDefaultTemperature: (n: number) => void;
   setDefaultContextLength: (n: number) => void;
   setDefaultMaxTokens: (n: number) => void;
@@ -69,14 +63,10 @@ export type ModelSliceActions = {
   setReasoningLevel: (level: ReasoningLevel) => void;
   setModelReasoningLevel: (key: string, level: ReasoningLevel) => void;
   setBackgroundJobsEnabled: (enabled: boolean) => void;
-  setAutoSummarizeChats: (enabled: boolean) => void;
-  setSummaryModel: (modelId: string) => void;
 };
 
 export const DEFAULT_MODEL_STATE: ModelSliceState = {
   favoriteModels: [],
-  autoNameEnabled: true,
-  autoNameModel: "",
   defaultTemperature: 0.7,
   defaultContextLength: 0,
   defaultMaxTokens: 32768,
@@ -91,8 +81,6 @@ export const DEFAULT_MODEL_STATE: ModelSliceState = {
   reasoningLevel: "medium",
   reasoningLevelByModel: {},
   backgroundJobsEnabled: true,
-  autoSummarizeChats: false,
-  summaryModel: "",
 };
 
 export type ModelSlice = ModelSliceState & ModelSliceActions;
@@ -106,8 +94,6 @@ export const createModelSlice: StateCreator<ModelSlice, [], [], ModelSlice> = (s
       : [...current, modelId];
     set({ favoriteModels: next });
   },
-  setAutoNameEnabled: (autoNameEnabled) => set({ autoNameEnabled }),
-  setAutoNameModel: (autoNameModel) => set({ autoNameModel }),
   setDefaultTemperature: (defaultTemperature) => set({ defaultTemperature }),
   setDefaultContextLength: (defaultContextLength) => set({ defaultContextLength }),
   setDefaultMaxTokens: (defaultMaxTokens) => set({ defaultMaxTokens }),
@@ -153,6 +139,4 @@ export const createModelSlice: StateCreator<ModelSlice, [], [], ModelSlice> = (s
     reasoningLevelByModel: { ...state.reasoningLevelByModel, [key]: level },
   })),
   setBackgroundJobsEnabled: (backgroundJobsEnabled) => set({ backgroundJobsEnabled }),
-  setAutoSummarizeChats: (autoSummarizeChats) => set({ autoSummarizeChats }),
-  setSummaryModel: (summaryModel) => set({ summaryModel }),
 });

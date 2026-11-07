@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessage, Conversation } from "@/modules/chat/chat-types";
+import type { AgentSession } from "@/modules/agents/agent-types";
 
 const mocks = vi.hoisted(() => ({
   saveConversationSnapshot: vi.fn(),
@@ -23,79 +24,120 @@ function conversation(messages: ChatMessage[], overrides: Partial<Conversation> 
   };
 }
 
-describe("chat store assistant append", () => {
+function session(overrides: Partial<AgentSession> = {}): AgentSession {
+  return {
+    id: "session-1",
+    title: "Session",
+    projectPath: "",
+    status: "completed",
+    startedAt: 1,
+    endedAt: 2,
+    events: [],
+    ...overrides,
+  } as AgentSession;
+}
+
+describe("chat store conversation index", () => {
   beforeEach(() => {
     mocks.saveConversationSnapshot.mockClear();
     useChatStore.setState({
       conversations: [],
       activeConversationId: null,
-      streamingBuffer: null,
     });
   });
 
-  it("appends only the replacement assistant after an edited user message", () => {
-    const user: ChatMessage = {
-      id: "user-1",
-      role: "user",
-      content: "Edited prompt",
-      timestamp: 1,
-    };
-    const assistant: ChatMessage = {
-      id: "assistant-2",
-      role: "assistant",
-      content: "",
-      timestamp: 2,
-    };
-    useChatStore.setState({ conversations: [conversation([user])] });
-
-    useChatStore.getState().appendAssistantMessage("conversation-1", assistant);
-
-    const messages = useChatStore.getState().conversations[0]?.messages;
-    expect(messages?.map((message) => message.id)).toEqual(["user-1", "assistant-2"]);
-    expect(new Set(messages?.map((message) => message.id)).size).toBe(messages?.length);
-    expect(useChatStore.getState().streamingBuffer).toMatchObject({
-      conversationId: "conversation-1",
-      messageId: "assistant-2",
+  it("moves a conversation and its mirrored session into a project", () => {
+    useChatStore.setState({
+      conversations: [conversation([], { agentSession: session() })],
     });
+
+    useChatStore.getState().moveConversation("conversation-1", "project-a");
+
+    const [moved] = useChatStore.getState().conversations;
+    expect(moved?.projectId).toBe("project-a");
+    expect(moved?.agentSession?.projectId).toBe("project-a");
     expect(mocks.saveConversationSnapshot).toHaveBeenCalledOnce();
   });
 
-  it("keeps an existing artifact until a valid regenerated artifact is stored", () => {
-    const previousArtifact = {
-      id: "old-artifact",
+  it("drops project scope from every conversation when the project is cleared", () => {
+    useChatStore.setState({
+      conversations: [
+        conversation([], { id: "in-project", projectId: "project-a", agentSession: session({ projectId: "project-a" }) }),
+        conversation([], { id: "elsewhere", projectId: "project-b" }),
+      ],
+    });
+
+    useChatStore.getState().clearProject("project-a");
+
+    const [cleared, untouched] = useChatStore.getState().conversations;
+    expect(cleared?.projectId).toBeUndefined();
+    expect(cleared?.agentSession?.projectId).toBeUndefined();
+    expect(untouched?.projectId).toBe("project-b");
+  });
+
+  it("selects the next conversation after a delete and persists the list", () => {
+    useChatStore.setState({
+      conversations: [conversation([], { id: "first" }), conversation([], { id: "second" })],
+      activeConversationId: "first",
+    });
+
+    useChatStore.getState().deleteConversation("first");
+
+    expect(useChatStore.getState().conversations.map((item) => item.id)).toEqual(["second"]);
+    expect(useChatStore.getState().activeConversationId).toBe("second");
+    expect(mocks.saveConversationSnapshot).toHaveBeenCalledOnce();
+  });
+
+  it("keeps titles trimmed and bounded", () => {
+    useChatStore.setState({ conversations: [conversation([])] });
+
+    useChatStore.getState().renameConversation("conversation-1", "   ");
+    expect(useChatStore.getState().conversations[0]?.title).toBe("Conversation");
+
+    useChatStore.getState().renameConversation("conversation-1", `  ${"x".repeat(120)}  `);
+    expect(useChatStore.getState().conversations[0]?.title).toHaveLength(80);
+  });
+
+  it("updates a document artifact in place and rejects invalid content", () => {
+    const document = {
+      id: "artifact-1",
       format: "document" as const,
       title: "Original plan",
       content: "# Original",
       createdAt: 1,
     };
-    const nextArtifact = {
-      id: "new-artifact",
-      format: "document" as const,
-      title: "Revised plan",
-      content: "# Revised",
-      createdAt: 2,
-    };
-    const previousUser: ChatMessage = { id: "old-user", role: "user", content: "Make a plan", timestamp: 1 };
-    const previousAssistant: ChatMessage = {
-      id: "old-assistant",
+    const assistant: ChatMessage = {
+      id: "assistant-1",
       role: "assistant",
       content: "",
       timestamp: 2,
-      artifact: previousArtifact,
+      artifact: document,
     };
-    const replacementUser: ChatMessage = { id: "new-user", role: "user", content: "Make a plan", timestamp: 3 };
-    const replacementAssistant: ChatMessage = {
-      id: "new-assistant",
-      role: "assistant",
-      content: "",
-      timestamp: 4,
-      artifactReplacement: { userMessageId: previousUser.id, assistantMessageId: previousAssistant.id },
-    };
-    useChatStore.setState({ conversations: [conversation([previousUser, previousAssistant, replacementUser, replacementAssistant])] });
+    useChatStore.setState({ conversations: [conversation([assistant])] });
 
-    const saved = useChatStore.getState().setAssistantArtifact("conversation-1", replacementAssistant.id, nextArtifact);
-    expect(saved).toBe(true);
-    expect(useChatStore.getState().conversations[0]?.messages.map((message) => message.id)).toEqual(["new-user", "new-assistant"]);
-    expect(useChatStore.getState().conversations[0]?.messages[1]?.artifact).toEqual(nextArtifact);
+    expect(useChatStore.getState().updateAssistantDocument("assistant-1", "Revised plan", "# Revised")).toBe(true);
+    expect(useChatStore.getState().conversations[0]?.messages[0]?.artifact).toMatchObject({
+      id: "artifact-1",
+      title: "Revised plan",
+      content: "# Revised",
+    });
+
+    expect(useChatStore.getState().updateAssistantDocument("assistant-1", "", "# Empty title")).toBe(false);
+  });
+
+  it("ignores document updates for non-document artifacts", () => {
+    const html = {
+      id: "artifact-2",
+      format: "html" as const,
+      title: "Chart",
+      content: "<p>hi</p>",
+      createdAt: 1,
+    };
+    useChatStore.setState({
+      conversations: [conversation([{ id: "assistant-2", role: "assistant", content: "", timestamp: 2, artifact: html }])],
+    });
+
+    expect(useChatStore.getState().updateAssistantDocument("assistant-2", "New", "<p>bye</p>")).toBe(false);
+    expect(useChatStore.getState().conversations[0]?.messages[0]?.artifact?.title).toBe("Chart");
   });
 });

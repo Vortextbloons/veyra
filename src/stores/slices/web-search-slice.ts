@@ -2,7 +2,6 @@ import type { StateCreator } from "zustand";
 
 export type WebSearchSliceState = {
   defaultWebSearchEnabled: boolean;
-  webSearchDefaultMode: "auto" | "always" | "off";
   webSearchMaxResults: number;
   webSearchContextTokenLimit: number;
   webSearchFetchEnabled: boolean;
@@ -41,7 +40,6 @@ export type WebSearchSliceActions = {
 
 export const DEFAULT_WEB_SEARCH_STATE: WebSearchSliceState = {
   defaultWebSearchEnabled: false,
-  webSearchDefaultMode: "auto",
   webSearchMaxResults: 8,
   webSearchContextTokenLimit: 4000,
   webSearchFetchEnabled: true,

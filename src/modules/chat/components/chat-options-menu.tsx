@@ -196,7 +196,7 @@ export function ChatOptionsMenu({
                 <SettingRow
                   icon={<LayoutDashboard className="size-4" />}
                   label="Interactive answers"
-                  description="Let AI compose charts, tools, diagrams, and explainers"
+                  description="Let AI compose live pages: charts, sliders, checklists, steps"
                   active={interactiveAnswersEnabled}
                   onToggle={setInteractiveAnswersEnabled}
                   iconActiveClass="text-violet-300"

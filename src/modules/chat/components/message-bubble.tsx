@@ -3,16 +3,21 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { ChatMessage, MessagePerformance } from "@/modules/chat/chat-types";
-import { hasWebSearchActivity } from "@/lib/web-search-state";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
 import { MessageAttachmentsPreview } from "@/modules/chat/components/composer";
 import { MessageToolbar } from "@/modules/chat/components/message-toolbar";
-import { ToolCallList } from "@/modules/chat/components/tool-call-list";
 import { ThinkingIndicator } from "@/modules/chat/components/thinking-indicator";
 import { type MessageAttachment } from "@/lib/message-attachments";
 import { FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
-import { InteractiveAnswerBlock } from "@/modules/chat/components/interactive-answer-block";
 import { ArtifactBlock } from "@/modules/chat/components/artifact-block";
+
+// The OpenUI Lang renderer is only needed for turns that carry an interactive
+// answer, so it stays out of the main chat bundle.
+const InteractiveAnswerBlock = lazy(() =>
+  import("@/modules/chat/components/interactive-answer-block").then((m) => ({
+    default: m.InteractiveAnswerBlock,
+  })),
+);
 
 const MarkdownRenderer = lazy(() =>
   import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
@@ -31,12 +36,6 @@ type MessageBubbleProps = {
   isStreaming: boolean;
   layout: ChatMessageLayout;
   isLastAssistant?: boolean;
-  pendingQuestion?: {
-    toolCallId: string;
-    questions: Array<{ text: string; options?: string[] }>;
-    answers: Record<number, string>;
-  };
-  onResolveQuestion?: (answers: Record<number, string>) => void;
   onEdit?: (messageId: string) => void;
   onRegenerate?: (messageId: string) => void;
   onRetry?: (messageId: string) => void;
@@ -51,8 +50,6 @@ export const MessageBubble = memo(function MessageBubble({
   isStreaming,
   layout,
   isLastAssistant = false,
-  pendingQuestion,
-  onResolveQuestion,
   onEdit,
   onRegenerate,
   onRetry,
@@ -111,15 +108,11 @@ export const MessageBubble = memo(function MessageBubble({
       </>
     );
   }
-  const rawBody = message.content.trim();
-  const body = hasWebSearchActivity(message.webSearchState)
-    ? rawBody.replace(/\{[\s\S]*?"tool"\s*:\s*"web\.search"[\s\S]*?"args"\s*:\s*\{[\s\S]*?"query"\s*:\s*"[^"]*"[\s\S]*?\}[\s\S]*?\}/, "").replace(/\n{3,}/g, "\n\n").trim()
-    : rawBody;
+  const body = message.content.trim();
   const reasoning = message.reasoning?.trim() ?? "";
   const hasReasoning = reasoning.length > 0;
   const reasoningOnlyStreaming = isStreaming && hasReasoning && !body;
-  const hasToolActivity = (message.toolStates?.length ?? 0) > 0 || hasWebSearchActivity(message.webSearchState);
-  const showReplyBubble = Boolean(body) || (isStreaming && !reasoningOnlyStreaming && !hasToolActivity);
+  const showReplyBubble = Boolean(body) || (isStreaming && !reasoningOnlyStreaming);
   const showThinking = isStreaming && !body && !reasoningOnlyStreaming;
   const showPulseInReply = isStreaming && !reasoningOnlyStreaming && Boolean(body);
 
@@ -134,13 +127,6 @@ export const MessageBubble = memo(function MessageBubble({
             messageTextClass={layout.messageText}
           />
         )}
-        {(message.toolStates?.length || hasWebSearchActivity(message.webSearchState)) ? (
-          <ToolCallList
-            message={message}
-            pendingQuestion={pendingQuestion}
-            onResolveQuestion={onResolveQuestion}
-          />
-        ) : null}
         {showReplyBubble && (
         <div
           className={`py-3 text-[var(--color-text)] transition-[font-size] duration-200 ease-out bg-transparent ${layout.messageText}`}
@@ -160,10 +146,12 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
         )}
         {message.interactiveAnswer && (
-          <InteractiveAnswerBlock
-            answer={message.interactiveAnswer}
-            onFollowUp={onFollowUp}
-          />
+          <Suspense fallback={null}>
+            <InteractiveAnswerBlock
+              answer={message.interactiveAnswer}
+              onFollowUp={onFollowUp}
+            />
+          </Suspense>
         )}
         {message.artifact && <ArtifactBlock artifact={message.artifact} messageId={message.id} />}
         </div>

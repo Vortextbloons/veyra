@@ -59,6 +59,21 @@ type ProjectStore = {
 
 let hydratePromise: Promise<void> | null = null;
 
+/**
+ * The agent runtime scopes sessions by workspace path, while memories and
+ * skills are scoped by project id. `resolveAgentProjectId` maps one to the
+ * other through this field, so it has to stay in sync with the directory
+ * resource the user attached.
+ */
+function withAgentProjectPath(settings: ProjectSettings): ProjectSettings {
+  const directory = settings.resources?.find((resource) => resource.directory)?.path;
+  if (!directory) {
+    const { agentProjectPath: _removed, ...rest } = settings;
+    return rest;
+  }
+  return { ...settings, agentProjectPath: directory };
+}
+
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   projects: [],
   activeProjectId: null,
@@ -106,7 +121,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       color: options?.color,
       icon: options?.icon,
       systemPrompt: options?.systemPrompt,
-      settings: { ...options?.settings, projectSystemVersion: 2, resources: options?.settings?.resources ?? [] },
+      settings: withAgentProjectPath({
+        ...options?.settings,
+        projectSystemVersion: 2,
+        resources: options?.settings?.resources ?? [],
+      }),
     });
     set((state) => ({
       projects: [project, ...state.projects],
@@ -117,6 +136,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   updateProject: async (id, changes) => {
     const now = new Date().toISOString();
+    const settings = changes.settings ? withAgentProjectPath(changes.settings) : undefined;
     const project = await updateProjectApi({
       id,
       name: changes.name,
@@ -126,7 +146,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       color: changes.color,
       icon: changes.icon,
       systemPrompt: changes.systemPrompt,
-      settings: changes.settings,
+      settings,
       updatedAt: now,
     });
     set((state) => ({

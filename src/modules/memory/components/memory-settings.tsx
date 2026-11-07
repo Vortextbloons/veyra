@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Bot,
-  Brain,
   CircleAlert,
   Loader2,
   MessageSquare,
@@ -524,18 +523,18 @@ export function MemorySettings() {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-        <div className="flex items-start gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-[var(--color-accent)]/25 bg-[var(--color-accent)]/10 text-[var(--color-focus)]">
-            <Brain aria-hidden className="size-4" />
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[21px] font-semibold tracking-tight text-white">Memory</h1>
+          <p className="mt-1 max-w-[70ch] text-[13px] leading-relaxed text-[var(--color-text-dim)]">
+            Durable facts Veyra carries between conversations. One switch covers automatic recall
+            and collection in every chat and agent run.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[12.5px] text-[var(--color-text-dim)]">
+            {enabled ? "Memory on" : "Memory off"}
           </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-[14px] font-semibold text-white">Memory</h2>
-            <p className="mt-1 max-w-xl text-[11.5px] leading-relaxed text-[var(--color-text-dim)]">
-              Durable facts Veyra carries between conversations. One switch covers automatic recall
-              and collection in every chat and agent run.
-            </p>
-          </div>
           <Toggle
             on={enabled}
             onChange={(next) => void handleToggle(next)}
@@ -543,33 +542,33 @@ export function MemorySettings() {
             disabled={loading || toggling}
           />
         </div>
+      </div>
 
-        <div className="mt-3 border-t border-[var(--color-border)] pt-3">
-          <p
-            className={`text-[11.5px] leading-relaxed ${
-              enabled ? "text-emerald-200/90" : "text-[var(--color-text-dim)]"
-            }`}
-          >
-            {toggling
-              ? "Saving the memory setting…"
-              : enabled
-                ? "On — personal facts and this project's facts are matched before each turn, and durable facts are extracted after a turn completes."
-                : "Off — no automatic recall and no automatic collection. Facts already saved stay encrypted on this device, and you can still add, edit, or remove them below."}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-[var(--color-text-dim)]">
-            <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5">
-              {counts.total} {counts.total === 1 ? "fact" : "facts"}
-            </span>
-            <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5">
-              {counts.personal} personal
-            </span>
-            <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5">
-              {scopeCountLabel}
-            </span>
-            <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5">
-              encrypted on this device
-            </span>
-          </div>
+      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] px-5 py-4">
+        <p
+          className={`text-[12.5px] leading-relaxed ${
+            enabled ? "text-emerald-200/90" : "text-[var(--color-text-dim)]"
+          }`}
+        >
+          {toggling
+            ? "Saving the memory setting…"
+            : enabled
+              ? "On — personal facts and this project's facts are matched before each turn, and durable facts are extracted after a turn completes."
+              : "Off — no automatic recall and no automatic collection. Facts already saved stay encrypted on this device, and you can still add, edit, or remove them below."}
+        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-dim)]">
+          <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5">
+            {counts.total} {counts.total === 1 ? "fact" : "facts"}
+          </span>
+          <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5">
+            {counts.personal} personal
+          </span>
+          <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5">
+            {scopeCountLabel}
+          </span>
+          <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5">
+            encrypted on this device
+          </span>
         </div>
       </section>
 

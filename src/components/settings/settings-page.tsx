@@ -31,7 +31,7 @@ const TABS: { id: SettingsTab; label: string; blurb: string; icon: LucideIcon }[
   { id: "general", label: "General", blurb: "Appearance, layout, and updates", icon: Settings },
   { id: "chat", label: "Chat", blurb: "Prompt, behavior, and automation", icon: MessageCircle },
   { id: "models", label: "Models", blurb: "Providers, favorites, and sampling", icon: Cpu },
-  { id: "tools", label: "Tools", blurb: "Web search and code execution", icon: Wrench },
+  { id: "tools", label: "Tools", blurb: "Web search and page extraction", icon: Wrench },
   { id: "memory", label: "Memory", blurb: "Facts Veyra keeps about you", icon: Brain },
   { id: "privacy", label: "Privacy", blurb: "Connectivity and data boundaries", icon: Shield },
   { id: "extensions", label: "Extensions", blurb: "Skills, MCP servers, and approvals", icon: Puzzle },

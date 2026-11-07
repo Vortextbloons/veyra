@@ -1,25 +1,37 @@
 import { Toggle } from "@/components/toggle";
-import { CollapsibleSettingsSection } from "../collapsible-settings-section";
+import {
+  SettingRow,
+  SettingsCard,
+  SettingsPanel,
+  SettingsRows,
+} from "../settings-ui";
 
 const noopToggle = () => {};
 
-function AdvancedSearchToggleRow({
+function SourceToggle({
   label,
   description,
   on,
   onChange,
+  locked = false,
 }: {
   label: string;
   description: string;
   on: boolean;
   onChange: (enabled: boolean) => void;
+  locked?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/45 px-3 py-2">
-      <Toggle label={label} on={on} onChange={onChange} />
-      <p className="mt-1 text-[10.5px] leading-relaxed text-[var(--color-text-dim)]">
-        {description}
-      </p>
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-white/[0.05] bg-black/20 px-3.5 py-3">
+      <div className="min-w-0">
+        <p className="text-[12.5px] font-medium text-white">{label}</p>
+        <p className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--color-text-dim)]">
+          {description}
+        </p>
+      </div>
+      <div className="shrink-0 pt-0.5">
+        <Toggle ariaLabel={label} on={on} onChange={onChange} disabled={locked} />
+      </div>
     </div>
   );
 }
@@ -62,122 +74,91 @@ export function AdvancedSearchBundleSection({
   setBundleWikipediaSearch,
 }: AdvancedSearchBundleSectionProps) {
   return (
-    <CollapsibleSettingsSection
-      subsectionKey="webSearch:bundle"
-      title="Advanced Search Bundle"
-      description="Optional extractors for non-HTML sources and supplementary direct APIs."
-      keywords={["youtube", "transcript", "pdf", "bundle", "advanced", "docx", "epub", "arxiv", "wikipedia"]}
+    <SettingsPanel
+      title="Sources and extraction"
+      description="Dedicated handlers for document types that plain page parsing reads badly, plus recovery and direct sources."
     >
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-        <Toggle
-          label="Enable Advanced Search Bundle"
-          on={advancedSearchBundleEnabled}
-          onChange={setAdvancedSearchBundleEnabled}
-        />
-        <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
-          When on, search results from YouTube, PDF, Office documents, and
-          EPUB files are extracted using dedicated handlers. Wayback Machine
-          fallback recovers content from failed fetches. Direct API providers
-          (ArXiv, Wikipedia) supplement the local search engine.
-        </p>
-      </div>
+      <SettingsCard>
+        <SettingsRows>
+          <SettingRow
+            label="Advanced source bundle"
+            description="Extract YouTube transcripts, PDFs, Office documents, and EPUB files from search results."
+          >
+            <Toggle
+              ariaLabel="Advanced source bundle"
+              on={advancedSearchBundleEnabled}
+              onChange={setAdvancedSearchBundleEnabled}
+            />
+          </SettingRow>
+        </SettingsRows>
 
-      {advancedSearchBundleEnabled && (
-        <>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-            <div className="mb-3">
-              <div className="text-[12.5px] font-medium text-white">Content Sources</div>
-              <p className="mt-1 text-[10.5px] text-[var(--color-text-dim)]">
-                Enables richer extraction for result types that normal webpage parsing does not handle well.
-              </p>
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              <AdvancedSearchToggleRow
+        {advancedSearchBundleEnabled && (
+          <>
+            <div className="grid gap-2 border-t border-[var(--color-border)] p-3 md:grid-cols-2 2xl:grid-cols-3">
+              <SourceToggle
                 label="YouTube transcripts"
-                on={true}
+                description="Reads public captions when a result is a video."
+                on
                 onChange={noopToggle}
-                description="Always available. Extracts public captions/transcripts when present."
+                locked
               />
-              <AdvancedSearchToggleRow
+              <SourceToggle
                 label="PDF text extraction"
-                on={true}
+                description="Pulls readable text out of PDF documents."
+                on
                 onChange={noopToggle}
-                description="Always available. Extracts text from PDF documents."
+                locked
               />
-              <AdvancedSearchToggleRow
-                label="DOCX documents"
+              <SourceToggle
+                label="Word documents"
+                description="Extracts text from DOCX files."
                 on={bundleExtractDocx}
                 onChange={setBundleExtractDocx}
-                description="Extracts text from Word documents."
               />
-              <AdvancedSearchToggleRow
-                label="PowerPoint presentations"
+              <SourceToggle
+                label="PowerPoint slides"
+                description="Extracts slide text from PPTX files."
                 on={bundleExtractPptx}
                 onChange={setBundleExtractPptx}
-                description="Extracts slide text from presentations."
               />
-              <AdvancedSearchToggleRow
+              <SourceToggle
                 label="Excel spreadsheets"
+                description="Reads cell data from XLSX files."
                 on={bundleExtractXlsx}
                 onChange={setBundleExtractXlsx}
-                description="Extracts readable cell data from spreadsheets."
               />
-              <AdvancedSearchToggleRow
+              <SourceToggle
                 label="EPUB books"
+                description="Extracts text from EPUB e-books."
                 on={bundleExtractEpub}
                 onChange={setBundleExtractEpub}
-                description="Extracts text from EPUB e-books."
               />
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-            <div className="mb-3">
-              <div className="text-[12.5px] font-medium text-white">Recovery and Direct Sources</div>
-              <p className="mt-1 text-[10.5px] text-[var(--color-text-dim)]">
-                Adds fallback retrieval and direct provider results that supplement the local engine.
-              </p>
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              <AdvancedSearchToggleRow
+              <SourceToggle
                 label="Wayback Machine fallback"
+                description="Tries an Internet Archive copy when a page fails to load."
                 on={bundleWaybackFallback}
                 onChange={setBundleWaybackFallback}
-                description="Tries an Internet Archive copy when a page fails to load."
               />
-              <AdvancedSearchToggleRow
-                label="ArXiv academic search"
+              <SourceToggle
+                label="ArXiv papers"
+                description="Adds academic abstracts directly from ArXiv."
                 on={bundleArxivSearch}
                 onChange={setBundleArxivSearch}
-                description="Includes paper abstracts via ArXiv for academic searches."
               />
-              <AdvancedSearchToggleRow
-                label="Wikipedia search"
+              <SourceToggle
+                label="Wikipedia articles"
+                description="Adds full article text directly from Wikipedia."
                 on={bundleWikipediaSearch}
                 onChange={setBundleWikipediaSearch}
-                description="Includes article content from Wikipedia for overview searches."
               />
             </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-            <div className="mb-2 text-[12.5px] font-medium text-white">
-              Active Capabilities
-            </div>
-            <ul className="space-y-1 text-[11px] text-[var(--color-text-dim)]">
-              <li>• YouTube videos → captions/transcripts</li>
-              <li>• PDF documents → text extraction</li>
-              {bundleExtractDocx && <li>• DOCX documents → text extraction</li>}
-              {bundleExtractPptx && <li>• PowerPoint presentations → slide text</li>}
-              {bundleExtractXlsx && <li>• Excel spreadsheets → cell data</li>}
-              {bundleExtractEpub && <li>• EPUB books → text extraction</li>}
-              {bundleWaybackFallback && <li>• Wayback Machine fallback for failed fetches</li>}
-              {bundleArxivSearch && <li>• ArXiv direct API for academic papers</li>}
-              {bundleWikipediaSearch && <li>• Wikipedia direct API for article content</li>}
-            </ul>
-          </div>
-        </>
-      )}
-    </CollapsibleSettingsSection>
+            <p className="border-t border-[var(--color-border)] px-5 py-3 text-[12px] text-[var(--color-text-dim)]">
+              YouTube and PDF handling are always on. ArXiv and Wikipedia supplement the local
+              engine with direct API calls.
+            </p>
+          </>
+        )}
+      </SettingsCard>
+    </SettingsPanel>
   );
 }

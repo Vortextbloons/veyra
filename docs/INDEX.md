@@ -32,7 +32,7 @@ Feature modules built around the chat core.
 | [projects/README.md](projects/README.md) | Project containers and scoping |
 | [agents/README.md](agents/README.md) | Pi CLI integration, plan/build modes |
 | [connectivity/README.md](connectivity/README.md) | Online/offline mode, network detection |
-| [code-execution/README.md](code-execution/README.md) | Disabled native execution and future sandbox boundary |
+| [code-execution/README.md](code-execution/README.md) | Python execution boundary and why the tool stays disabled |
 
 ## Architecture
 

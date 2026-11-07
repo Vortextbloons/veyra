@@ -1,40 +1,69 @@
 # Chat Tools
 
-If the model returns tool calls, they are executed in rounds with re-prompting after each round. Standard mode allows up to 6 rounds; enhanced mode allows up to 10.
+Pi asks Veyra to run a tool. The frontend holds the tool definitions and does
+the execution, so no tool code runs inside the Pi process.
 
 ## Registered Tools
 
-| Tool | Required Flag | Description |
-|------|--------------|-------------|
-| `web_search` | `webSearchEnabled` | Search the web via the bundled DonSeTch engine with optional intent selection |
-| `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
-| `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
+| Tool | Condition | Description |
+|------|-----------|-------------|
+| `web_search` | web search enabled **and** connectivity is online | Runs the bundled search orchestrator and returns a context block |
+| `ask_question` | interactive answers enabled | Asks the user one or more questions and returns their answers |
+| `create_artifact` | artifacts enabled | Attaches an HTML, code, or document artifact to the conversation |
+| `generate_interactive_answer` | interactive answers enabled | Attaches a live UI page: the model writes an OpenUI Lang program that Veyra renders with its own component library |
+| `mcp_*` | server connected, chat-enabled, grant present | Proxied MCP tool calls, capped at 60 KB of output |
 
-## Enhanced Mode
+`scratchpad_write` is filtered out of the Pi tool list. Code execution is passed
+as `codeExecutionEnabled: false`, so `run-python` is never offered to the model.
 
-When enhanced mode is enabled (`enhancedModeEnabled` setting):
-- Two additional tools become available: `scratchpad_write` and `ask_question`
-- Max tool rounds increase from 6 to 10
-- The scratchpad persists across rounds as working memory for the model
+## How Tools Reach Pi
 
-## Tool Round Execution
+`src/modules/agents/pi-chat-tools.ts` builds the tool list with
+`buildProviderTools` (plus `buildMcpProviderTools`) and hands it to the Pi
+runner. Pi's tool request arrives as a prompt whose title is `veyra_tool` and
+whose placeholder is the JSON tool call:
 
-1. Model returns one or more tool calls
-2. Web search calls are executed in parallel via `Promise.all`
-3. Other tools execute sequentially
-4. Results are collected and formatted as tool response messages
-5. Results are fed back to the model for re-prompting
-6. Loop continues until model produces a text response or max rounds reached
+1. Re-validate that the tool is still enabled in the current scope.
+2. Dispatch by name (`web_search`, `ask_question`, artifacts, MCP).
+3. Return the result as text, or a `Tool failed: …` string the model can react to.
+4. Emit an `AgentEvent` for artifacts and interactive answers so the turn renders them.
 
-## Retry Logic
+## Interactive Answers
 
-- Web searches retry up to 2 times on failure (`TOOL_RETRY_LIMIT = 2`)
+`generate_interactive_answer` takes one `program` string: an
+[OpenUI Lang](https://www.openui.com) document the model writes with the
+component library in `src/modules/chat/ui/`. The program is not a template — it
+arranges primitives (`Col`, `Row`, `Card`, `Chart`, `Table`, `Slider`, `Svg`, …),
+holds its own state in `$variables`, and computes what it shows with `@`
+functions, so the answer keeps working without another message.
 
-Native `code_execution` is not offered to models. Legacy calls fail closed until an OS-enforced sandbox is implemented.
+- `src/modules/chat/ui/library.ts` registers the components, functions and
+  actions, and compiles them into the system prompt (`getInteractiveAnswerPrompt`).
+  `src/lib/prompts.ts` appends that prompt only when the tool is enabled.
+- `src/modules/chat/ui/validate.ts` parses the program before it is stored.
+  Unknown components, undefined references, unreferenced statements and
+  truncated output are rejected, and the reason goes back to the model as a
+  tool error so it can repair the program.
+- `src/modules/chat/interactive-answer.ts` normalizes the payload
+  (`{ version: 2, id, title?, program }`) and size-checks it.
+- `src/modules/chat/components/interactive-answer-block.tsx` renders it with
+  `<Renderer>` and routes actions: `@ToAssistant` becomes a follow-up message
+  (with form values), `@OpenUrl` opens the system browser, `@CopyToClipboard`
+  copies, and `@Set` / `@Reset` are applied by the renderer itself.
 
-## Tool Registry
+The prompt is about 7.5k tokens. Local models need a context window large
+enough for it (LM Studio defaults to 4k, which truncates the prompt and breaks
+the output); raise the model's context length before enabling the feature.
 
-Tools are registered in `src/lib/tool-registry.ts` with JSON Schema definitions. Each tool specifies:
-- Name and description
-- Parameter schema (JSON Schema format)
-- Required state flags (web search must be enabled, etc.)
+## Permissions
+
+- Project policy can disable a capability id outright.
+- MCP calls need a `CapabilityGrant` scoped to server, project, chat, and the
+  server's capability fingerprint. Destructive tools consume a one-time grant.
+- A missing grant fails the call with instructions instead of prompting silently.
+
+## Rendering
+
+Tool activity is rendered from the session event log: `AgentActivityCard` for
+`tool` events, `ArtifactBlock` and `InteractiveAnswerBlock` for rich output. The
+previous per-message `toolStates` renderer was removed with the orchestrator.

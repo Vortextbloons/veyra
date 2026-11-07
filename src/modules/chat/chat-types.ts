@@ -263,7 +263,7 @@ export interface PrimarySidebarProps {
 
 // ── Nav mode helpers ─────────────────────────────────────────────────────────
 
-export const CHAT_MODE_NAV_IDS = ["chat", "projects"] as const;
+export const CHAT_MODE_NAV_IDS = ["chat"] as const;
 
 export function isChatModeNav(navId: string): boolean {
   return (CHAT_MODE_NAV_IDS as readonly string[]).includes(navId);

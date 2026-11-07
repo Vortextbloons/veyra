@@ -7,7 +7,6 @@ import { buildSkillContext } from "@/modules/extensions/skill-runtime";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AgentEvent,
-  AgentReasoningLevel,
   AgentSession,
   AgentStatus,
   StartAgentSessionInput,
@@ -70,14 +69,9 @@ type AgentStore = {
   runtimeAvailable: boolean | null;
   runtimeStatus: AgentStatus;
   projectPath: string;
+  /** Workspace paths seen this install, including empty ones. */
   projects: string[];
-  selectedModel: string;
-  reasoningLevel: AgentReasoningLevel;
-  reasoningLevelByModel: Record<string, AgentReasoningLevel>;
-  setModelReasoningLevel: (key: string, level: AgentReasoningLevel) => void;
-  setReasoningLevel: (level: AgentReasoningLevel) => void;
   setProjectPath: (projectPath: string) => void;
-  setSelectedModel: (model: string) => void;
   setActiveSessionId: (id: string | null) => void;
   checkRuntime: () => Promise<void>;
   loadProjectSessions: (projectPath: string) => Promise<void>;
@@ -390,11 +384,6 @@ export const useAgentStore = create<AgentStore>()(
       runtimeStatus: "idle",
       projectPath: "",
       projects: [],
-      selectedModel: "",
-      reasoningLevel: "medium",
-      reasoningLevelByModel: {},
-      setModelReasoningLevel: (key, level) => set((state) => ({ reasoningLevelByModel: { ...state.reasoningLevelByModel, [key]: level } })),
-      setReasoningLevel: (reasoningLevel) => set({ reasoningLevel }),
       setProjectPath: (projectPath) => {
         const path = projectPath.trim();
         set((state) => {
@@ -407,7 +396,6 @@ export const useAgentStore = create<AgentStore>()(
           sessions: attachToDiscussion ? patchSession(state.sessions, active.id, { projectPath: path, projectId: useProjectStore.getState().activeProjectId ?? undefined }) : state.sessions,
         }; });
       },
-      setSelectedModel: (selectedModel) => set({ selectedModel }),
       setActiveSessionId: (activeSessionId) => {
         const session = activeSessionId
           ? get().sessions.find((item) => item.id === activeSessionId)
@@ -797,6 +785,10 @@ export const useAgentStore = create<AgentStore>()(
     {
       name: "veyra-agent-store",
       storage: createJSONStorage(() => localStorage),
+      // Session transcripts live in the encrypted conversation snapshot
+      // (see pi-conversation-storage.ts). Persisting them here as well would
+      // rewrite every transcript on each streamed event and create a second
+      // copy of the same history.
       partialize: (state) => ({
         activeSessionId: state.sessions.some(
           (session) => session.id === state.activeSessionId && session.status !== "running",
@@ -805,9 +797,6 @@ export const useAgentStore = create<AgentStore>()(
           : null,
         projectPath: state.projectPath,
         projects: state.projects,
-        selectedModel: state.selectedModel,
-        reasoningLevel: state.reasoningLevel,
-        reasoningLevelByModel: state.reasoningLevelByModel,
       }),
     },
   ),

@@ -100,7 +100,6 @@ function App() {
 
     void (async () => {
       await ensureSettingsHydrated();
-      if (useSettingsStore.getState().activeNav === "projects") useSettingsStore.getState().setActiveNav("chat");
       setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
       await useChatStore.getState().hydrateConversations();
       await useProjectStore.getState().hydrateProjects();
@@ -245,7 +244,7 @@ function App() {
       <TitleBar />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <PrimarySidebar
-          activeNav={isChatMode ? "chat" : activeNav}
+          activeNav={activeNav}
           onNavChange={(nav) => {
             setActiveNav(nav);
           }}
@@ -288,16 +287,16 @@ function App() {
             onDeleteAll={handleDeleteAllChats}
             collapsed={recentChatsCollapsed}
             onCollapsedChange={setRecentChatsCollapsed}
-            hidden={!isChatMode || activeNav === "projects"}
+            hidden={!isChatMode}
           />
         </PrimarySidebar>
-        <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
+        <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode ? "hidden" : ""}`}>
           <Suspense fallback={null}>
             {activeNav === "settings" && <SettingsPage />}
           </Suspense>
         </div>
-        {isChatMode && activeNav !== "projects" && hydrationState === "loading" && <ChatHydrationSkeleton />}
-        {isChatMode && activeNav !== "projects" && hydrationState === "ready" && (
+        {isChatMode && hydrationState === "loading" && <ChatHydrationSkeleton />}
+        {isChatMode && hydrationState === "ready" && (
           <ChatPanel
             onSend={pipelineHandleSend}
             providers={pipelineRest.providers}

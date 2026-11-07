@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Interactive answers in OpenUI Lang** — `generate_interactive_answer` now carries a model-written [OpenUI Lang](https://www.openui.com) program instead of a fixed chart/comparison/diagram payload. Veyra ships its own component library (`src/modules/chat/ui/`) styled for the dark desktop UI: layout, text, tables, charts, sliders, segmented controls, checklists, inputs, forms, icons, images and SVG drawing, plus about 50 `@` functions. Answers hold their own `$variables`, recompute with expressions, and react to clicks without another message; `@ToAssistant` sends a follow-up that carries the form values. Programs are parsed before they are stored, so unknown components, undefined references and truncated output come back to the model as a repairable tool error. The generated prompt is appended only while the feature is enabled.
+
+### Changed
+
+- **Interactive answers replace the template picker** — The `version: 1` kind-based payload (`chart`, `comparison`, `calculator`, `steps`, `diagram`, `text`, `board`) and its renderer are removed. Saved conversations that contain an old interactive answer still open; the block simply renders nothing for them.
+
 ## [2.1.0] - 2026-11-04
 
 Minor release since [2.0.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.0.0). Chat now runs entirely on a bundled Pi runtime, projects move into the primary sidebar with browsable resources, and OpenCode Go joins the cloud provider presets. Pi and Node ship with the app, so no global runtime installation is required.

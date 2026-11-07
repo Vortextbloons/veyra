@@ -122,23 +122,8 @@ async function withTimeout(promise: Promise<void>, label: string): Promise<void>
 }
 
 async function persistConversations(): Promise<void> {
+  // Flush the Pi session log into the conversation index before snapshotting it.
   flushPiConversations();
-  const {
-    streamingBuffer,
-    activeConversationId,
-    commitAssistantMessage,
-  } = useChatStore.getState();
-
-  if (
-    streamingBuffer &&
-    activeConversationId &&
-    streamingBuffer.conversationId === activeConversationId
-  ) {
-    commitAssistantMessage(activeConversationId, streamingBuffer.messageId, {});
-  }
-
-  // Read conversations AFTER committing buffered assistant text so the
-  // snapshot cannot lag behind the freshly committed state.
   const { conversations } = useChatStore.getState();
   void saveConversationSnapshot(conversations);
   await flushConversationSave();

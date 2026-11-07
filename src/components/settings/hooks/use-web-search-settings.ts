@@ -13,7 +13,6 @@ import {
 export function useWebSearchSettings() {
   const defaultWebSearchEnabled = useSettingsStore((s) => s.defaultWebSearchEnabled);
   const setDefaultWebSearchEnabled = useSettingsStore((s) => s.setDefaultWebSearchEnabled);
-  const webSearchDefaultMode = useSettingsStore((s) => s.webSearchDefaultMode);
 
   const webSearchMaxResults = useSettingsStore((s) => s.webSearchMaxResults);
   const setWebSearchMaxResults = useSettingsStore((s) => s.setWebSearchMaxResults);
@@ -127,7 +126,6 @@ export function useWebSearchSettings() {
   return {
     defaultWebSearchEnabled,
     setDefaultWebSearchEnabled,
-    webSearchDefaultMode,
     webSearchMaxResults,
     setWebSearchMaxResults,
     webSearchContextTokenLimit,

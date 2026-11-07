@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Minus, Plus, RotateCcw } from "lucide-react";
 import { Toggle } from "@/components/toggle";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -17,7 +17,7 @@ import {
   SettingsPanel,
   SettingsRows,
   SettingValue,
-  settingsButtonClass,
+  settingsIconButtonClass,
 } from "./settings-ui";
 
 const SCALE_STEP = 0.1;
@@ -27,10 +27,6 @@ export function GeneralSettings() {
   const setRecentChatsCollapsed = useSettingsStore((s) => s.setRecentChatsCollapsed);
 
   const [scale, setScale] = useState(() => getUiScale());
-
-  useEffect(() => {
-    setScale(getUiScale());
-  }, []);
 
   const applyScale = useCallback(async (next: number) => {
     const clamped = Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, next));
@@ -62,7 +58,7 @@ export function GeneralSettings() {
                   aria-label="Zoom out"
                   onClick={() => void applyScale(scale - SCALE_STEP)}
                   disabled={scale <= UI_SCALE_MIN}
-                  className={`${settingsButtonClass} size-8 p-0`}
+                  className={settingsIconButtonClass}
                 >
                   <Minus className="size-3.5" />
                 </button>
@@ -72,7 +68,7 @@ export function GeneralSettings() {
                   aria-label="Zoom in"
                   onClick={() => void applyScale(scale + SCALE_STEP)}
                   disabled={scale >= UI_SCALE_MAX}
-                  className={`${settingsButtonClass} size-8 p-0`}
+                  className={settingsIconButtonClass}
                 >
                   <Plus className="size-3.5" />
                 </button>
@@ -82,7 +78,7 @@ export function GeneralSettings() {
                   title="Reset to 100%"
                   onClick={() => void applyScale(UI_SCALE_DEFAULT)}
                   disabled={scale === UI_SCALE_DEFAULT}
-                  className={`${settingsButtonClass} size-8 p-0`}
+                  className={settingsIconButtonClass}
                 >
                   <RotateCcw className="size-3.5" />
                 </button>

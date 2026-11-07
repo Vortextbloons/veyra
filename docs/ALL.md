@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-11-07T21:12:07.226Z
+> Generated: 2026-11-07T21:54:47.060Z
 > Total files: 54
 
 ## Table of Contents
@@ -222,61 +222,57 @@ Veyra is a **local-first AI desktop workspace** built with Tauri v2, React, Type
 
 # Chat Pipeline
 
-The chat module is Veyra's core AI pipeline. It manages conversations, streaming responses, tool calls, and context window management.
+Every chat turn runs on the bundled Pi runtime. Veyra no longer ships an
+in-browser chat orchestrator: the frontend prepares one job, the Rust side owns
+the process, and the transcript is rebuilt from Pi events.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/modules/chat/chat-orchestrator.ts` | Main orchestrator — builds prompts, runs provider, handles tool loops |
-| `src/modules/chat/chat-actions.ts` | Entry point: `executeChatSend()` |
-| `src/modules/chat/chat-types.ts` | All type definitions |
-| `src/modules/chat/chat-context-builder.ts` | System prompt assembly from XML blocks |
-| `src/modules/chat/chat-provider-options.ts` | Provider selection logic |
-| `src/modules/chat/tools/` | Individual tool implementations |
-| `src/modules/chat/components/` | UI components |
+| `src/hooks/use-chat-send.ts` | Builds the `agent_pi` job (prompt, model, reasoning, attachments) |
+| `src/hooks/use-chat-pipeline.ts` | Wires provider/model settings into send and new-chat handlers |
+| `src/modules/agents/agent-store.ts` | Session lifecycle, event log, steering, stop |
+| `src/modules/agents/pi-runtime.ts` | Frontend bridge to the Pi commands (run/stop/steer/check) |
+| `src-tauri/src/agents/pi_runner.rs` | Spawns Pi, streams stdout as events |
+| `src/modules/agents/agent-chat-turns.ts` | Pure projection of the event log into renderable turns |
+| `src/modules/agents/pi-conversation-storage.ts` | Mirrors sessions into the conversation index and snapshot |
+| `src/modules/chat/chat-types.ts` | Shared chat/session/UI types |
 
-## Chat Modes
+## Turn Flow
 
-| Mode | Description |
-|------|-------------|
-| `chat` | Standard AI conversation |
-| `agents` | Pi CLI agent integration |
+1. `Composer` calls `handleSend` from `useChatSend`.
+2. `useChatSend` filters attachments, resolves the model's system prompt,
+   reasoning level, and context budget, then enqueues one `agent_pi` job in
+   `aiScheduler` (one job per workspace path).
+3. Inside the job, LM Studio models are loaded first when needed, then
+   `agent-store.startSession` composes the prompt (memory + previous transcript
+   under one budget), picks the project scope, and dispatches `runPiAgent`.
+4. Pi emits progress; `agent-store` appends `AgentEvent`s to the session.
+5. `buildAgentChatTurns` folds those events into user/assistant/tool/reasoning
+   turns for `AgentChatTurn`; `AgentActivityCard` renders tool and reasoning
+   steps, `MessageBubble` renders prose, and artifacts and interactive answers
+   render through their own blocks.
+6. On completion, `pi-conversation-storage` mirrors the session into the
+   conversation index and writes the encrypted snapshot, and memory extraction
+   is queued when background jobs are enabled.
 
-## Pipeline Flow
+## Stop, Steer, Retry
 
-### 1. Message Send
-User types a message in the composer component and hits send.
+| Action | Behavior |
+|--------|----------|
+| Stop | `Composer` `onStop` cancels the queued/active job and calls `stopSession`, which aborts the controller and kills the Pi process |
+| Steer | A running session accepts follow-up text through `steerSession` |
+| Follow-up | Sending while a session is live continues that session (`continueSessionId`) |
 
-### 2. Pipeline Entry (`executeChatSend`)
-- Loads the orchestrator lazily
-- Prepares the model via LM Studio adapter
+## Ownership Rules
 
-### 3. Orchestrator (`sendChatRequest`)
-- **System prompt composition**: Assembles context blocks from `BuildChatContextOptions`:
-  - `<veyra_core>` — Base AI identity
-  - `<model_identity>` — Model name/identity
-  - `<veyra_user_prompt>` — Custom user instructions
-  - `<veyra_project>` — Active project context
-  - `<veyra_context>` — Date, time, platform info (context anchoring)
-  - `<veyra_conversation_summary>` — Summary of older turns
-  - `<veyra_tools>` — Available tool definitions
-- **Message trimming**: Fits messages within the token budget (context limit minus reserved output)
-- **Streaming**: Provider adapter streams tokens with callbacks for content, reasoning, and tool calls
-- **Enhanced mode**: When enabled, adds `scratchpad_write` and `ask_question` tools, increases max tool rounds from 6 to 10
-
-### 4. Stop / Cancel
-
-During streaming, pressing **Escape** or calling `handleStopStreaming` (returned by `useChatPipeline`) cancels the active AI job via `aiScheduler.cancelAiJob`, resets request status to `idle`, and clears the streaming buffer.
-
-### 5. Post-Chat Jobs
-After the response completes:
-- **Auto-summarization**: If context usage > 55%, older turns are folded into a summary
-
-Cloud providers use the same orchestration and local tool loop as LM Studio. Their
-API keys are supplied by the Rust credential store at request time. Provider presets
-and custom OpenAI-compatible endpoints share the normalized Chat Completions stream
-path, so cloud selection does not change message or tool execution behavior.
+- `agent-store.sessions` is the transcript. Nothing else stores a second copy.
+- `chat-store` is an index over that transcript (title, project scope, artifact
+  text edits, hydration state). It never constructs messages on its own.
+- A conversation belongs to at most one project, and a project's workspace
+  directory is mirrored into `settings.agentProjectPath` so path-keyed sessions
+  can resolve back to a project for memory and skill scoping.
 
 ---
 
@@ -286,44 +282,73 @@ path, so cloud selection does not change message or tool execution behavior.
 
 # Chat Tools
 
-If the model returns tool calls, they are executed in rounds with re-prompting after each round. Standard mode allows up to 6 rounds; enhanced mode allows up to 10.
+Pi asks Veyra to run a tool. The frontend holds the tool definitions and does
+the execution, so no tool code runs inside the Pi process.
 
 ## Registered Tools
 
-| Tool | Required Flag | Description |
-|------|--------------|-------------|
-| `web_search` | `webSearchEnabled` | Search the web via the bundled DonSeTch engine with optional intent selection |
-| `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds |
-| `ask_question` | `enhancedMode` | Pause execution and ask the user a question |
+| Tool | Condition | Description |
+|------|-----------|-------------|
+| `web_search` | web search enabled **and** connectivity is online | Runs the bundled search orchestrator and returns a context block |
+| `ask_question` | interactive answers enabled | Asks the user one or more questions and returns their answers |
+| `create_artifact` | artifacts enabled | Attaches an HTML, code, or document artifact to the conversation |
+| `generate_interactive_answer` | interactive answers enabled | Attaches a live UI page: the model writes an OpenUI Lang program that Veyra renders with its own component library |
+| `mcp_*` | server connected, chat-enabled, grant present | Proxied MCP tool calls, capped at 60 KB of output |
 
-## Enhanced Mode
+`scratchpad_write` is filtered out of the Pi tool list. Code execution is passed
+as `codeExecutionEnabled: false`, so `run-python` is never offered to the model.
 
-When enhanced mode is enabled (`enhancedModeEnabled` setting):
-- Two additional tools become available: `scratchpad_write` and `ask_question`
-- Max tool rounds increase from 6 to 10
-- The scratchpad persists across rounds as working memory for the model
+## How Tools Reach Pi
 
-## Tool Round Execution
+`src/modules/agents/pi-chat-tools.ts` builds the tool list with
+`buildProviderTools` (plus `buildMcpProviderTools`) and hands it to the Pi
+runner. Pi's tool request arrives as a prompt whose title is `veyra_tool` and
+whose placeholder is the JSON tool call:
 
-1. Model returns one or more tool calls
-2. Web search calls are executed in parallel via `Promise.all`
-3. Other tools execute sequentially
-4. Results are collected and formatted as tool response messages
-5. Results are fed back to the model for re-prompting
-6. Loop continues until model produces a text response or max rounds reached
+1. Re-validate that the tool is still enabled in the current scope.
+2. Dispatch by name (`web_search`, `ask_question`, artifacts, MCP).
+3. Return the result as text, or a `Tool failed: …` string the model can react to.
+4. Emit an `AgentEvent` for artifacts and interactive answers so the turn renders them.
 
-## Retry Logic
+## Interactive Answers
 
-- Web searches retry up to 2 times on failure (`TOOL_RETRY_LIMIT = 2`)
+`generate_interactive_answer` takes one `program` string: an
+[OpenUI Lang](https://www.openui.com) document the model writes with the
+component library in `src/modules/chat/ui/`. The program is not a template — it
+arranges primitives (`Col`, `Row`, `Card`, `Chart`, `Table`, `Slider`, `Svg`, …),
+holds its own state in `$variables`, and computes what it shows with `@`
+functions, so the answer keeps working without another message.
 
-Native `code_execution` is not offered to models. Legacy calls fail closed until an OS-enforced sandbox is implemented.
+- `src/modules/chat/ui/library.ts` registers the components, functions and
+  actions, and compiles them into the system prompt (`getInteractiveAnswerPrompt`).
+  `src/lib/prompts.ts` appends that prompt only when the tool is enabled.
+- `src/modules/chat/ui/validate.ts` parses the program before it is stored.
+  Unknown components, undefined references, unreferenced statements and
+  truncated output are rejected, and the reason goes back to the model as a
+  tool error so it can repair the program.
+- `src/modules/chat/interactive-answer.ts` normalizes the payload
+  (`{ version: 2, id, title?, program }`) and size-checks it.
+- `src/modules/chat/components/interactive-answer-block.tsx` renders it with
+  `<Renderer>` and routes actions: `@ToAssistant` becomes a follow-up message
+  (with form values), `@OpenUrl` opens the system browser, `@CopyToClipboard`
+  copies, and `@Set` / `@Reset` are applied by the renderer itself.
 
-## Tool Registry
+The prompt is about 7.5k tokens. Local models need a context window large
+enough for it (LM Studio defaults to 4k, which truncates the prompt and breaks
+the output); raise the model's context length before enabling the feature.
 
-Tools are registered in `src/lib/tool-registry.ts` with JSON Schema definitions. Each tool specifies:
-- Name and description
-- Parameter schema (JSON Schema format)
-- Required state flags (web search must be enabled, etc.)
+## Permissions
+
+- Project policy can disable a capability id outright.
+- MCP calls need a `CapabilityGrant` scoped to server, project, chat, and the
+  server's capability fingerprint. Destructive tools consume a one-time grant.
+- A missing grant fails the call with instructions instead of prompting silently.
+
+## Rendering
+
+Tool activity is rendered from the session event log: `AgentActivityCard` for
+`tool` events, `ArtifactBlock` and `InteractiveAnswerBlock` for rich output. The
+previous per-message `toolStates` renderer was removed with the orchestrator.
 
 ---
 
@@ -372,32 +397,43 @@ The UI displays:
 
 # Chat Streaming
 
-The UI supports real-time streaming of multiple content types during AI response generation.
+Streaming is event-shaped, not token-shaped. The Pi process writes lines on
+stdout, `pi_runner.rs` forwards them, and `agent-store` appends one `AgentEvent`
+per line. The UI renders whatever the event log currently contains.
 
 ## Stream Types
 
-| Type | Description |
-|------|-------------|
-| Content tokens | The AI's response text |
-| Reasoning tokens | Chain-of-thought (shown in expandable block) |
-| Web search state | Search/fetch/reading progress indicators |
-| Tool calls | Live tool execution indicators |
+| Type | Rendered by | Description |
+|------|-------------|-------------|
+| `output` (Pi / Pi stream) | `MessageBubble` via `TypewriterMarkdown` | Assistant prose, appended to the current turn |
+| `reasoning` | `ReasoningBlock` | Chain-of-thought, collapsible, collapsed once complete |
+| `tool` | `AgentActivityCard` | Tool name, arguments, and result summary |
+| `status` | `AgentChatTurn` | Prompt echo, session started/stopped, failures |
+| `error` | `AgentChatTurn` | Error card with the failing command or provider message |
 
-## Stream Architecture
+Artifacts and interactive answers arrive as their own events and are rendered by
+`ArtifactBlock` / `InteractiveAnswerBlock` on the owning turn.
 
-- Provider adapter streams tokens via callbacks
-- Content tokens update the message buffer character by character
-- Reasoning tokens are accumulated separately for display in expandable sections
-- Tool call updates are merged into the message's tool call state
-- Web search progress updates the search state indicator
+## Why There Is No Message Buffer
+
+The previous architecture accumulated tokens in `chat-store.streamingBuffer` and
+committed them at the end of a turn. That path was removed with the orchestrator:
+tokens already arrive as complete event payloads, so buffering would duplicate
+the transcript and force a second merge step. The event log is the single source
+of truth and is persisted as-is.
 
 ## Stop / Cancel
 
-While streaming, pressing **Escape** stops the active generation. The `Composer` component listens for `Escape` when `busy` and calls `onStop`, which cancels the AI job via `aiScheduler.cancelAiJob` and resets streaming state.
+Pressing **Escape** (or the stop button) while `busy` cancels the scheduled job
+and calls `agent-store.stopSession`, which aborts the request controller and
+terminates the Pi process. The session is marked `stopped` and its events remain
+readable.
 
-## Provider Compatibility
+## Scroll Behavior
 
-Both LM Studio and cloud providers use the same streaming interface, ensuring consistent UI behavior regardless of provider.
+`AgentOutputView` follows the tail while the user is within 100px of the bottom,
+and stops following as soon as they scroll up, so streaming never fights a user
+reading earlier turns.
 
 ---
 
@@ -739,39 +775,42 @@ Core AI chat pipeline with streaming, tool calls, and context window management.
 
 # Hooks
 
-React hooks used across Veyra's frontend for chat, scheduling, and UI interactions.
+React hooks used across Veyra's frontend.
 
 ## Chat Hooks
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useChatSend` | `src/hooks/use-chat-send.ts` | Message send logic |
-| `useChatPipeline` | `src/hooks/use-chat-pipeline.ts` | Pipeline lifecycle — returns `handleSend`, `handleStopStreaming`, `handleEdit*`, `handleRegenerate`, `handleCopyMessage`, `handleForkMessage`, `handleDeleteMessage`, streaming state, and provider info |
-| `useChatAttachments` | `src/hooks/use-chat-attachments.ts` | File attachment management |
-| `useChatEditing` | `src/hooks/use-chat-editing.ts` | Message editing |
-| `useChatRegeneration` | `src/hooks/use-chat-regeneration.ts` | Response regeneration |
-| `useChatContextPanel` | `src/hooks/use-chat-context-panel.ts` | Context panel state |
-
-## Scheduler Hooks
-
-| Hook | File | Purpose |
-|------|------|---------|
-| `useAiScheduler` | `src/hooks/use-ai-scheduler.ts` | AI job scheduling |
-| `runChatJob` | `src/hooks/run-chat-job.ts` | Chat job execution |
+| `useChatSend` | `src/hooks/use-chat-send.ts` | Builds the `agent_pi` job: prompt, model, reasoning, attachments, LM Studio model load |
+| `useChatPipeline` | `src/hooks/use-chat-pipeline.ts` | Provider/model selection plus `handleSend`, `handleNewChat`, `handleDeleteChat` |
+| `useChatAttachments` | `src/hooks/use-chat-attachments.ts` | Attachment filtering and validation |
+| `useChatContextPanel` | `src/hooks/use-chat-context-panel.ts` | Resolved context length, reserved output tokens, context stats |
+| `useModelReasoning` | `src/hooks/use-model-reasoning.ts` | Reasoning levels the selected model actually accepts |
 
 ## Agent Hooks
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useAgentDispatch` | `src/hooks/use-agent-dispatch.ts` | Agent dispatch logic |
+| `useAgentDispatch` | `src/hooks/use-agent-dispatch.ts` | Session list, active session, runtime check, workspace sessions |
+
+## Scheduler Hooks
+
+| Hook | File | Purpose |
+|------|------|---------|
+| `useAiScheduler` | `src/hooks/use-ai-scheduler.ts` | Subscribe to scheduler snapshots |
 
 ## UI Hooks
 
 | Hook | File | Purpose |
 |------|------|---------|
 | `useClickOutside` | `src/hooks/use-click-outside.ts` | Click-outside detection |
-| `useShutdownState` | `src/hooks/use-shutdown-state.ts` | Shutdown state tracking |
-| `useAppUpdateCheck` | `src/hooks/use-app-update-check.ts` | Update notification check |
+| `useShutdownState` | `src/hooks/use-shutdown-state.ts` | Shutdown overlay state |
+| `useAppUpdateCheck` | `src/hooks/use-app-update-check.ts` | Update check on startup |
+
+Editing, regeneration, forking, and message-level streaming hooks were removed
+with the in-browser chat orchestrator. Those actions are now session operations
+(`stopSession`, `steerSession`, continue-session sends) exposed by
+`agent-store`.
 
 ---
 
@@ -974,7 +1013,7 @@ Each MCP tool is namespaced as `mcp_<serverId>_<toolName>` to avoid collisions. 
 
 ## Tool Execution
 
-In `src/modules/chat/chat-tool-rounds.ts`, `executeToolRound()` routes any tool call starting with `mcp_` through the MCP adapter:
+Pi tool requests are handled by `src/modules/agents/pi-chat-tools.ts`, which routes any `mcp_` tool through the MCP adapter:
 
 1. **Resolve** — Match the tool name to an `McpServerRecord` and tool name.
 2. **Gate** — Check chat-level enable, server health, project scope, and transport feature flags.
@@ -986,14 +1025,23 @@ Tool call results are rendered in the chat UI's tool call indicators, with `mcpA
 
 ## Skill Context Injection
 
-In `src/modules/chat/chat-orchestrator.ts`, `sendChatRequest()` resolves the active skill:
+`src/modules/agents/agent-store.ts` resolves the active skill when it starts a
+session:
 
 ```typescript
-const activeSkill = extensionState.resolveActiveSkillSelection(conversationId, projectId);
-const skillContextBlock = activeSkill ? buildSkillContext(activeSkill.skill, activeSkill.workflowId) : undefined;
+const selectedSkill = extensions.resolveActiveSkillSelection(scopeId, scopeProjectId);
+const contextualPrompt = [
+  project?.systemPrompt ? `Project guidance:
+${project.systemPrompt}` : "",
+  selectedSkill ? buildSkillContext(selectedSkill.skill, selectedSkill.workflowId) : "",
+  userPrompt,
+].filter(Boolean).join("
+
+");
 ```
 
-The resulting `<veyra_active_skill>` XML block is added to the system prompt alongside other context blocks.
+The skill block is prepended to the user prompt (after project guidance), so it
+reaches Pi together with the turn it applies to.
 
 ## UI Components
 
@@ -2103,8 +2151,12 @@ Veyra therefore does not register a Tauri command that spawns Python or expose
 recognized so stored or model-emitted calls fail closed with a clear disabled
 error.
 
-Persisted code-execution settings are retained for state compatibility, but
-they do not enable native execution.
+Settings expose an `Enable Python execution` toggle. Until the Pi path actually
+registers an executor and a sandbox exists, that toggle does not change model
+capabilities: `pi-chat-tools.ts` passes `codeExecutionEnabled: false` when it
+builds the tool list, because there is no handler that can run `run-python`
+safely. Treat the control as a preference that takes effect only when execution
+is re-enabled end to end.
 
 ---
 
@@ -2129,47 +2181,81 @@ host interpreter without an OS-enforced sandbox.
 
 # State Management
 
-Cross-cutting architecture patterns for state management.
+Veyra keeps one owner per fact. The rule is simple: if two stores hold the same
+value, one of them is a bug waiting to be reported.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/stores/chat-store.ts` | Central conversation state |
-| `src/stores/settings-store.ts` | Combined settings (8 slices) |
-| `src/stores/provider-store.ts` | Provider and model management |
-| `src/stores/connectivity-store.ts` | Connectivity state |
+| `src/stores/chat-store.ts` | Conversation index over the Pi transcript |
+| `src/stores/settings-store.ts` | All app settings (7 slices) |
+| `src/stores/provider-store.ts` | Provider connection, model listing, selected model |
+| `src/stores/connectivity-store.ts` | Online/offline/local-only state |
 | `src/stores/update-store.ts` | App update state |
+| `src/modules/agents/agent-store.ts` | Pi sessions (the transcript) |
+| `src/modules/projects/project-store.ts` | Projects, active project, workspace resources |
+| `src/modules/extensions/extensions-store.ts` | Skills, MCP servers, approvals |
+| `src/modules/memory/memory-store.ts` | Durable memory facts |
 
-## Zustand Stores (8 total)
+## Ownership
 
-Stores live in both `src/stores/` and `src/modules/<feature>/`:
+| Fact | Owner | Consumers |
+|------|-------|-----------|
+| Session transcript | `agent-store.sessions` | `pi-conversation-storage` (mirror), chat UI |
+| Conversation index (title, project, artifacts) | `chat-store` | sidebar, project sidebar |
+| Active conversation | `chat-store.activeConversationId` | chat panel |
+| Active project | `project-store.activeProjectId` | composer scope, memory scoping |
+| Workspace path | `agent-store.projectPath` | session filtering, Pi dispatch |
+| Selected model | `provider-store.selectedModel` | composer, context meter |
+| Reasoning level | `settings-store` (`reasoningLevel`, `reasoningLevelByModel`) | send path, Pi model config |
+| Chat behavior toggles | `settings-store` chat slice | tool registry |
+| Web search defaults | `settings-store` web-search slice | search orchestrator, tools |
 
-| Store Hook | Location | Purpose |
-|------------|----------|---------|
-| `useChatStore` | `src/stores/chat-store.ts` | Conversations, streaming buffer, messages |
-| `useSettingsStore` | `src/stores/settings-store.ts` | All app settings (8 slices) |
-| `useProviderStore` | `src/stores/provider-store.ts` | Provider connection, model listing |
-| `useConnectivityStore` | `src/stores/connectivity-store.ts` | Online/offline/local-only state |
-| `useUpdateStore` | `src/stores/update-store.ts` | App update state |
-| `useProjectStore` | `src/modules/projects/project-store.ts` | Projects |
-| `useAgentStore` | `src/modules/agents/agent-store.ts` | Agent sessions |
+`chat-store` is deliberately thin: `modules/agents/pi-conversation-storage.ts`
+is its only writer. It never builds a transcript of its own, and the removed
+`streamingBuffer` / `toolStates` / `scratchpadContent` plumbing is gone with the
+old orchestrator.
 
-## Settings Store (8 Slices)
-
-The settings store is composed from 8 slices in `src/stores/slices/`:
+## Settings Store (7 Slices)
 
 | Slice | File | Purpose |
 |-------|------|---------|
-| `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, panel collapsed state, visible tool settings |
-| `model-slice` | `model-slice.ts` | Default model, temperature, context length |
-| `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, and extraction settings |
-| `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |
+| `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, recent-chats collapsed |
+| `model-slice` | `model-slice.ts` | Model defaults, per-model overrides, prompts, reasoning |
+| `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, extraction |
+| `code-execution-slice` | `code-execution-slice.ts` | Python execution toggle |
 | `connectivity-slice` | `connectivity-slice.ts` | Online/offline preference |
-| `chat-slice` | `chat-slice.ts` | Workspace mode, context anchoring, enhanced mode |
+| `chat-slice` | `chat-slice.ts` | Interactive answers, artifacts, background jobs |
 | `update-slice` | `update-slice.ts` | Auto-check updates, dismissed version |
 
-All settings persist to localStorage under `veyra.settings.v1`.
+All settings persist to `localStorage` under `veyra.settings.v1`. Adding a field
+means three edits — slice state/action, `DEFAULT_*_STATE`, and
+`partializeSettings` — so a setting without a `partialize` entry silently resets
+on restart.
+
+## Agent Store Persistence
+
+`agent-store` persists only `activeSessionId`, `projectPath`, and `projects`.
+Session events live in the encrypted conversation snapshot, written by
+`pi-conversation-storage.ts` on a debounce. Persisting events in both places
+would rewrite every transcript on each streamed line and create two copies of
+the same history that can disagree after a crash.
+
+## Selector Discipline
+
+- Subscribe to the narrowest slice: `useSettingsStore((s) => s.foo)`.
+- Never subscribe to a whole store in a component that renders per token.
+- Full-collection subscriptions belong to collection consumers (recent chats,
+  project sidebar). Active-only consumers should read the active record.
+
+## Project Scope
+
+`project-store` mirrors a project's directory resource into
+`settings.agentProjectPath`. `resolveAgentProjectId` (in
+`modules/agents/agent-session-context.ts`) uses that mapping so a session keyed
+by workspace path can find its project for memory and skill scoping. Ambiguous
+or missing mappings fail closed: no project memory is injected.
 
 ---
 
@@ -2238,7 +2324,8 @@ Reference material is admitted only when it fits after the system instructions a
 |------|---------|
 | `src/lib/prompts.ts` | Prompt construction and assembly |
 | `src/lib/context.ts` | Context budgeting and message assembly |
-| `src/modules/chat/chat-context-builder.ts` | Tool-round context assembly |
+| `src/modules/agents/agent-session-context.ts` | Session transcript + memory budget composition |
+| `src/modules/agents/agent-store.ts` | Final prompt assembly: project guidance, skill block, system prompt |
 
 ---
 
@@ -2316,29 +2403,53 @@ under `veyra.provider.v1`.
 
 # Tool System
 
-## Registered Tools
+Model-facing tools are defined once in `src/lib/tool-registry.ts` and executed by
+the Pi bridge in `src/modules/agents/pi-chat-tools.ts`.
+
+## Registry
 
 | Tool | Condition | Description |
 |------|-----------|-------------|
-| `web_search` | `webSearchEnabled` | Search the web via the bundled DonSeTch engine. Up to 2 retries. |
-| `scratchpad_write` | `enhancedMode` | Persistent working notes across tool rounds. |
-| `ask_question` | `enhancedMode` | Pause execution to ask the user a question. |
+| `web_search` | web search enabled and online | Search via the bundled DonSeTch engine; results return as a context block |
+| `ask_question` | interactive answers enabled | Pause the turn and ask the user |
+| `create_artifact` | artifacts enabled | Attach HTML, code, or document output to the turn |
+| `generate_interactive_answer` | interactive answers enabled | Attach a live UI page written in OpenUI Lang |
+| `run-python` | code execution enabled | Native Python; the Pi path currently passes `false` |
 
-Each tool has a JSON schema defining its parameters. Tool calls execute in rounds:
-- Standard mode: up to **6 rounds**
-- Enhanced mode: up to **10 rounds**
+MCP tools are appended per chat from the extensions store and always require a
+capability grant.
 
-Native `code_execution` is disabled and is not included in provider tool definitions. Legacy calls return a disabled error until an OS-enforced sandbox exists.
+## Where Execution Lives
 
-## Key Files
+| Concern | File |
+|---------|------|
+| JSON schemas and tool list | `src/lib/tool-registry.ts` |
+| MCP tool schemas, resolution, invocation | `src/modules/extensions/mcp-tool-adapter.ts` |
+| Pi tool request handling | `src/modules/agents/pi-chat-tools.ts` |
+| Search execution | `src/modules/web-search/orchestrator/SearchOrchestrator.ts` |
+| Artifact and answer validation | `src/modules/chat/artifact.ts`, `src/modules/chat/interactive-answer.ts`, `src/modules/chat/ui/validate.ts` |
+| Interactive answer component library and prompt | `src/modules/chat/ui/` |
+| Tool event rendering | `src/modules/agents/components/agent-output-view.tsx` |
 
-| File | Purpose |
-|------|---------|
-| `src/lib/tool-registry.ts` | Tool definitions for LLM (JSON Schema) |
-| `src/lib/tool-call-ui.ts` | UI rendering for tool calls |
-| `src/modules/chat/chat-tool-rounds.ts` | Tool call execution engine |
-| `src/modules/chat/chat-tool-loop.ts` | Tool loop iteration control |
-| `src/modules/chat/tools/` | Individual tool implementations |
+## Retries and Budgets
+
+- Web search retries twice on failure (`TOOL_RETRY_LIMIT`).
+- Search context is trimmed to the configured token limit before it reaches the
+  model.
+- MCP output is capped at 60 KB.
+- Pi itself owns the tool-call loop; Veyra does not re-prompt after a tool call.
+
+## Safety
+
+Native code execution is not offered to models on the Pi path. Artifacts and
+interactive answers are normalized and size-checked before they are stored, and
+tool results are treated as untrusted context in later prompts.
+
+An interactive answer program is model-written UI, so the library treats it as
+untrusted: CSS values that could load resources (`url(...)`, `var(...)`) are
+dropped, links and images only accept absolute `http(s)` URLs, `@OpenUrl`
+validates before it hands a URL to the system browser, and icon names resolve
+against a fixed set rather than the whole lucide package.
 
 ---
 

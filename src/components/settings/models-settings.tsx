@@ -92,7 +92,7 @@ export function ModelsSettings() {
                 {currentProvider?.name ?? "Unknown provider"}
               </p>
               <p className="mt-0.5 truncate font-mono text-[11.5px] text-[var(--color-text-dim)]">
-                {currentBaseUrl ?? "No endpoint configured"}
+                {currentBaseUrl ?? (selectedProvider === "lm-studio" ? "Local server on this machine" : "No endpoint configured")}
               </p>
               <p className="mt-1 text-[12.5px] text-[var(--color-text-dim)]">
                 {selectedModel ? `Using ${selectedModel}` : "No model selected"}
@@ -483,7 +483,7 @@ function ModelOverrideRow({
                   ? "Leave empty to use the Chat tab prompt"
                   : "No prompt set in Chat settings"
               }
-              className={settingsTextareaClass}
+              className={`${settingsTextareaClass} max-w-[980px]`}
             />
           </div>
         </div>

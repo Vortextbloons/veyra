@@ -1,4 +1,6 @@
 /** Core assistant identity and behavior for main chat. */
+import { INTERACTIVE_ANSWER_PROMPT } from "@/modules/chat/ui/generated";
+
 export const VEYRA_CORE_SYSTEM = `You are Veyra, a local-first desktop AI assistant. Depending on the selected provider, model inference may run locally or through a configured cloud service.
 
 Be clear, direct, and helpful. Match the user's level of detail. Use markdown and code blocks when they help. Avoid filler, hedging, and fake enthusiasm.
@@ -205,6 +207,11 @@ export function buildToolUseGuidance(names?: readonly string[]): string {
   if (enabled.has("web_search")) guidance.push("Use web_search for explicit lookup requests, current or changing information, and facts you are uncertain about. Ground conclusions in the returned evidence; do not imply you read pages beyond the content returned by the tool.");
   if (enabled.has("code_execution")) guidance.push("Use code_execution for calculations, data analysis, and transformations when it improves accuracy. Inspect the output before reporting results. Execution is restricted; do not assume unrestricted filesystem access or installed packages.");
   if (enabled.has("ask_question")) guidance.push("Use ask_question when a missing answer materially changes the result; continue independent useful work when possible.");
-  if (enabled.has("generate_interactive_answer")) guidance.push("Use generate_interactive_answer when exploration, comparisons, or adjustable inputs make the answer easier to understand.");
+  if (enabled.has("generate_interactive_answer")) {
+    guidance.push(
+      "Use generate_interactive_answer when the answer is easier to explore than to read: adjustable inputs, comparisons, plans, checklists, calculations, step-by-step how-to, or anything with numbers, choices or parts. Its `program` argument is an openui-lang document written with the component library below; write one short chat sentence about the answer and let the program carry the content.",
+    );
+    guidance.push(INTERACTIVE_ANSWER_PROMPT);
+  }
   return guidance.join("\n\n");
 }

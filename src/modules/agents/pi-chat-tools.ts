@@ -5,7 +5,6 @@ import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useExtensionsStore, findCapabilityGrant } from "@/modules/extensions/extensions-store";
 import { buildMcpProviderTools, invokeMcpTool, mcpCapabilityId, resolveMcpTool } from "@/modules/extensions/mcp-tool-adapter";
 import { normalizeArtifact } from "@/modules/chat/artifact";
-import { normalizeInteractiveAnswer } from "@/modules/chat/interactive-answer";
 import type { AgentEvent } from "./agent-types";
 import { askPiQuestion } from "./pi-questions";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -49,7 +48,10 @@ export function createPiChatTools(options: { sessionId: string; scopeId: string;
       if (call.name === "create_artifact" || call.name === "generate_interactive_answer") {
         const id = crypto.randomUUID();
         const artifact = call.name === "create_artifact" ? normalizeArtifact(call.arguments, id) : null;
-        const interactive = call.name === "generate_interactive_answer" ? normalizeInteractiveAnswer(call.arguments, id) : null;
+        const interactive =
+          call.name === "generate_interactive_answer"
+            ? (await import("@/modules/chat/interactive-answer")).normalizeInteractiveAnswer(call.arguments, id)
+            : null;
         if (artifact && !artifact.ok) throw new Error(artifact.error);
         if (interactive && !interactive.ok) throw new Error(interactive.error);
         onOutput({ id, type: "output", title: "Rich output", at: Date.now(), ...(artifact?.ok ? { artifact: artifact.artifact } : {}), ...(interactive?.ok ? { interactiveAnswer: interactive.answer } : {}) });

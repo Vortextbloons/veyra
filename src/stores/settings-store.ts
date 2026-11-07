@@ -1,11 +1,9 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { mergeVisibleToolSettingsSections } from "@/components/settings/tools-settings-registry";
 
 import { createUiLayoutSlice, DEFAULT_UI_LAYOUT_STATE } from "./slices/ui-layout-slice";
 import { createModelSlice, DEFAULT_MODEL_STATE } from "./slices/model-slice";
 import { createWebSearchSlice, DEFAULT_WEB_SEARCH_STATE } from "./slices/web-search-slice";
-import { createCodeExecutionSlice, DEFAULT_CODE_EXECUTION_STATE } from "./slices/code-execution-slice";
 import { createConnectivitySlice, DEFAULT_CONNECTIVITY_STATE } from "./slices/connectivity-slice";
 import { createChatSlice, DEFAULT_CHAT_STATE } from "./slices/chat-slice";
 import { createUpdateSlice, DEFAULT_UPDATE_STATE } from "./slices/update-slice";
@@ -20,7 +18,6 @@ const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 export type SettingsStoreState = UiLayoutSliceState
   & ModelSliceState
   & WebSearchSliceState
-  & CodeExecutionSliceState
   & ConnectivitySliceState
   & ChatSliceState
   & UpdateSliceState;
@@ -37,7 +34,6 @@ export type SettingsStore = SettingsStoreState
 import type { UiLayoutSliceState, UiLayoutSliceActions } from "./slices/ui-layout-slice";
 import type { ModelSliceState, ModelSliceActions } from "./slices/model-slice";
 import type { WebSearchSliceState, WebSearchSliceActions } from "./slices/web-search-slice";
-import type { CodeExecutionSliceState } from "./slices/code-execution-slice";
 import type { ConnectivitySliceState, ConnectivitySliceActions } from "./slices/connectivity-slice";
 import type { ChatSliceState, ChatSliceActions } from "./slices/chat-slice";
 import type { UpdateSliceState, UpdateSliceActions } from "./slices/update-slice";
@@ -48,7 +44,6 @@ const DEFAULT_STATE: SettingsStoreState = {
   ...DEFAULT_UI_LAYOUT_STATE,
   ...DEFAULT_MODEL_STATE,
   ...DEFAULT_WEB_SEARCH_STATE,
-  ...DEFAULT_CODE_EXECUTION_STATE,
   ...DEFAULT_CONNECTIVITY_STATE,
   ...DEFAULT_CHAT_STATE,
   ...DEFAULT_UPDATE_STATE,
@@ -60,11 +55,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
   return {
     activeNav: state.activeNav,
     recentChatsCollapsed: state.recentChatsCollapsed,
-    visibleToolSettingsSections: state.visibleToolSettingsSections,
-    toolSettingsSubsectionsExpanded: state.toolSettingsSubsectionsExpanded,
     favoriteModels: state.favoriteModels,
-    autoNameEnabled: state.autoNameEnabled,
-    autoNameModel: state.autoNameModel,
     defaultTemperature: state.defaultTemperature,
     defaultContextLength: state.defaultContextLength,
     defaultMaxTokens: state.defaultMaxTokens,
@@ -79,10 +70,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     reasoningLevel: state.reasoningLevel,
     reasoningLevelByModel: state.reasoningLevelByModel,
     backgroundJobsEnabled: state.backgroundJobsEnabled,
-    autoSummarizeChats: state.autoSummarizeChats,
-    summaryModel: state.summaryModel,
     defaultWebSearchEnabled: state.defaultWebSearchEnabled,
-    webSearchDefaultMode: state.webSearchDefaultMode,
     webSearchMaxResults: state.webSearchMaxResults,
     webSearchContextTokenLimit: state.webSearchContextTokenLimit,
     webSearchFetchEnabled: state.webSearchFetchEnabled,
@@ -98,13 +86,8 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     bundleWaybackFallback: state.bundleWaybackFallback,
     bundleArxivSearch: state.bundleArxivSearch,
     bundleWikipediaSearch: state.bundleWikipediaSearch,
-    contextAnchoringEnabled: state.contextAnchoringEnabled,
-    enhancedModeEnabled: state.enhancedModeEnabled,
     interactiveAnswersEnabled: state.interactiveAnswersEnabled,
     artifactsEnabled: state.artifactsEnabled,
-    codeExecutionEnabled: state.codeExecutionEnabled,
-    customPythonPath: state.customPythonPath,
-    codeExecutionTimeoutSecs: state.codeExecutionTimeoutSecs,
     connectivityPreference: state.connectivityPreference,
     autoCheckUpdatesEnabled: state.autoCheckUpdatesEnabled,
     dismissedUpdateVersion: state.dismissedUpdateVersion,
@@ -129,7 +112,6 @@ export const useSettingsStore = create<SettingsStore>()(
       ...createUiLayoutSlice(...a),
       ...createModelSlice(...a),
       ...createWebSearchSlice(...a),
-      ...createCodeExecutionSlice(...a),
       ...createConnectivitySlice(...a),
       ...createChatSlice(...a),
       ...createUpdateSlice(...a),
@@ -153,13 +135,6 @@ export const useSettingsStore = create<SettingsStore>()(
         ) {
           migrated.defaultWebSearchEnabled = parsed.webSearchEnabled;
         }
-        migrated.visibleToolSettingsSections = mergeVisibleToolSettingsSections(
-          parsed.visibleToolSettingsSections,
-        );
-        migrated.toolSettingsSubsectionsExpanded = {
-          ...current.toolSettingsSubsectionsExpanded,
-          ...parsed.toolSettingsSubsectionsExpanded,
-        };
         if (parsed.reasoningLevel === undefined) {
           migrated.reasoningLevel = parsed.reasoningEnabled === false ? "off" : "medium";
         }

@@ -1,8 +1,15 @@
 import { useCallback } from "react";
-import { Loader2, Shield, Wifi, WifiOff } from "lucide-react";
+import { Check, Loader2, Minus, Shield, Wifi, WifiOff } from "lucide-react";
 import type { ConnectivityPreference } from "@/lib/connectivity/connectivity-types";
 import { useConnectivity } from "@/lib/connectivity/useConnectivity";
 import { useSettingsStore } from "@/stores/settings-store";
+import {
+  SettingsCallout,
+  SettingsCard,
+  SettingsHeader,
+  SettingsPanel,
+  settingsButtonClass,
+} from "./settings-ui";
 
 const PREFERENCE_OPTIONS: {
   id: ConnectivityPreference;
@@ -12,29 +19,28 @@ const PREFERENCE_OPTIONS: {
   {
     id: "auto",
     label: "Auto",
-    description: "Follow your network connection. Web search turns off when offline.",
+    description: "Follow the network probe. Internet features turn off when you go offline.",
   },
   {
     id: "online",
-    label: "Online",
-    description: "Keep internet features enabled even if the probe cannot verify connectivity.",
+    label: "Always online",
+    description: "Keep web search and cloud models available even if the probe fails.",
   },
   {
     id: "offline",
-    label: "Offline",
-    description: "Privacy mode — block web search and cloud models. Nothing leaves your machine.",
+    label: "Always offline",
+    description: "Block web search and cloud models. Nothing leaves this machine.",
   },
 ];
 
 function formatProbeTime(timestamp: number | null): string {
-  if (!timestamp) return "Not checked yet";
+  if (!timestamp) return "not checked yet";
   return new Date(timestamp).toLocaleTimeString();
 }
 
 export function PrivacyConnectivitySettings() {
   const connectivityPreference = useSettingsStore((s) => s.connectivityPreference);
   const setConnectivityPreference = useSettingsStore((s) => s.setConnectivityPreference);
-  const webSearchDefaultMode = useSettingsStore((s) => s.webSearchDefaultMode);
 
   const {
     effectiveConnectivity,
@@ -56,108 +62,113 @@ export function PrivacyConnectivitySettings() {
 
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className="mb-2 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Privacy &amp; Connectivity
-        </h2>
-        <p className="mb-4 max-w-xl text-[12px] leading-relaxed text-[var(--color-text-dim)]">
-          Local AI via LM Studio never sends your conversations to the cloud. Offline mode blocks
-          web search and cloud models while keeping chat on your machine.
-        </p>
+      <SettingsHeader
+        title="Privacy"
+        description="Chat stays local by default. These controls decide when anything is allowed to leave your machine."
+      />
 
-        <div className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-          <div
-            className={`grid size-9 shrink-0 place-items-center rounded-lg ${
-              effectiveConnectivity === "online"
-                ? "bg-emerald-500/15 text-emerald-300"
-                : connectivityPreference === "offline"
-                  ? "bg-amber-500/15 text-amber-300"
-                  : "bg-white/5 text-[var(--color-text-dim)]"
-            }`}
-          >
-            {effectiveConnectivity === "online" ? (
-              <Wifi className="size-4" />
-            ) : connectivityPreference === "offline" ? (
-              <Shield className="size-4" />
-            ) : (
-              <WifiOff className="size-4" />
-            )}
+      <SettingsPanel title="Connectivity">
+        <SettingsCard>
+          <div className="flex flex-wrap items-center gap-4 px-5 py-4">
+            <div
+              className={`grid size-10 shrink-0 place-items-center rounded-lg ${
+                effectiveConnectivity === "online"
+                  ? "bg-emerald-500/12 text-emerald-300"
+                  : connectivityPreference === "offline"
+                    ? "bg-amber-500/12 text-amber-300"
+                    : "bg-white/[0.05] text-[var(--color-text-dim)]"
+              }`}
+            >
+              {effectiveConnectivity === "online" ? (
+                <Wifi className="size-4" />
+              ) : connectivityPreference === "offline" ? (
+                <Shield className="size-4" />
+              ) : (
+                <WifiOff className="size-4" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13.5px] font-medium text-white">{label}</p>
+              <p className="mt-0.5 text-[12.5px] leading-relaxed text-[var(--color-text-dim)]">
+                {description}
+              </p>
+              <p className="mt-1 text-[12px] text-[var(--color-text-dim)]/80">
+                Probe:{" "}
+                {systemOnline === true
+                  ? "connected"
+                  : systemOnline === false
+                    ? "no connection"
+                    : "unknown"}
+                {" · "}last checked {formatProbeTime(lastProbeAt)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void refreshProbe()}
+              disabled={probing}
+              className={settingsButtonClass}
+            >
+              {probing ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Check now
+            </button>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-medium text-white">{label}</p>
-            <p className="text-[11.5px] text-[var(--color-text-dim)]">{description}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void refreshProbe()}
-            disabled={probing}
-            className="shrink-0 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-[11px] text-[var(--color-text-dim)] hover:bg-white/[0.04] hover:text-white disabled:opacity-50"
-          >
-            {probing ? <Loader2 className="size-3.5 animate-spin" /> : "Refresh"}
-          </button>
-        </div>
 
-        <p className="mb-4 text-[11px] text-[var(--color-text-dim)]">
-          System probe:{" "}
-          {systemOnline === true
-            ? "Connected"
-            : systemOnline === false
-              ? "No connection"
-              : "Unknown"}
-          {" · "}
-          Last checked: {formatProbeTime(lastProbeAt)}
-        </p>
-
-        <div className="space-y-2">
-          {PREFERENCE_OPTIONS.map((option) => {
-            const selected = connectivityPreference === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => handlePreferenceChange(option.id)}
-                className={`flex w-full items-start gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors ${
-                  selected
-                    ? "border-[var(--color-accent)]/40 bg-[var(--color-accent-soft)]"
-                    : "border-[var(--color-border)] bg-[var(--color-panel)] hover:border-white/15"
-                }`}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 text-[12.5px] font-medium text-white">
+          <div className="grid gap-2 border-t border-[var(--color-border)] p-3 sm:grid-cols-3">
+            {PREFERENCE_OPTIONS.map((option) => {
+              const selected = connectivityPreference === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => handlePreferenceChange(option.id)}
+                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                    selected
+                      ? "border-[var(--color-accent)]/50 bg-[var(--color-accent)]/[0.08]"
+                      : "border-[var(--color-border)] bg-[var(--color-bg)]/40 hover:border-[var(--color-border-strong)]"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-[13px] font-medium text-white">
+                    {selected && <Check className="size-3.5 text-[var(--color-focus)]" />}
                     {option.label}
                   </span>
-                  <span className="mt-0.5 block text-[11.5px] leading-relaxed text-[var(--color-text-dim)]">
+                  <span className="mt-1 block text-[12px] leading-relaxed text-[var(--color-text-dim)]">
                     {option.description}
                   </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+                </button>
+              );
+            })}
+          </div>
+        </SettingsCard>
+      </SettingsPanel>
 
-      <section>
-        <h2 className="mb-3 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Feature availability
-        </h2>
-        <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-          <table className="w-full text-left text-[12px]">
+      <SettingsPanel
+        title="What each mode allows"
+        description="Feature availability follows the effective mode above, not the preference alone."
+      >
+        <SettingsCard>
+          <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-[var(--color-border)] bg-white/[0.02] text-[10.5px] uppercase tracking-wider text-[var(--color-text-dim)]">
-                <th className="px-3 py-2 font-medium">Feature</th>
-                <th className="px-3 py-2 font-medium">Status</th>
+              <tr className="border-b border-[var(--color-border)] text-[11.5px] text-[var(--color-text-dim)]">
+                <th className="px-5 py-2.5 font-medium">Feature</th>
+                <th className="px-5 py-2.5 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {featureMatrix.map((row) => (
                 <tr key={row.feature} className="border-b border-[var(--color-border)] last:border-0">
-                  <td className="px-3 py-2.5 text-white">{row.label}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-5 py-3 text-[13px] text-white">{row.label}</td>
+                  <td className="px-5 py-3">
                     {row.available ? (
-                      <span className="text-emerald-300">Available</span>
+                      <span className="inline-flex items-center gap-1.5 text-[12.5px] text-emerald-300">
+                        <Check className="size-3.5" /> Available
+                      </span>
                     ) : (
-                      <span className="text-[var(--color-text-dim)]" title={row.reason}>
-                        Unavailable
+                      <span
+                        className="inline-flex items-center gap-1.5 text-[12.5px] text-[var(--color-text-dim)]"
+                        title={row.reason}
+                      >
+                        <Minus className="size-3.5" /> Blocked
                       </span>
                     )}
                   </td>
@@ -165,23 +176,27 @@ export function PrivacyConnectivitySettings() {
               ))}
             </tbody>
           </table>
-        </div>
-      </section>
+        </SettingsCard>
+      </SettingsPanel>
 
-      <section>
-        <h2 className="mb-2 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Web search defaults
-        </h2>
-        <p className="text-[12px] leading-relaxed text-[var(--color-text-dim)]">
-          Connectivity controls whether internet features are allowed at all. When online, your web
-          search default mode is <span className="font-mono text-white">{webSearchDefaultMode}</span>
-          . Configure per-chat defaults in Tools settings.
-        </p>
-        <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
-          Keyboard shortcut: <span className="font-mono text-white">Ctrl+Shift+O</span> toggles
-          forced offline mode.
-        </p>
-      </section>
+      <SettingsPanel title="Where your data lives">
+        <SettingsCard>
+          <div className="space-y-3 px-5 py-4 text-[12.5px] leading-relaxed text-[var(--color-text-dim)]">
+            <p>
+              Conversations, memories, skills, and settings are encrypted and stored on this
+              machine. Provider API keys live in the operating system credential vault.
+            </p>
+            <p>
+              Local models through LM Studio never send prompts off-device. Cloud providers
+              receive only what the current turn needs, and only while online mode allows it.
+            </p>
+            <SettingsCallout tone="info" title="Shortcut">
+              Press <span className="font-mono text-white">Ctrl+Shift+O</span> to toggle forced
+              offline mode from anywhere.
+            </SettingsCallout>
+          </div>
+        </SettingsCard>
+      </SettingsPanel>
     </div>
   );
 }

@@ -1,7 +1,5 @@
 import { useSettingsStore } from "@/stores/settings-store";
 import { Toggle } from "@/components/toggle";
-import { ModelDropdown } from "@/components/settings/model-dropdown";
-import { useProviderStore } from "@/stores/provider-store";
 import {
   SettingRow,
   SettingsCallout,
@@ -18,24 +16,13 @@ export function ChatSettings() {
   const systemPromptReplacesDefault = useSettingsStore((s) => s.systemPromptReplacesDefault);
   const setSystemPromptReplacesDefault = useSettingsStore((s) => s.setSystemPromptReplacesDefault);
 
-  const autoNameEnabled = useSettingsStore((s) => s.autoNameEnabled);
-  const setAutoNameEnabled = useSettingsStore((s) => s.setAutoNameEnabled);
-  const autoNameModel = useSettingsStore((s) => s.autoNameModel);
-  const setAutoNameModel = useSettingsStore((s) => s.setAutoNameModel);
-
   const backgroundJobsEnabled = useSettingsStore((s) => s.backgroundJobsEnabled);
   const setBackgroundJobsEnabled = useSettingsStore((s) => s.setBackgroundJobsEnabled);
-  const autoSummarizeChats = useSettingsStore((s) => s.autoSummarizeChats);
-  const setAutoSummarizeChats = useSettingsStore((s) => s.setAutoSummarizeChats);
-  const summaryModel = useSettingsStore((s) => s.summaryModel);
-  const setSummaryModel = useSettingsStore((s) => s.setSummaryModel);
 
   const artifactsEnabled = useSettingsStore((s) => s.artifactsEnabled);
   const setArtifactsEnabled = useSettingsStore((s) => s.setArtifactsEnabled);
   const interactiveAnswersEnabled = useSettingsStore((s) => s.interactiveAnswersEnabled);
   const setInteractiveAnswersEnabled = useSettingsStore((s) => s.setInteractiveAnswersEnabled);
-
-  const models = useProviderStore((s) => s.models);
 
   const promptIsEmpty = !defaultSystemPrompt.trim();
 
@@ -65,7 +52,7 @@ export function ChatSettings() {
               rows={8}
               spellCheck={false}
               placeholder="You are a direct, technically precise assistant. Answer in plain language and skip the preamble."
-              className={settingsTextareaClass}
+              className={`${settingsTextareaClass} max-w-[980px]`}
             />
             <p className="mt-2 text-[12px] leading-relaxed text-[var(--color-text-dim)]">
               {systemPromptReplacesDefault
@@ -129,62 +116,20 @@ export function ChatSettings() {
       </SettingsPanel>
 
       <SettingsPanel
-        title="Automation"
-        description="Background jobs are required for auto-naming and auto-summarize."
+        title="Background work"
+        description="Short helper requests Veyra runs on its own after a reply finishes."
       >
         <SettingsCard>
           <SettingsRows>
             <SettingRow
               label="Background jobs"
-              description="Runs short helper requests after a reply. Turning this off disables everything below."
+              description="Lets Veyra extract durable memory after a conversation turn. Turning this off keeps all memory writes manual."
             >
               <Toggle
                 ariaLabel="Background jobs"
                 on={backgroundJobsEnabled}
                 onChange={setBackgroundJobsEnabled}
               />
-            </SettingRow>
-            <SettingRow
-              label="Auto-name conversations"
-              description="Generates a short title from the first exchange."
-            >
-              <Toggle
-                ariaLabel="Auto-name conversations"
-                on={autoNameEnabled}
-                onChange={setAutoNameEnabled}
-                disabled={!backgroundJobsEnabled}
-              />
-            </SettingRow>
-            <SettingRow label="Auto-name model" description="Leave empty to use the selected model.">
-              <div className="w-full sm:w-[260px]">
-                <ModelDropdown
-                  models={models}
-                  value={autoNameModel}
-                  onChange={setAutoNameModel}
-                  placeholder="Use selected model"
-                />
-              </div>
-            </SettingRow>
-            <SettingRow
-              label="Auto-summarize long chats"
-              description="Condenses older turns so the context window keeps useful history."
-            >
-              <Toggle
-                ariaLabel="Auto-summarize long chats"
-                on={autoSummarizeChats}
-                onChange={setAutoSummarizeChats}
-                disabled={!backgroundJobsEnabled}
-              />
-            </SettingRow>
-            <SettingRow label="Summary model" description="Leave empty to use the selected model.">
-              <div className="w-full sm:w-[260px]">
-                <ModelDropdown
-                  models={models}
-                  value={summaryModel}
-                  onChange={setSummaryModel}
-                  placeholder="Use selected model"
-                />
-              </div>
             </SettingRow>
           </SettingsRows>
         </SettingsCard>

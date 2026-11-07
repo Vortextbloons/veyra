@@ -9,5 +9,9 @@ Veyra therefore does not register a Tauri command that spawns Python or expose
 recognized so stored or model-emitted calls fail closed with a clear disabled
 error.
 
-Persisted code-execution settings are retained for state compatibility, but
-they do not enable native execution.
+Settings expose an `Enable Python execution` toggle. Until the Pi path actually
+registers an executor and a sandbox exists, that toggle does not change model
+capabilities: `pi-chat-tools.ts` passes `codeExecutionEnabled: false` when it
+builds the tool list, because there is no handler that can run `run-python`
+safely. Treat the control as a preference that takes effect only when execution
+is re-enabled end to end.

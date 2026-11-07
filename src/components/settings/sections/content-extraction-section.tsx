@@ -1,5 +1,12 @@
 import { Toggle } from "@/components/toggle";
-import { CollapsibleSettingsSection } from "../collapsible-settings-section";
+import { SliderControl } from "@/components/ui/slider-control";
+import {
+  SettingRow,
+  SettingsCard,
+  SettingsPanel,
+  SettingsRows,
+  settingsButtonClass,
+} from "../settings-ui";
 import type { WebFetchCacheStats } from "@/modules/web-search/tauri-commands";
 
 interface ContentExtractionSectionProps {
@@ -32,153 +39,81 @@ export function ContentExtractionSection({
   onClearCache,
 }: ContentExtractionSectionProps) {
   return (
-    <CollapsibleSettingsSection
-      subsectionKey="webSearch:extraction"
-      title="Content Extraction"
-      description="Fetch full pages, timeouts, and local cache."
-      keywords={["fetch", "readability", "cache", "timeout", "extract"]}
+    <SettingsPanel
+      title="Page reading"
+      description="Opening result pages gives the model real content instead of search snippets."
     >
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-        <Toggle
-          label="Fetch and extract full page content"
-          on={webSearchFetchEnabled}
-          onChange={setWebSearchFetchEnabled}
-        />
-        <p className="mt-2 text-[11px] text-[var(--color-text-dim)]">
-          When on, Veyra fetches each result page and extracts the readable
-          article body using Mozilla Readability. Failures fall back to the
-          search snippet and mark the source as unavailable.
-        </p>
-      </div>
-
-      {webSearchFetchEnabled && (
-        <>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <div className="text-[12.5px] font-medium text-white">
-                  Pages to fetch per search
-                </div>
-                <div className="text-[11px] text-[var(--color-text-dim)]">
-                  Top N results to fetch. Higher values use more time and
-                  context.
-                </div>
-              </div>
-              <span className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[12px] text-white">
-                {webSearchFetchCount}
-              </span>
-            </div>
-            <input
-              type="range"
-              min={1}
-              max={10}
-              step={1}
-              value={webSearchFetchCount}
-              onChange={(e) => setWebSearchFetchCount(parseInt(e.target.value))}
-              className="w-full accent-[var(--color-accent)]"
+      <SettingsCard>
+        <SettingsRows>
+          <SettingRow
+            label="Read full pages"
+            description="Fetches each result and extracts the readable article body. Failed pages fall back to the snippet."
+          >
+            <Toggle
+              ariaLabel="Read full pages"
+              on={webSearchFetchEnabled}
+              onChange={setWebSearchFetchEnabled}
             />
-            <div className="mt-1 flex justify-between text-[10px] text-[var(--color-text-dim)]">
-              <span>1</span>
-              <span>5</span>
-              <span>10</span>
+          </SettingRow>
+        </SettingsRows>
+
+        {webSearchFetchEnabled && (
+          <div className="space-y-5 border-t border-[var(--color-border)] px-5 py-4">
+            <div className="grid gap-5 md:grid-cols-3">
+              <SliderControl
+                label="Pages per search"
+                description="Top results opened each search."
+                value={webSearchFetchCount}
+                onChange={setWebSearchFetchCount}
+                min={1}
+                max={10}
+                step={1}
+                formatValue={(n) => `${n}`}
+              />
+              <SliderControl
+                label="Page timeout"
+                description="Seconds to wait before giving up."
+                value={webSearchPerPageTimeoutSecs}
+                onChange={setWebSearchPerPageTimeoutSecs}
+                min={2}
+                max={30}
+                step={1}
+                formatValue={(n) => `${n}s`}
+              />
+              <SliderControl
+                label="Characters per page"
+                description="Cap on extracted text per page."
+                value={webSearchFetchMaxCharsPerSource}
+                onChange={setWebSearchFetchMaxCharsPerSource}
+                min={1000}
+                max={50000}
+                step={1000}
+                formatValue={(n) => `${(n / 1000).toFixed(0)}K`}
+              />
             </div>
           </div>
+        )}
 
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <div className="text-[12.5px] font-medium text-white">
-                  Per-page timeout (seconds)
-                </div>
-                <div className="text-[11px] text-[var(--color-text-dim)]">
-                  How long to wait for a page before giving up.
-                </div>
-              </div>
-              <span className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[12px] text-white">
-                {webSearchPerPageTimeoutSecs}s
-              </span>
-            </div>
-            <input
-              type="range"
-              min={2}
-              max={30}
-              step={1}
-              value={webSearchPerPageTimeoutSecs}
-              onChange={(e) =>
-                setWebSearchPerPageTimeoutSecs(parseInt(e.target.value))
-              }
-              className="w-full accent-[var(--color-accent)]"
-            />
-            <div className="mt-1 flex justify-between text-[10px] text-[var(--color-text-dim)]">
-              <span>2s</span>
-              <span>15s</span>
-              <span>30s</span>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <div className="text-[12.5px] font-medium text-white">
-                  Characters per fetched page
-                </div>
-                <div className="text-[11px] text-[var(--color-text-dim)]">
-                  Max characters extracted from each page. Readability text
-                  is denser than raw HTML, so even small values give the AI
-                  a lot of context.
-                </div>
-              </div>
-              <span className="rounded bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[12px] text-white">
-                {(webSearchFetchMaxCharsPerSource / 1000).toFixed(0)}K
-              </span>
-            </div>
-            <input
-              type="range"
-              min={1000}
-              max={50000}
-              step={1000}
-              value={webSearchFetchMaxCharsPerSource}
-              onChange={(e) =>
-                setWebSearchFetchMaxCharsPerSource(parseInt(e.target.value))
-              }
-              className="w-full accent-[var(--color-accent)]"
-            />
-            <div className="mt-1 flex justify-between text-[10px] text-[var(--color-text-dim)]">
-              <span>1K</span>
-              <span>25K</span>
-              <span>50K</span>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3">
-            <div className="mb-1 flex items-center justify-between">
-              <div className="text-[12.5px] font-medium text-white">Cache</div>
-              <div className="font-mono text-[11.5px] text-[var(--color-text-dim)]">
-                {cacheStats
-                  ? `${cacheStats.entries} ${cacheStats.entries === 1 ? "entry" : "entries"} · ${(cacheStats.total_bytes / (1024 * 1024)).toFixed(2)} MB`
-                  : "—"}
-              </div>
-            </div>
-            <p className="text-[11px] text-[var(--color-text-dim)]">
-              Extracted pages are cached locally for 24 hours. The cache is
-              capped at 50 MB; oldest entries are pruned first.
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] px-5 py-3.5">
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-white">Local page cache</p>
+            <p className="mt-0.5 text-[12px] text-[var(--color-text-dim)]">
+              {cacheStats
+                ? `${cacheStats.entries} ${cacheStats.entries === 1 ? "page" : "pages"} · ${(cacheStats.total_bytes / (1024 * 1024)).toFixed(2)} MB · kept 24 hours, capped at 50 MB`
+                : "Extracted pages are kept for 24 hours, capped at 50 MB."}
             </p>
-            <div className="mt-2 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClearCache}
-                disabled={clearingCache || !cacheStats || cacheStats.entries === 0}
-                className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[11.5px] font-medium text-white transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {clearingCache ? "Clearing…" : "Clear cache"}
-              </button>
-              {clearError && (
-                <span className="text-[11px] text-red-400">{clearError}</span>
-              )}
-            </div>
+            {clearError && <p className="mt-1 text-[12px] text-red-300">{clearError}</p>}
           </div>
-        </>
-      )}
-    </CollapsibleSettingsSection>
+          <button
+            type="button"
+            onClick={onClearCache}
+            disabled={clearingCache || !cacheStats || cacheStats.entries === 0}
+            className={settingsButtonClass}
+          >
+            {clearingCache ? "Clearing…" : "Clear cache"}
+          </button>
+        </div>
+      </SettingsCard>
+    </SettingsPanel>
   );
 }

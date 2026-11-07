@@ -1,12 +1,17 @@
+import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import type { AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
 import { AgentActivityCard } from "@/modules/agents/components/agent-output-view";
 import { TypewriterMarkdown } from "@/modules/agents/components/typewriter-markdown";
 import { MessageBubble } from "@/modules/chat/components/message-bubble";
 import { ArtifactBlock } from "@/modules/chat/components/artifact-block";
-import { InteractiveAnswerBlock } from "@/modules/chat/components/interactive-answer-block";
 import { normalizeArtifact } from "@/modules/chat/artifact";
 import { useAgentStore } from "../agent-store";
+
+// Loaded only for turns that carry an interactive answer.
+const InteractiveAnswerBlock = lazy(() =>
+  import("@/modules/chat/components/interactive-answer-block").then((m) => ({ default: m.InteractiveAnswerBlock })),
+);
 
 export function AgentChatTurn({
   turn,
@@ -58,7 +63,11 @@ export function AgentChatTurn({
             if (!artifact.ok) return false;
             useAgentStore.setState((state) => ({ sessions: state.sessions.map((session) => ({ ...session, events: session.events.map((event) => event.id === turn.id ? { ...event, artifact: artifact.artifact } : event) })) }));
             return true;
-          }} /> : turn.interactiveAnswer ? <InteractiveAnswerBlock answer={turn.interactiveAnswer} onFollowUp={onFollowUp} /> : turn.pending ? (
+          }} /> : turn.interactiveAnswer ? (
+            <Suspense fallback={null}>
+              <InteractiveAnswerBlock answer={turn.interactiveAnswer} onFollowUp={onFollowUp} />
+            </Suspense>
+          ) : turn.pending ? (
             <div className="flex items-center gap-2 text-[var(--color-text-dim)]">
               <Loader2 className="size-3.5 animate-spin text-[var(--color-accent)]" />
               <span>Thinking...</span>
