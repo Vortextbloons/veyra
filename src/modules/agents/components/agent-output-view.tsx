@@ -1,8 +1,8 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { AgentChatTurn } from "@/modules/agents/components/agent-chat-turn";
-import { buildAgentChatTurns, type AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
+import { buildAgentChatTurns, reuseAgentChatTurns, type AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
 
 export function AgentOutputView({
   session,
@@ -24,6 +24,9 @@ export function AgentOutputView({
   }, [session.events]);
 
   const turns = useMemo(() => buildAgentChatTurns(session.events, session.model), [session.events, session.model]);
+  const [cached, setCached] = useState({ source: turns, turns });
+  const stableTurns = cached.source === turns ? cached.turns : reuseAgentChatTurns(turns, cached.turns);
+  if (cached.source !== turns) setCached({ source: turns, turns: stableTurns });
   const hasAssistantAfterLastPrompt = turns.at(-1)?.role === "assistant";
   const showWorkingTurn = isRunning && !hasAssistantAfterLastPrompt;
 
@@ -31,8 +34,10 @@ export function AgentOutputView({
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={outputRef} onScroll={() => { const el = outputRef.current; if (el) followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-3 px-5 pb-8 pt-6">
-          {turns.map((turn) => (
-            <AgentChatTurn key={turn.id} turn={turn} isStreaming={isRunning && turn === turns.at(-1)} onFollowUp={onFollowUp} />
+          {stableTurns.map((turn) => (
+            <div key={turn.id} style={turn === stableTurns.at(-1) ? undefined : { contentVisibility: "auto", containIntrinsicSize: "auto 160px" }}>
+              <AgentChatTurn turn={turn} isStreaming={isRunning && turn === stableTurns.at(-1)} onFollowUp={onFollowUp} />
+            </div>
           ))}
 
           {showWorkingTurn && (

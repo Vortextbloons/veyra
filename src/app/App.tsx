@@ -119,6 +119,7 @@ function App() {
   useEffect(() => {
     return deferUntilIdle(() => {
       void useProviderStore.getState().ensureProviderReady(true).catch(() => undefined);
+      void useProviderStore.getState().connectProvidersOnStartup();
       if (useConnectivityStore.getState().effectiveConnectivity === "online") {
         void refreshPiModelCatalog();
       }

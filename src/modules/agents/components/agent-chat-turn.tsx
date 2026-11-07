@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, memo, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import type { AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
 import { AgentActivityCard } from "@/modules/agents/components/agent-output-view";
@@ -13,7 +13,7 @@ const InteractiveAnswerBlock = lazy(() =>
   import("@/modules/chat/components/interactive-answer-block").then((m) => ({ default: m.InteractiveAnswerBlock })),
 );
 
-export function AgentChatTurn({
+export const AgentChatTurn = memo(function AgentChatTurn({
   turn,
   onFollowUp,
   isStreaming = false,
@@ -83,4 +83,4 @@ export function AgentChatTurn({
       </div>
     </div>
   );
-}
+});

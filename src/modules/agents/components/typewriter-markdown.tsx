@@ -29,13 +29,13 @@ export function TypewriterMarkdown({ content, enabled }: { content: string; enab
 
     const interval = window.setInterval(() => {
       const remaining = content.length - index;
-      const step = remaining > 800 ? 8 : remaining > 300 ? 5 : 3;
+      const step = remaining > 800 ? 24 : remaining > 300 ? 15 : 9;
       index = Math.min(content.length, index + step);
       const next = content.slice(0, index);
       visibleRef.current = next;
       setVisible(next);
       if (index >= content.length) window.clearInterval(interval);
-    }, 16);
+    }, 48);
 
     return () => window.clearInterval(interval);
   }, [content, enabled]);
@@ -43,7 +43,7 @@ export function TypewriterMarkdown({ content, enabled }: { content: string; enab
   return (
     <>
       <Suspense>
-        <MarkdownRenderer className="leading-snug">{visible}</MarkdownRenderer>
+        <MarkdownRenderer className="leading-snug" deferHighlight={enabled && visible !== content}>{visible}</MarkdownRenderer>
       </Suspense>
       {enabled && visible.length < content.length && (
         <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-300 align-middle" />

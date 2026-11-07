@@ -45,4 +45,27 @@ describe("encrypted Pi conversation history", () => {
     expect(saved?.agentSession?.projectId).toBe("new");
     expect(saved?.messages.map((message) => message.content)).toEqual(["Question", "Answer"]);
   });
+  it("throttles live saves but flushes final output immediately", () => {
+    vi.useFakeTimers();
+    try {
+      useAgentStore.setState({ sessions: [session] });
+      flushPiConversations();
+      mocks.save.mockClear();
+      const updated = { ...session, events: [...session.events, { id: "b", type: "output" as const, title: "Pi", detail: "More", at: 3 }] };
+      useAgentStore.setState({ sessions: [updated] });
+      vi.advanceTimersByTime(1999);
+      expect(mocks.save).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(mocks.save).toHaveBeenCalledTimes(1);
+      mocks.save.mockClear();
+      useAgentStore.setState({ sessions: [{ ...updated, status: "stopped" }] });
+      expect(mocks.save).toHaveBeenCalledTimes(1);
+      expect(useChatStore.getState().conversations.find((item) => item.id === session.id)?.messages.at(-1)?.content).toContain("More");
+      flushPiConversations();
+      expect(mocks.save).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
 });

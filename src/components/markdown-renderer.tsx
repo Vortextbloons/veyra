@@ -11,17 +11,19 @@ import { cn } from "@/lib/utils";
 interface MarkdownRendererProps {
   children: string;
   className?: string;
+  deferHighlight?: boolean;
 }
 
 export const MarkdownRenderer = memo(function MarkdownRenderer({
   children,
   className,
+  deferHighlight = false,
 }: MarkdownRendererProps) {
   return (
     <div className={cn("markdown-rendered", className)}>
       <Markdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeHighlight, rehypeKatex]}
+        rehypePlugins={deferHighlight ? [] : [rehypeHighlight, rehypeKatex]}
         components={MARKDOWN_COMPONENTS}
       >
         {children}

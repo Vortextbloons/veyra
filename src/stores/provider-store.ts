@@ -22,6 +22,7 @@ type ProviderStore = {
   cloudProviders: CloudProviderConfig[];
   initializeProvider: () => void;
   ensureProviderReady: (refresh?: boolean) => Promise<void>;
+  connectProvidersOnStartup: () => Promise<void>;
   selectProvider: (providerId: string) => Promise<void>;
   reconnectProvider: (providerId?: string) => Promise<void>;
   startProviderServer: (providerId?: string) => Promise<void>;
@@ -248,6 +249,21 @@ export const useProviderStore = create<ProviderStore>()(
           },
         );
         await providerReadyPromise;
+      },
+
+      connectProvidersOnStartup: async () => {
+        const selectedId = get().selectedProvider;
+        const others = get().providers.filter((provider) =>
+          provider.id !== selectedId && isProviderAllowedForConnectivity(provider.id),
+        );
+        await Promise.allSettled(others.map(async (provider) => {
+          const { available } = await syncProviderConnection(provider.id, {});
+          set((state) => ({
+            providers: state.providers.map((item) => item.id === provider.id
+              ? { ...item, status: available ? "connected" : "disconnected" }
+              : item),
+          }));
+        }));
       },
 
       selectProvider: async (providerId) => {

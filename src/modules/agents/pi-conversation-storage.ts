@@ -13,6 +13,7 @@ export function flushPiConversations(): void {
   if (timer) clearTimeout(timer);
   timer = undefined;
   const sessions = useAgentStore.getState().sessions;
+  if (sessions === savedSessions) return;
   const previousIds = new Set(savedSessions.map((session) => session.sourceConversationId ?? session.id));
   const ids = new Set(sessions.map((session) => session.sourceConversationId ?? session.id));
   const chat = useChatStore.getState();
@@ -23,7 +24,8 @@ export function flushPiConversations(): void {
     const existing = conversations.find((conversation) => conversation.id === id);
     const existingMessages = new Map(existing?.messages.map((message) => [message.id, message]));
     const eventTimes = new Map(session.events.map((event) => [event.id, event.at]));
-    const messages: ChatMessage[] = buildAgentChatTurns(session.events, session.model).filter((turn) => !turn.kind).map((turn) => ({
+    const previousSession = savedSessions.find((item) => item.id === session.id);
+    const messages: ChatMessage[] = existing && previousSession?.events === session.events && previousSession.model === session.model ? existing.messages : buildAgentChatTurns(session.events, session.model).filter((turn) => !turn.kind).map((turn) => ({
       ...existingMessages.get(turn.id),
       id: turn.id, role: turn.role === "user" ? "user" : "assistant", content: turn.content,
       reasoning: turn.reasoning,
@@ -52,6 +54,6 @@ export function initializePiConversations(): void {
     if (state.sessions === previous.sessions) return;
     const terminalChange = state.sessions.length !== previous.sessions.length || state.sessions.some((session) => session.status !== "running" && !previous.sessions.includes(session));
     if (terminalChange) flushPiConversations();
-    else if (!timer) timer = setTimeout(flushPiConversations, 500);
+    else if (!timer) timer = setTimeout(flushPiConversations, 2000);
   });
 }

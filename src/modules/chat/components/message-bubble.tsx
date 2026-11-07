@@ -97,7 +97,7 @@ export const MessageBubble = memo(function MessageBubble({
               )}
               {message.content.trim() && (
                 <Suspense>
-                  <MarkdownRenderer className="leading-snug">
+                  <MarkdownRenderer className="leading-snug" deferHighlight={isStreaming}>
                     {message.content.trim()}
                   </MarkdownRenderer>
                 </Suspense>
@@ -135,7 +135,7 @@ export const MessageBubble = memo(function MessageBubble({
               <ThinkingIndicator />
           ) : (
             <Suspense>
-              <MarkdownRenderer className="leading-snug">
+              <MarkdownRenderer className="leading-snug" deferHighlight={isStreaming}>
                 {body}
               </MarkdownRenderer>
             </Suspense>

@@ -152,3 +152,13 @@ export function buildAgentChatTurns(
 
   return turns;
 }
+
+/** Reuse immutable completed turns so streaming does not invalidate every row. */
+export function reuseAgentChatTurns(next: AgentChatTurnModel[], previous: AgentChatTurnModel[]): AgentChatTurnModel[] {
+  const byId = new Map(previous.map((turn) => [turn.id, turn]));
+  return next.map((turn) => {
+    const old = byId.get(turn.id);
+    return old && (Object.keys({ ...old, ...turn }) as (keyof AgentChatTurnModel)[])
+      .every((key) => old[key] === turn[key]) ? old : turn;
+  });
+}
