@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { Brain, Cpu, FlaskConical, MessageCircle, Puzzle, Settings, Shield, Wrench, type LucideIcon } from "lucide-react";
+import { Brain, Cpu, MessageCircle, Puzzle, Settings, Shield, Wrench, type LucideIcon } from "lucide-react";
 import { GeneralSettings } from "./general-settings";
 import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
 import { ChatSettings } from "./chat-settings";
 import { ModelsSettings } from "./models-settings";
 import { ToolsSettings } from "./tools-settings";
-import { ResearchSettings } from "./research-settings";
 import { ExtensionsSettings } from "./extensions-settings";
 import { MemorySettings } from "@/modules/memory/components/memory-settings";
 type SettingsTab =
@@ -15,7 +14,6 @@ type SettingsTab =
   | "memory"
   | "models"
   | "tools"
-  | "research"
   | "extensions";
 
 const TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
@@ -25,7 +23,6 @@ const TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "memory", label: "Memory", icon: Brain },
   { id: "models", label: "Models", icon: Cpu },
   { id: "tools", label: "Tools", icon: Wrench },
-  { id: "research", label: "Research", icon: FlaskConical },
   { id: "extensions", label: "Extensions", icon: Puzzle },
 ];
 
@@ -66,7 +63,6 @@ export function SettingsPage() {
           {activeTab === "memory" && <MemorySettings />}
           {activeTab === "models" && <ModelsSettings />}
           {activeTab === "tools" && <ToolsSettings />}
-          {activeTab === "research" && <ResearchSettings />}
           {activeTab === "extensions" && <ExtensionsSettings />}
         </div>
       </div>

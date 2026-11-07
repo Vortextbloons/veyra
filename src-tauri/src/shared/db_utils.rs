@@ -5,10 +5,6 @@ use tauri::{AppHandle, Manager};
 
 pub type DbSlot<D> = Arc<OnceLock<Result<Arc<D>, String>>>;
 
-pub fn parse_json_array(s: &str) -> Vec<String> {
-    serde_json::from_str::<Vec<String>>(s).unwrap_or_default()
-}
-
 pub fn open_app_sqlite(app: &AppHandle, db_filename: &str) -> Result<Connection, String> {
     let dir = app
         .path()

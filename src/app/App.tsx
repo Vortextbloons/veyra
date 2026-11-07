@@ -25,8 +25,7 @@ import { useAppUpdateCheck } from "@/hooks/use-app-update-check";
 import { useIsFeatureAvailable } from "@/lib/connectivity/useConnectivity";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
 import { useConnectivityStore } from "@/stores/connectivity-store";
-import { useResearchStore } from "@/modules/research/research-store";
-import { useAppZoom } from "@/hooks/use-app-zoom";
+import { installUiScaleShortcuts } from "@/lib/ui-scale";
 import { useChatContextPanel } from "@/hooks/use-chat-context-panel";
 import { useChatPipeline } from "@/hooks/use-chat-pipeline";
 import { useAgentDispatch } from "@/hooks/use-agent-dispatch";
@@ -35,7 +34,6 @@ import { initializePiConversations } from "@/modules/agents/pi-conversation-stor
 import { ProjectSidebar } from "@/modules/projects/components/project-sidebar";
 
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
-const ResearchPage = lazy(() => import("@/modules/research/components/ResearchPage").then(m => ({ default: m.ResearchPage })));
 
 function ChatHydrationSkeleton() {
   return (
@@ -51,7 +49,6 @@ function ChatHydrationSkeleton() {
 }
 
 function App() {
-  const { zoom, zoomIn, zoomOut, zoomReset } = useAppZoom();
 
   const conversations = useChatStore((state) => state.conversations);
   const hydrationState = useChatStore((state) => state.hydrationState);
@@ -88,6 +85,9 @@ function App() {
     logStartupDuration("veyra:main-start", "veyra:app-mounted", "main-to-mount");
   }, []);
 
+  // Ctrl/Cmd +/-/0 and Ctrl+wheel drive the native webview scale.
+  useEffect(() => installUiScaleShortcuts(), []);
+
   useEffect(() => {
     let cleanup: (() => void) | undefined;
     void registerAppShutdownHandler().then((unregister) => {
@@ -106,7 +106,6 @@ function App() {
       await useChatStore.getState().hydrateConversations();
       await useProjectStore.getState().hydrateProjects();
       initializePiConversations();
-      void useResearchStore.getState().hydrateRuns();
       markStartup("veyra:hydration-ready");
       logStartupDuration("veyra:main-start", "veyra:hydration-ready", "main-to-hydration");
       initializeProvider();
@@ -244,12 +243,7 @@ function App() {
       <ConnectivityToastHost />
       <UpdateAvailableBanner />
       <ConversationStorageBanner />
-      <TitleBar
-        zoom={zoom}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onZoomReset={zoomReset}
-      />
+      <TitleBar />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <PrimarySidebar
           activeNav={isChatMode ? "chat" : activeNav}
@@ -300,7 +294,6 @@ function App() {
         </PrimarySidebar>
         <div className={`flex min-w-0 flex-1 basis-0 ${isChatMode && activeNav !== "projects" ? "hidden" : ""}`}>
           <Suspense fallback={null}>
-            {activeNav === "research" && <ResearchPage />}
             {activeNav === "settings" && <SettingsPage />}
           </Suspense>
         </div>

@@ -7,9 +7,7 @@ Accurate as of the current source code (`src/modules/chat/chat-types.ts`).
 ```typescript
 type ChatRole = "user" | "assistant" | "system";
 
-type ChatMode = "chat" | "agents" | "research";
-
-type WorkspaceChatMode = "chat" | "agents";
+const CHAT_MODE_NAV_IDS = ["chat", "projects"] as const;
 
 interface ChatMessage {
   id: string;

@@ -40,7 +40,6 @@ mod document_extraction;
 mod extensions;
 mod file_extraction;
 mod projects;
-mod research;
 mod shared;
 mod web_search;
 
@@ -594,22 +593,6 @@ pub fn run() {
             projects::commands::list_projects,
             projects::commands::delete_project,
             projects::commands::export_project_manifest,
-            research::commands::create_research_run,
-            research::commands::get_research_run,
-            research::commands::update_research_run,
-            research::commands::list_research_runs,
-            research::commands::delete_research_run,
-            research::commands::create_research_step,
-            research::commands::update_research_step,
-            research::commands::create_research_source,
-            research::commands::update_research_source,
-            research::commands::create_research_evidence,
-            research::commands::create_research_claim,
-            research::commands::update_research_claim,
-            research::commands::create_research_contradiction,
-            research::commands::create_research_report,
-            research::commands::update_research_report,
-            research::commands::update_research_source_after_fetch,
             file_extraction::commands::extract_file_text,
             extensions::commands::snapshot_skill_directory,
             extensions::commands::snapshot_skill_zip,
@@ -627,10 +610,6 @@ pub fn run() {
             let project_db_state = projects::db::ProjectDbState::new(app.handle().clone());
             project_db_state.spawn_background_init();
             app.manage(project_db_state);
-
-            let research_db_state = research::db::ResearchDbState::new(app.handle().clone());
-            research_db_state.spawn_background_init();
-            app.manage(research_db_state);
 
             let search_engine_state =
                 web_search::engine::SearchEngineState::new(app.handle().clone());

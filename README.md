@@ -22,7 +22,6 @@ Grab the latest installer on the [releases page](https://github.com/Vortextbloon
 ## Features
 
 - **Chat** — talk to local models (LM Studio) or cloud providers with streaming and tool calls
-- **Research** — deep research pipeline with citations and source auditing
 - **Artifacts** - interactive HTML previews attached to chat messages
 - **Memory** - persistent local memory integrated into chat context
 - **Agents** — plan-building and code-writing agents

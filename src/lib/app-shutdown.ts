@@ -6,7 +6,6 @@ import { unloadAllProviderModels } from "@/lib/providers";
 import { useProviderStore } from "@/stores/provider-store";
 import { invokeStopSearchEngine } from "@/modules/web-search/tauri-commands";
 import { useChatStore } from "@/stores/chat-store";
-import { useResearchStore } from "@/modules/research/research-store";
 import { flushPiConversations } from "@/modules/agents/pi-conversation-storage";
 
 const SHUTDOWN_STEP_TIMEOUT_MS = 6000;
@@ -154,7 +153,6 @@ export async function runAppShutdown(): Promise<void> {
   await waitForShutdownUi();
 
   setShutdownStep("preparing");
-  await withTimeout(useResearchStore.getState().interruptActiveResearchOnShutdown(), "Pause active research");
   await withTimeout(aiScheduler.shutdown(), "Stop AI jobs");
 
   setShutdownStep("saving");

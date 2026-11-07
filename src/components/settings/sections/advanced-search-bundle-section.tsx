@@ -149,13 +149,13 @@ export function AdvancedSearchBundleSection({
                 label="ArXiv academic search"
                 on={bundleArxivSearch}
                 onChange={setBundleArxivSearch}
-                description="Includes paper abstracts via ArXiv when allowed by the active research depth."
+                description="Includes paper abstracts via ArXiv for academic searches."
               />
               <AdvancedSearchToggleRow
                 label="Wikipedia search"
                 on={bundleWikipediaSearch}
                 onChange={setBundleWikipediaSearch}
-                description="Includes article content from Wikipedia when allowed by the active research depth."
+                description="Includes article content from Wikipedia for overview searches."
               />
             </div>
           </div>

@@ -72,7 +72,7 @@ describe("chat search reading budget", () => {
     expect(mocks.arxiv).not.toHaveBeenCalled();
   });
 
-  it("preserves research provider and page reading settings", async () => {
+  it("uses full-quality budgets and archive recovery outside chat", async () => {
     await runSearch("plate tectonics");
     expect(mocks.arxiv).toHaveBeenCalledOnce();
     expect(mocks.wikipedia).toHaveBeenCalledOnce();

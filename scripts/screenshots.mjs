@@ -13,7 +13,6 @@ const TABS = [
   { id: "characters", label: "Characters" },
   { id: "projects", label: "Projects" },
   { id: "documents", label: "Documents" },
-  { id: "research", label: "Research" },
   { id: "email", label: "Email" },
   { id: "memory", label: "Memory" },
   { id: "settings", label: "Settings" },

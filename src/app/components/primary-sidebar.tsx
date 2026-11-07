@@ -1,10 +1,9 @@
 import type { PrimarySidebarProps } from "@/modules/chat/chat-types";
 import type { ReactNode } from "react";
-import { MessageCircle, Search, Settings, SquarePen, type LucideIcon } from "lucide-react";
+import { MessageCircle, Settings, SquarePen, type LucideIcon } from "lucide-react";
 
 const NAV: { id: string; label: string; icon: LucideIcon }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle },
-  { id: "research", label: "Research", icon: Search },
 ];
 
 export function PrimarySidebar({ activeNav, onNavChange, onNewChat, children, compact = false }: PrimarySidebarProps & { children?: ReactNode; compact?: boolean }) {

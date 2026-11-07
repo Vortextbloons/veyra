@@ -20,7 +20,6 @@ The chat module is Veyra's core AI pipeline. It manages conversations, streaming
 |------|-------------|
 | `chat` | Standard AI conversation |
 | `agents` | Pi CLI agent integration |
-| `research` | Deep research pipeline |
 
 ## Pipeline Flow
 

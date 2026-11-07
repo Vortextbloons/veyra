@@ -10,6 +10,7 @@
     "core:window:allow-destroy",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
+    "core:webview:allow-set-webview-zoom",
     "http:default",
     "dialog:default",
     "dialog:allow-confirm",

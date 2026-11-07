@@ -1,6 +1,6 @@
 # Tauri Backend
 
-## Rust Modules (9 total)
+## Rust Modules (8 total)
 
 | Module | Purpose |
 |--------|---------|
@@ -10,19 +10,17 @@
 | `extensions/` | MCP server discovery and invocation |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
 | `projects/` | Project CRUD, manifest export |
-| `research/` | Research run, step, source, evidence, claim, contradiction, report CRUD |
 | `shared/` | SQLite connection, migrations, encryption keys |
 | `web_search/` | Bundled engine lifecycle, MCP bridge, page fetching |
 
 ## Command Count
 
-**~61 Tauri commands** registered across all modules. Key counts:
+**40 Tauri commands** registered across all modules. Key counts:
 - Agents: 3 commands
 - App update: 1 command
 - Connectivity: 1 command
 - Web search: 14 commands
 - Projects: 5 commands
-- Research: 15 commands
 - Extensions: 14 commands
 - File extraction: 1 command
 - Core (conversations, credentials, app lifecycle): 8 commands
@@ -37,7 +35,8 @@
 
 ### Startup (`src/lib/startup.ts`)
 1. Initialize Tauri IPC
-2. Load settings from localStorage
+2. Apply the persisted UI scale (`src/lib/ui-scale.ts`, native webview zoom)
+3. Load settings from localStorage
 3. Connect to LM Studio
 4. Load projects
 5. Check Pi CLI availability
@@ -45,9 +44,8 @@
 
 ### Shutdown (`src/lib/app-shutdown.ts`)
 1. Unload all AI models
-2. Interrupt running research
-3. Flush pending saves
-4. Close SQLite connections
+2. Flush pending saves
+3. Close SQLite connections
 
 ## Key Files
 
@@ -55,5 +53,6 @@
 |------|---------|
 | `src-tauri/src/lib.rs` | Tauri application setup and command registration |
 | `src/lib/startup.ts` | App initialization sequence |
+| `src/lib/ui-scale.ts` | Native webview UI scaling and zoom shortcuts |
 | `src/lib/app-shutdown.ts` | Graceful shutdown |
 | `src/lib/app-update.ts` | Update checking |

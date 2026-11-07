@@ -28,7 +28,6 @@ Feature modules built around the chat core.
 | File | Description |
 |------|-------------|
 | [extensions/README.md](extensions/README.md) | MCP servers, Skills, capability grants |
-| [research/README.md](research/README.md) | 9-phase deep research pipeline |
 | [web-search/README.md](web-search/README.md) | Bundled DonSeTch engine, ArXiv, Wikipedia search |
 | [projects/README.md](projects/README.md) | Project containers and scoping |
 | [agents/README.md](agents/README.md) | Pi CLI integration, plan/build modes |

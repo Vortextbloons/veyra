@@ -146,11 +146,6 @@ body {
   overflow: hidden;
 }
 
-#root {
-  width: calc(100vw / var(--ui-zoom, 1));
-  height: calc(100vh / var(--ui-zoom, 1));
-}
-
 .group\/composer textarea:focus-visible {
   outline: none;
 }

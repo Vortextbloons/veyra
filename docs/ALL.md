@@ -1,7 +1,7 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-11-07T20:41:26.359Z
-> Total files: 61
+> Generated: 2026-11-07T21:12:07.226Z
+> Total files: 54
 
 ## Table of Contents
 
@@ -30,14 +30,6 @@
   - [03-chat-integration](#extensions-03-chat-integration)
   - [04-types](#extensions-04-types)
   - [README](#extensions-readme)
-- [research](#research)
-  - [01-pipeline](#research-01-pipeline)
-  - [02-depth-presets](#research-02-depth-presets)
-  - [03-source-types](#research-03-source-types)
-  - [04-pause-resume](#research-04-pause-resume)
-  - [05-report-export](#research-05-report-export)
-  - [06-types](#research-06-types)
-  - [README](#research-readme)
 - [web-search](#web-search)
   - [01-setup](#web-search-01-setup)
   - [02-search-flow](#web-search-02-search-flow)
@@ -134,7 +126,6 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 | Settings | localStorage | `veyra.settings.v1` key |
 | Provider config | localStorage | `veyra.provider.v1` key |
 | Projects | SQLite via Tauri | Structured records |
-| Research | SQLite via Tauri | Structured records |
 | Agent sessions | localStorage | Serialized sessions |
 | Cloud credentials | OS credential vault | Tauri secure storage |
 
@@ -201,7 +192,6 @@ npm run version:check
 | Module | Folder | Description |
 |--------|--------|-------------|
 | Chat | `docs/chat/` | Core AI chat pipeline with streaming and tool calls |
-| Research | `docs/research/` | 9-phase deep research pipeline with citation auditing |
 | Web Search | `docs/web-search/` | Bundled DonSeTch search with ArXiv and Wikipedia support |
 | Projects | `docs/projects/` | Per-project containers for scoping chats and settings |
 | Agents | `docs/agents/` | Optional Pi CLI integration for plan and build modes |
@@ -252,7 +242,6 @@ The chat module is Veyra's core AI pipeline. It manages conversations, streaming
 |------|-------------|
 | `chat` | Standard AI conversation |
 | `agents` | Pi CLI agent integration |
-| `research` | Deep research pipeline |
 
 ## Pipeline Flow
 
@@ -454,9 +443,7 @@ Accurate as of the current source code (`src/modules/chat/chat-types.ts`).
 ```typescript
 type ChatRole = "user" | "assistant" | "system";
 
-type ChatMode = "chat" | "agents" | "research";
-
-type WorkspaceChatMode = "chat" | "agents";
+const CHAT_MODE_NAV_IDS = ["chat", "projects"] as const;
 
 interface ChatMessage {
   id: string;
@@ -783,7 +770,6 @@ React hooks used across Veyra's frontend for chat, scheduling, and UI interactio
 | Hook | File | Purpose |
 |------|------|---------|
 | `useClickOutside` | `src/hooks/use-click-outside.ts` | Click-outside detection |
-| `useAppZoom` | `src/hooks/use-app-zoom.ts` | App zoom control |
 | `useShutdownState` | `src/hooks/use-shutdown-state.ts` | Shutdown state tracking |
 | `useAppUpdateCheck` | `src/hooks/use-app-update-check.ts` | Update notification check |
 
@@ -1217,315 +1203,6 @@ MCP (Model Context Protocol) server integration and local SKILL.md instruction p
 
 ---
 
-# research > 01-pipeline
-
-> Source: `docs/research/01-pipeline.md`
-
-# Research Pipeline
-
-Deep research pipeline with background research, 9 core phases, and citation auditing. Supports multiple depth presets, plan approval, source scoring, contradiction detection, and evidence extraction.
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/modules/research/research-types.ts` | Comprehensive type system |
-| `src/modules/research/research-store.ts` | Zustand store with full CRUD |
-| `src/modules/research/research-runtime.ts` | Research execution engine |
-| `src/modules/research/research-runtime-context.ts` | Runtime context and state |
-| `src/modules/research/research-lifecycle.ts` | Interrupted run handling |
-| `src/modules/research/research-background-phase.ts` | Background research (Phase 0) |
-| `src/modules/research/research-plan-phase.ts` | Plan generation (Phase 1) |
-| `src/modules/research/research-search-phase.ts` | Search execution (Phase 2) |
-| `src/modules/research/research-read-phase.ts` | Source reading (Phase 3) |
-| `src/modules/research/research-verify-phase.ts` | Validate + Verify (Phases 4, 6) |
-| `src/modules/research/research-extract-phase.ts` | Evidence extraction (Phase 5) |
-| `src/modules/research/research-gap-phase.ts` | Gap analysis (Phase 7) |
-| `src/modules/research/research-synthesis-phase.ts` | Report synthesis + Citation audit (Phase 8) |
-| `src/modules/research/research-output-budgets.ts` | Per-phase output token budgets and scaling functions |
-
-## Pipeline Phases
-
-### Phase 0: Background Research
-Searches for contextual snippets before the plan phase, providing the LLM with preliminary information.
-
-### Phase 1: Plan
-- LLM generates a structured research plan with steps, search queries, and expected source types
-- **Plan approval flow**: users can review and edit the plan before execution
-
-### Phase 2: Search
-- Executes searches using the web search orchestrator
-- Multi-query planning with concurrent execution and query limits per depth
-
-### Phase 3: Read
-- Fetches and reads source content via Tauri backend
-- Deduplication of identical sources
-
-### Phase 4: Validate
-- Scores source quality across multiple dimensions (relevance, credibility, currency, depth)
-- Sources below quality thresholds are filtered out
-
-### Phase 5: Extract
-- Extracts evidence from validated sources
-- Evidence types: claims, statistics, quotes, facts, methodologies
-
-### Phase 6: Verify
-- Cross-references claims across multiple sources
-- **Contradiction detection**: Trigram-Jaccard similarity + LLM dedup
-- Claims supported by multiple sources are marked as verified
-
-### Phase 7: Gap Analysis
-- Identifies missing information and generates follow-up queries
-- May loop back to search if significant gaps exist
-
-### Phase 8: Synthesize + Citation Audit
-- Generates a cited report with citation maps linking claims to sources
-- **Citation Audit**: Full citation-accuracy audit against original sources, verifying every claim-reference mapping
-
-### Phase 9: Finalize
-- Saves the report and sets status to `completed`
-- Optional export to a markdown/text file
-
-The `ResumePhase` type in `research-runtime.ts` tracks: `"background" | "plan" | "search" | "read" | "validate" | "extract" | "verify" | "gap" | "synthesize"`.
-
----
-
-# research > 02-depth-presets
-
-> Source: `docs/research/02-depth-presets.md`
-
-# Research Depth Presets
-
-| Preset | Rounds | Max Sources | ArXiv | Wikipedia | Contradiction | Audit |
-|--------|--------|-------------|-------|-----------|---------------|-------|
-| `lightning` | 1 | 15 | No | No | No | No |
-| `quick` | 3 | 35 | No | No | No | Yes (5 citations) |
-| `standard` | 5 | 75 | No | Yes | No | Yes |
-| `deep` | 8 | 150 | Yes | Yes | Yes (200 pairs) | Yes |
-| `exhaustive` | 10 | 300 | Yes | Yes | Yes (500 pairs) | Yes |
-
-## Configuration
-
-Each preset configures 31 parameters including:
-- `searchRounds`, `maxSources`, `queriesPerStep`
-- `perSourceRead`, `crossSourceVerify`
-- `contradictionDetect`, `contradictionMaxPairs`, `contradictionTopK`
-- `gapAnalysis`, `selfCritiquePass`
-- `maxSections`, `sectionMaxWords`
-- `reasoningEnabled`, `enableArxiv`, `enableWikipedia`
-- `adaptiveDeepening`, `auditMaxCitations`
-
-Config is defined in `src/modules/research/research-config.ts`. Custom profiles are supported.
-
----
-
-# research > 03-source-types
-
-> Source: `docs/research/03-source-types.md`
-
-# Research Source Types
-
-From `src/modules/research/research-types.ts`:
-
-| Type | Description |
-|------|-------------|
-| `webpage` | General web page |
-| `pdf` | PDF document |
-| `news` | News article |
-| `docs` | Documentation site |
-| `github` | GitHub repository/code |
-| `wikipedia` | Wikipedia article |
-| `forum` | Forum discussion |
-| `package` | Software package (npm, pip, etc.) |
-| `youtube` | YouTube video |
-| `arxiv` | ArXiv paper |
-| `epub` | EPUB ebook |
-| `docx` | Word document |
-| `pptx` | PowerPoint presentation |
-| `xlsx` | Excel spreadsheet |
-| `unknown` | Unclassified source |
-
-## Source Quality Scoring
-
-Sources are scored on credibility using `src/modules/research/source-credibility.ts` considering:
-- Domain authority
-- Publication recency
-- Content depth and structure
-- Citation presence
-
-## Source Statuses
-
-| Status | Description |
-|--------|-------------|
-| `discovered` | Found via search but not yet fetched |
-| `fetched` | Content downloaded |
-| `read` | Content extracted and parsed |
-| `failed` | Fetch or extraction failed |
-| `skipped` | Intentionally bypassed |
-
----
-
-# research > 04-pause-resume
-
-> Source: `docs/research/04-pause-resume.md`
-
-# Research Pause and Resume
-
-## Mid-Run Pause
-
-- Research runs can be paused mid-execution
-- `AbortController` handles graceful shutdown of active fetches
-- Paused runs transition to `paused` status
-- State is persisted so runs survive app restarts
-
-## Resume
-
-- Paused runs can be resumed from their last completed phase
-- Phase state is tracked per run, enabling precise continuation
-- Interrupted runs (app close/crash) are automatically set to `paused` on next launch
-
-## Lifecycle
-
-`research-lifecycle.ts` handles:
-- Interrupted run reconciliation on app start
-- Graceful shutdown on app close
-- Signal handling for clean cancellation
-
----
-
-# research > 05-report-export
-
-> Source: `docs/research/05-report-export.md`
-
-# Research Report Export
-
-Reports can be exported to a file after the research pipeline completes.
-
-## Export Targets
-
-| Target | Description |
-|--------|-------------|
-| File | Direct markdown/text file export |
-
-## Citation Maps
-
-Exported reports include citation maps linking claims to their source evidence, enabling traceable, verifiable research output.
-
----
-
-# research > 06-types
-
-> Source: `docs/research/06-types.md`
-
-# Research Key Types
-
-From `src/modules/research/research-types.ts`:
-
-```typescript
-type ResearchDepth = "lightning" | "quick" | "standard" | "deep" | "exhaustive";
-
-type ResearchRunStatus =
-  | "planning" | "searching" | "reading" | "extracting"
-  | "verifying" | "synthesizing" | "completed" | "failed" | "paused";
-
-type ResearchSourceType =
-  | "webpage" | "pdf" | "news" | "docs" | "github"
-  | "wikipedia" | "forum" | "package" | "youtube" | "arxiv"
-  | "epub" | "docx" | "pptx" | "xlsx" | "unknown";
-
-type ResearchSourceStatus =
-  | "discovered" | "fetched" | "read" | "failed" | "skipped";
-
-type ResearchStepType =
-  | "clarify" | "plan" | "background" | "search" | "read"
-  | "extract" | "verify" | "synthesize" | "report" | "follow_up";
-
-type ResearchStepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
-
-type ResearchEvidenceType =
-  | "claim" | "statistic" | "quote" | "fact" | "methodology" | "example" | "counter";
-
-interface ResearchRun {
-  id: string;
-  question: string;
-  depth: ResearchDepth;
-  status: ResearchRunStatus;
-  plan?: ResearchPlan;
-  reportId?: string;
-  projectId?: string;
-  progressPercent: number;
-  modelUsed?: string;
-  providerId?: string;
-  totalTokensUsed?: number;
-  searchProvider?: string;
-  currentStepId?: string;
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;
-}
-
-interface ResearchSource {
-  id: string;
-  url: string;
-  title: string;
-  sourceType: ResearchSourceType;
-  sourceQuality?: {
-    relevant: boolean;
-    quality: number;
-    relevanceScore?: number;
-  };
-  fetchedAt?: string;
-}
-
-interface ResearchEvidence {
-  id: string;
-  sourceId: string;
-  claim: string;
-  type: ResearchEvidenceType;
-  confidence: number;
-  context?: string;
-  pageNumber?: string;
-  tags?: string[];
-  stepId?: string;
-}
-
-interface ResearchClaim {
-  id: string;
-  text: string;
-  evidenceId: string;
-  sourceId: string;
-  supportingEvidence: string[];
-  contradictingEvidence: string[];
-  verified: boolean;
-  verifiedBy?: string;
-  contradictedBy?: string;
-  disputedBy?: string;
-  needsSemanticReview?: boolean;
-  verificationReason?: string;
-}
-```
-
----
-
-# research > README
-
-> Source: `docs/research/README.md`
-
-# Research Module
-
-Deep research pipeline with 9 phases, multi-depth presets, source scoring, and citation auditing.
-
-## Contents
-
-- [01-pipeline.md](01-pipeline.md) — The 9-phase research pipeline
-- [02-depth-presets.md](02-depth-presets.md) — Research depth configurations
-- [03-source-types.md](03-source-types.md) — Source types and credibility scoring
-- [04-pause-resume.md](04-pause-resume.md) — Pause/resume and lifecycle handling
-- [05-report-export.md](05-report-export.md) — Report export to files
-- [06-types.md](06-types.md) — Key type definitions
-
----
-
 # web-search > 01-setup
 
 > Source: `docs/web-search/01-setup.md`
@@ -1606,7 +1283,7 @@ There is no category/engine routing, time-range filter, safe-search level, langu
 
 ## Supplementary providers
 
-When the Advanced Search Bundle is enabled, ArXiv and Wikipedia direct APIs run in parallel with DonSeTch and are merged by URL. Research depth profiles can disable either provider per run.
+When the Advanced Search Bundle is enabled, ArXiv and Wikipedia direct APIs run in parallel with DonSeTch and are merged by URL. Chat narrows the choice further by query intent (ArXiv for academic, Wikipedia for overview questions).
 
 ## Deduplication
 
@@ -1637,7 +1314,6 @@ After fetching, `passage-ranker.ts` splits each page into blocks, scores them ag
 | `"fast"` | Skips page fetching, returns up to 3 snippet-only results, disables direct ArXiv/Wikipedia providers |
 | `"normal"` | Full-quality search respecting user settings |
 
-The research pipeline uses `"normal"` for background and gap-phase searches.
 
 ## Diagnostics
 
@@ -1667,7 +1343,7 @@ Each provider implements a common interface in `src/modules/web-search/providers
 
 - accepts search input (query, limit, intent)
 - returns normalized `SearchResult` objects
-- is selected by the orchestrator based on settings and research depth
+- is selected by the orchestrator based on settings and query intent
 
 ## DonSeTch provider
 
@@ -1684,11 +1360,11 @@ The engine returns ranked URLs, titles, snippets, and scores. It also reports `d
 
 ## ArXiv provider
 
-Direct API access for academic paper searches. Returns paper metadata with links. Gated by `advancedSearchBundleEnabled`, `bundleArxivSearch`, and the active research depth.
+Direct API access for academic paper searches. Returns paper metadata with links. Gated by `advancedSearchBundleEnabled` and `bundleArxivSearch`, and only queried for academic intent in chat.
 
 ## Wikipedia provider
 
-Direct API access for encyclopedia searches. Returns article summaries and links. Gated by `advancedSearchBundleEnabled`, `bundleWikipediaSearch`, and the active research depth.
+Direct API access for encyclopedia searches. Returns article summaries and links. Gated by `advancedSearchBundleEnabled` and `bundleWikipediaSearch`, and only queried for overview-style questions in chat.
 
 ---
 
@@ -1717,20 +1393,9 @@ The tool has retry logic (up to 2 retries) and real-time UI updates:
 - **Fetch phase**: downloading content
 - **Reading phase**: extracting text
 
-## Research pipeline integration
-
-The research module uses the same orchestrator with:
-
-- multiple queries per research step (generated by the research planner, not by the search provider)
-- per-depth ArXiv/Wikipedia overrides
-- higher fetch limits for thorough research
-- credibility scoring integration
-
-Research runs record `searchProvider: "donsetch"` (or `"auto"` for legacy records).
-
 ## Supplementary direct providers
 
-`src/lib/direct-search-providers.ts` decides whether the ArXiv and Wikipedia APIs should run for a search. It requires the Advanced Search Bundle and the corresponding provider toggle, and respects per-run research overrides.
+`src/lib/direct-search-providers.ts` decides whether the ArXiv and Wikipedia APIs should run for a search. It requires the Advanced Search Bundle and the corresponding provider toggle, and chat narrows the choice by query intent (ArXiv for academic, Wikipedia for overview questions).
 
 ---
 
@@ -1864,7 +1529,7 @@ Bundled local web search via DonSeTch, with optional ArXiv and Wikipedia direct 
 - [01-setup.md](01-setup.md) — Bundled engine, vendoring, lifecycle, and security
 - [02-search-flow.md](02-search-flow.md) — Query execution, deduplication, fetching, ranking
 - [03-providers.md](03-providers.md) — Search providers (DonSeTch, ArXiv, Wikipedia)
-- [04-integration.md](04-integration.md) — Chat tool and research pipeline integration
+- [04-integration.md](04-integration.md) — Chat tool integration
 - [05-types.md](05-types.md) — Key type definitions
 
 ---
@@ -2488,7 +2153,6 @@ Stores live in both `src/stores/` and `src/modules/<feature>/`:
 | `useConnectivityStore` | `src/stores/connectivity-store.ts` | Online/offline/local-only state |
 | `useUpdateStore` | `src/stores/update-store.ts` | App update state |
 | `useProjectStore` | `src/modules/projects/project-store.ts` | Projects |
-| `useResearchStore` | `src/modules/research/research-store.ts` | Research runs and reports |
 | `useAgentStore` | `src/modules/agents/agent-store.ts` | Agent sessions |
 
 ## Settings Store (8 Slices)
@@ -2500,7 +2164,6 @@ The settings store is composed from 8 slices in `src/stores/slices/`:
 | `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, panel collapsed state, visible tool settings |
 | `model-slice` | `model-slice.ts` | Default model, temperature, context length |
 | `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, and extraction settings |
-| `research-slice` | `research-slice.ts` | Default depth, approval requirements |
 | `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |
 | `connectivity-slice` | `connectivity-slice.ts` | Online/offline preference |
 | `chat-slice` | `chat-slice.ts` | Workspace mode, context anchoring, enhanced mode |
@@ -2518,13 +2181,12 @@ All settings persist to localStorage under `veyra.settings.v1`.
 
 Central scheduler (`src/lib/ai-scheduler.ts`) manages all AI tasks with priority-based queueing.
 
-## Job Types (7 total)
+## Job Types (6 total)
 
 | Type | Priority | Description |
 |------|----------|-------------|
 | `user_chat` | 0 (highest) | User chat requests |
 | `agent_pi` | 1 | Pi CLI agent runs |
-| `research_run` | 1 | Research pipeline execution |
 | `auto_name_chat` | 2 | Auto-generate conversation titles |
 | `summarize_chat` | 3 | Conversation summarization |
 | `compress_context` | 3 | Context compression |
@@ -2716,7 +2378,7 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 # Tauri Backend
 
-## Rust Modules (9 total)
+## Rust Modules (8 total)
 
 | Module | Purpose |
 |--------|---------|
@@ -2726,19 +2388,17 @@ Native `code_execution` is disabled and is not included in provider tool definit
 | `extensions/` | MCP server discovery and invocation |
 | `file_extraction/` | PDF, DOCX, PPTX, XLSX extraction |
 | `projects/` | Project CRUD, manifest export |
-| `research/` | Research run, step, source, evidence, claim, contradiction, report CRUD |
 | `shared/` | SQLite connection, migrations, encryption keys |
 | `web_search/` | Bundled engine lifecycle, MCP bridge, page fetching |
 
 ## Command Count
 
-**~61 Tauri commands** registered across all modules. Key counts:
+**40 Tauri commands** registered across all modules. Key counts:
 - Agents: 3 commands
 - App update: 1 command
 - Connectivity: 1 command
 - Web search: 14 commands
 - Projects: 5 commands
-- Research: 15 commands
 - Extensions: 14 commands
 - File extraction: 1 command
 - Core (conversations, credentials, app lifecycle): 8 commands
@@ -2753,7 +2413,8 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 ### Startup (`src/lib/startup.ts`)
 1. Initialize Tauri IPC
-2. Load settings from localStorage
+2. Apply the persisted UI scale (`src/lib/ui-scale.ts`, native webview zoom)
+3. Load settings from localStorage
 3. Connect to LM Studio
 4. Load projects
 5. Check Pi CLI availability
@@ -2761,9 +2422,8 @@ Native `code_execution` is disabled and is not included in provider tool definit
 
 ### Shutdown (`src/lib/app-shutdown.ts`)
 1. Unload all AI models
-2. Interrupt running research
-3. Flush pending saves
-4. Close SQLite connections
+2. Flush pending saves
+3. Close SQLite connections
 
 ## Key Files
 
@@ -2771,6 +2431,7 @@ Native `code_execution` is disabled and is not included in provider tool definit
 |------|---------|
 | `src-tauri/src/lib.rs` | Tauri application setup and command registration |
 | `src/lib/startup.ts` | App initialization sequence |
+| `src/lib/ui-scale.ts` | Native webview UI scaling and zoom shortcuts |
 | `src/lib/app-shutdown.ts` | Graceful shutdown |
 | `src/lib/app-update.ts` | Update checking |
 

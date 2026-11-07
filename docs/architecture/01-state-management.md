@@ -24,7 +24,6 @@ Stores live in both `src/stores/` and `src/modules/<feature>/`:
 | `useConnectivityStore` | `src/stores/connectivity-store.ts` | Online/offline/local-only state |
 | `useUpdateStore` | `src/stores/update-store.ts` | App update state |
 | `useProjectStore` | `src/modules/projects/project-store.ts` | Projects |
-| `useResearchStore` | `src/modules/research/research-store.ts` | Research runs and reports |
 | `useAgentStore` | `src/modules/agents/agent-store.ts` | Agent sessions |
 
 ## Settings Store (8 Slices)
@@ -36,7 +35,6 @@ The settings store is composed from 8 slices in `src/stores/slices/`:
 | `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, panel collapsed state, visible tool settings |
 | `model-slice` | `model-slice.ts` | Default model, temperature, context length |
 | `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, and extraction settings |
-| `research-slice` | `research-slice.ts` | Default depth, approval requirements |
 | `code-execution-slice` | `code-execution-slice.ts` | Python path, timeout |
 | `connectivity-slice` | `connectivity-slice.ts` | Online/offline preference |
 | `chat-slice` | `chat-slice.ts` | Workspace mode, context anchoring, enhanced mode |

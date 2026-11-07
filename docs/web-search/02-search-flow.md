@@ -24,7 +24,7 @@ There is no category/engine routing, time-range filter, safe-search level, langu
 
 ## Supplementary providers
 
-When the Advanced Search Bundle is enabled, ArXiv and Wikipedia direct APIs run in parallel with DonSeTch and are merged by URL. Research depth profiles can disable either provider per run.
+When the Advanced Search Bundle is enabled, ArXiv and Wikipedia direct APIs run in parallel with DonSeTch and are merged by URL. Chat narrows the choice further by query intent (ArXiv for academic, Wikipedia for overview questions).
 
 ## Deduplication
 
@@ -55,7 +55,6 @@ After fetching, `passage-ranker.ts` splits each page into blocks, scores them ag
 | `"fast"` | Skips page fetching, returns up to 3 snippet-only results, disables direct ArXiv/Wikipedia providers |
 | `"normal"` | Full-quality search respecting user settings |
 
-The research pipeline uses `"normal"` for background and gap-phase searches.
 
 ## Diagnostics
 

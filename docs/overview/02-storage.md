@@ -9,7 +9,6 @@ All runtime data is local-only and never leaves your machine. Timestamps are ISO
 | Settings | localStorage | `veyra.settings.v1` key |
 | Provider config | localStorage | `veyra.provider.v1` key |
 | Projects | SQLite via Tauri | Structured records |
-| Research | SQLite via Tauri | Structured records |
 | Agent sessions | localStorage | Serialized sessions |
 | Cloud credentials | OS credential vault | Tauri secure storage |
 

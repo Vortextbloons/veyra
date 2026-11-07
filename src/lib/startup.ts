@@ -1,3 +1,5 @@
+import { initUiScale } from "@/lib/ui-scale";
+
 /** Dev-only startup timing helpers. */
 export function markStartup(name: string): void {
   if (import.meta.env.DEV) {
@@ -36,6 +38,11 @@ export async function emitAppReady(): Promise<void> {
   appReadyEmitted = true;
 
   markStartup("veyra:app-ready");
+
+  // Reveal only once the webview zoom is applied; otherwise the window shows at
+  // 100% and then reflows to the stored scale.
+  await initUiScale().catch(() => undefined);
+
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("app_ready");

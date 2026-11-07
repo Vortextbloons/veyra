@@ -12,7 +12,7 @@ Each provider implements a common interface in `src/modules/web-search/providers
 
 - accepts search input (query, limit, intent)
 - returns normalized `SearchResult` objects
-- is selected by the orchestrator based on settings and research depth
+- is selected by the orchestrator based on settings and query intent
 
 ## DonSeTch provider
 
@@ -29,8 +29,8 @@ The engine returns ranked URLs, titles, snippets, and scores. It also reports `d
 
 ## ArXiv provider
 
-Direct API access for academic paper searches. Returns paper metadata with links. Gated by `advancedSearchBundleEnabled`, `bundleArxivSearch`, and the active research depth.
+Direct API access for academic paper searches. Returns paper metadata with links. Gated by `advancedSearchBundleEnabled` and `bundleArxivSearch`, and only queried for academic intent in chat.
 
 ## Wikipedia provider
 
-Direct API access for encyclopedia searches. Returns article summaries and links. Gated by `advancedSearchBundleEnabled`, `bundleWikipediaSearch`, and the active research depth.
+Direct API access for encyclopedia searches. Returns article summaries and links. Gated by `advancedSearchBundleEnabled` and `bundleWikipediaSearch`, and only queried for overview-style questions in chat.

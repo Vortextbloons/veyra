@@ -52,7 +52,7 @@ function withSoftTimeout(
 }
 
 export type RunSearchOptions = {
-  /** Bound ordinary chat reading costs without changing research depth settings. */
+  /** Bound ordinary chat reading costs (page count, per-page timeout). */
   workflow?: "chat";
   projectId?: string;
   signal?: AbortSignal;
@@ -61,14 +61,10 @@ export type RunSearchOptions = {
   speedPreset?: "fast" | "normal";
   /**
    * When true, skip the page-fetch/extract step that normally runs after search.
-   * The research pipeline fetches the same URLs again with larger limits, so the
-   * intermediate search-time fetch is wasted work (and pollutes the cache with
-   * truncated content).
+   * Callers that read the pages themselves with larger limits avoid the wasted
+   * intermediate fetch (and the truncated content it would cache).
    */
   skipFetch?: boolean;
-  /** Research depth profile: gates direct ArXiv/Wikipedia APIs (omit for chat). */
-  directArxivSearch?: boolean;
-  directWikipediaSearch?: boolean;
   request?: SearchInput;
 };
 
@@ -80,8 +76,7 @@ export async function runSearch(
     options && typeof (options as AbortSignal).aborted !== "undefined"
       ? { signal: options as AbortSignal }
       : (options as RunSearchOptions) ?? {};
-  const { signal, projectId, onFetchProgress, skipFetch, directArxivSearch, directWikipediaSearch } =
-    opts;
+  const { signal, projectId, onFetchProgress, skipFetch } = opts;
   const request = opts.request ?? { query };
   const isChat = opts.workflow === "chat";
 
@@ -149,13 +144,11 @@ export async function runSearch(
           advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
           bundleArxivSearch: settings.bundleArxivSearch,
           bundleWikipediaSearch: settings.bundleWikipediaSearch,
-          directArxivSearch: isChat
-            ? request.intent === "academic"
-            : directArxivSearch,
+          directArxivSearch: isChat ? request.intent === "academic" : true,
           directWikipediaSearch: isChat
             ? (!request.intent || request.intent === "general") &&
               /\b(what (?:is|are|was|were)|who (?:is|was|were)|explain|overview|background|history of|definition of)\b/i.test(query)
-            : directWikipediaSearch,
+            : true,
         });
 
     const providerResultCounts: Record<string, number> = {};

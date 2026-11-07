@@ -31,6 +31,5 @@ React hooks used across Veyra's frontend for chat, scheduling, and UI interactio
 | Hook | File | Purpose |
 |------|------|---------|
 | `useClickOutside` | `src/hooks/use-click-outside.ts` | Click-outside detection |
-| `useAppZoom` | `src/hooks/use-app-zoom.ts` | App zoom control |
 | `useShutdownState` | `src/hooks/use-shutdown-state.ts` | Shutdown state tracking |
 | `useAppUpdateCheck` | `src/hooks/use-app-update-check.ts` | Update notification check |

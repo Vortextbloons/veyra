@@ -1,12 +1,10 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { mergeVisibleToolSettingsSections } from "@/components/settings/tools-settings-registry";
-import { DEFAULT_RESEARCH_CONFIG } from "@/modules/research/research-config";
 
 import { createUiLayoutSlice, DEFAULT_UI_LAYOUT_STATE } from "./slices/ui-layout-slice";
 import { createModelSlice, DEFAULT_MODEL_STATE } from "./slices/model-slice";
 import { createWebSearchSlice, DEFAULT_WEB_SEARCH_STATE } from "./slices/web-search-slice";
-import { createResearchSlice, DEFAULT_RESEARCH_SLICE_STATE } from "./slices/research-slice";
 import { createCodeExecutionSlice, DEFAULT_CODE_EXECUTION_STATE } from "./slices/code-execution-slice";
 import { createConnectivitySlice, DEFAULT_CONNECTIVITY_STATE } from "./slices/connectivity-slice";
 import { createChatSlice, DEFAULT_CHAT_STATE } from "./slices/chat-slice";
@@ -22,7 +20,6 @@ const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 export type SettingsStoreState = UiLayoutSliceState
   & ModelSliceState
   & WebSearchSliceState
-  & ResearchSliceState
   & CodeExecutionSliceState
   & ConnectivitySliceState
   & ChatSliceState
@@ -32,7 +29,6 @@ export type SettingsStore = SettingsStoreState
   & UiLayoutSliceActions
   & ModelSliceActions
   & WebSearchSliceActions
-  & ResearchSliceActions
   & ConnectivitySliceActions
   & ChatSliceActions
   & UpdateSliceActions;
@@ -41,7 +37,6 @@ export type SettingsStore = SettingsStoreState
 import type { UiLayoutSliceState, UiLayoutSliceActions } from "./slices/ui-layout-slice";
 import type { ModelSliceState, ModelSliceActions } from "./slices/model-slice";
 import type { WebSearchSliceState, WebSearchSliceActions } from "./slices/web-search-slice";
-import type { ResearchSliceState, ResearchSliceActions } from "./slices/research-slice";
 import type { CodeExecutionSliceState } from "./slices/code-execution-slice";
 import type { ConnectivitySliceState, ConnectivitySliceActions } from "./slices/connectivity-slice";
 import type { ChatSliceState, ChatSliceActions } from "./slices/chat-slice";
@@ -53,7 +48,6 @@ const DEFAULT_STATE: SettingsStoreState = {
   ...DEFAULT_UI_LAYOUT_STATE,
   ...DEFAULT_MODEL_STATE,
   ...DEFAULT_WEB_SEARCH_STATE,
-  ...DEFAULT_RESEARCH_SLICE_STATE,
   ...DEFAULT_CODE_EXECUTION_STATE,
   ...DEFAULT_CONNECTIVITY_STATE,
   ...DEFAULT_CHAT_STATE,
@@ -107,9 +101,6 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     enhancedModeEnabled: state.enhancedModeEnabled,
     interactiveAnswersEnabled: state.interactiveAnswersEnabled,
     artifactsEnabled: state.artifactsEnabled,
-    research: state.research,
-    researchAdvancedOpen: state.researchAdvancedOpen,
-    researchFirstRunNoticeDismissed: state.researchFirstRunNoticeDismissed,
     codeExecutionEnabled: state.codeExecutionEnabled,
     customPythonPath: state.customPythonPath,
     codeExecutionTimeoutSecs: state.codeExecutionTimeoutSecs,
@@ -137,7 +128,6 @@ export const useSettingsStore = create<SettingsStore>()(
       ...createUiLayoutSlice(...a),
       ...createModelSlice(...a),
       ...createWebSearchSlice(...a),
-      ...createResearchSlice(...a),
       ...createCodeExecutionSlice(...a),
       ...createConnectivitySlice(...a),
       ...createChatSlice(...a),
@@ -151,6 +141,7 @@ export const useSettingsStore = create<SettingsStore>()(
         const parsed = persisted as Partial<SettingsStoreState> & { webSearchEnabled?: boolean };
         const migrated: Partial<SettingsStoreState> = { ...parsed };
         if (parsed.activeNav === "characters") migrated.activeNav = "chat";
+        if (parsed.activeNav === "research") migrated.activeNav = "chat";
         if (
           parsed.webSearchEnabled !== undefined &&
           parsed.defaultWebSearchEnabled === undefined
@@ -163,12 +154,6 @@ export const useSettingsStore = create<SettingsStore>()(
         migrated.toolSettingsSubsectionsExpanded = {
           ...current.toolSettingsSubsectionsExpanded,
           ...parsed.toolSettingsSubsectionsExpanded,
-        };
-        migrated.research = {
-          ...DEFAULT_RESEARCH_CONFIG,
-          ...(parsed.research ?? {}),
-          depthOverrides: parsed.research?.depthOverrides ?? {},
-          customProfiles: parsed.research?.customProfiles ?? [],
         };
         if (parsed.reasoningLevel === undefined) {
           migrated.reasoningLevel = parsed.reasoningEnabled === false ? "off" : "medium";
