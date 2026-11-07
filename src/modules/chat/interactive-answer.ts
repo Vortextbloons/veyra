@@ -80,7 +80,7 @@ export type InteractiveAnswerNormalization =
   | { ok: true; answer: InteractiveAnswer }
   | { ok: false; error: string };
 
-export const MAX_INTERACTIVE_ANSWER_CHARS = 24_000;
+export const MAX_INTERACTIVE_ANSWER_CHARS = Number.POSITIVE_INFINITY;
 
 const MAX_ABS_VALUE = 1_000_000_000;
 
@@ -151,14 +151,10 @@ function normalizeInteractiveAnswerValue(
   if (raw.version !== undefined && raw.version !== 1) {
     return { ok: false, error: "This interactive answer version is not supported." };
   }
-  let serialized: string;
   try {
-    serialized = JSON.stringify(raw);
+    JSON.stringify(raw);
   } catch {
     return { ok: false, error: "The interactive answer could not be read." };
-  }
-  if (serialized.length > MAX_INTERACTIVE_ANSWER_CHARS) {
-    return { ok: false, error: "The interactive answer is too large. Keep it under 24 KB." };
   }
 
   const base = baseFields(raw, id);

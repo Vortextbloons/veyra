@@ -70,12 +70,19 @@ function persistScale(scale: number): void {
   }
 }
 
+let warnedAboutMissingZoom = false;
+
 async function applyScale(scale: number): Promise<void> {
   currentScale = scale;
   try {
     await getCurrentWebview().setZoom(scale);
-  } catch {
-    // Browser-only preview (plain Vite server): there is no webview to scale.
+  } catch (error) {
+    // Browser-only preview (plain Vite server) or a missing capability: the UI
+    // simply stays at 100% instead of falling back to broken CSS zoom.
+    if (!warnedAboutMissingZoom && import.meta.env.DEV) {
+      warnedAboutMissingZoom = true;
+      console.warn("[veyra] native webview zoom unavailable", error);
+    }
   }
 }
 

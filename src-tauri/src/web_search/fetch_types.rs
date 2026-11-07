@@ -22,7 +22,7 @@ pub struct FetchedPage {
 
 pub const USER_AGENT: &str =
     "Mozilla/5.0 (compatible; Veyra/0.1; +https://github.com/anomalyco/veyra)";
-pub const MAX_BODY_BYTES: usize = 5_000_000;
+pub const MAX_BODY_BYTES: usize = 25_000_000;
 pub const MIN_CONTENT_CHARS: usize = 200;
 
 pub static FETCH_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {

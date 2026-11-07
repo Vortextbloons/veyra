@@ -1,6 +1,5 @@
 import { lazy, memo, Suspense, useState } from "react";
 import {
-  Brain,
   ChevronDown,
 } from "lucide-react";
 import type { ChatMessage, MessagePerformance } from "@/modules/chat/chat-types";
@@ -10,7 +9,6 @@ import { MessageAttachmentsPreview } from "@/modules/chat/components/composer";
 import { MessageToolbar } from "@/modules/chat/components/message-toolbar";
 import { ToolCallList } from "@/modules/chat/components/tool-call-list";
 import { ThinkingIndicator } from "@/modules/chat/components/thinking-indicator";
-import { useProviderStore } from "@/stores/provider-store";
 import { type MessageAttachment } from "@/lib/message-attachments";
 import { FilePreviewModal } from "@/modules/chat/components/file-preview-modal";
 import { InteractiveAnswerBlock } from "@/modules/chat/components/interactive-answer-block";
@@ -63,10 +61,8 @@ export const MessageBubble = memo(function MessageBubble({
   onDelete,
   onFollowUp,
 }: MessageBubbleProps) {
-  const models = useProviderStore((state) => state.models);
-  const resolvedModelName = message.modelId
-    ? models.find((m) => m.id === message.modelId)?.name ?? "Assistant"
-    : "Assistant";
+
+
 
   const isUser = message.role === "user";
   const [previewAttachment, setPreviewAttachment] = useState<MessageAttachment | null>(null);
@@ -131,21 +127,6 @@ export const MessageBubble = memo(function MessageBubble({
       <div className="group/message flex items-start gap-3">
       <div className="min-w-0 flex-1">
         <div className="w-full max-w-none">
-        <div className="mb-1 flex items-center gap-2 text-[11.5px] leading-none">
-          <span className="truncate font-medium text-white">{resolvedModelName}</span>
-          <span className="size-1 rounded-full bg-[var(--color-text-dim)]/50" />
-          <span className="text-[var(--color-text-dim)]">just now</span>
-        </div>
-        <MessageToolbar
-          isUser={false}
-          isStreaming={isStreaming}
-          isLastAssistant={isLastAssistant}
-          onRegenerate={onRegenerate ? () => onRegenerate(message.id) : undefined}
-          onRetry={onRetry ? () => onRetry(message.id) : undefined}
-          onCopy={onCopy ? () => onCopy(message.id) : undefined}
-          onFork={onFork ? () => onFork(message.id) : undefined}
-          onDelete={onDelete ? () => onDelete(message.id) : undefined}
-        />
         {hasReasoning && (
           <ReasoningBlock
             content={reasoning}
@@ -186,6 +167,18 @@ export const MessageBubble = memo(function MessageBubble({
         )}
         {message.artifact && <ArtifactBlock artifact={message.artifact} messageId={message.id} />}
         </div>
+        {Boolean(body) && (
+          <MessageToolbar
+            isUser={false}
+            isStreaming={isStreaming}
+            isLastAssistant={isLastAssistant}
+            onRegenerate={onRegenerate ? () => onRegenerate(message.id) : undefined}
+            onRetry={onRetry ? () => onRetry(message.id) : undefined}
+            onCopy={onCopy ? () => onCopy(message.id) : undefined}
+            onFork={onFork ? () => onFork(message.id) : undefined}
+            onDelete={onDelete ? () => onDelete(message.id) : undefined}
+          />
+        )}
         {!isStreaming && message.performance && (
           <MessagePerformanceBar performance={message.performance} />
         )}
@@ -206,33 +199,32 @@ function ReasoningBlock({
   messageTextClass,
 }: ReasoningBlockProps) {
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
-  const expanded = isStreaming ? true : (userExpanded ?? false);
+  const expanded = userExpanded ?? isStreaming;
 
   return (
     <div
-      className={`mb-2 overflow-hidden rounded-xl border border-violet-500/15 bg-violet-500/[0.06] transition-[font-size] duration-200 ease-out ${messageTextClass}`}
+      className={`my-1 transition-[font-size] duration-200 ease-out ${messageTextClass}`}
     >
       <button
         type="button"
         onClick={() => setUserExpanded((v) => !(v ?? expanded))}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition-colors hover:bg-violet-500/[0.04]"
+        className="group flex min-h-8 items-center gap-2 rounded-md py-1 text-left text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
       >
-        <Brain className="size-3 shrink-0 text-violet-300/80" />
-        <span className="flex-1 text-[10.5px] font-medium uppercase tracking-wide text-violet-300/80">
+        <span className="text-[13px]">
           {isStreaming ? "Thinking" : "Reasoning"}
         </span>
         {isStreaming && (
-          <span className="inline-block size-1.5 animate-pulse rounded-full bg-violet-400" />
+          <span className="inline-block size-1.5 animate-pulse rounded-full bg-[var(--color-text-dim)]" />
         )}
         <ChevronDown
-          className={`size-3.5 shrink-0 text-violet-300/60 transition-transform ${
+          className={`size-3 shrink-0 opacity-60 transition-transform motion-reduce:transition-none ${
             expanded ? "rotate-180" : ""
           }`}
         />
       </button>
       {expanded && (
-        <div className="px-3.5 py-2.5">
+        <div className="py-1">
           <p className="m-0 whitespace-pre-wrap text-[12.5px] leading-relaxed text-[var(--color-text-dim)]">
             {content}
           </p>

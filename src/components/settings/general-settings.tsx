@@ -1,97 +1,106 @@
-import { useSettingsStore } from "@/stores/settings-store";
-import { useProviderStore } from "@/stores/provider-store";
+import { useCallback, useEffect, useState } from "react";
+import { Minus, Plus, RotateCcw } from "lucide-react";
 import { Toggle } from "@/components/toggle";
-import { Star } from "lucide-react";
-
+import { useSettingsStore } from "@/stores/settings-store";
+import {
+  getUiScale,
+  setUiScale,
+  UI_SCALE_DEFAULT,
+  UI_SCALE_MAX,
+  UI_SCALE_MIN,
+} from "@/lib/ui-scale";
 import { AboutUpdateSettings } from "./about-update-settings";
+import {
+  SettingRow,
+  SettingsCard,
+  SettingsHeader,
+  SettingsPanel,
+  SettingsRows,
+  SettingValue,
+  settingsButtonClass,
+} from "./settings-ui";
+
+const SCALE_STEP = 0.1;
 
 export function GeneralSettings() {
-  const favoriteModels = useSettingsStore((s) => s.favoriteModels);
-  const toggleFavoriteModel = useSettingsStore((s) => s.toggleFavoriteModel);
-  const autoNameEnabled = useSettingsStore((s) => s.autoNameEnabled);
-  const setAutoNameEnabled = useSettingsStore((s) => s.setAutoNameEnabled);
+  const recentChatsCollapsed = useSettingsStore((s) => s.recentChatsCollapsed);
+  const setRecentChatsCollapsed = useSettingsStore((s) => s.setRecentChatsCollapsed);
 
-  const models = useProviderStore((s) => s.models);
-  const selectedProvider = useProviderStore((s) => s.selectedProvider);
-  const providers = useProviderStore((s) => s.providers);
+  const [scale, setScale] = useState(() => getUiScale());
 
-  const currentProvider = providers.find((p) => p.id === selectedProvider);
-  const providerLabel = currentProvider?.name ?? "LM Studio";
+  useEffect(() => {
+    setScale(getUiScale());
+  }, []);
 
-  const favoriteModelsList = models.filter((m) => favoriteModels.includes(m.id));
+  const applyScale = useCallback(async (next: number) => {
+    const clamped = Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, next));
+    const rounded = Math.round(clamped * 100) / 100;
+    setScale(rounded);
+    await setUiScale(rounded);
+  }, []);
 
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Favorite Models
-        </h2>
-        <p className="mb-3 text-[12px] text-[var(--color-text-dim)]">
-          Favorited models appear at the top of the model selector across the app.
-        </p>
-        {favoriteModelsList.length === 0 ? (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-6 text-center">
-            <p className="text-[12px] text-[var(--color-text-dim)]">
-              No favorites yet. Star models in the chat header or models page.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {favoriteModelsList.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2.5"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12.5px] font-medium text-white">
-                    {m.name}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10.5px] text-[var(--color-text-dim)]">
-                    <span>{providerLabel}</span>
-                    {m.size && (
-                      <>
-                        <span className="opacity-50">&middot;</span>
-                        <span className="font-mono">{m.size}</span>
-                      </>
-                    )}
-                    {m.contextWindow && (
-                      <>
-                        <span className="opacity-50">&middot;</span>
-                        <span className="font-mono">
-                          {m.contextWindow >= 1000
-                            ? `${(m.contextWindow / 1000).toFixed(m.contextWindow % 1000 ? 1 : 0)}K`
-                            : m.contextWindow}{" "}
-                          ctx
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
+      <SettingsHeader
+        title="General"
+        description="Appearance, layout, and application updates."
+      />
+
+      <SettingsPanel
+        title="Appearance"
+        description="Scaling is applied by the desktop shell, so overlays and hit targets stay aligned."
+      >
+        <SettingsCard>
+          <SettingsRows>
+            <SettingRow
+              label="Interface scale"
+              description="Ctrl + Plus, Ctrl + Minus, and Ctrl + 0 also change the scale. Ctrl + scroll adjusts it anywhere in the app."
+            >
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => toggleFavoriteModel(m.id)}
-                  className="grid size-7 place-items-center rounded-md text-amber-400 transition-colors hover:bg-white/[0.06]"
+                  aria-label="Zoom out"
+                  onClick={() => void applyScale(scale - SCALE_STEP)}
+                  disabled={scale <= UI_SCALE_MIN}
+                  className={`${settingsButtonClass} size-8 p-0`}
                 >
-                  <Star className="size-3.5" fill="currentColor" />
+                  <Minus className="size-3.5" />
+                </button>
+                <SettingValue>{Math.round(scale * 100)}%</SettingValue>
+                <button
+                  type="button"
+                  aria-label="Zoom in"
+                  onClick={() => void applyScale(scale + SCALE_STEP)}
+                  disabled={scale >= UI_SCALE_MAX}
+                  className={`${settingsButtonClass} size-8 p-0`}
+                >
+                  <Plus className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Reset interface scale"
+                  title="Reset to 100%"
+                  onClick={() => void applyScale(UI_SCALE_DEFAULT)}
+                  disabled={scale === UI_SCALE_DEFAULT}
+                  className={`${settingsButtonClass} size-8 p-0`}
+                >
+                  <RotateCcw className="size-3.5" />
                 </button>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-[11px] font-mono font-semibold uppercase tracking-wider text-[var(--color-text-dim)]">
-          Defaults
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <Toggle
-            label="Auto-name conversations"
-            on={autoNameEnabled}
-            onChange={setAutoNameEnabled}
-          />
-        </div>
-      </section>
+            </SettingRow>
+            <SettingRow
+              label="Recent chats sidebar"
+              description="Keep the conversation list open beside chat. You can still collapse it from the sidebar."
+            >
+              <Toggle
+                ariaLabel="Recent chats sidebar"
+                on={!recentChatsCollapsed}
+                onChange={(on) => setRecentChatsCollapsed(!on)}
+              />
+            </SettingRow>
+          </SettingsRows>
+        </SettingsCard>
+      </SettingsPanel>
 
       <AboutUpdateSettings />
     </div>

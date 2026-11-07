@@ -199,13 +199,13 @@ export function configureModelRoute(config, { providerId, modelId, baseUrl, cont
   if (typeof config.providers !== "object" || Array.isArray(config.providers)) throw new Error("Invalid Pi providers");
   const hash = createHash("sha256").update(JSON.stringify([providerId, endpoint])).digest("hex").slice(0, 16);
   const provider = `veyra-${hash}`;
-  const contextWindow = Math.max(1024, Math.min(262144, Number(contextLength) || 8192));
-  const output = Math.max(128, Math.min(contextWindow - 128, Number(maxTokens) || Math.max(256, Math.floor(contextWindow / 4))));
   const alias = { "lm-studio": "lmstudio", "opencode-zen": "opencode" }[providerId] ?? providerId;
   const matches = models.filter((model) => !model.provider.startsWith("veyra-") &&
     (model.id === modelId || `${model.provider}/${model.id}` === modelId));
   const template = matches.find((model) => model.provider === alias) ??
     (matches.length === 1 ? matches[0] : undefined);
+  const contextWindow = Math.max(1024, Number(contextLength) || template?.contextWindow || 8192);
+  const output = Math.max(128, Math.min(contextWindow, template?.maxTokens || contextWindow, Number(maxTokens) || 32768));
   // Apply documented endpoint metadata through Pi on an isolated route.
   // Keep this adapter on Veyra's isolated route, leaving user providers intact.
   const correction = nvidiaReasoningMetadata({ modelId, baseUrl: endpoint });

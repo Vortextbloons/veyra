@@ -133,8 +133,9 @@ export function WebSearchToolCallBlock({
       onToggle={() => setExpanded((value) => !value)}
     >
       {expanded && state.sources.length > 0 && (
-        <div className="mt-1 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]/50">
-          <ul className="m-0 list-none divide-y divide-[var(--color-border)] p-0">
+        <div className="mt-1 max-h-[28rem] overflow-y-auto overscroll-contain pr-2 scrollbar-thin">
+          <div className="mb-2 text-[11px] text-[var(--color-text-dim)]">Results for <span className="text-[var(--color-text)]">{state.query}</span></div>
+          <ul className="m-0 list-none space-y-1 p-0">
             {state.sources.map((source, index) => {
               const fetch = source.fetch;
               const fetchedOk = fetch?.status === "ok";
@@ -161,7 +162,7 @@ export function WebSearchToolCallBlock({
                   ? "text-amber-400"
                   : "text-[var(--color-text-dim)]/60";
               return (
-                <li key={source.id} className="px-3 py-2">
+                <li key={source.id} className="rounded-md px-2 py-3 transition-colors hover:bg-white/[0.025]">
                   <div className="flex items-start gap-2">
                     <span className="mt-0.5 shrink-0 font-mono text-[10px] text-[var(--color-text-dim)]/60">
                       {index + 1}
@@ -172,7 +173,7 @@ export function WebSearchToolCallBlock({
                           href={source.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="group/link inline-flex min-w-0 items-center gap-1 text-[12px] font-medium text-white hover:text-cyan-300"
+                          className="group/link inline-flex min-w-0 items-center gap-1 text-[13px] font-medium leading-5 text-[var(--color-text)] underline-offset-4 hover:underline"
                         >
                           <span className="truncate">{source.title}</span>
                           <ExternalLink className="size-3 shrink-0 opacity-0 transition-opacity group-hover/link:opacity-100" />
@@ -190,11 +191,11 @@ export function WebSearchToolCallBlock({
                           />
                         )}
                       </div>
-                      <div className="mt-0.5 truncate text-[10.5px] text-[var(--color-accent)]/70">
+                      <div className="mt-1 truncate text-[11px] text-[var(--color-text-dim)]/70">
                         {source.url}
                       </div>
                       {source.snippet && (
-                        <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-dim)]">
+                        <p className="mt-1.5 line-clamp-3 break-words text-[12px] leading-relaxed text-[var(--color-text-dim)]">
                           {source.snippet}
                         </p>
                       )}

@@ -10,12 +10,17 @@ type StartPiAgentInput = {
   model: string;
   contextLength?: number;
   reservedOutputTokens?: number;
+  maxTokens?: number;
   providerId?: string;
   providerBaseUrl?: string;
   reasoningEnabled?: boolean;
   reasoningLevel?: AgentReasoningLevel;
   images?: { data: string; mimeType: string }[];
   tools?: ProviderToolDefinition[];
+  /** User-authored system prompt for this turn. */
+  systemPrompt?: string;
+  /** When true, `systemPrompt` replaces the default system prompt entirely. */
+  replaceSystemPrompt?: boolean;
 };
 
 type PiRunFinishedEvent = {
@@ -36,7 +41,7 @@ export type RunPiAgentOptions = {
   onUiRequest?: (request: Record<string, unknown>) => Promise<string | undefined>;
 };
 
-const DEFAULT_AGENT_EVENT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_AGENT_EVENT_TIMEOUT_MS = 5 * 60 * 60 * 1000;
 
 export async function checkPiAvailable(): Promise<boolean> {
   try {

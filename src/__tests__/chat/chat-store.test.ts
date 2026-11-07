@@ -93,13 +93,6 @@ describe("chat store assistant append", () => {
     };
     useChatStore.setState({ conversations: [conversation([previousUser, previousAssistant, replacementUser, replacementAssistant])] });
 
-    const rejected = useChatStore.getState().setAssistantArtifact("conversation-1", replacementAssistant.id, {
-      ...nextArtifact,
-      content: "x".repeat(5 * 1024 * 1024 + 1),
-    });
-    expect(rejected).toBe(false);
-    expect(useChatStore.getState().conversations[0]?.messages[1]?.artifact).toEqual(previousArtifact);
-
     const saved = useChatStore.getState().setAssistantArtifact("conversation-1", replacementAssistant.id, nextArtifact);
     expect(saved).toBe(true);
     expect(useChatStore.getState().conversations[0]?.messages.map((message) => message.id)).toEqual(["new-user", "new-assistant"]);

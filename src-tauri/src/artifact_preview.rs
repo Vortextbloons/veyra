@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use tauri::http::{header, Response, StatusCode};
 use tauri::{AppHandle, Manager, State};
 
-pub const MAX_ARTIFACT_BYTES: usize = 5 * 1024 * 1024;
+pub const MAX_ARTIFACT_BYTES: usize = usize::MAX;
 const MAX_PREVIEWS: usize = 32;
 const PREVIEW_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
@@ -26,9 +26,6 @@ pub fn register_artifact_preview(
 ) -> Result<(), String> {
     if !is_safe_id(&id) {
         return Err("invalid artifact preview id".into());
-    }
-    if html.len() > MAX_ARTIFACT_BYTES {
-        return Err("artifact exceeds the 5 MB preview limit".into());
     }
 
     let mut previews = state.previews.lock();
@@ -178,6 +175,6 @@ mod tests {
         assert!(is_safe_id("d9428888-122b-4b24-8f0a-6b3f90e11f10"));
         assert!(!is_safe_id("../d9428888-122b-4b24-8f0a-6b3f90e11f10"));
         assert!(!is_safe_id("d9428888-122b-4b24-8f0a-6b3f90e11f10/more"));
-        assert_eq!(MAX_ARTIFACT_BYTES, 5 * 1024 * 1024);
+        assert_eq!(MAX_ARTIFACT_BYTES, usize::MAX);
     }
 }

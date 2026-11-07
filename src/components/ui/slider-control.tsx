@@ -44,19 +44,25 @@ export function SliderControl({
   }
 
   const track = (
-    <div className="relative">
-      <div className="h-1.5 rounded-full bg-white/[0.06]">
+    <div className="relative flex h-5 items-center">
+      <div className="h-1.5 w-full rounded-full bg-white/[0.08]">
         <div
           className="h-full rounded-full bg-[var(--color-accent)]"
           style={{ width: `${percent}%` }}
         />
       </div>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute size-3 -translate-x-1/2 rounded-full border border-black/40 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
+        style={{ left: `${percent}%` }}
+      />
       <input
         type="range"
         min={min}
         max={max}
         step={step}
         value={value}
+        aria-label={label}
         onChange={(e) => onChange(Number(e.target.value))}
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
       />
@@ -84,14 +90,16 @@ export function SliderControl({
 
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between">
-        <div className="text-[12px] font-medium text-white">{label}</div>
-        <span className="rounded bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white">
+      <div className="mb-1 flex items-baseline justify-between gap-3">
+        <p className="text-[13px] font-medium text-white">{label}</p>
+        <span className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-0.5 font-mono text-[11.5px] tabular-nums text-white">
           {formatValue(value)}
         </span>
       </div>
       {description && (
-        <p className="mb-2 text-[10.5px] text-[var(--color-text-dim)]">{description}</p>
+        <p className="mb-1.5 text-[12px] leading-relaxed text-[var(--color-text-dim)]">
+          {description}
+        </p>
       )}
       {track}
     </div>

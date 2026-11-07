@@ -10,7 +10,7 @@ export function useChatContextPanel({ activeAgentSession }: { activeAgentSession
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
   const models = useProviderStore((state) => state.models);
   const selectedModel = useProviderStore((state) => state.selectedModel);
-  const resolvedContextLength = modelOverrides[selectedModel]?.contextLength ?? defaultContextLength;
+  const resolvedContextLength = modelOverrides[selectedModel]?.contextLength ?? (defaultContextLength || models.find((model) => model.id === selectedModel)?.contextWindow || 8192);
   const resolvedReservedOutputTokens = modelOverrides[selectedModel]?.reservedOutputTokens ?? defaultReservedOutputTokens;
   const displayContextStats: ContextStats | undefined = useMemo(() => {
     if (!activeAgentSession) return undefined;

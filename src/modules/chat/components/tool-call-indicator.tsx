@@ -72,13 +72,13 @@ export function ToolCallIndicator({ state }: ToolCallIndicatorProps) {
     >
       {expanded && (hasDetails || approval) && (
         <div
-          className={`mt-1 rounded-lg border px-3 py-2 text-[11.5px] ${
+          className={`mt-1 py-2 text-[12px] ${
             displayError
               ? "border-red-500/20 bg-red-500/[0.06] text-red-300"
-              : "border-[var(--color-border)] bg-[var(--color-panel)]/50 text-[var(--color-text-dim)]"
+              : "text-[var(--color-text-dim)]"
           }`}
         >
-          <p>{isApproved ? `Approved for this chat. Send the request again to call ${approval?.toolName}.` : state.error || state.detail}</p>
+          <p className="m-0 whitespace-pre-wrap break-words leading-relaxed">{isApproved ? `Approved for this chat. Send the request again to call ${approval?.toolName}.` : state.error || state.detail}</p>
           {approval && !isApproved && (
             <button
               type="button"

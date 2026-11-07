@@ -86,7 +86,7 @@ export function CodeExecutionBlock({ state }: { state: ToolCallState }) {
       onToggle={() => setExpanded((value) => !value)}
     >
       {expanded && result && (
-        <div className="mt-2 space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]/50 p-3">
+        <div className="my-2 space-y-3 py-2">
           <div className="grid gap-2 text-[10.5px] text-[var(--color-text-dim)] sm:grid-cols-2">
             <div>Python: <span className="font-mono text-[var(--color-text)]">{result.pythonPath}</span></div>
             <div>Duration: <span className="font-mono text-[var(--color-text)]">{result.durationMs}ms</span></div>
@@ -104,7 +104,7 @@ export function CodeExecutionBlock({ state }: { state: ToolCallState }) {
         </div>
       )}
       {expanded && !result && (state.error || state.detail) && (
-        <div className="mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]/50 px-3 py-2 text-[11.5px] text-[var(--color-text-dim)]">
+        <div className="mt-1 py-2 text-[11.5px] text-[var(--color-text-dim)]">
           <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed">
             {state.detail || state.error}
           </pre>

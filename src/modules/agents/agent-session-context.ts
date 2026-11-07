@@ -2,7 +2,6 @@ import type { AgentSession } from "./agent-types";
 import { buildMemoryReferenceBlock } from "@/lib/prompts";
 
 const DEFAULT_AGENT_CONTEXT_LENGTH = 16_384;
-const MAX_AGENT_CONTEXT_CHARS = 48_000;
 const APPROX_CHARS_PER_TOKEN = 4;
 /** Memory may not crowd out the previous-session transcript on small contexts. */
 const MEMORY_SHARE_OF_OPTIONAL_CONTEXT = 0.25;
@@ -14,7 +13,7 @@ function agentContextBudgetChars(
   const limit = Math.max(0, Math.floor(contextLength ?? DEFAULT_AGENT_CONTEXT_LENGTH));
   const reserved = Math.max(0, Math.floor(reservedOutputTokens ?? 0));
   const usableTokens = Math.max(0, limit - reserved);
-  return Math.min(MAX_AGENT_CONTEXT_CHARS, usableTokens * APPROX_CHARS_PER_TOKEN);
+  return usableTokens * APPROX_CHARS_PER_TOKEN;
 }
 
 function sessionTranscript(session: AgentSession | null): string {

@@ -1,6 +1,6 @@
 import type { SearchPassage } from "./types";
 
-const MAX_PASSAGE_CHARS = 1_600;
+const MAX_PASSAGE_CHARS = 10_000;
 
 function terms(text: string): Set<string> {
   return new Set(text.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? []);

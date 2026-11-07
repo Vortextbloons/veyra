@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo } from "react";
-import { ChevronRight, Sparkles, TerminalSquare } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { AgentChatTurn } from "@/modules/agents/components/agent-chat-turn";
 import { buildAgentChatTurns, type AgentChatTurnModel } from "@/modules/agents/agent-chat-turns";
@@ -30,7 +30,7 @@ export function AgentOutputView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={outputRef} onScroll={() => { const el = outputRef.current; if (el) followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-7 px-5 pb-8 pt-6">
+        <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-3 px-5 pb-8 pt-6">
           {turns.map((turn) => (
             <AgentChatTurn key={turn.id} turn={turn} isStreaming={isRunning && turn === turns.at(-1)} onFollowUp={onFollowUp} />
           ))}
@@ -62,28 +62,12 @@ export function AgentActivityCard({ turn }: { turn: AgentChatTurnModel }) {
   const isTool = turn.kind === "tool";
   const isReasoning = turn.kind === "reasoning";
   return (
-    <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-      <summary className="flex cursor-pointer items-center gap-2 text-[11px] text-[var(--color-text-dim)]">
-      <div
-        className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-md ${
-          isTool
-            ? "bg-cyan-400/10 text-cyan-300"
-            : isReasoning
-              ? "bg-violet-400/10 text-violet-300"
-              : "bg-indigo-400/10 text-indigo-300"
-        }`}
-      >
-        {isTool ? <TerminalSquare className="size-3" /> : isReasoning ? <Sparkles className="size-3" /> : <ChevronRight className="size-3" />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-[11.5px] font-medium text-[var(--color-text)]">
-          <span className="truncate">{turn.title ?? (isTool ? "Tool" : isReasoning ? "Reasoning" : "Step")}</span>
-          {isTool && <span className="rounded bg-cyan-400/10 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wide text-cyan-300">tool</span>}
-          {isReasoning && <span className="rounded bg-violet-400/10 px-1.5 py-0.5 text-[9.5px] uppercase tracking-wide text-violet-300">thinking</span>}
-        </div>
-      </div>
+    <details className="group/activity min-w-0 text-[var(--color-text-dim)]">
+      <summary className="flex min-h-7 cursor-pointer list-none items-center gap-2 rounded text-[12px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
+        <span className="truncate">{turn.title ?? (isTool ? "Tool" : isReasoning ? "Reasoning" : "Step")}</span>
+        <ChevronRight className="size-3 shrink-0 opacity-50 transition-transform group-open/activity:rotate-90" />
       </summary>
-      {turn.content && <pre className="mt-3 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[var(--color-text-dim)]">{turn.content}</pre>}
+      {turn.content && <pre className="mb-2 mt-1 max-h-96 overflow-auto whitespace-pre-wrap break-words border-l border-[var(--color-border)] pl-4 font-mono text-[12px] leading-relaxed">{turn.content}</pre>}
     </details>
   );
 }

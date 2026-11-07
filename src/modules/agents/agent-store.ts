@@ -1,3 +1,4 @@
+import { useSettingsStore } from "@/stores/settings-store";
 import { create } from "zustand";
 import type { Conversation } from "@/modules/chat/chat-types";
 import { createPiChatTools } from "./pi-chat-tools";
@@ -628,16 +629,20 @@ export const useAgentStore = create<AgentStore>()(
                 session: shouldContinue ? activeSession ?? null : null,
                 contextLength: input.contextLength,
                 reservedOutputTokens: input.reservedOutputTokens,
+
               }),
               model: selectedModel,
               contextLength: input.contextLength,
               reservedOutputTokens: input.reservedOutputTokens,
+              maxTokens: useSettingsStore.getState().getModelSettings(input.model).maxTokens,
               providerId: input.providerId,
               providerBaseUrl: input.providerBaseUrl,
               reasoningEnabled: input.reasoningEnabled,
               reasoningLevel: input.reasoningLevel,
               images: input.images,
               tools: bridge.tools,
+              systemPrompt: input.systemPrompt,
+              replaceSystemPrompt: input.replaceSystemPrompt,
             },
             (rawEvent) => {
               const parsedEvent = parsePiEvent(rawEvent);

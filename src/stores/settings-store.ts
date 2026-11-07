@@ -73,6 +73,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     defaultStopSequences: state.defaultStopSequences,
     defaultReservedOutputTokens: state.defaultReservedOutputTokens,
     defaultSystemPrompt: state.defaultSystemPrompt,
+    systemPromptReplacesDefault: state.systemPromptReplacesDefault,
     modelOverrides: state.modelOverrides,
     reasoningEnabled: state.reasoningEnabled,
     reasoningLevel: state.reasoningLevel,
@@ -140,6 +141,10 @@ export const useSettingsStore = create<SettingsStore>()(
       merge: (persisted, current) => {
         const parsed = persisted as Partial<SettingsStoreState> & { webSearchEnabled?: boolean };
         const migrated: Partial<SettingsStoreState> = { ...parsed };
+        // Upgrade former defaults while preserving custom values and model overrides.
+        if (parsed.defaultMaxTokens === 0) migrated.defaultMaxTokens = 32768;
+        if (parsed.defaultReservedOutputTokens === 1024) migrated.defaultReservedOutputTokens = 8192;
+        if (parsed.defaultContextLength === 8192) migrated.defaultContextLength = 0;
         if (parsed.activeNav === "characters") migrated.activeNav = "chat";
         if (parsed.activeNav === "research") migrated.activeNav = "chat";
         if (

@@ -1,4 +1,5 @@
 import type { StateCreator } from "zustand";
+import { useProviderStore } from "@/stores/provider-store";
 import type { ReasoningLevel } from "@/lib/reasoning-capabilities";
 
 export type ModelSettings = {
@@ -35,6 +36,8 @@ export type ModelSliceState = {
   defaultStopSequences: string[];
   defaultReservedOutputTokens: number;
   defaultSystemPrompt: string;
+  /** Send `defaultSystemPrompt` as the only system prompt, replacing Veyra's defaults. */
+  systemPromptReplacesDefault: boolean;
   modelOverrides: Record<string, ModelSettings>;
   reasoningEnabled: boolean;
   /** Global fallback effort used when a model has no explicit choice. */
@@ -58,6 +61,7 @@ export type ModelSliceActions = {
   setDefaultStopSequences: (s: string[]) => void;
   setDefaultReservedOutputTokens: (n: number) => void;
   setDefaultSystemPrompt: (s: string) => void;
+  setSystemPromptReplacesDefault: (enabled: boolean) => void;
   setModelOverride: (modelId: string, settings: ModelSettings) => void;
   clearModelOverride: (modelId: string) => void;
   getModelSettings: (modelId: string) => ResolvedModelSettings;
@@ -74,13 +78,14 @@ export const DEFAULT_MODEL_STATE: ModelSliceState = {
   autoNameEnabled: true,
   autoNameModel: "",
   defaultTemperature: 0.7,
-  defaultContextLength: 8192,
-  defaultMaxTokens: 0,
+  defaultContextLength: 0,
+  defaultMaxTokens: 32768,
   defaultTopP: 1.0,
   defaultRepetitionPenalty: 1.0,
   defaultStopSequences: [],
-  defaultReservedOutputTokens: 1024,
+  defaultReservedOutputTokens: 8192,
   defaultSystemPrompt: "",
+  systemPromptReplacesDefault: false,
   modelOverrides: {},
   reasoningEnabled: true,
   reasoningLevel: "medium",
@@ -112,6 +117,8 @@ export const createModelSlice: StateCreator<ModelSlice, [], [], ModelSlice> = (s
   setDefaultReservedOutputTokens: (defaultReservedOutputTokens) =>
     set({ defaultReservedOutputTokens }),
   setDefaultSystemPrompt: (defaultSystemPrompt) => set({ defaultSystemPrompt }),
+  setSystemPromptReplacesDefault: (systemPromptReplacesDefault) =>
+    set({ systemPromptReplacesDefault }),
   setModelOverride: (modelId: string, settings: ModelSettings) => {
     const current = get().modelOverrides;
     set({ modelOverrides: { ...current, [modelId]: settings } });
@@ -127,7 +134,7 @@ export const createModelSlice: StateCreator<ModelSlice, [], [], ModelSlice> = (s
     const override = state.modelOverrides[modelId];
     return {
       temperature: override?.temperature ?? state.defaultTemperature,
-      contextLength: override?.contextLength ?? state.defaultContextLength,
+      contextLength: override?.contextLength ?? (state.defaultContextLength || useProviderStore.getState().models.find((model) => model.id === modelId)?.contextWindow || 8192),
       maxTokens: override?.maxTokens ?? state.defaultMaxTokens,
       topP: override?.topP ?? state.defaultTopP,
       repetitionPenalty: override?.repetitionPenalty ?? state.defaultRepetitionPenalty,

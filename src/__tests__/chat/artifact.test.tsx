@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   artifactDownloadName,
-  MAX_ARTIFACT_BYTES,
   normalizeArtifact,
 } from "@/modules/chat/artifact";
 import { ArtifactBlock } from "@/modules/chat/components/artifact-block";
@@ -34,12 +33,11 @@ describe("artifact validation", () => {
     }
   });
 
-  it("rejects oversized content without truncating it", () => {
-    const accepted = normalizeArtifact({ format: "html", title: "Large page", content: "x".repeat(MAX_ARTIFACT_BYTES) }, "id");
-    const rejected = normalizeArtifact({ format: "html", title: "Large page", content: "x".repeat(MAX_ARTIFACT_BYTES + 1) }, "id");
-
-    expect(accepted.ok).toBe(true);
-    expect(rejected).toEqual({ ok: false, error: "Artifacts must be 5 MB or smaller. Nothing was truncated." });
+  it("accepts content beyond the former size limit without truncation", () => {
+    const content = "x".repeat(5 * 1024 * 1024 + 1);
+    const result = normalizeArtifact({ format: "html", title: "Large page", content }, "id");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.artifact.content).toBe(content);
   });
 
   it("accepts a single safe filename and rejects path traversal", () => {

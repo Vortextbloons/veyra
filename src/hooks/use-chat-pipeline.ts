@@ -19,9 +19,9 @@ export function useChatPipeline({ projectId, webSearchEnabled }: { projectId?: s
   const modelOverrides = useSettingsStore((state) => state.modelOverrides);
   const connectivity = useConnectivityStore((state) => state.effectiveConnectivity);
   const context = useMemo(() => ({
-    contextLength: modelOverrides[selectedModel]?.contextLength ?? defaultContextLength,
+    contextLength: modelOverrides[selectedModel]?.contextLength ?? (defaultContextLength || models.find((model) => model.id === selectedModel)?.contextWindow || 8192),
     reservedOutputTokens: modelOverrides[selectedModel]?.reservedOutputTokens ?? defaultReservedOutputTokens,
-  }), [selectedModel, modelOverrides, defaultContextLength, defaultReservedOutputTokens]);
+  }), [selectedModel, models, modelOverrides, defaultContextLength, defaultReservedOutputTokens]);
   const supportsImages = models.find((model) => model.id === selectedModel)?.supportsImages ?? false;
   const { handleSend } = useChatSend({
     projectId, selectedModel, selectedProvider, supportsImages,

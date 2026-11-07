@@ -74,6 +74,10 @@ export type StartAgentSessionInput = {
   images?: { data: string; mimeType: string }[];
   attachments?: MessageAttachment[];
   webSearchEnabled?: boolean;
+  /** Resolved user-authored system prompt (global or per-model). */
+  systemPrompt?: string;
+  /** Send `systemPrompt` as the only system prompt instead of appending it. */
+  replaceSystemPrompt?: boolean;
 };
 
 export type PiRunResult = {

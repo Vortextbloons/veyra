@@ -49,7 +49,6 @@ function ChatHydrationSkeleton() {
 }
 
 function App() {
-
   const conversations = useChatStore((state) => state.conversations);
   const hydrationState = useChatStore((state) => state.hydrationState);
   const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);

@@ -30,12 +30,17 @@ pub struct StartPiAgentInput {
     pub model: String,
     pub context_length: Option<u32>,
     pub reserved_output_tokens: Option<u32>,
+    pub max_tokens: Option<u32>,
     pub provider_id: Option<String>,
     pub provider_base_url: Option<String>,
     pub reasoning_enabled: Option<bool>,
     pub reasoning_level: Option<String>,
     pub images: Option<Vec<serde_json::Value>>,
     pub tools: Option<Vec<serde_json::Value>>,
+    /// User-authored system prompt, resolved from global or per-model settings.
+    pub system_prompt: Option<String>,
+    /// When true, `system_prompt` replaces the default system prompt entirely.
+    pub replace_system_prompt: Option<bool>,
 }
 
 #[tauri::command]
@@ -103,7 +108,9 @@ pub async fn run_pi_agent(
         resolve_thinking_level(input.reasoning_level.as_deref(), input.reasoning_enabled)?
             .to_string();
     let context_length = input.context_length;
-    let reserved_output_tokens = input.reserved_output_tokens;
+    let max_tokens = input.max_tokens;
+    let custom_system_prompt = input.system_prompt.clone().unwrap_or_default();
+    let replace_system_prompt = input.replace_system_prompt.unwrap_or(false);
 
     // Resolve and automatically configure the selected Pi route before execution.
     let sid = session_id.clone();
@@ -121,7 +128,7 @@ pub async fn run_pi_agent(
                 input.provider_base_url.as_deref().unwrap_or(""),
                 &thinking_level,
                 context_length,
-                reserved_output_tokens,
+                max_tokens,
             )?;
             if !capability.known {
                 return Err(capability.message);
@@ -154,6 +161,8 @@ pub async fn run_pi_agent(
                 input.images.as_deref().unwrap_or(&[]),
                 input.tools.as_deref().unwrap_or(&[]),
                 !input.project_path.trim().is_empty(),
+                &custom_system_prompt,
+                replace_system_prompt,
                 &cancelled,
             )
         })();

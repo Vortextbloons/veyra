@@ -35,6 +35,8 @@ export function useChatSend({
     const continueSessionId = state.activeSessionId;
     const providerBaseUrl = useProviderStore.getState().cloudProviders.find((provider) => provider.id === selectedProvider)?.baseUrl;
     const settings = useSettingsStore.getState();
+    const systemPrompt = settings.getModelSettings(selectedModel).systemPrompt.trim();
+    const replaceSystemPrompt = settings.systemPromptReplacesDefault;
     const reasoningLevel = settings.reasoningLevelByModel[reasoningModelKey(selectedProvider, selectedModel, providerBaseUrl)] ?? settings.reasoningLevel;
     const prompt = [trimmed, ...effectiveAttachments.filter((attachment) => attachment.fileType === "text").map((attachment) => `Attached file: ${attachment.name}\n${attachment.textContent ?? ""}`)].filter(Boolean).join("\n\n");
     aiScheduler.abortActiveBackgroundJob();
@@ -67,6 +69,8 @@ export function useChatSend({
             providerId: selectedProvider, providerBaseUrl, reasoningLevel,
             images: effectiveAttachments.filter((attachment) => attachment.fileType === "image").map((attachment) => ({ data: attachment.dataUrl.split(",")[1], mimeType: attachment.mimeType })),
             attachments: effectiveAttachments, webSearchEnabled: effectiveWebSearchEnabled,
+            systemPrompt: systemPrompt || undefined,
+            replaceSystemPrompt,
           });
           return { prompt, output: useAgentStore.getState().sessions.find((session) => session.id === id)?.summary };
         } finally {

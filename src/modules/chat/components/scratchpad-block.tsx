@@ -38,8 +38,8 @@ export function ScratchpadBlock({ state, scratchpadContent }: ScratchpadBlockPro
       onToggle={() => setExpanded((v) => !v)}
     >
       {expanded && content && (
-        <div className="mt-2 rounded-lg border border-violet-500/20 bg-violet-500/[0.04] p-3">
-          <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-violet-200/80">
+        <div className="my-1 max-h-80 overflow-auto py-2 pr-3">
+          <pre className="whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-[var(--color-text-dim)]">
             {content}
           </pre>
         </div>

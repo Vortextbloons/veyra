@@ -90,7 +90,7 @@ describe("Pi reasoning routing", () => {
   });
   it("configures local thinking with Pi's boolean chat template adapter and bounds token limits", () => {
     const route = configureModelRoute({}, { providerId: "lm-studio", modelId: "qwen/model", contextLength: "1024", maxTokens: "5000" });
-    expect(route.config.providers[route.provider]).toMatchObject({ baseUrl: "http://localhost:1234/v1", apiKey: "lm-studio", models: [{ reasoning: true, maxTokens: 896, compat: { thinkingFormat: "qwen-chat-template" } }] });
+    expect(route.config.providers[route.provider]).toMatchObject({ baseUrl: "http://localhost:1234/v1", apiKey: "lm-studio", models: [{ reasoning: true, maxTokens: 1024, compat: { thinkingFormat: "qwen-chat-template" } }] });
   });
   it("reloads the registry when the Pi catalog changes on disk", async () => {
     const { serve } = await import(helperUrl) as { serve: (options: {
