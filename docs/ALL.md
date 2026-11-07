@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-10-27T00:14:34.877Z
+> Generated: 2026-11-07T20:41:26.359Z
 > Total files: 61
 
 ## Table of Contents
@@ -869,7 +869,7 @@ The extensions settings page exposes four feature flags that can disable entire 
 | `stdio` | Disables local stdio-based MCP servers |
 | `streamableHttp` | Disables remote Streamable HTTP MCP servers |
 
-MCP servers are off by default for each chat. The user must explicitly enable a server in the `McpChatToggle` component before the model can call its tools.
+MCP servers are off by default for each chat. The user must explicitly enable a server in the chat options menu (`ChatExtensionsSettings`) before the model can call its tools.
 
 ---
 
@@ -889,8 +889,7 @@ Skills are local, reviewed Markdown instruction packages (SKILL.md) that guide t
 | `src/modules/extensions/skill-generator.ts` | AI-powered skill draft generation via the provider |
 | `src/modules/extensions/extension-types.ts` | `SkillRecord`, `SkillDraft`, `SkillValidation`, `SkillWorkflow` |
 | `src/modules/extensions/capability-catalog.ts` | Lists `WorkflowCapability` entries from installed skills |
-| `src/modules/extensions/components/skill-selector.tsx` | Composer dropdown to pick a skill/workflow |
-| `src/modules/extensions/components/project-skills-settings.tsx` | Project-scoped skill and MCP server enable/disable |
+| `src/modules/extensions/components/chat-extensions-settings.tsx` | Chat options menu: active skill/workflow and MCP servers for the chat |
 | `src/components/settings/extensions-settings.tsx` | Settings page for importing, generating, and managing skills |
 
 ## SKILL.md Format
@@ -1014,9 +1013,7 @@ The resulting `<veyra_active_skill>` XML block is added to the system prompt alo
 
 | Component | Location | Role |
 |-----------|----------|------|
-| `SkillSelector` | Composer toolbar | Select an active skill or workflow per chat |
-| `McpChatToggle` | Composer toolbar | Enable/disable MCP servers for the current chat |
-| `ProjectSkillsSettings` | Project settings | Restrict skills and MCP servers per project |
+| `ChatExtensionsSettings` | Chat options menu | Select the active skill or workflow and enable/disable MCP servers for the current chat |
 | `ExtensionsSettings` | Settings → Extensions | Full skill and MCP server management |
 | `McpServerSettings` | Settings → Extensions | Add, inspect, connect, and grant MCP permissions |
 
@@ -1028,9 +1025,8 @@ Settings page
   ├─ Add MCP server → Tauri discovery command → extensions-store
   └─ Grant permissions → extensions-store
 
-Composer toolbar
-  ├─ SkillSelector → activeSkillId → extensions-store
-  └─ McpChatToggle → chatDisabledMcpServerIds → extensions-store
+Chat options menu
+  └─ ChatExtensionsSettings → activeSkillId / chatDisabledMcpServerIds → extensions-store
 
 Send message
   └─ useChatSend → attaches skillSnapshot to user message
@@ -1550,9 +1546,9 @@ The engine is [DonSeTch](https://github.com/dondai44423/donsetch), a Rust single
 | Log | `<app-data>/logs/search-engine.log` |
 | Fetch script | `scripts/fetch-search-engine.mjs` |
 
-`npm run dev:app` and `npm run build:app` call `fetch-search-engine.mjs` automatically. It downloads the pinned `donsetch-win32-x64.tar.gz` (or the asset for the current platform), verifies the published SHA256, and fetches the 23 MB rerank model from Hugging Face.
+`npm run dev:app` and `npm run build:app` call `fetch-search-engine.mjs` automatically. It downloads the pinned `donsetch-win32-x64.tar.gz` (or the asset for the current platform), verifies the published SHA256, builds the adaptive-recall patch, and fetches the 23 MB rerank model from Hugging Face. The first patched build needs Git, Rust, CMake, NASM, a C++ toolchain and libclang; subsequent launches reuse the verified binary. Build details and regression tests are in [scripts/search-engine/README.md](../../scripts/search-engine/README.md).
 
-The artifact is intentionally ignored by git. Run `npm run search-engine:fetch` after cloning if you are not using the npm scripts.
+The artifact is intentionally ignored by git. Run `node scripts/fetch-search-engine.mjs` after cloning if you are not using the npm scripts.
 
 ## Lifecycle
 
@@ -1576,7 +1572,7 @@ The artifact is intentionally ignored by git. Run `npm run search-engine:fetch` 
 
 ## Licensing
 
-DonSeTch is AGPL-3.0. The fetch script copies its `LICENSE` and a `SOURCE-OFFER.txt` into the resource directory. Keep both in the installer. If Veyra ever patches the engine, publish the patch under the AGPL.
+DonSeTch and Veyra's adaptive-recall patch are AGPL-3.0-only. The fetch script bundles `LICENSE`, `SOURCE-OFFER.txt`, `adaptive-recall.patch`, complete patched `SOURCE.tar.gz`, and `VEYRA-BUILD.json` with the executable. Keep them in the installer so recipients receive the corresponding source. Veyra runs the engine as a separate process.
 
 ---
 
@@ -1590,7 +1586,11 @@ DonSeTch is AGPL-3.0. The fetch script copies its `LICENSE` and a `SOURCE-OFFER.
 
 `SearchOrchestrator.runSearch()` sends a single query to the bundled DonSeTch engine. Veyra's previous multi-query expansion, RRF fusion, and adaptive fallback pipeline has been removed; DonSeTch performs its own multi-engine consensus, semantic reranking, and authority placement internally.
 
-The model can supply an explicit `intent`, or omit it and let the engine infer one. Veyra maps its intent names to DonSeTch intents:
+The model can supply an explicit `intent`, or omit it and let the engine infer one.
+
+The bundled engine cancels pending automatic follow-up queries once all primary search lanes finish with enough relevant results and recognized official sources. Weak or incomplete results retain concurrent follow-up searches. This reduces waits behind repeated-engine pacing without changing result limits, semantic ranking, page fetching, or speed presets.
+
+Veyra maps its intent names to DonSeTch intents:
 
 | Veyra intent | DonSeTch intent | Adds |
 |--------------|-----------------|------|
@@ -2322,7 +2322,17 @@ The installed version's source and exports take precedence over newer online doc
 
 # Agents Module
 
-Optional Pi CLI integration for plan and build modes with streaming event output.
+Chat uses Pi as its main runtime for questions, research, and project work in one conversation. The separate Agents navigation and Plan/Build selector have been removed; legacy mode values remain readable in saved sessions.
+
+- A project is optional. Without a folder, Pi receives only enabled Veyra host tools; built-in file and command tools are excluded.
+- Attach a folder from Chat to enable file reads, edits, and commands. Folders are remembered as projects, and an existing project without a folder can gain one.
+- The familiar Chat composer supports attachments, model selection, reasoning, web search, Skills, and MCP settings. Pi host tools use the RPC extension UI channel, with live capability and permission checks in Veyra.
+- New run history shares Chat's encrypted conversation snapshot. Interrupted output is restored as stopped work. Legacy chat history can continue through Pi, and existing agent history is migrated when encrypted history hydrates.
+- Responses are concise by default. Planning-only instructions are honored within the conversation without a separate mode.
+- Web search runs through Veyra's existing `SearchOrchestrator` and Pi host-tool bridge. No third-party web extension is required.
+- The former provider-driven Chat orchestrator, duplicate tool loop, standalone agent composer, and mode selector have been removed. Shared providers, search, artifact rendering, encrypted history, and memory services remain available to their current callers.
+
+The detailed pages below also document the earlier standalone agent interface; confirm current UI behavior against the code.
 
 ## Contents
 

@@ -39,9 +39,7 @@ The resulting `<veyra_active_skill>` XML block is added to the system prompt alo
 
 | Component | Location | Role |
 |-----------|----------|------|
-| `SkillSelector` | Composer toolbar | Select an active skill or workflow per chat |
-| `McpChatToggle` | Composer toolbar | Enable/disable MCP servers for the current chat |
-| `ProjectSkillsSettings` | Project settings | Restrict skills and MCP servers per project |
+| `ChatExtensionsSettings` | Chat options menu | Select the active skill or workflow and enable/disable MCP servers for the current chat |
 | `ExtensionsSettings` | Settings → Extensions | Full skill and MCP server management |
 | `McpServerSettings` | Settings → Extensions | Add, inspect, connect, and grant MCP permissions |
 
@@ -53,9 +51,8 @@ Settings page
   ├─ Add MCP server → Tauri discovery command → extensions-store
   └─ Grant permissions → extensions-store
 
-Composer toolbar
-  ├─ SkillSelector → activeSkillId → extensions-store
-  └─ McpChatToggle → chatDisabledMcpServerIds → extensions-store
+Chat options menu
+  └─ ChatExtensionsSettings → activeSkillId / chatDisabledMcpServerIds → extensions-store
 
 Send message
   └─ useChatSend → attaches skillSnapshot to user message

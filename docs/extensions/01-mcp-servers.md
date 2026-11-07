@@ -60,4 +60,4 @@ The extensions settings page exposes four feature flags that can disable entire 
 | `stdio` | Disables local stdio-based MCP servers |
 | `streamableHttp` | Disables remote Streamable HTTP MCP servers |
 
-MCP servers are off by default for each chat. The user must explicitly enable a server in the `McpChatToggle` component before the model can call its tools.
+MCP servers are off by default for each chat. The user must explicitly enable a server in the chat options menu (`ChatExtensionsSettings`) before the model can call its tools.

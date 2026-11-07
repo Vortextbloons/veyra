@@ -10,8 +10,7 @@ Skills are local, reviewed Markdown instruction packages (SKILL.md) that guide t
 | `src/modules/extensions/skill-generator.ts` | AI-powered skill draft generation via the provider |
 | `src/modules/extensions/extension-types.ts` | `SkillRecord`, `SkillDraft`, `SkillValidation`, `SkillWorkflow` |
 | `src/modules/extensions/capability-catalog.ts` | Lists `WorkflowCapability` entries from installed skills |
-| `src/modules/extensions/components/skill-selector.tsx` | Composer dropdown to pick a skill/workflow |
-| `src/modules/extensions/components/project-skills-settings.tsx` | Project-scoped skill and MCP server enable/disable |
+| `src/modules/extensions/components/chat-extensions-settings.tsx` | Chat options menu: active skill/workflow and MCP servers for the chat |
 | `src/components/settings/extensions-settings.tsx` | Settings page for importing, generating, and managing skills |
 
 ## SKILL.md Format
