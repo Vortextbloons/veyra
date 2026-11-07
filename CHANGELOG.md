@@ -5,15 +5,38 @@ All notable changes to Veyra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.3.0] - 2026-11-07
+
+Minor release since [2.1.2](https://github.com/Vortextbloons/veyra/releases/tag/v2.1.2). You can now write the system prompt Veyra sends to the model, scale the entire interface, and get interactive answers written in OpenUI Lang. The research module is gone, chat no longer renders per-tool cards, and the settings surface is rebuilt around one shared layout.
 
 ### Added
 
+- **Custom system prompts** — Settings → Chat holds your own instructions for every conversation, and each model in Settings → Models can carry its own override that replaces that text for that model only. A toggle sends the prompt as the *only* system prompt, passed to Pi as `--system-prompt`, which drops both Pi's built-in assistant prompt and Veyra's defaults; tool use can become less reliable in that mode. By default your instructions are appended after Veyra's own guidance via `--append-system-prompt`, so the runtime's tool and safety rules stay in place. An empty prompt leaves the defaults untouched.
+- **Interface scale** — Settings → General scales the whole window from 70% to 160%. Scaling is applied by the desktop shell (`WebView2` zoom) instead of CSS `zoom`, so viewport units, sticky and fixed overlays, scroll containers and hit targets stay aligned at every level. The stored scale is applied before the window is revealed, so the UI no longer flashes at 100% and reflows. `Ctrl` + `+` / `-` / `0` and `Ctrl` + scroll work anywhere in the app, and the old `veyra.zoom` value migrates once.
 - **Interactive answers in OpenUI Lang** — `generate_interactive_answer` now carries a model-written [OpenUI Lang](https://www.openui.com) program instead of a fixed chart/comparison/diagram payload. Veyra ships its own component library (`src/modules/chat/ui/`) styled for the dark desktop UI: layout, text, tables, charts, sliders, segmented controls, checklists, inputs, forms, icons, images and SVG drawing, plus about 50 `@` functions. Answers hold their own `$variables`, recompute with expressions, and react to clicks without another message; `@ToAssistant` sends a follow-up that carries the form values. Programs are parsed before they are stored, so unknown components, undefined references and truncated output come back to the model as a repairable tool error. The generated prompt is appended only while the feature is enabled.
 
 ### Changed
 
 - **Interactive answers replace the template picker** — The `version: 1` kind-based payload (`chart`, `comparison`, `calculator`, `steps`, `diagram`, `text`, `board`) and its renderer are removed. Saved conversations that contain an old interactive answer still open; the block simply renders nothing for them.
+- **Settings layout** — Settings now uses one shared set of layout primitives (`settings-ui.tsx`) instead of per-tab markup: content fills the window in bordered cards, each row keeps its explanation beside the control it changes, and destructive or risky choices are called out in place. General, Chat, Models, Cloud providers, Tools, Web search, Extensions, Privacy and Updates are all rebuilt on it. The tool section picker, collapsible settings sections, the model dropdown and the search-context/provider plumbing are removed.
+- **Model defaults** — New installs start at 32,768 max output tokens and 8,192 reserved output tokens, and an unset context length now falls back to the context window the provider reports for the selected model. Existing installs still holding the old defaults (`0` max tokens, `1,024` reserved, `8,192` context) migrate once; custom values and per-model overrides are preserved.
+- **Chat messages** — Assistant turns render markdown, artifacts and interactive answers only; the web search, question, scratchpad and code execution cards are gone from the message surface. The OpenUI renderer is lazy-loaded, and syntax highlighting is deferred while a message is still streaming so text keeps up with the model.
+- **Agent rendering** — Stable agent turns are reused across renders and turn components are memoized, and Pi conversation snapshots are written on a throttle instead of on every token, removing the redundant rebuild on each save.
+- **Provider startup** — Providers other than the selected one now connect in the background at launch, so switching providers no longer waits for a first connection.
+- **Advanced source bundle** — DOCX, PPTX, XLSX and EPUB extraction is always on when the bundle is enabled; the per-format toggles, including their stored settings, are removed.
+- **Artifacts and page reading** — The 5 MB artifact cap is gone in both the frontend normalizer and the Rust preview server, and fetched page bodies may now reach 25 MB.
+
+### Fixed
+
+- **Windows Node runtime paths** — Release builds hand Node a resource directory with the verbatim `\\?\` prefix Tauri canonicalizes to, which made Node's entrypoint resolver fail with `EISDIR` while resolving the drive root. The prefix is stripped for verbatim disk and UNC paths before the path reaches Node.
+
+### Removed
+
+- **Research** — The deep research pipeline, its Rust commands and SQLite tables, run history and reports, evidence and contradiction panels, depth presets, settings slice, tests, documentation and screenshot. Stored research runs are no longer read; saved navigation state pointing at research opens Chat instead.
+- **Auto-naming and summaries** — Background chat auto-naming and auto-summarize, along with their model pickers, settings, `post-chat-jobs`, `auto-name`, `chat-summarize` and the summary prompt plumbing.
+- **Code execution settings** — The `codeExecutionEnabled`, Python path and timeout settings, their slice and the code execution message card. The tool stays disabled for chat, as documented in `docs/code-execution/`.
+- **Chat tool-call UI** — `tool-call-list`, `tool-call-shell`, `tool-call-indicator`, `tool-call-ui`, `web-search-block`, `web-search-state`, `ask-question-block`, `pending-question-registry`, `scratchpad-block`, `code-execution-block` and `source-extraction-ui`, plus the streaming tool and web-search state they read from. `chat-store` is reduced to conversation state; streaming now lives entirely in the Pi session.
+- **Unused project pages** — The projects workspace page, project workspace, settings panel, export panel and create-project modal, which the sidebar flow replaced in 2.1.0, along with `empty-state`, `agent-status-dot`, `mcp-chat-toggle`, `skill-selector`, `project-skills-settings`, `segmented-control`, `async-pool` and `number`.
 
 ## [2.1.0] - 2026-11-04
 
