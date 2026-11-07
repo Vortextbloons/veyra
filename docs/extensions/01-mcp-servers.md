@@ -15,7 +15,7 @@ Veyra integrates MCP servers via the `rmcp` Rust SDK. Two transports are support
 | `src/modules/extensions/extensions-store.ts` | Zustand store with persistence for servers, grants, diagnostics |
 | `src/modules/extensions/capability-catalog.ts` | Classifies MCP tool side effects, builds unified capability catalog |
 | `src/modules/extensions/components/mcp-server-settings.tsx` | Settings UI: add, connect, inspect, grant permissions |
-| `src/modules/extensions/components/mcp-chat-toggle.tsx` | Per-chat MCP server enable/disable toggle in composer |
+| `src/modules/extensions/components/mcp-server-settings.tsx` | Per-chat server enable/disable and project policy controls |
 
 ## Tauri Commands
 

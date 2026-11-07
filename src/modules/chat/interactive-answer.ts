@@ -1,4 +1,4 @@
-import { validateProgram } from "@/modules/chat/ui/validate";
+import { MAX_PROGRAM_CHARS, validateProgram } from "@/modules/chat/ui/validate";
 
 /**
  * An interactive answer is an OpenUI Lang program the model composed for this
@@ -17,7 +17,7 @@ export type InteractiveAnswerNormalization =
   | { ok: true; answer: InteractiveAnswer }
   | { ok: false; error: string };
 
-export const MAX_INTERACTIVE_ANSWER_CHARS = 120_000;
+export const MAX_INTERACTIVE_ANSWER_CHARS = MAX_PROGRAM_CHARS;
 
 const MAX_TITLE_CHARS = 80;
 

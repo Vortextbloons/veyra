@@ -4,7 +4,7 @@ Extensions integrate into the chat pipeline at three points: tool registration, 
 
 ## Tool Registration
 
-In `src/modules/chat/chat-provider-options.ts`, `resolveProviderTooling()` appends MCP tools to the provider's tool list:
+In `src/modules/agents/pi-chat-tools.ts`, `createPiChatTools()` appends MCP tools to the provider's tool list:
 
 ```typescript
 buildMcpProviderTools(extensions.mcpServers, projectId, featureFlags, disabledServerIds)

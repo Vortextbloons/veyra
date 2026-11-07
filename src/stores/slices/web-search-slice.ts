@@ -10,10 +10,6 @@ export type WebSearchSliceState = {
   webSearchFetchMaxCharsPerSource: number;
   webSearchSpeedPreset: "normal" | "fast";
   advancedSearchBundleEnabled: boolean;
-  bundleExtractDocx: boolean;
-  bundleExtractPptx: boolean;
-  bundleExtractXlsx: boolean;
-  bundleExtractEpub: boolean;
   bundleWaybackFallback: boolean;
   bundleArxivSearch: boolean;
   bundleWikipediaSearch: boolean;
@@ -29,10 +25,6 @@ export type WebSearchSliceActions = {
   setWebSearchFetchMaxCharsPerSource: (n: number) => void;
   setWebSearchSpeedPreset: (preset: "normal" | "fast") => void;
   setAdvancedSearchBundleEnabled: (enabled: boolean) => void;
-  setBundleExtractDocx: (enabled: boolean) => void;
-  setBundleExtractPptx: (enabled: boolean) => void;
-  setBundleExtractXlsx: (enabled: boolean) => void;
-  setBundleExtractEpub: (enabled: boolean) => void;
   setBundleWaybackFallback: (enabled: boolean) => void;
   setBundleArxivSearch: (enabled: boolean) => void;
   setBundleWikipediaSearch: (enabled: boolean) => void;
@@ -48,10 +40,6 @@ export const DEFAULT_WEB_SEARCH_STATE: WebSearchSliceState = {
   webSearchFetchMaxCharsPerSource: 8000,
   webSearchSpeedPreset: "normal",
   advancedSearchBundleEnabled: true,
-  bundleExtractDocx: true,
-  bundleExtractPptx: true,
-  bundleExtractXlsx: true,
-  bundleExtractEpub: true,
   bundleWaybackFallback: true,
   bundleArxivSearch: true,
   bundleWikipediaSearch: true,
@@ -74,10 +62,6 @@ export const createWebSearchSlice: StateCreator<WebSearchSlice, [], [], WebSearc
   setWebSearchSpeedPreset: (webSearchSpeedPreset) => set({ webSearchSpeedPreset }),
   setAdvancedSearchBundleEnabled: (advancedSearchBundleEnabled) =>
     set({ advancedSearchBundleEnabled }),
-  setBundleExtractDocx: (bundleExtractDocx) => set({ bundleExtractDocx }),
-  setBundleExtractPptx: (bundleExtractPptx) => set({ bundleExtractPptx }),
-  setBundleExtractXlsx: (bundleExtractXlsx) => set({ bundleExtractXlsx }),
-  setBundleExtractEpub: (bundleExtractEpub) => set({ bundleExtractEpub }),
   setBundleWaybackFallback: (bundleWaybackFallback) => set({ bundleWaybackFallback }),
   setBundleArxivSearch: (bundleArxivSearch) => set({ bundleArxivSearch }),
   setBundleWikipediaSearch: (bundleWikipediaSearch) => set({ bundleWikipediaSearch }),

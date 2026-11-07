@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-11-07T21:54:47.060Z
+> Generated: 2026-11-07T22:00:49.630Z
 > Total files: 54
 
 ## Table of Contents
@@ -703,7 +703,7 @@ The preview response sets a restrictive CSP: inline CSS/SVG and inline scripts a
 | File | Purpose |
 | --- | --- |
 | `src/modules/chat/artifact.ts` | Artifact format, size validation, metadata, and download filename rules. |
-| `src/modules/chat/tools/artifact-tool.ts` | Validates and attaches the `create_artifact` tool result. |
+| `src/modules/agents/pi-chat-tools.ts` | Validates and attaches the `create_artifact` tool result. |
 | `src/modules/chat/components/artifact-block.tsx` | Message viewer, HTML preview, document editor, copy, download, and print controls. |
 | `src-tauri/src/artifact_preview.rs` | Bounded in-memory preview protocol and response security headers. |
 
@@ -849,7 +849,7 @@ Veyra integrates MCP servers via the `rmcp` Rust SDK. Two transports are support
 | `src/modules/extensions/extensions-store.ts` | Zustand store with persistence for servers, grants, diagnostics |
 | `src/modules/extensions/capability-catalog.ts` | Classifies MCP tool side effects, builds unified capability catalog |
 | `src/modules/extensions/components/mcp-server-settings.tsx` | Settings UI: add, connect, inspect, grant permissions |
-| `src/modules/extensions/components/mcp-chat-toggle.tsx` | Per-chat MCP server enable/disable toggle in composer |
+| `src/modules/extensions/components/mcp-server-settings.tsx` | Per-chat server enable/disable and project policy controls |
 
 ## Tauri Commands
 
@@ -1003,7 +1003,7 @@ Extensions integrate into the chat pipeline at three points: tool registration, 
 
 ## Tool Registration
 
-In `src/modules/chat/chat-provider-options.ts`, `resolveProviderTooling()` appends MCP tools to the provider's tool list:
+In `src/modules/agents/pi-chat-tools.ts`, `createPiChatTools()` appends MCP tools to the provider's tool list:
 
 ```typescript
 buildMcpProviderTools(extensions.mcpServers, projectId, featureFlags, disabledServerIds)
@@ -1785,7 +1785,7 @@ Optional agents mode that depends on the Pi CLI. Provides "plan" (read-only anal
 | `src/modules/agents/pi-runtime.ts` | Tauri IPC for Pi CLI |
 | `src/modules/agents/components/agents-panel.tsx` | Main agents panel UI |
 | `src/modules/agents/components/agent-output-view.tsx` | Live streaming output |
-| `src/modules/agents/components/agent-session-list.tsx` | Session sidebar |
+| `src/modules/agents/components/agents-panel.tsx` | Session panel and composer host |
 
 ## Requirements
 

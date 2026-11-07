@@ -41,6 +41,17 @@ describe("interactive answer programs", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("reports unsupported Stack as the cause rather than a missing root", () => {
+    const result = validateProgram('root = Stack([title])\ntitle = Title("Trigonometry")');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain("Stack is not supported");
+    expect(result.error).toContain("Col([...])");
+    expect(result.error).not.toContain("no renderable root");
+    expect(result.error).not.toContain("they are dropped");
+    expect(validateProgram('root = Col([title])\ntitle = Title("Trigonometry")').ok).toBe(true);
+  });
+
   it("rejects an undefined reference", () => {
     const result = validateProgram("root = Col([title, missing])");
     expect(result.ok).toBe(false);

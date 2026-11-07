@@ -20,7 +20,7 @@ function getParser() {
 
 export type ProgramValidation = { ok: true } | { ok: false; error: string };
 
-const MAX_PROGRAM_CHARS = 100_000;
+export const MAX_PROGRAM_CHARS = 100_000;
 
 function describe(result: ParseResult): string[] {
   const problems: string[] = [];
@@ -61,6 +61,16 @@ export function validateProgram(program: string): ProgramValidation {
       ok: false,
       error: `The program could not be parsed: ${error instanceof Error ? error.message : String(error)}`,
     };
+  }
+
+  // A component error can prevent root construction. Report that cause before
+  // suggesting a missing root or unreachable statements as secondary symptoms.
+  if (result.meta.errors.length) {
+    const errors = result.meta.errors.slice(0, 4).map((error) => error.message);
+    const hint = errors.some((message) => message.includes('"Stack"'))
+      ? " Use Col([...]) for vertical layout or Row([...]) for horizontal layout; Stack is not supported."
+      : "";
+    return { ok: false, error: `Fix these openui-lang problems and call the tool again: ${errors.join(" ")}${hint}` };
   }
 
   if (!result.root) {

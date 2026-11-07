@@ -35,7 +35,7 @@ The preview response sets a restrictive CSP: inline CSS/SVG and inline scripts a
 | File | Purpose |
 | --- | --- |
 | `src/modules/chat/artifact.ts` | Artifact format, size validation, metadata, and download filename rules. |
-| `src/modules/chat/tools/artifact-tool.ts` | Validates and attaches the `create_artifact` tool result. |
+| `src/modules/agents/pi-chat-tools.ts` | Validates and attaches the `create_artifact` tool result. |
 | `src/modules/chat/components/artifact-block.tsx` | Message viewer, HTML preview, document editor, copy, download, and print controls. |
 | `src-tauri/src/artifact_preview.rs` | Bounded in-memory preview protocol and response security headers. |
 

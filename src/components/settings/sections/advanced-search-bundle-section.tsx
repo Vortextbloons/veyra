@@ -39,14 +39,6 @@ function SourceToggle({
 interface AdvancedSearchBundleSectionProps {
   advancedSearchBundleEnabled: boolean;
   setAdvancedSearchBundleEnabled: (v: boolean) => void;
-  bundleExtractDocx: boolean;
-  setBundleExtractDocx: (v: boolean) => void;
-  bundleExtractPptx: boolean;
-  setBundleExtractPptx: (v: boolean) => void;
-  bundleExtractXlsx: boolean;
-  setBundleExtractXlsx: (v: boolean) => void;
-  bundleExtractEpub: boolean;
-  setBundleExtractEpub: (v: boolean) => void;
   bundleWaybackFallback: boolean;
   setBundleWaybackFallback: (v: boolean) => void;
   bundleArxivSearch: boolean;
@@ -58,14 +50,6 @@ interface AdvancedSearchBundleSectionProps {
 export function AdvancedSearchBundleSection({
   advancedSearchBundleEnabled,
   setAdvancedSearchBundleEnabled,
-  bundleExtractDocx,
-  setBundleExtractDocx,
-  bundleExtractPptx,
-  setBundleExtractPptx,
-  bundleExtractXlsx,
-  setBundleExtractXlsx,
-  bundleExtractEpub,
-  setBundleExtractEpub,
   bundleWaybackFallback,
   setBundleWaybackFallback,
   bundleArxivSearch,
@@ -112,26 +96,30 @@ export function AdvancedSearchBundleSection({
               <SourceToggle
                 label="Word documents"
                 description="Extracts text from DOCX files."
-                on={bundleExtractDocx}
-                onChange={setBundleExtractDocx}
+                on
+                onChange={noopToggle}
+                locked
               />
               <SourceToggle
                 label="PowerPoint slides"
                 description="Extracts slide text from PPTX files."
-                on={bundleExtractPptx}
-                onChange={setBundleExtractPptx}
+                on
+                onChange={noopToggle}
+                locked
               />
               <SourceToggle
                 label="Excel spreadsheets"
                 description="Reads cell data from XLSX files."
-                on={bundleExtractXlsx}
-                onChange={setBundleExtractXlsx}
+                on
+                onChange={noopToggle}
+                locked
               />
               <SourceToggle
                 label="EPUB books"
                 description="Extracts text from EPUB e-books."
-                on={bundleExtractEpub}
-                onChange={setBundleExtractEpub}
+                on
+                onChange={noopToggle}
+                locked
               />
               <SourceToggle
                 label="Wayback Machine fallback"

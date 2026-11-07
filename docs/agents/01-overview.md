@@ -11,7 +11,7 @@ Optional agents mode that depends on the Pi CLI. Provides "plan" (read-only anal
 | `src/modules/agents/pi-runtime.ts` | Tauri IPC for Pi CLI |
 | `src/modules/agents/components/agents-panel.tsx` | Main agents panel UI |
 | `src/modules/agents/components/agent-output-view.tsx` | Live streaming output |
-| `src/modules/agents/components/agent-session-list.tsx` | Session sidebar |
+| `src/modules/agents/components/agents-panel.tsx` | Session panel and composer host |
 
 ## Requirements
 

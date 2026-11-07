@@ -28,14 +28,6 @@ export function useWebSearchSettings() {
   const setWebSearchFetchMaxCharsPerSource = useSettingsStore((s) => s.setWebSearchFetchMaxCharsPerSource);
   const advancedSearchBundleEnabled = useSettingsStore((s) => s.advancedSearchBundleEnabled);
   const setAdvancedSearchBundleEnabled = useSettingsStore((s) => s.setAdvancedSearchBundleEnabled);
-  const bundleExtractDocx = useSettingsStore((s) => s.bundleExtractDocx);
-  const setBundleExtractDocx = useSettingsStore((s) => s.setBundleExtractDocx);
-  const bundleExtractPptx = useSettingsStore((s) => s.bundleExtractPptx);
-  const setBundleExtractPptx = useSettingsStore((s) => s.setBundleExtractPptx);
-  const bundleExtractXlsx = useSettingsStore((s) => s.bundleExtractXlsx);
-  const setBundleExtractXlsx = useSettingsStore((s) => s.setBundleExtractXlsx);
-  const bundleExtractEpub = useSettingsStore((s) => s.bundleExtractEpub);
-  const setBundleExtractEpub = useSettingsStore((s) => s.setBundleExtractEpub);
   const bundleWaybackFallback = useSettingsStore((s) => s.bundleWaybackFallback);
   const setBundleWaybackFallback = useSettingsStore((s) => s.setBundleWaybackFallback);
   const bundleArxivSearch = useSettingsStore((s) => s.bundleArxivSearch);
@@ -140,14 +132,6 @@ export function useWebSearchSettings() {
     setWebSearchFetchMaxCharsPerSource,
     advancedSearchBundleEnabled,
     setAdvancedSearchBundleEnabled,
-    bundleExtractDocx,
-    setBundleExtractDocx,
-    bundleExtractPptx,
-    setBundleExtractPptx,
-    bundleExtractXlsx,
-    setBundleExtractXlsx,
-    bundleExtractEpub,
-    setBundleExtractEpub,
     bundleWaybackFallback,
     setBundleWaybackFallback,
     bundleArxivSearch,

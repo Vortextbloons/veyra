@@ -65,14 +65,6 @@ export function WebSearchSettings() {
       <AdvancedSearchBundleSection
         advancedSearchBundleEnabled={settings.advancedSearchBundleEnabled}
         setAdvancedSearchBundleEnabled={settings.setAdvancedSearchBundleEnabled}
-        bundleExtractDocx={settings.bundleExtractDocx}
-        setBundleExtractDocx={settings.setBundleExtractDocx}
-        bundleExtractPptx={settings.bundleExtractPptx}
-        setBundleExtractPptx={settings.setBundleExtractPptx}
-        bundleExtractXlsx={settings.bundleExtractXlsx}
-        setBundleExtractXlsx={settings.setBundleExtractXlsx}
-        bundleExtractEpub={settings.bundleExtractEpub}
-        setBundleExtractEpub={settings.setBundleExtractEpub}
         bundleWaybackFallback={settings.bundleWaybackFallback}
         setBundleWaybackFallback={settings.setBundleWaybackFallback}
         bundleArxivSearch={settings.bundleArxivSearch}
