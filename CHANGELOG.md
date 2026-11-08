@@ -5,6 +5,44 @@ All notable changes to Veyra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-11-08
+
+Minor release since [2.3.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.3.0). Skills become a standalone library you apply per message or pin to a chat, and the model can be allowed to choose them. Updates now download and verify in the background and install when you restart, and startup no longer repeats work it used to do on every launch.
+
+### Added
+
+- **Skill library** — Settings → Skills is now the whole management surface: create, edit, duplicate, delete, import a folder or ZIP, and export a Skill as a ZIP. Skills follow the [Agent Skills](https://agentskills.io/specification) shape — a `SKILL.md` with `name` and `description` frontmatter plus a Markdown body — so a Veyra manifest is no longer required. Imports accept a folder or ZIP containing `SKILL.md` at its root and unwrap an archive that wraps everything in one folder; exports write `<slug>/SKILL.md` with supporting files. Packages are still validated as inert content, with the same 60,000-character instruction cap, 5 MB and 200-file limits.
+- **Per-message and per-chat Skills** — Type `/` in the composer to apply a Skill to the next message; the chip reads "This message", keeps any text you already typed, and clears once the request is sent. **Pin** on that chip, or the Chat options panel, promotes it to the whole chat, where it gets a distinct chip and stays until removed. Applied Skills are shown on the user message and in the composer above the draft.
+- **Model-selected Skills** — A library-wide **Let the model choose Skills** default (off) advertises each allowed Skill by name and description in an `<available_skills>` catalogue and registers a `use_skill` tool. Each Skill can override the default with **Model may use** or **Manual only**, and manual use is never restricted. Access is re-checked on every call, so disabling a Skill or switching it to manual mid-request takes effect immediately. Bodies stay out of the prompt until the model asks for them, and a loaded Skill is appended to that request's record.
+- **Repeat with the same Skill instructions** — Retry on a user turn replays the Skill invocations recorded on it, so an edited or deleted Skill cannot change what runs.
+- **Background update downloads** — After the automatic startup check the Windows installer downloads and is verified while the app stays usable. The update banner and Settings → About read **Download update**, then **Restart to update**; restarting saves conversations, stops streaming and the bundled runtimes, and launches the staged installer.
+- **Working indicator in recent chats** — A session that is still running shows a spinner in place of its chat icon.
+
+### Changed
+
+- **Installer verification** — `install_app_update` is split into `prepare_app_update` (download, SHA-256 check, backend-owned staging) and `install_app_update` (re-verify the staged bytes, then execute). The renderer never supplies an executable path, re-preparing the same release reuses the verified file, and a modified file is removed and rejected. Releases without a SHA-256 digest fall back to manual installation. NSIS installs with `/S /UPDATE /R` and MSI with `/passive /norestart AUTOLAUNCHAPP=True`; update policy is centralized in `src/lib/update-config.ts`. See `docs/app-updates.md`.
+- **Skill migration** — `veyra.extensions.v1` is rewritten at version 2 and its retired payload is parked under `veyra.skills.legacy.v1`. `importLegacySkillsOnce()` merges it at startup before conversations restore: installed instructions and disabled state are kept, each old per-chat selection becomes an explicit chat-scoped Skill, and workflows and capability lists move to `legacyWorkflows` / `legacyCapabilities` for conversion. A selection made after upgrading is never overwritten.
+- **Startup** — Modern snapshots no longer derive the legacy PBKDF2 key after a successful vault decryption, base64 decoding writes into a preallocated buffer, and restored Pi sessions reuse their saved transcripts without scheduling another encrypted save. The bundled search engine and reasoning worker now start on first use instead of at launch, and startup marks are recorded in release builds. On the opt-in benchmark, snapshot loading drops from 911 ms to 54 ms and seven restorations produce zero startup saves; see `docs/startup-performance.md`.
+- **Startup screen** — The pre-React shell and the hydrated view share one branded screen (logo, tagline, sweep indicator) styled from `public/startup.css`, which also replaces the chat skeleton while conversations load.
+- **Context meter** — Pi usage is split into input (including cached tokens) and output, drawn as a two-segment ring and bar with the reserved output shown separately. Counts are compact (`100K`, `1M`) through a shared `formatTokenCount` helper, the breakdown opens by default, the popover is wider, and it closes on blur.
+- **Accent tokens** — Hardcoded indigo, violet and blue accents across the scheduler, model and reasoning selectors, toggles, sliders, chat options, and settings are replaced by `--color-accent` plus the new `--color-accent-line`, `--color-accent-tint` and `--color-accent-line-soft` tokens. Context block colors get a distinct palette.
+- **Composer** — The web search toggle moved out of the composer toolbar into the chat options menu, and the project `<select>` became a searchable project picker. The submit button resolves through `resolveComposerAction`, so a running response with an empty draft shows **Stop** instead of a disabled dead end, while text keeps it a **Send** that steers.
+- **Projects** — Creating a project is now a modal with a name, an optional folder and project instructions, shared by the sidebar and the composer picker. Deleting a project asks for confirmation and keeps its chats and original files.
+- **Pi skill loading** — Skills for a request are written to `<app data>/extensions/pi-skills/<slug>/SKILL.md` with `disable-model-invocation: true` and passed as `--skill` paths after `--no-skills`, so Pi resolves supporting files itself without picking up unrelated user or project skills. Veyra sends the recorded instructions with the prompt rather than letting Pi re-read the file.
+
+### Fixed
+
+- **Context usage with caching** — Cached input tokens (`cacheRead`, `cacheWrite`) count toward the context meter, so a long conversation no longer appears to shrink once the provider starts reporting cached input.
+- **Project deletion** — The confirmation replaces `window.confirm`, and a running session in the project now blocks the delete with an explanation instead of failing silently.
+- **Interactive answers** — The OpenUI Lang prompt now treats component signatures as a strict contract and calls out the mistakes that produced invalid programs: children must be one array argument, `Col` takes at most three positional arguments, and the model is asked to check each call before submitting.
+
+### Removed
+
+- **`ChatMessage.skillSnapshot`** — The id/version-only record is replaced by `SkillInvocation[]`, which carries the content hash and the instruction snapshot actually used.
+- **Skill state in the extensions store** — `skills`, `installSkill`, `removeSkill`, `setSkillEnabled`, `activeSkillIds`, `activeSkillWorkflowIds`, `resolveActiveSkill`, `resolveActiveSkillSelection` and the `skills` feature flag. Settings → Extensions now covers MCP servers and approvals only, and its Skills feature-flag row and library editor are gone.
+- **Workflow selection** — Workflows are no longer part of a Skill; the composer picker and the Chat options radio list that selected them are gone, and imported packages keep them as `legacyWorkflows` so each can be converted or dropped.
+- **Composer web search button** — The toolbar toggle, along with eager search-engine startup and reasoning-worker prewarming at launch.
+
 ## [2.3.0] - 2026-11-07
 
 Minor release since [2.1.2](https://github.com/Vortextbloons/veyra/releases/tag/v2.1.2). You can now write the system prompt Veyra sends to the model, scale the entire interface, and get interactive answers written in OpenUI Lang. The research module is gone, chat no longer renders per-tool cards, and the settings surface is rebuilt around one shared layout.
