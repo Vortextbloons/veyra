@@ -598,6 +598,8 @@ pub fn run() {
             file_extraction::commands::extract_file_text,
             extensions::commands::snapshot_skill_directory,
             extensions::commands::snapshot_skill_zip,
+            extensions::commands::materialize_pi_skills,
+            extensions::commands::export_skill_package,
             extensions::commands::discover_streamable_http_mcp,
             extensions::commands::discover_stdio_mcp,
             extensions::commands::call_streamable_http_mcp,

@@ -1,22 +1,21 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { CapabilityGrant, ExtensionDiagnostic, McpServerRecord, ProjectExtensionPolicy, SkillRecord } from "./extension-types";
-import { draftToSkill } from "./skill-runtime";
+import type { CapabilityGrant, ExtensionDiagnostic, McpServerRecord, ProjectExtensionPolicy } from "./extension-types";
+import { stashLegacySkills } from "./skills-migration";
 
+/**
+ * MCP servers, capability approvals, and diagnostics. Skills live in
+ * `skills-store.ts` because they are edited as documents and selected per
+ * request, which is a different lifecycle from a long-lived server process.
+ */
 type ExtensionsStore = {
-  featureFlags: { skills: boolean; mcp: boolean; stdio: boolean; streamableHttp: boolean };
-  skills: SkillRecord[];
+  featureFlags: { mcp: boolean; stdio: boolean; streamableHttp: boolean };
   mcpServers: McpServerRecord[];
   grants: CapabilityGrant[];
   diagnostics: ExtensionDiagnostic[];
   policies: Record<string, ProjectExtensionPolicy>;
-  activeSkillIds: Record<string, string | null>;
-  activeSkillWorkflowIds: Record<string, string | undefined>;
   chatDisabledMcpServerIds: Record<string, string[]>;
   chatEnabledMcpServerIds: Record<string, string[]>;
-  installSkill: (input: { name: string; description: string; source: string; provenance: "local" | "generated"; snapshotId?: string; contentHash?: string; packageManifest?: string; packageFiles?: string[] }) => Promise<SkillRecord>;
-  removeSkill: (id: string) => void;
-  setSkillEnabled: (id: string, enabled: boolean) => void;
   saveMcpServer: (server: McpServerRecord) => void;
   removeMcpServer: (id: string) => void;
   setMcpDiscovery: (id: string, result: { tools?: unknown[]; resources?: unknown[]; prompts?: unknown[] }) => void;
@@ -26,11 +25,8 @@ type ExtensionsStore = {
   addDiagnostic: (diagnostic: Omit<ExtensionDiagnostic, "id" | "createdAt">) => void;
   clearDiagnostics: (source?: string) => void;
   setProjectPolicy: (projectId: string, policy: Partial<ProjectExtensionPolicy>) => void;
-  setActiveSkill: (scopeId: string, skillId: string | null, workflowId?: string) => void;
-  setFeatureFlag: (flag: "skills" | "mcp" | "stdio" | "streamableHttp", enabled: boolean) => void;
+  setFeatureFlag: (flag: "mcp" | "stdio" | "streamableHttp", enabled: boolean) => void;
   setChatMcpEnabled: (chatId: string, serverId: string, enabled: boolean) => void;
-  resolveActiveSkill: (scopeId: string, projectId?: string) => SkillRecord | undefined;
-  resolveActiveSkillSelection: (scopeId: string, projectId?: string) => { skill: SkillRecord; workflowId?: string } | undefined;
 };
 
 const DEFAULT_POLICY: ProjectExtensionPolicy = {
@@ -66,23 +62,9 @@ export function isMcpEnabledForChat(server: McpServerRecord, disabledIds: string
   return server.enabled || Boolean(enabledIds?.includes(server.id));
 }
 
-export const useExtensionsStore = create<ExtensionsStore>()(persist((set, get) => ({
-  featureFlags: { skills: true, mcp: true, stdio: true, streamableHttp: true },
-  skills: [], mcpServers: [], grants: [], diagnostics: [], policies: {}, activeSkillIds: {}, activeSkillWorkflowIds: {}, chatDisabledMcpServerIds: {}, chatEnabledMcpServerIds: {},
-  installSkill: async (draft) => {
-    const skill = await draftToSkill(draft);
-    if (get().skills.some((item) => item.id === skill.id)) {
-      throw new Error(`A Skill with the ID ${skill.id} is already installed. Re-import it as a reviewed revision instead.`);
-    }
-    set((state) => ({ skills: [...state.skills, skill] }));
-    return skill;
-  },
-  removeSkill: (id) => set((state) => ({
-    skills: state.skills.filter((skill) => skill.id !== id),
-    activeSkillIds: Object.fromEntries(Object.entries(state.activeSkillIds).map(([scope, active]) => [scope, active === id ? null : active])),
-    activeSkillWorkflowIds: Object.fromEntries(Object.entries(state.activeSkillWorkflowIds).map(([scope, active]) => [scope, state.activeSkillIds[scope] === id ? undefined : active])),
-  })),
-  setSkillEnabled: (id, enabled) => set((state) => ({ skills: state.skills.map((skill) => skill.id === id ? { ...skill, enabled, health: enabled ? "ready" : "disabled", updatedAt: new Date().toISOString() } : skill) })),
+export const useExtensionsStore = create<ExtensionsStore>()(persist((set) => ({
+  featureFlags: { mcp: true, stdio: true, streamableHttp: true },
+  mcpServers: [], grants: [], diagnostics: [], policies: {}, chatDisabledMcpServerIds: {}, chatEnabledMcpServerIds: {},
   saveMcpServer: (server) => set((state) => ({ mcpServers: state.mcpServers.some((item) => item.id === server.id) ? state.mcpServers.map((item) => item.id === server.id ? server : item) : [...state.mcpServers, server] })),
   removeMcpServer: (id) => set((state) => ({ mcpServers: state.mcpServers.filter((server) => server.id !== id), grants: state.grants.filter((grant) => grant.serverId !== id) })),
   setMcpDiscovery: (id, result) => set((state) => {
@@ -102,7 +84,6 @@ export const useExtensionsStore = create<ExtensionsStore>()(persist((set, get) =
   addDiagnostic: (diagnostic) => set((state) => ({ diagnostics: [...state.diagnostics.slice(-199), { ...diagnostic, id: crypto.randomUUID(), createdAt: new Date().toISOString() }] })),
   clearDiagnostics: (source) => set((state) => ({ diagnostics: source ? state.diagnostics.filter((item) => item.source !== source) : [] })),
   setProjectPolicy: (projectId, update) => set((state) => ({ policies: { ...state.policies, [projectId]: { ...(state.policies[projectId] ?? DEFAULT_POLICY), ...update } } })),
-  setActiveSkill: (scopeId, skillId, workflowId) => set((state) => ({ activeSkillIds: { ...state.activeSkillIds, [scopeId]: skillId }, activeSkillWorkflowIds: { ...state.activeSkillWorkflowIds, [scopeId]: skillId ? workflowId : undefined } })),
   setFeatureFlag: (flag, enabled) => set((state) => ({ featureFlags: { ...state.featureFlags, [flag]: enabled } })),
   setChatMcpEnabled: (chatId, serverId, enabled) => set((state) => {
     const disabled = state.chatDisabledMcpServerIds[chatId] ?? [];
@@ -114,19 +95,23 @@ export const useExtensionsStore = create<ExtensionsStore>()(persist((set, get) =
       chatEnabledMcpServerIds: { ...state.chatEnabledMcpServerIds, [chatId]: nextEnabled },
     };
   }),
-  resolveActiveSkill: (scopeId, projectId) => {
-    const explicitId = get().activeSkillIds[scopeId];
-    const policy = projectId ? get().policies[projectId] : undefined;
-    const id = explicitId === undefined ? policy?.defaultSkillId : explicitId;
-    if (!get().featureFlags.skills) return undefined;
-    const skill = get().skills.find((item) => item.id === id && item.enabled);
-    if (!skill) return undefined;
-    return explicitId !== undefined || !projectId || policy?.enabledSkillIds.includes(skill.id) ? skill : undefined;
+}), {
+  name: "veyra.extensions.v1",
+  version: 2,
+  /** Drops the retired skill fields; `skills-store.ts` owns migrated skills. */
+  migrate: (persisted) => {
+    const state = persisted && typeof persisted === "object" ? persisted as Record<string, unknown> : {};
+    // Park skills before this key is rewritten, so a later-created skills store
+    // can still find and convert them.
+    stashLegacySkills(state);
+    return {
+      featureFlags: { mcp: true, stdio: true, streamableHttp: true, ...(state.featureFlags as Record<string, boolean> | undefined) },
+      mcpServers: Array.isArray(state.mcpServers) ? state.mcpServers : [],
+      grants: Array.isArray(state.grants) ? state.grants : [],
+      diagnostics: Array.isArray(state.diagnostics) ? state.diagnostics : [],
+      policies: state.policies && typeof state.policies === "object" ? state.policies : {},
+      chatDisabledMcpServerIds: state.chatDisabledMcpServerIds && typeof state.chatDisabledMcpServerIds === "object" ? state.chatDisabledMcpServerIds : {},
+      chatEnabledMcpServerIds: state.chatEnabledMcpServerIds && typeof state.chatEnabledMcpServerIds === "object" ? state.chatEnabledMcpServerIds : {},
+    } as Partial<ExtensionsStore>;
   },
-  resolveActiveSkillSelection: (scopeId, projectId) => {
-    const skill = get().resolveActiveSkill(scopeId, projectId);
-    if (!skill) return undefined;
-    const workflowId = get().activeSkillWorkflowIds[scopeId];
-    return { skill, workflowId: workflowId && skill.workflows.some((workflow) => workflow.id === workflowId) ? workflowId : undefined };
-  },
-}), { name: "veyra.extensions.v1" }));
+}));

@@ -25,24 +25,44 @@ type ExtensionRecord = {
 ## Skill Types
 
 ```typescript
+/** A legacy manifest workflow. Kept only so it can be converted. */
 type SkillWorkflow = { id: string; name: string; instructions: string };
 
 type SkillRecord = ExtensionRecord & {
   type: "skill";
+  /** Instruction body only; frontmatter is generated from name/description. */
   instructions: string;
-  workflows: SkillWorkflow[];
   contentHash: string;
+  /** Spec-compliant folder name used when the Skill is written as SKILL.md. */
+  slug: string;
+  metadata?: Record<string, string>;
+  files?: string[];
   snapshotId?: string;
-  requestedCapabilities: string[];
+  legacyWorkflows?: SkillWorkflow[];
+  legacyCapabilities?: string[];
+};
+
+/** The immutable record of a Skill applied to one request. */
+type SkillInvocation = {
+  id: string;
+  name: string;
+  slug: string;
+  contentHash: string;
+  instructions: string;
+  scope: "turn" | "chat";
+  location?: string;
 };
 
 type SkillDraft = {
   name: string;
   description: string;
-  source: string;
-  provenance: "local" | "generated";
-  packageManifest?: string;
-  packageFiles?: string[];
+  instructions: string;
+  provenance?: "local" | "generated";
+  files?: string[];
+  snapshotId?: string;
+  metadata?: Record<string, string>;
+  legacyWorkflows?: SkillWorkflow[];
+  legacyCapabilities?: string[];
 };
 
 type SkillValidation = {
@@ -51,8 +71,8 @@ type SkillValidation = {
   warnings: string[];
   name?: string;
   description?: string;
-  version?: string;
   instructions?: string;
+  metadata?: Record<string, string>;
 };
 ```
 
@@ -123,19 +143,37 @@ type ToolCapability = {
 
 ## Store State
 
+Skills live in their own store because they are edited as documents and selected
+per request, which is a different lifecycle from a long-lived server process.
+
 ```typescript
-type ExtensionsStore = {
-  featureFlags: { skills: boolean; mcp: boolean; stdio: boolean; streamableHttp: boolean };
+type SkillsStore = {
   skills: SkillRecord[];
+  /** Persistent for the chat, shown as removable chips. */
+  chatSkillIds: Record<string, string[]>;
+  /** Applies to the next request only; cleared when it is sent. */
+  pendingTurnSkillIds: Record<string, string[]>;
+  skillsEnabled: boolean;
+};
+
+type ExtensionsStore = {
+  featureFlags: { mcp: boolean; stdio: boolean; streamableHttp: boolean };
   mcpServers: McpServerRecord[];
   grants: CapabilityGrant[];
   diagnostics: ExtensionDiagnostic[];
   policies: Record<string, ProjectExtensionPolicy>;
-  activeSkillIds: Record<string, string | null>;
-  activeSkillWorkflowIds: Record<string, string | undefined>;
   chatDisabledMcpServerIds: Record<string, string[]>;
+  chatEnabledMcpServerIds: Record<string, string[]>;
 };
 ```
+
+## Request Records
+
+`SkillInvocation` is stored on the user event (`AgentEvent.skillInvocations`) and
+on the saved `ChatMessage`. It holds the ID, content hash, and instruction
+snapshot, so editing or deleting a Skill cannot change what a past request ran and
+Retry can repeat the original instructions. `ChatMessage.skillSnapshot` is gone;
+it recorded only an ID and version, which no longer identifies the content.
 
 ## ToolCallState Extension
 

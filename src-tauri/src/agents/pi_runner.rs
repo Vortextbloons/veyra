@@ -124,6 +124,12 @@ pub(crate) fn resolve_thinking_level(
 
 /// Spawn `pi --mode rpc`, send the prompt, stream stdout events, and wait for
 /// the process to finish (or time out).
+///
+/// `skill_paths` are directories written by `materialize_pi_skills`. Pi loads
+/// them with `--skill`, so its own discovery, `/skill:name` expansion, and the
+/// `read` tool for supporting files all work. Skills stay off automatic model
+/// selection because Veyra decides which ones a request uses.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_pi_agent_blocking(
     app: &tauri::AppHandle,
     session_id: &str,
@@ -138,6 +144,7 @@ pub(crate) fn run_pi_agent_blocking(
     has_project: bool,
     custom_system_prompt: &str,
     replace_system_prompt: bool,
+    skill_paths: &[String],
     cancelled: &AtomicBool,
 ) -> Result<PiAgentOutput, String> {
     let mut args = vec![
@@ -148,6 +155,11 @@ pub(crate) fn run_pi_agent_blocking(
         thinking_level.to_string(),
     ];
     args.extend(["--no-extensions".to_string(), "--no-skills".to_string(), "--no-prompt-templates".to_string()]);
+    // Explicit `--skill` paths still load after `--no-skills`, which keeps Pi's
+    // own discovery from picking up unrelated user or project skills.
+    for path in skill_paths {
+        args.extend(["--skill".to_string(), path.clone()]);
+    }
     if !has_project { args.push("--no-context-files".to_string()); }
 
     let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|error| error.to_string())?.as_nanos();

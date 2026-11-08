@@ -25,7 +25,9 @@ import {
   type ReasoningLevel,
 } from "@/lib/reasoning-capabilities";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
-import { missingRequiredCapabilities } from "@/modules/extensions/skill-runtime";
+import { useSkillsStore } from "@/modules/extensions/skills-store";
+import { SkillChipRow } from "@/modules/extensions/components/skill-chip";
+import type { SkillRecord } from "@/modules/extensions/extension-types";
 import { useAgentStore } from "@/modules/agents/agent-store";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
@@ -222,59 +224,63 @@ export function Composer({
   const projectId = useProjectStore((state) => state.activeProjectId) ?? undefined;
   const projects = useProjectStore((state) => state.projects);
   const activeSession = useAgentStore((state) => state.sessions.find((session) => session.id === state.activeSessionId));
-  const skills = useExtensionsStore((state) => state.skills);
-  const skillsEnabled = useExtensionsStore((state) => state.featureFlags.skills);
   const policies = useExtensionsStore((state) => state.policies);
-  const servers = useExtensionsStore((state) => state.mcpServers);
-  const setActiveSkill = useExtensionsStore((state) => state.setActiveSkill);
+  const skillLibrary = useSkillsStore((state) => state.skills);
+  const skillsEnabled = useSkillsStore((state) => state.skillsEnabled);
+  const chatSkillIds = useSkillsStore((state) => state.chatSkillIds[conversationId]);
+  const pendingSkillIds = useSkillsStore((state) => state.pendingTurnSkillIds[conversationId]);
+  const addChatSkill = useSkillsStore((state) => state.addChatSkill);
+  const removeChatSkill = useSkillsStore((state) => state.removeChatSkill);
+  const setPendingTurnSkills = useSkillsStore((state) => state.setPendingTurnSkills);
   const projectPolicy = projectId ? policies[projectId] : undefined;
   const availableSkills = useMemo(() => skillsEnabled
-    ? skills.filter((skill) => skill.enabled && (!projectId || !projectPolicy || projectPolicy.enabledSkillIds.length === 0 || projectPolicy.enabledSkillIds.includes(skill.id)))
-    : [], [skills, skillsEnabled, projectId, projectPolicy]);
-  const skillCommands = useMemo(() => availableSkills.flatMap((skill) => {
-    const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "skill";
-    const missing = missingRequiredCapabilities(skill, servers, projectId);
-    return [
-      { skill, workflowId: undefined as string | undefined, command: slug(skill.name), aliases: [slug(skill.name), skill.name], description: skill.description, missing },
-      ...skill.workflows.map((workflow) => ({
-        skill,
-        workflowId: workflow.id,
-        command: `${slug(skill.name)}:${slug(workflow.name)}`,
-        aliases: [`${slug(skill.name)}:${slug(workflow.name)}`, `${skill.name} ${workflow.name}`],
-        label: `${skill.name} · ${workflow.name}`,
-        description: `Workflow · ${workflow.name}`,
-        missing,
-      })),
-    ];
-  }), [availableSkills, servers, projectId]);
-  const matchingSkillCommands = skillMenuQuery === null ? [] : skillCommands.filter((item) => item.aliases.some((alias) => alias.toLowerCase().startsWith(skillMenuQuery.toLowerCase())));
+    ? skillLibrary.filter((skill) => skill.enabled && (!projectId || !projectPolicy || projectPolicy.enabledSkillIds.length === 0 || projectPolicy.enabledSkillIds.includes(skill.id)))
+    : [], [skillLibrary, skillsEnabled, projectId, projectPolicy]);
+  const chatSkills = useMemo(() => (chatSkillIds ?? []).flatMap((id) => availableSkills.filter((skill) => skill.id === id)), [chatSkillIds, availableSkills]);
+  const pendingSkills = useMemo(() => (pendingSkillIds ?? []).flatMap((id) => availableSkills.filter((skill) => skill.id === id)), [pendingSkillIds, availableSkills]);
+  const selectedSkillIds = useMemo(() => [...chatSkills, ...pendingSkills].map((skill) => skill.id), [chatSkills, pendingSkills]);
+  const matchingSkills = skillMenuQuery === null
+    ? []
+    : availableSkills.filter((skill) => skill.name.toLowerCase().includes(skillMenuQuery.toLowerCase()) || skill.slug.includes(skillMenuQuery.toLowerCase()));
 
   useClickOutside(optionsRef, optionsOpen, () => setOptionsOpen(false));
 
   const isEditMode = Boolean(editMessageId);
 
+  /** Opens the picker when the caret sits inside a bare `/word` at line start. */
   const updateSkillMenu = (textarea: HTMLTextAreaElement) => {
     if (isEditMode) {
       setSkillMenuQuery(null);
       return;
     }
     const beforeCaret = textarea.value.slice(0, textarea.selectionStart);
-    const match = beforeCaret.match(/^\/([^\n]*)$/);
-    const query = match?.[1] ?? null;
-    const queryLower = query?.toLowerCase() ?? "";
-    const hasCommandText = query !== null && (
-      query !== query.trimEnd() ||
-      skillCommands.some((command) => command.aliases.some((alias) => queryLower.startsWith(`${alias.toLowerCase()} `)))
-    );
-    setSkillMenuQuery(hasCommandText ? null : query);
+    const match = beforeCaret.match(/^\/([^\s]*)$/);
+    setSkillMenuQuery(match ? match[1] : null);
     setHighlightedSkillIndex(0);
   };
 
-  const activateSkill = (command: (typeof skillCommands)[number]) => {
-    setActiveSkill(conversationId, command.skill.id, command.workflowId);
-    setValue("");
+  /**
+   * Adds a Skill to this message. Existing composer text is preserved because
+   * only the `/query` token is removed, not the draft.
+   */
+  const selectSkill = (skill: SkillRecord) => {
+    if (!selectedSkillIds.includes(skill.id)) {
+      setPendingTurnSkills(conversationId, [...(pendingSkillIds ?? []), skill.id]);
+    }
+    setValue((current) => current.replace(/^\/[^\s]*/, "").trimStart());
     setSkillMenuQuery(null);
     setHighlightedSkillIndex(0);
+    textareaRef.current?.focus();
+  };
+
+  const removePendingSkill = (skill: SkillRecord) => {
+    setPendingTurnSkills(conversationId, (pendingSkillIds ?? []).filter((id) => id !== skill.id));
+    textareaRef.current?.focus();
+  };
+
+  /** The explicit promotion from one request to the whole chat. */
+  const pinSkill = (skill: SkillRecord) => {
+    addChatSkill(conversationId, skill.id);
     textareaRef.current?.focus();
   };
 
@@ -379,7 +385,7 @@ export function Composer({
     (value.trim().length > 0 || activeAttachments.length > 0) && !isInputBlocked && !extractingFile;
 
   const handleSend = () => {
-    let text = value.trim();
+    const text = value.trim();
     if ((!text && activeAttachments.length === 0) || isInputBlocked || extractingFile) return;
     if (busy && onSteer) {
       if (activeAttachments.length) { setAttachError("Send steering as text. Attach files after this response finishes."); return; }
@@ -397,23 +403,6 @@ export function Composer({
       textareaRef.current?.focus();
       return;
     }
-
-    const normalizedText = text.toLowerCase();
-    const invocation = skillCommands
-      .flatMap((item) => item.aliases.map((alias) => ({ item, alias })))
-      .filter(({ alias }) => normalizedText === `/${alias.toLowerCase()}` || normalizedText.startsWith(`/${alias.toLowerCase()} `))
-      .sort((left, right) => right.alias.length - left.alias.length)[0];
-    const command = invocation?.item;
-    if (command && invocation && command.missing.length === 0) {
-      setActiveSkill(conversationId, command.skill.id, command.workflowId);
-      text = text.slice(invocation.alias.length + 1).trim();
-      setSkillMenuQuery(null);
-      if (!text && activeAttachments.length === 0) {
-        setValue("");
-        textareaRef.current?.focus();
-        return;
-      }
-    }
     if (!text && activeAttachments.length === 0) return;
 
     const hasImageAttachments = activeAttachments.some((a) => a.fileType === "image");
@@ -426,9 +415,12 @@ export function Composer({
       text,
       activeAttachments.length > 0 ? activeAttachments : undefined,
     );
+    // The one-request Skills are cleared by the store once the request is
+    // recorded; clearing here keeps the chips from flashing as still applied.
     setValue("");
     setAttachments([]);
     setAttachError(null);
+    setSkillMenuQuery(null);
     textareaRef.current?.focus();
   };
 
@@ -479,24 +471,24 @@ export function Composer({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!isEditMode && skillMenuQuery !== null && matchingSkillCommands.length > 0) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (!isEditMode && skillMenuQuery !== null) {
+      if (matchingSkills.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
         e.preventDefault();
         const direction = e.key === "ArrowDown" ? 1 : -1;
-        setHighlightedSkillIndex((index) => (index + direction + matchingSkillCommands.length) % matchingSkillCommands.length);
+        setHighlightedSkillIndex((index) => (index + direction + matchingSkills.length) % matchingSkills.length);
         return;
       }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        const selected = matchingSkillCommands[highlightedSkillIndex] ?? matchingSkillCommands[0];
-        if (selected.missing.length === 0) activateSkill(selected);
+        const selected = matchingSkills[highlightedSkillIndex] ?? matchingSkills[0];
+        if (selected) selectSkill(selected);
         return;
       }
-    }
-    if (e.key === "Escape" && skillMenuQuery !== null) {
-      e.preventDefault();
-      setSkillMenuQuery(null);
-      return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSkillMenuQuery(null);
+        return;
+      }
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -575,25 +567,42 @@ export function Composer({
         {activeAttachError && (
           <p className="whitespace-pre-wrap px-2 text-[11.5px] text-amber-300">{activeAttachError}</p>
         )}
+        {!isEditMode && (
+          <SkillChipRow
+            chatSkills={chatSkills}
+            pendingSkills={pendingSkills}
+            disabled={isInputBlocked}
+            onRemoveChatSkill={(skill) => { removeChatSkill(conversationId, skill.id); textareaRef.current?.focus(); }}
+            onRemovePendingSkill={removePendingSkill}
+            onPinPendingSkill={pinSkill}
+          />
+        )}
         <div className="relative">
           {!isEditMode && skillMenuQuery !== null && (
-            <div id="skill-slash-listbox" role="listbox" aria-label="Skills" className="absolute bottom-full left-3 z-50 mb-2 max-h-64 w-[min(22rem,calc(100%-1.5rem))] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-1.5 shadow-xl shadow-black/40">
-              <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--color-text-dim)]">Use a Skill</p>
-              {matchingSkillCommands.length === 0 ? (
-                <p className="px-2 py-3 text-[11px] text-[var(--color-text-dim)]">No matching Skills. Install or enable one in Settings → Extensions.</p>
-              ) : matchingSkillCommands.map((command, index) => (
+            <div id="skill-picker-listbox" role="listbox" aria-label="Skills" className="absolute bottom-full left-3 z-50 mb-2 max-h-72 w-[min(26rem,calc(100%-1.5rem))] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-1.5 shadow-xl shadow-black/40">
+              <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--color-text-dim)]">Use a Skill for this message</p>
+              {matchingSkills.length === 0 ? (
+                <p className="px-2 py-3 text-[11px] text-[var(--color-text-dim)]">
+                  {availableSkills.length === 0
+                    ? "No Skills yet. Create one in Settings → Skills."
+                    : "No matching Skills."}
+                </p>
+              ) : matchingSkills.map((skill, index) => (
                 <button
-                  key={`${command.skill.id}:${command.workflowId ?? "skill"}`}
+                  key={skill.id}
                   type="button"
                   role="option"
                   aria-selected={index === highlightedSkillIndex}
-                  disabled={command.missing.length > 0}
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => activateSkill(command)}
-                  className={`w-full rounded-lg px-2 py-2 text-left disabled:cursor-not-allowed disabled:opacity-45 ${index === highlightedSkillIndex ? "bg-accent-tint" : "hover:bg-white/5"}`}
+                  onMouseEnter={() => setHighlightedSkillIndex(index)}
+                  onClick={() => selectSkill(skill)}
+                  className={`w-full rounded-lg px-2 py-2 text-left ${index === highlightedSkillIndex ? "bg-accent-tint" : "hover:bg-white/5"}`}
                 >
-                  <span className="block text-[11.5px] font-medium text-white">/{command.command}</span>
-                  <span className="block truncate text-[10px] text-[var(--color-text-dim)]">{command.missing.length > 0 ? `Requires: ${command.missing.join(", ")}` : command.description || "Activate this Skill for the chat"}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[11.5px] font-medium text-white">{skill.name}</span>
+                    {selectedSkillIds.includes(skill.id) && <Check className="size-3 shrink-0 text-emerald-400" aria-label="Already applied" />}
+                  </span>
+                  <span className="line-clamp-2 text-[10px] leading-snug text-[var(--color-text-dim)]">{skill.description || "Applies this Skill to one message"}</span>
                 </button>
               ))}
             </div>
@@ -606,10 +615,10 @@ export function Composer({
             onKeyDown={handleKeyDown}
             onKeyUp={(e) => updateSkillMenu(e.currentTarget)}
             onClick={(e) => updateSkillMenu(e.currentTarget)}
-            placeholder={busy && onSteer ? "Guide the current response..." : isEditMode ? "Edit your message..." : skillCommands.length > 0 ? "Ask anything... (type / for Skills)" : "Ask anything..."}
+            placeholder={busy && onSteer ? "Guide the current response..." : isEditMode ? "Edit your message..." : availableSkills.length > 0 ? "Ask anything... (type / for Skills)" : "Ask anything..."}
             aria-label={isEditMode ? "Edit message" : "Message"}
             aria-autocomplete="list"
-            aria-controls={skillMenuQuery !== null ? "skill-slash-listbox" : undefined}
+            aria-controls={skillMenuQuery !== null ? "skill-picker-listbox" : undefined}
             className={`block w-full resize-none rounded-md bg-transparent px-3 py-2 font-normal leading-relaxed text-white transition-[font-size] duration-200 ease-out placeholder:text-[var(--color-text-dim)] focus:outline-none disabled:opacity-50 ${composerTextClass}`}
           />
         </div>

@@ -1,10 +1,12 @@
 import { useSettingsStore } from "@/stores/settings-store";
+import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { contextTokensFromUsage, splitContextUsage } from "./context-usage";
 import type { Conversation } from "@/modules/chat/chat-types";
 import { createPiChatTools } from "./pi-chat-tools";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
-import { buildSkillContext } from "@/modules/extensions/skill-runtime";
+import { invocationsFor, useSkillsStore } from "@/modules/extensions/skills-store";
+import { buildSkillPromptBlock } from "@/modules/extensions/skill-runtime";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AgentEvent,
@@ -447,7 +449,7 @@ export const useAgentStore = create<AgentStore>()(
           projectPath, prompt: "", model: "", title: conversation.title, startedAt: conversation.createdAt,
           events: conversation.messages.filter((message) => message.role === "user" || message.role === "assistant").map((message) => ({
             id: message.id, type: message.role === "user" ? "status" : "output",
-            title: message.role === "user" ? "Prompt" : "Pi", detail: message.content, at: message.timestamp, attachments: message.attachments, artifact: message.artifact, interactiveAnswer: message.interactiveAnswer,
+            title: message.role === "user" ? "Prompt" : "Pi", detail: message.content, at: message.timestamp, attachments: message.attachments, skillInvocations: message.skillInvocations, artifact: message.artifact, interactiveAnswer: message.interactiveAnswer,
           })),
         };
         set((state) => ({ sessions: [imported, ...state.sessions], activeSessionId: id, projectPath }));
@@ -524,6 +526,16 @@ export const useAgentStore = create<AgentStore>()(
       // not fall back to global personal memory for extraction.
       const mayExtractAgentMemory = !projectPath.trim() || scopeProjectId !== undefined;
       const now = Date.now();
+      const messageId = crypto.randomUUID();
+      // Skills come from the composer's one-request picks plus anything pinned to
+      // this chat. `retrySkillInvocations` replays a stored record instead so a
+      // retry repeats the original instructions even after an edit or delete.
+      const skillsState = useSkillsStore.getState();
+      const scopeId = shouldContinue && activeSession ? activeSession.id : "new-chat";
+      const invocations = input.retrySkillInvocations ?? input.skillInvocations
+        ?? (skillsState.skillsEnabled
+          ? invocationsFor(skillsState.skills, skillsState.chatSkillIds[scopeId] ?? [], skillsState.pendingTurnSkillIds[scopeId] ?? [])
+          : []);
       const session: AgentSession = {
         id,
         runtime: "pi",
@@ -547,7 +559,7 @@ export const useAgentStore = create<AgentStore>()(
               .filter(Boolean)
               .join("\n") || undefined,
           ),
-          { ...event("status", "Prompt", input.displayPrompt || userPrompt), attachments: input.attachments },
+          { ...event("status", "Prompt", input.displayPrompt || userPrompt), id: messageId, attachments: input.attachments, skillInvocations: invocations.length ? invocations : undefined },
         ],
       };
 
@@ -567,6 +579,22 @@ export const useAgentStore = create<AgentStore>()(
           : [session, ...state.sessions],
         ...(state.projectPath.trim() === projectPath ? { activeSessionId: id } : {}),
       }));
+
+      // The request now carries its own record, so the composer's one-request
+      // pick is spent. Clearing here means a later failure cannot leave a stale
+      // selection silently applying to the next message.
+      const sentSkills = useSkillsStore.getState();
+      if (scopeId === "new-chat") {
+        const pinned = sentSkills.chatSkillIds[scopeId] ?? [];
+        if (pinned.length) sentSkills.setChatSkills(id, pinned);
+      }
+      sentSkills.clearPendingTurnSkills(scopeId);
+      if (scopeId === "new-chat") {
+        useExtensionsStore.setState((state) => ({
+          chatDisabledMcpServerIds: { ...state.chatDisabledMcpServerIds, [id]: state.chatDisabledMcpServerIds[scopeId] ?? [] },
+          chatEnabledMcpServerIds: { ...state.chatEnabledMcpServerIds, [id]: state.chatEnabledMcpServerIds[scopeId] ?? [] },
+        }));
+      }
 
       try {
         const abortController = new AbortController();
@@ -594,7 +622,6 @@ export const useAgentStore = create<AgentStore>()(
           }
           if (abortController.signal.aborted) return id;
 
-          const scopeId = shouldContinue && activeSession ? activeSession.id : "new-chat";
           const bridge = createPiChatTools({ sessionId: id, scopeId, projectId: scopeProjectId, webSearchEnabled: input.webSearchEnabled ?? false, signal: abortController.signal, onOutput: (output) => {
             if (abortController.signal.aborted) return;
             set((state) => {
@@ -602,14 +629,42 @@ export const useAgentStore = create<AgentStore>()(
               return current ? { sessions: patchSession(state.sessions, id, { events: [...current.events, output] }) } : state;
             });
           } });
-          const extensions = useExtensionsStore.getState();
-          const selectedSkill = extensions.resolveActiveSkillSelection(scopeId, scopeProjectId);
           const project = scopeProjectId ? useProjectStore.getState().projects.find((item) => item.id === scopeProjectId) : undefined;
-          const contextualPrompt = [project?.systemPrompt ? `Project guidance:\n${project.systemPrompt}` : "", selectedSkill ? buildSkillContext(selectedSkill.skill, selectedSkill.workflowId) : "", userPrompt].filter(Boolean).join("\n\n");
-          if (scopeId === "new-chat") {
-            extensions.setActiveSkill(id, selectedSkill?.skill.id ?? null, selectedSkill?.workflowId);
-            useExtensionsStore.setState((state) => ({ chatDisabledMcpServerIds: { ...state.chatDisabledMcpServerIds, [id]: state.chatDisabledMcpServerIds[scopeId] ?? [] }, chatEnabledMcpServerIds: { ...state.chatEnabledMcpServerIds, [id]: state.chatEnabledMcpServerIds[scopeId] ?? [] } }));
+          let skillPaths: string[] = [];
+          let promptInvocations = invocations;
+          if (invocations.length) {
+            try {
+              const materialized = await invoke<{ path: string; name: string }[]>("materialize_pi_skills", {
+                skills: invocations.map((invocation) => {
+                  const current = skillsState.skills.find((skill) => skill.id === invocation.id);
+                  return {
+                    name: invocation.name,
+                    slug: invocation.slug,
+                    // A deleted Skill still has its recorded instructions, so the
+                    // retry works; the description is only routing metadata Pi
+                    // does not use for an explicitly selected Skill.
+                    description: current?.description || `Recorded Skill ${invocation.name}`,
+                    instructions: invocation.instructions,
+                    snapshotId: current?.snapshotId,
+                  };
+                }),
+              });
+              skillPaths = materialized.map((item) => item.path);
+              // Record where each Skill's files live so the model can resolve
+              // relative references through Pi's own read tool.
+              promptInvocations = invocations.map((invocation) => ({
+                ...invocation,
+                location: materialized.find((item) => item.name === invocation.slug)?.path,
+              }));
+            } catch {
+              // Pi runs without Skills rather than failing the whole request.
+              skillPaths = [];
+            }
           }
+          // The recorded instructions are sent with the request; `--skill` gives
+          // the model a resolvable directory for supporting files.
+          const skillBlock = buildSkillPromptBlock(promptInvocations);
+          const contextualPrompt = [project?.systemPrompt ? `Project guidance:\n${project.systemPrompt}` : "", skillBlock, userPrompt].filter(Boolean).join("\n\n");
           const result = await runPiAgent(
             {
               sessionId: id,
@@ -630,6 +685,7 @@ export const useAgentStore = create<AgentStore>()(
               reasoningLevel: input.reasoningLevel,
               images: input.images,
               tools: bridge.tools,
+              skillPaths,
               systemPrompt: input.systemPrompt,
               replaceSystemPrompt: input.replaceSystemPrompt,
             },

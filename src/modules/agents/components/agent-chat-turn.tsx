@@ -16,14 +16,30 @@ const InteractiveAnswerBlock = lazy(() =>
 export const AgentChatTurn = memo(function AgentChatTurn({
   turn,
   onFollowUp,
+  onRetry,
   isStreaming = false,
 }: {
   turn: AgentChatTurnModel;
   onFollowUp?: (prompt: string) => void;
+  /** Repeats this request with its recorded Skill instructions. */
+  onRetry?: (turn: AgentChatTurnModel) => void;
   isStreaming?: boolean;
 }) {
   if (turn.role === "user") {
-    return <MessageBubble message={{ id: turn.id, role: "user", content: turn.content, attachments: turn.attachments, timestamp: 0 }} isStreaming={false} layout={{ messagesPx: "px-5", messageText: "text-[15px]", userMaxW: "max-w-[85%]", composerText: "text-[14px]", footerPx: "px-4" }} onCopy={() => void navigator.clipboard.writeText(turn.content)} />;
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <MessageBubble message={{ id: turn.id, role: "user", content: turn.content, attachments: turn.attachments, skillInvocations: turn.skillInvocations, timestamp: 0 }} isStreaming={false} layout={{ messagesPx: "px-5", messageText: "text-[15px]", userMaxW: "max-w-[85%]", composerText: "text-[14px]", footerPx: "px-4" }} onCopy={() => void navigator.clipboard.writeText(turn.content)} />
+        {onRetry && turn.skillInvocations && turn.skillInvocations.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onRetry(turn)}
+            className="rounded-md px-1.5 text-[11px] text-[var(--color-text-dim)] transition-colors hover:text-white"
+          >
+            Repeat with the same Skill instructions
+          </button>
+        )}
+      </div>
+    );
   }
 
   const isError = turn.role === "error";

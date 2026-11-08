@@ -26,49 +26,54 @@ Tool call results are rendered in the chat UI's tool call indicators, with `mcpA
 
 ## Skill Context Injection
 
-`src/modules/agents/agent-store.ts` resolves the active skill when it starts a
+`src/modules/agents/agent-store.ts` resolves a request's Skills when it starts a
 session:
 
 ```typescript
-const selectedSkill = extensions.resolveActiveSkillSelection(scopeId, scopeProjectId);
-const contextualPrompt = [
-  project?.systemPrompt ? `Project guidance:
-${project.systemPrompt}` : "",
-  selectedSkill ? buildSkillContext(selectedSkill.skill, selectedSkill.workflowId) : "",
-  userPrompt,
-].filter(Boolean).join("
-
-");
+const invocations = invocationsFor(skills, chatSkillIds, pendingTurnSkillIds);
+const contextualPrompt = [projectGuidance, buildSkillPromptBlock(invocations), userPrompt]
+  .filter(Boolean).join("\n\n");
 ```
 
-The skill block is prepended to the user prompt (after project guidance), so it
-reaches Pi together with the turn it applies to.
+The recorded instructions are sent with the user prompt (after project guidance),
+so the block that runs belongs to that request rather than to whatever the
+library holds now. See [Skills](02-skills.md) for the materialize step that gives
+Pi a resolvable directory for supporting files.
 
 ## UI Components
 
 | Component | Location | Role |
 |-----------|----------|------|
-| `ChatExtensionsSettings` | Chat options menu | Select the active skill or workflow and enable/disable MCP servers for the current chat |
-| `ExtensionsSettings` | Settings → Extensions | Full skill and MCP server management |
+| `ChatExtensionsSettings` | Chat options menu | Pin or remove Skills for the whole chat, and enable/disable MCP servers |
+| `SkillsLibrarySettings` | Settings → Skills | Create, edit, duplicate, delete, import, and export Skills |
 | `McpServerSettings` | Settings → Extensions | Add, inspect, connect, and grant MCP permissions |
 
 ## Data Flow
 
 ```
 Settings page
-  ├─ Import / generate skill → extensions-store (persisted)
+  ├─ Skills → skills-store (library, persisted)
   ├─ Add MCP server → Tauri discovery command → extensions-store
   └─ Grant permissions → extensions-store
 
+Composer
+  ├─ Type / → picker → skills-store pendingTurnSkillIds (one message)
+  └─ Pin a chip → skills-store chatSkillIds (whole chat)
+
 Chat options menu
-  └─ ChatExtensionsSettings → activeSkillId / chatDisabledMcpServerIds → extensions-store
+  └─ ChatExtensionsSettings → chatSkillIds / chatDisabledMcpServerIds
 
 Send message
-  └─ useChatSend → attaches skillSnapshot to user message
+  └─ useChatSend → agent-store startSession
 
-Chat orchestrator
-  ├─ resolveActiveSkillSelection → buildSkillContext → system prompt
-  └─ resolveProviderTooling → buildMcpProviderTools → tool definitions
+Agent start
+  ├─ invocationsFor → recorded on the user event
+  ├─ materialize_pi_skills → --skill paths + file locations
+  ├─ buildSkillPromptBlock → recorded instructions in the prompt
+  └─ buildMcpProviderTools → tool definitions
+
+Retry on a user turn
+  └─ agent-store retryRequest → replays the stored invocation record
 
 Tool execution
   └─ executeToolRound → mcpCalls → resolveMcpTool → grant check → invokeMcpTool

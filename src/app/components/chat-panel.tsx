@@ -17,7 +17,7 @@ export function ChatPanel({
   onToggleFavorite, contextStats, webSearchEnabled = false, onWebSearchChange,
   webSearchDisabled = false, webSearchDisabledReason, sidebarsCollapsed = 0, modelLoadProgress,
   agentSessions = [], activeAgentSessionId = null, agentRuntimeAvailable = null,
-  agentProjectPath = "", onAgentProjectPathChange, onAgentRuntimeCheck, onAgentSessionStop,
+  agentProjectPath = "", onAgentProjectPathChange, onAgentRuntimeCheck, onAgentSessionStop, onRetryRequest,
 }: ChatPanelProps) {
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const scheduler = useSyncExternalStore((listener) => aiScheduler.subscribeToScheduler(listener), () => aiScheduler.getSchedulerSnapshot());
@@ -42,6 +42,7 @@ export function ChatPanel({
     runtimeAvailable={agentRuntimeAvailable} projectPath={agentProjectPath}
     onProjectPathChange={(path) => onAgentProjectPathChange?.(path)}
     onCheckRuntime={() => onAgentRuntimeCheck?.()} onStopSession={(id) => onAgentSessionStop?.(id)}
+    onRetryRequest={(turn) => onRetryRequest?.({ id: turn.id, content: turn.content })}
     onSuggestion={setSuggestedPrompt}
     connection={<ProviderConnectionBanner provider={currentProvider ?? null} phase={providerConnectionPhase} error={providerConnectionError} onReconnect={() => onProviderReconnect?.()} onStartServer={() => onProviderStartServer?.()} />}
     composer={<div className={`mx-auto w-full max-w-[1100px] shrink-0 pb-3 pt-2 ${sidebarsCollapsed ? "px-3" : "px-4"}`}>

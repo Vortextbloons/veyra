@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { FileText, Folder, PencilLine, PanelRightClose, PanelRightOpen, RefreshCw, X } from "lucide-react";
 import type { AgentSession } from "../agent-types";
+import type { AgentChatTurnModel } from "../agent-chat-turns";
 import { AgentOutputView } from "./agent-output-view";
 import { AgentInspector } from "./agent-inspector";
 import "./agent-workspace.css";
@@ -12,10 +13,12 @@ type AgentsPanelProps = {
   sessions: AgentSession[]; activeSessionId: string | null; runtimeAvailable: boolean | null;
   projectPath: string; onProjectPathChange: (path: string) => void;
   onCheckRuntime: () => void; onStopSession: (id: string) => void;
+  /** Repeats a request with the Skill instructions recorded on it. */
+  onRetryRequest?: (turn: AgentChatTurnModel) => void;
   composer: ReactNode; connection: ReactNode; onSuggestion: (text: string) => void;
 };
 
-export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, projectPath, onProjectPathChange, onCheckRuntime, onStopSession, composer, connection, onSuggestion }: AgentsPanelProps) {
+export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, projectPath, onProjectPathChange, onCheckRuntime, onStopSession, onRetryRequest, composer, connection, onSuggestion }: AgentsPanelProps) {
   const active = sessions.find((session) => session.id === activeSessionId) ?? null;
   const empty = !active || active.events.length === 0;
   const running = sessions.some((session) => session.status === "running" && session.projectPath === projectPath);
@@ -36,7 +39,7 @@ export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, proje
         <span>{runtimeAvailable === null ? "Checking chat runtime…" : "Pi is unavailable. Install Pi or check that it is on your PATH, then retry."}</span>
         <button className="flex items-center gap-2" onClick={onCheckRuntime}><RefreshCw size={13} />Retry</button>
       </div>}
-      {!empty && active ? <AgentOutputView key={active.id} session={active} onStop={onStopSession} onFollowUp={onSuggestion} /> : <div className="flex min-h-0 flex-1 flex-col justify-end overflow-y-auto px-6 pb-8 pt-8 text-center">
+      {!empty && active ? <AgentOutputView key={active.id} session={active} onStop={onStopSession} onFollowUp={onSuggestion} onRetry={onRetryRequest} /> : <div className="flex min-h-0 flex-1 flex-col justify-end overflow-y-auto px-6 pb-8 pt-8 text-center">
         <h2 className="text-[clamp(24px,3vw,32px)] font-normal leading-tight tracking-tight text-[var(--color-text)]">What's on your mind today?</h2>
       </div>}
       <PiQuestion sessionId={activeSessionId} />

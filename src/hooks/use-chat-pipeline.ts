@@ -23,12 +23,12 @@ export function useChatPipeline({ projectId, webSearchEnabled }: { projectId?: s
     reservedOutputTokens: modelOverrides[selectedModel]?.reservedOutputTokens ?? defaultReservedOutputTokens,
   }), [selectedModel, models, modelOverrides, defaultContextLength, defaultReservedOutputTokens]);
   const supportsImages = models.find((model) => model.id === selectedModel)?.supportsImages ?? false;
-  const { handleSend } = useChatSend({
+  const { handleSend, handleRetry } = useChatSend({
     projectId, selectedModel, selectedProvider, supportsImages,
     effectiveWebSearchEnabled: webSearchEnabled && connectivity === "online",
     selectedModelContextSettings: context,
   });
   const handleNewChat = useCallback(() => useChatStore.getState().setActiveConversationId(null), []);
   const handleDeleteChat = useCallback((id: string) => useChatStore.getState().deleteConversation(id), []);
-  return { providers, selectedProvider, models, selectedModel, connectionPhase, connectionError, modelLoadProgress, favoriteModels, handleSend, handleNewChat, handleDeleteChat };
+  return { providers, selectedProvider, models, selectedModel, connectionPhase, connectionError, modelLoadProgress, favoriteModels, handleSend, handleRetry, handleNewChat, handleDeleteChat };
 }

@@ -17,6 +17,8 @@ type StartPiAgentInput = {
   reasoningLevel?: AgentReasoningLevel;
   images?: { data: string; mimeType: string }[];
   tools?: ProviderToolDefinition[];
+  /** Directories Pi loads as Skills with `--skill`. */
+  skillPaths?: string[];
   /** User-authored system prompt for this turn. */
   systemPrompt?: string;
   /** When true, `systemPrompt` replaces the default system prompt entirely. */

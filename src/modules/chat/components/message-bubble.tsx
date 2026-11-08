@@ -1,6 +1,8 @@
 import { lazy, memo, Suspense, useState } from "react";
 import {
   ChevronDown,
+  Pin,
+  Sparkles,
 } from "lucide-react";
 import type { ChatMessage, MessagePerformance } from "@/modules/chat/chat-types";
 import { formatDuration, formatTokensPerSecond } from "@/lib/performance";
@@ -94,6 +96,24 @@ export const MessageBubble = memo(function MessageBubble({
                   attachments={message.attachments}
                   onPreview={(att) => setPreviewAttachment(att)}
                 />
+              )}
+              {message.skillInvocations && message.skillInvocations.length > 0 && (
+                <div className="mb-1.5 flex flex-wrap justify-end gap-1">
+                  {message.skillInvocations.map((invocation) => (
+                    <span
+                      key={`${invocation.id}:${invocation.scope}`}
+                      title={invocation.scope === "chat" ? "Applied to every message in this chat" : "Applied to this message only"}
+                      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10.5px] ${
+                        invocation.scope === "chat"
+                          ? "border-violet-300/25 bg-white/10 text-violet-50"
+                          : "border-white/20 bg-white/10 text-white/80"
+                      }`}
+                    >
+                      {invocation.scope === "chat" ? <Pin className="size-2.5" aria-hidden /> : <Sparkles className="size-2.5" aria-hidden />}
+                      {invocation.name}
+                    </span>
+                  ))}
+                </div>
               )}
               {message.content.trim() && (
                 <Suspense>

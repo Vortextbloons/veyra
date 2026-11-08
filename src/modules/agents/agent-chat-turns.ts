@@ -12,6 +12,8 @@ export type AgentChatTurnModel = {
   /** Provider-qualified model id (e.g. "lmstudio/qwen2.5-7b"). */
   model?: string;
   attachments?: AgentEvent["attachments"];
+  /** Skills this request used, shown as chips on the user turn. */
+  skillInvocations?: AgentEvent["skillInvocations"];
   artifact?: AgentEvent["artifact"];
   interactiveAnswer?: AgentEvent["interactiveAnswer"];
 };
@@ -45,7 +47,7 @@ export function buildAgentChatTurns(
     }
     if (evt.type === "status" && evt.title === "Prompt" && evt.detail?.trim()) {
       toolTurnIndexByCallId.clear();
-      turns.push({ id: evt.id, role: "user", content: evt.detail.trim(), attachments: evt.attachments });
+      turns.push({ id: evt.id, role: "user", content: evt.detail.trim(), attachments: evt.attachments, skillInvocations: evt.skillInvocations });
       previousEventType = evt.type;
       continue;
     }
@@ -57,8 +59,7 @@ export function buildAgentChatTurns(
       if (
         isAssistantReplyTurn(last) &&
         (previousEventType === "output" || previousEventType === "reasoning")
-      ) {
-        last.content =
+      ) {        last.content =
           previousEventType === "output"
             ? [last.content, content].filter(Boolean).join("\n\n")
             : content;
@@ -153,12 +154,26 @@ export function buildAgentChatTurns(
   return turns;
 }
 
-/** Reuse immutable completed turns so streaming does not invalidate every row. */
+/**
+ * Reuse immutable completed turns so streaming does not invalidate every row.
+ *
+ * Array fields are compared element-by-element by reference: a user turn's
+ * `skillInvocations` is often rebuilt as a fresh array around the same records,
+ * and treating that as a change would re-render the whole transcript on every
+ * streamed token.
+ */
 export function reuseAgentChatTurns(next: AgentChatTurnModel[], previous: AgentChatTurnModel[]): AgentChatTurnModel[] {
   const byId = new Map(previous.map((turn) => [turn.id, turn]));
   return next.map((turn) => {
     const old = byId.get(turn.id);
-    return old && (Object.keys({ ...old, ...turn }) as (keyof AgentChatTurnModel)[])
-      .every((key) => old[key] === turn[key]) ? old : turn;
+    if (!old) return turn;
+    return (Object.keys({ ...old, ...turn }) as (keyof AgentChatTurnModel)[])
+      .every((key) => isSameTurnField(old[key], turn[key])) ? old : turn;
   });
+}
+
+function isSameTurnField(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  return left.length === right.length && left.every((item, index) => item === right[index]);
 }

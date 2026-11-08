@@ -7,6 +7,7 @@ import { useProviderStore } from "@/stores/provider-store";
 import { reasoningModelKey } from "@/modules/agents/agent-reasoning";
 import { useSettingsStore } from "@/stores/settings-store";
 import { filterAttachments } from "@/hooks/use-chat-attachments";
+import type { SkillInvocation } from "@/modules/extensions/extension-types";
 
 interface UseChatSendOptions {
   projectId?: string;
@@ -17,12 +18,27 @@ interface UseChatSendOptions {
   selectedModelContextSettings: { contextLength: number; reservedOutputTokens: number };
 }
 
+/** Replaying a past request: its own text and its recorded Skill instructions. */
+export type RetryRequestOptions = {
+  prompt: string;
+  attachments?: MessageAttachment[];
+  skillInvocations: SkillInvocation[];
+};
+
 export function useChatSend({
   projectId, selectedModel, selectedProvider, supportsImages,
   effectiveWebSearchEnabled, selectedModelContextSettings,
 }: UseChatSendOptions) {
   const setModelLoadProgress = useChatStore((state) => state.setModelLoadProgress);
-  const handleSend = useCallback((text: string, attachments?: MessageAttachment[]) => {
+  /**
+   * Sends one request through the scheduler.
+   *
+   * `retry` replays a past request: it reuses the recorded Skill invocations
+   * instead of resolving the current library, so an edited or deleted Skill
+   * cannot change what runs, and it still goes through the same model
+   * preparation, cancellation, and streaming path as a normal send.
+   */
+  const send = useCallback((text: string, attachments?: MessageAttachment[], retry?: RetryRequestOptions) => {
     const trimmed = text.trim();
     const { effectiveAttachments, blocked } = filterAttachments(attachments, supportsImages, trimmed);
     if (blocked || (!trimmed && effectiveAttachments.length === 0) || !selectedModel) return;
@@ -42,7 +58,7 @@ export function useChatSend({
     aiScheduler.abortActiveBackgroundJob();
     aiScheduler.enqueueAiJob({
       type: "agent_pi", conversationId: `agent:${projectPath}`, priority: 0,
-      title: "Responding in Chat", description: trimmed.slice(0, 80) || "Reading attachments",
+      title: retry ? "Repeating a request" : "Responding in Chat", description: trimmed.slice(0, 80) || "Reading attachments",
       prompt, model: selectedModel,
       run: async (signal) => {
         const onAbort = () => {
@@ -71,6 +87,7 @@ export function useChatSend({
             attachments: effectiveAttachments, webSearchEnabled: effectiveWebSearchEnabled,
             systemPrompt: systemPrompt || undefined,
             replaceSystemPrompt,
+            retrySkillInvocations: retry?.skillInvocations,
           });
           return { prompt, output: useAgentStore.getState().sessions.find((session) => session.id === id)?.summary };
         } finally {
@@ -80,5 +97,7 @@ export function useChatSend({
       },
     });
   }, [projectId, selectedModel, selectedProvider, supportsImages, effectiveWebSearchEnabled, selectedModelContextSettings.contextLength, selectedModelContextSettings.reservedOutputTokens, setModelLoadProgress]);
-  return { handleSend };
+  const handleSend = useCallback((text: string, attachments?: MessageAttachment[]) => send(text, attachments), [send]);
+  const handleRetry = useCallback((request: RetryRequestOptions) => send(request.prompt, request.attachments, request), [send]);
+  return { handleSend, handleRetry };
 }

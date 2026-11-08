@@ -37,6 +37,8 @@ pub struct StartPiAgentInput {
     pub reasoning_level: Option<String>,
     pub images: Option<Vec<serde_json::Value>>,
     pub tools: Option<Vec<serde_json::Value>>,
+    /// Directories containing a `SKILL.md` for Pi to load with `--skill`.
+    pub skill_paths: Option<Vec<String>>,
     /// User-authored system prompt, resolved from global or per-model settings.
     pub system_prompt: Option<String>,
     /// When true, `system_prompt` replaces the default system prompt entirely.
@@ -163,6 +165,7 @@ pub async fn run_pi_agent(
                 !input.project_path.trim().is_empty(),
                 &custom_system_prompt,
                 replace_system_prompt,
+                input.skill_paths.as_deref().unwrap_or(&[]),
                 &cancelled,
             )
         })();

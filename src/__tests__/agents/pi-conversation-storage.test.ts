@@ -47,6 +47,19 @@ describe("encrypted Pi conversation history", () => {
     expect(saved?.agentSession?.projectId).toBe("new");
     expect(saved?.messages.map((message) => message.content)).toEqual(["Question", "Answer"]);
   });
+  it("keeps a request's Skill record in the saved conversation", () => {
+    const invocation = { id: "skill.pdf-tools.abcd1234", name: "PDF tools", slug: "pdf-tools", contentHash: "hash-v1", instructions: "Read the reference first.", scope: "turn" as const };
+    const withSkill: AgentSession = { ...session, events: [{ id: "u", type: "status", title: "Prompt", detail: "Question", at: 1, skillInvocations: [invocation] }, { id: "a", type: "output", title: "Pi", detail: "Answer", at: 2 }] };
+    useAgentStore.setState({ sessions: [withSkill] });
+    flushPiConversations();
+    const saved = useChatStore.getState().conversations.find((item) => item.id === session.id);
+    const userMessage = saved?.messages.find((message) => message.role === "user");
+    expect(userMessage?.skillInvocations).toEqual([invocation]);
+    // The saved message is the durable copy; a restored session is rebuilt from
+    // the encrypted snapshot, which carries the same record.
+    expect(saved?.agentSession?.events.find((event) => event.title === "Prompt")?.skillInvocations).toEqual([invocation]);
+  });
+
   it("throttles live saves but flushes final output immediately", () => {
     vi.useFakeTimers();
     try {

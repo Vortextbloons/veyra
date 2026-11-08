@@ -32,6 +32,7 @@ import { useChatPipeline } from "@/hooks/use-chat-pipeline";
 import { useAgentDispatch } from "@/hooks/use-agent-dispatch";
 import { useAgentStore } from "@/modules/agents/agent-store";
 import { initializePiConversations } from "@/modules/agents/pi-conversation-storage";
+import { importLegacySkillsOnce } from "@/modules/extensions/skills-store";
 import { ProjectSidebar } from "@/modules/projects/components/project-sidebar";
 
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
@@ -87,6 +88,9 @@ function App() {
 
     void (async () => {
       await ensureSettingsHydrated();
+      // Before conversations restore, so a migrated chat selection has a Skill
+      // to point at when its transcript is read.
+      importLegacySkillsOnce();
       await useChatStore.getState().hydrateConversations();
       await useProjectStore.getState().hydrateProjects();
       initializePiConversations();
@@ -305,6 +309,17 @@ function App() {
             onAgentProjectPathChange={agent.setAgentProjectPath}
             onAgentRuntimeCheck={() => void agent.checkAgentRuntime()}
             onAgentSessionStop={agent.stopAgentSession}
+            onRetryRequest={(turn) => {
+              const session = agent.agentSessions.find((item) => item.id === agent.activeAgentSessionId);
+              const source = session?.events.find((event) => event.id === turn.id);
+              if (!source) return;
+              pipelineRest.handleRetry({
+                prompt: turn.content,
+                attachments: source.attachments,
+                // Replay exactly what this request used, not the current library.
+                skillInvocations: source.skillInvocations ?? [],
+              });
+            }}
           />
         )}
       </div>

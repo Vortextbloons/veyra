@@ -7,7 +7,10 @@ use url::Url;
 const MAX_SKILL_FILE_BYTES: u64 = 512 * 1024;
 const MAX_SKILL_PACKAGE_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_SKILL_FILES: usize = 200;
+const MAX_INSTRUCTION_BYTES: usize = 256 * 1024;
 const SKILLS_DIR: &str = "extensions/skills";
+/// Where active Skills are written as Pi-discoverable `SKILL.md` folders.
+const MATERIALIZED_DIR: &str = "extensions/pi-skills";
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +19,32 @@ pub struct SkillSnapshot {
     pub skill_md: String,
     pub content_hash: String,
     pub files: Vec<String>,
+    /// Legacy `veyra.json` manifest, returned so it can be converted rather than rejected.
     pub veyra_json: Option<String>,
+    /// Source folder name, used as the Skill name when frontmatter omits it.
+    pub directory_name: String,
+}
+
+/// One Skill the current request uses. Veyra owns the library and records the
+/// invocation; Pi only needs the instruction text on disk.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MaterializedSkillInput {
+    pub name: String,
+    pub slug: String,
+    pub description: String,
+    pub instructions: String,
+    /// Package snapshot for a Skill with supporting files.
+    pub snapshot_id: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MaterializedSkill {
+    /// Pi `--skill` path: the directory containing SKILL.md.
+    pub path: String,
+    /// Pi command name, without the `skill:` prefix.
+    pub name: String,
 }
 
 fn skill_root(app: &AppHandle) -> Result<PathBuf, String> {
@@ -40,6 +68,17 @@ fn validate_skill_asset(path: &Path, contents: &[u8]) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn package_hash(files: &[(PathBuf, PathBuf)]) -> Result<String, String> {
+    let mut hasher = Sha256::new();
+    for (source, relative) in files {
+        hasher.update(relative.to_string_lossy().as_bytes());
+        hasher.update([0]);
+        hasher.update(fs::read(source).map_err(|error| error.to_string())?);
+        hasher.update([0]);
+    }
+    Ok(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 fn walk_skill_source(root: &Path, current: &Path, files: &mut Vec<(PathBuf, PathBuf)>, bytes: &mut u64) -> Result<(), String> {
@@ -66,26 +105,20 @@ fn walk_skill_source(root: &Path, current: &Path, files: &mut Vec<(PathBuf, Path
     Ok(())
 }
 
-/// Copies a user-selected directory into Veyra-managed storage after validating every path.
-/// Source files are never executed; scripts and binaries remain inert snapshot content.
+/// Copies a user-selected `SKILL.md` folder into Veyra-managed storage after
+/// validating every path. Source files are never executed; scripts and binaries
+/// stay inert package content.
 #[tauri::command]
 pub fn snapshot_skill_directory(app: AppHandle, source_path: String) -> Result<SkillSnapshot, String> {
     let source = PathBuf::from(source_path);
-    if !source.is_dir() { return Err("select a Skill package folder".into()); }
+    if !source.is_dir() { return Err("select a folder that contains SKILL.md".into()); }
     let canonical = source.canonicalize().map_err(|error| error.to_string())?;
     let mut files = Vec::new();
     let mut bytes = 0;
     walk_skill_source(&canonical, &canonical, &mut files, &mut bytes)?;
-    let skill_entry = files.iter().find(|(_, relative)| relative == Path::new("SKILL.md")).ok_or_else(|| "Skill package must contain SKILL.md at its root".to_string())?;
+    let skill_entry = files.iter().find(|(_, relative)| relative == Path::new("SKILL.md")).ok_or_else(|| "The folder must contain SKILL.md at its root".to_string())?;
     let skill_md = fs::read_to_string(&skill_entry.0).map_err(|_| "SKILL.md must be valid UTF-8 text".to_string())?;
-    let mut hasher = Sha256::new();
-    for (source_file, relative) in &files {
-        hasher.update(relative.to_string_lossy().as_bytes());
-        hasher.update([0]);
-        hasher.update(fs::read(source_file).map_err(|error| error.to_string())?);
-        hasher.update([0]);
-    }
-    let content_hash = hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    let content_hash = package_hash(&files)?;
     let snapshot_id = format!("skill-{}", &content_hash[..16]);
     let target = skill_root(&app)?.join(&snapshot_id);
     if !target.exists() {
@@ -96,8 +129,9 @@ pub fn snapshot_skill_directory(app: AppHandle, source_path: String) -> Result<S
             fs::copy(source_file, destination).map_err(|error| error.to_string())?;
         }
     }
+    let directory_name = canonical.file_name().and_then(|value| value.to_str()).unwrap_or("skill").to_string();
     let veyra_json = files.iter().find(|(_, relative)| relative == Path::new("veyra.json")).map(|(path, _)| fs::read_to_string(path).map_err(|_| "veyra.json must be valid UTF-8 text".to_string())).transpose()?;
-    Ok(SkillSnapshot { snapshot_id, skill_md, content_hash, files: files.into_iter().map(|(_, relative)| relative.to_string_lossy().into_owned()).collect(), veyra_json })
+    Ok(SkillSnapshot { snapshot_id, skill_md, content_hash, files: files.into_iter().map(|(_, relative)| relative.to_string_lossy().into_owned()).collect(), veyra_json, directory_name })
 }
 
 #[tauri::command]
@@ -120,13 +154,174 @@ pub fn snapshot_skill_zip(app: AppHandle, source_path: String) -> Result<SkillSn
         validate_skill_asset(&relative, &contents)?;
         entries.push((relative, contents));
     }
+    // Archives commonly wrap everything in one folder; accept either layout.
+    let (entries, directory_name) = strip_single_wrapper_folder(entries);
+    if entries.iter().any(|(path, _)| path.components().any(|part| matches!(part, Component::ParentDir | Component::RootDir | Component::Prefix(_)))) {
+        return Err("Skill archive must contain SKILL.md at its root".into());
+    }
     let skill_md = entries.iter().find(|(path, _)| path == Path::new("SKILL.md")).ok_or_else(|| "Skill archive must contain SKILL.md at its root".to_string())?.1.clone();
     let skill_md = String::from_utf8(skill_md).map_err(|_| "SKILL.md must be valid UTF-8 text".to_string())?;
     let mut hasher = Sha256::new(); for (path, contents) in &entries { hasher.update(path.to_string_lossy().as_bytes()); hasher.update([0]); hasher.update(contents); hasher.update([0]); }
     let content_hash = hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect::<String>(); let snapshot_id = format!("skill-{}", &content_hash[..16]); let target = skill_root(&app)?.join(&snapshot_id);
     if !target.exists() { fs::create_dir_all(&target).map_err(|error| error.to_string())?; for (relative, contents) in &entries { let destination = target.join(relative); if let Some(parent) = destination.parent() { fs::create_dir_all(parent).map_err(|error| error.to_string())?; } fs::write(destination, contents).map_err(|error| error.to_string())?; } }
     let veyra_json = entries.iter().find(|(path, _)| path == Path::new("veyra.json")).map(|(_, contents)| String::from_utf8(contents.clone()).map_err(|_| "veyra.json must be valid UTF-8 text".to_string())).transpose()?;
-    Ok(SkillSnapshot { snapshot_id, skill_md, content_hash, files: entries.into_iter().map(|(path, _)| path.to_string_lossy().into_owned()).collect(), veyra_json })
+    Ok(SkillSnapshot { snapshot_id, skill_md, content_hash, files: entries.into_iter().map(|(path, _)| path.to_string_lossy().into_owned()).collect(), veyra_json, directory_name })
+}
+
+/// Drops a single top-level folder shared by every entry, which is how most
+/// exported `SKILL.md` packages are zipped. Returns the remaining entries and
+/// the folder name, which serves as the fallback Skill name.
+fn strip_single_wrapper_folder(entries: Vec<(PathBuf, Vec<u8>)>) -> (Vec<(PathBuf, Vec<u8>)>, String) {
+    if entries.iter().any(|(path, _)| path == Path::new("SKILL.md")) {
+        return (entries, String::new());
+    }
+    let first = entries.first().and_then(|(path, _)| path.components().next().map(|part| part.as_os_str().to_string_lossy().into_owned()));
+    let Some(first) = first else { return (entries, String::new()); };
+    let shared = entries.iter().all(|(path, _)| {
+        path.components().count() > 1 &&
+            path.components().next().map(|part| part.as_os_str().to_string_lossy().into_owned()).as_deref() == Some(first.as_str())
+    });
+    if !shared { return (entries, String::new()); }
+    if !entries.iter().any(|(path, _)| path.as_path() == Path::new(&first).join("SKILL.md")) {
+        return (entries, String::new());
+    }
+    (entries.into_iter().map(|(path, contents)| (path.components().skip(1).collect::<PathBuf>(), contents)).collect(), first)
+}
+
+fn materialized_root(app: &AppHandle) -> Result<PathBuf, String> {
+    let root = app.path().app_data_dir().map_err(|error| error.to_string())?.join(MATERIALIZED_DIR);
+    fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+    Ok(root)
+}
+
+/// Strips YAML-style frontmatter so the body can be re-emitted under the
+/// library's own `name` and `description`.
+fn body_without_frontmatter(source: &str) -> &str {
+    let trimmed = source.trim_start();
+    let Some(rest) = trimmed.strip_prefix("---") else { return source.trim() };
+    let Some(rest) = rest.strip_prefix("\r\n").or_else(|| rest.strip_prefix('\n')) else { return source.trim() };
+    match rest.find("\n---") {
+        Some(index) => rest[index + 4..].trim_start_matches(['\r', '\n']).trim(),
+        None => source.trim(),
+    }
+}
+
+fn yaml_scalar(value: &str) -> String {
+    let clean = value.replace(['\r', '\n'], " ").trim().to_string();
+    if clean.is_empty() { "\"\"".to_string() } else { format!("\"{}\"", clean.replace('\\', "\\\\").replace('"', "\\\"")) }
+}
+
+fn safe_slug(slug: &str) -> Result<String, String> {
+    let slug: String = slug.trim().to_lowercase().chars()
+        .map(|character| if character.is_ascii_alphanumeric() || character == '-' { character } else { '-' })
+        .collect();
+    let slug = slug.trim_matches('-').to_string();
+    if slug.is_empty() { return Err("a Skill needs a usable name".into()); }
+    Ok(slug)
+}
+
+/// Writes each Skill in this request as `<root>/<slug>/SKILL.md` and returns the
+/// paths for Pi's `--skill` flag. Pi then handles discovery, the `/skill:name`
+/// command, and reading supporting files relative to the skill directory.
+#[tauri::command]
+pub fn materialize_pi_skills(app: AppHandle, skills: Vec<MaterializedSkillInput>) -> Result<Vec<MaterializedSkill>, String> {
+    let root = materialized_root(&app)?;
+    let mut materialized = Vec::new();
+    let mut expected: Vec<PathBuf> = Vec::new();
+    for skill in skills {
+        let slug = safe_slug(&skill.slug)?;
+        if skill.instructions.len() > MAX_INSTRUCTION_BYTES {
+            return Err(format!("Skill “{}” has instructions that are too large", skill.name));
+        }
+        let directory = root.join(&slug);
+        // Rewrite from scratch so removed supporting files cannot linger.
+        if directory.exists() { fs::remove_dir_all(&directory).map_err(|error| error.to_string())?; }
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        if let Some(snapshot) = skill.snapshot_id.as_deref().filter(|value| !value.trim().is_empty()) {
+            if safe_relative(Path::new(snapshot)).is_ok() {
+                let source = skill_root(&app)?.join(snapshot);
+                if source.is_dir() {
+                    for entry in fs::read_dir(&source).map_err(|error| error.to_string())? {
+                        let entry = entry.map_err(|error| error.to_string())?;
+                        if entry.file_name().to_string_lossy().eq_ignore_ascii_case("SKILL.md") { continue; }
+                        copy_dir_contents(&entry.path(), &directory.join(entry.file_name()))?;
+                    }
+                }
+            }
+        }
+        let document = format!(
+            "---\nname: {slug}\ndescription: {description}\ndisable-model-invocation: true\n---\n\n{body}\n",
+            slug = slug,
+            description = yaml_scalar(&skill.description),
+            body = body_without_frontmatter(&skill.instructions),
+        );
+        fs::write(directory.join("SKILL.md"), document).map_err(|error| error.to_string())?;
+        expected.push(directory.clone());
+        materialized.push(MaterializedSkill { path: directory.to_string_lossy().into_owned(), name: slug });
+    }
+    // Remove folders from earlier requests; Pi should only see this selection.
+    if let Ok(entries) = fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && !expected.iter().any(|keep| keep == &path) {
+                let _ = fs::remove_dir_all(path);
+            }
+        }
+    }
+    Ok(materialized)
+}
+
+fn copy_dir_contents(source: &Path, destination: &Path) -> Result<(), String> {    let file_type = fs::symlink_metadata(source).map_err(|error| error.to_string())?.file_type();
+    if file_type.is_symlink() { return Err("skill packages cannot contain symbolic links".into()); }
+    if file_type.is_dir() {
+        fs::create_dir_all(destination).map_err(|error| error.to_string())?;
+        for entry in fs::read_dir(source).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            copy_dir_contents(&entry.path(), &destination.join(entry.file_name()))?;
+        }
+        return Ok(());
+    }
+    if !file_type.is_file() { return Err("skill package contains an unsupported file type".into()); }
+    if let Some(parent) = destination.parent() { fs::create_dir_all(parent).map_err(|error| error.to_string())?; }
+    fs::copy(source, destination).map(|_| ()).map_err(|error| error.to_string())
+}
+
+/// Writes a standards-shaped `<slug>/SKILL.md` ZIP plus any supporting files the
+/// Skill was imported with. Nothing else is added: a Veyra manifest is not
+/// required for a package to be portable.
+#[tauri::command]
+pub fn export_skill_package(app: AppHandle, target_path: String, slug: String, skill_md: String, files: Vec<String>, snapshot_id: Option<String>) -> Result<(), String> {
+    use std::io::Write;
+    let slug = safe_slug(&slug)?;
+    let target = PathBuf::from(target_path);
+    if target.extension().and_then(|value| value.to_str()).is_none_or(|extension| !extension.eq_ignore_ascii_case("zip")) {
+        return Err("export a Skill as a .zip file".into());
+    }
+    if let Some(parent) = target.parent() { fs::create_dir_all(parent).map_err(|error| error.to_string())?; }
+    let file = fs::File::create(&target).map_err(|error| error.to_string())?;
+    let mut archive = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    archive.start_file(format!("{slug}/SKILL.md"), options).map_err(|error| error.to_string())?;
+    archive.write_all(skill_md.as_bytes()).map_err(|error| error.to_string())?;
+    // Supporting files travel with the package so references and assets keep
+    // working for whoever imports it.
+    if let Some(snapshot) = snapshot_id.as_deref().filter(|value| !value.trim().is_empty()) {
+        if safe_relative(Path::new(snapshot)).is_ok() {
+            let root = skill_root(&app)?.join(snapshot);
+            for relative in &files {
+                let path = PathBuf::from(relative);
+                if safe_relative(&path).is_err() || path.file_name().is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("SKILL.md")) { continue; }
+                let source = root.join(&path);
+                if !source.is_file() { continue; }
+                let contents = fs::read(&source).map_err(|error| error.to_string())?;
+                validate_skill_asset(&path, &contents)?;
+                archive.start_file(format!("{slug}/{}", path.to_string_lossy().replace('\\', "/")), options).map_err(|error| error.to_string())?;
+                archive.write_all(&contents).map_err(|error| error.to_string())?;
+            }
+        }
+    }
+    archive.finish().map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn validate_mcp_endpoint(endpoint: &str) -> Result<(), String> {
@@ -289,5 +484,56 @@ mod tests {
     fn rejects_active_svg_assets() {
         assert!(validate_skill_asset(Path::new("assets/icon.svg"), br#"<svg><script>alert(1)</script></svg>"#).is_err());
         assert!(validate_skill_asset(Path::new("assets/icon.svg"), br#"<svg><path d='M0 0'/></svg>"#).is_ok());
+    }
+
+    #[test]
+    fn unwraps_a_single_archive_folder() {
+        let entries = vec![
+            (PathBuf::from("pdf-tools/SKILL.md"), Vec::new()),
+            (PathBuf::from("pdf-tools/references/formats.md"), Vec::new()),
+        ];
+        let (entries, directory) = strip_single_wrapper_folder(entries);
+        assert_eq!(directory, "pdf-tools");
+        assert_eq!(entries[0].0, PathBuf::from("SKILL.md"));
+        assert_eq!(entries[1].0, PathBuf::from("references/formats.md"));
+    }
+
+    #[test]
+    fn keeps_a_flat_archive_as_is() {
+        let entries = vec![(PathBuf::from("SKILL.md"), Vec::new())];
+        let (entries, directory) = strip_single_wrapper_folder(entries);
+        assert!(directory.is_empty());
+        assert_eq!(entries[0].0, PathBuf::from("SKILL.md"));
+    }
+
+    #[test]
+    fn keeps_mixed_folders_untouched() {
+        let entries = vec![
+            (PathBuf::from("skills/one/SKILL.md"), Vec::new()),
+            (PathBuf::from("extras/two.md"), Vec::new()),
+        ];
+        let (entries, directory) = strip_single_wrapper_folder(entries);
+        assert!(directory.is_empty());
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn reemits_body_without_old_frontmatter() {
+        let source = "---\nname: old\ndescription: Old description\n---\n\n# Body\n\nSteps.";
+        assert_eq!(body_without_frontmatter(source), "# Body\n\nSteps.");
+        assert_eq!(body_without_frontmatter("# Body\n"), "# Body");
+    }
+
+    #[test]
+    fn quotes_description_for_frontmatter() {
+        assert_eq!(yaml_scalar("Extract \"tables\"\nfrom PDFs"), "\"Extract \\\"tables\\\" from PDFs\"");
+        assert_eq!(yaml_scalar("   "), "\"\"");
+    }
+
+    #[test]
+    fn normalizes_skill_slugs() {
+        assert_eq!(safe_slug("PDF Tools").unwrap(), "pdf-tools");
+        assert_eq!(safe_slug("../escape").unwrap(), "escape");
+        assert!(safe_slug("!!").is_err());
     }
 }

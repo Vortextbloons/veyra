@@ -7,10 +7,13 @@ import { buildAgentChatTurns, reuseAgentChatTurns, type AgentChatTurnModel } fro
 export function AgentOutputView({
   session,
   onFollowUp,
+  onRetry,
 }: {
   session: AgentSession;
   onStop: (id: string) => void;
   onFollowUp?: (prompt: string) => void;
+  /** Repeats a request with the Skill instructions recorded on it. */
+  onRetry?: (turn: AgentChatTurnModel) => void;
 }) {
   const outputRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
@@ -36,7 +39,7 @@ export function AgentOutputView({
         <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-3 px-5 pb-8 pt-6">
           {stableTurns.map((turn) => (
             <div key={turn.id} style={turn === stableTurns.at(-1) ? undefined : { contentVisibility: "auto", containIntrinsicSize: "auto 160px" }}>
-              <AgentChatTurn turn={turn} isStreaming={isRunning && turn === stableTurns.at(-1)} onFollowUp={onFollowUp} />
+              <AgentChatTurn turn={turn} isStreaming={isRunning && turn === stableTurns.at(-1)} onFollowUp={onFollowUp} onRetry={onRetry} />
             </div>
           ))}
 

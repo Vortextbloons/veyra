@@ -5,6 +5,7 @@ import type { AgentSession } from "@/modules/agents/agent-types";
 import type { SearchResult, SourceFetch } from "@/modules/web-search/types";
 import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
 import type { Artifact } from "@/modules/chat/artifact";
+import type { SkillInvocation } from "@/modules/extensions/extension-types";
 
 export type ChatRole = "user" | "assistant" | "system";
 
@@ -57,8 +58,12 @@ export interface ChatMessage {
   content: string;
   /** Images and other media attached to user messages */
   attachments?: MessageAttachment[];
-  /** Immutable record of the explicitly active Skill for this sent message. */
-  skillSnapshot?: { id: string; version: string; workflowId?: string };
+  /**
+   * Immutable record of the Skills applied to this request: id, content hash,
+   * and the instruction snapshot. Editing or deleting a Skill never changes it,
+   * and Retry replays exactly these instructions.
+   */
+  skillInvocations?: SkillInvocation[];
   /** Model reasoning / chain-of-thought from LM Studio (when supported) */
   reasoning?: string;
   timestamp: number;
@@ -239,6 +244,8 @@ export interface ChatPanelProps {
   onAgentProjectPathChange?: (path: string) => void;
   onAgentRuntimeCheck?: () => void;
   onAgentSessionStop?: (id: string) => void;
+  /** Repeats a request with the Skill instructions recorded on it. */
+  onRetryRequest?: (turn: { id: string; content: string }) => void;
 }
 
 export interface RecentChatsItem {

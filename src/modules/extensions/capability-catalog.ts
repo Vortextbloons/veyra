@@ -19,6 +19,7 @@ export function classifyMcpTool(tool: Record<string, unknown>): SideEffectLevel 
   return "external_write";
 }
 
+/** The legacy capability catalog surfaced workflows from Skill manifests. */
 export function buildCapabilityCatalog(servers: McpServerRecord[], skills: SkillRecord[]): Capability[] {
   const capabilities: Capability[] = [];
   for (const server of servers) {
@@ -26,6 +27,8 @@ export function buildCapabilityCatalog(servers: McpServerRecord[], skills: Skill
     for (const raw of server.capabilities?.resources ?? []) { const resource = object(raw); const uri = text(resource.uri); if (uri) capabilities.push({ kind: "resource", id: `mcp.${server.id}.resource.${encodeURIComponent(uri)}`, serverId: server.id, uri, name: text(resource.name, uri), mimeType: text(resource.mimeType) || undefined, estimatedBytes: typeof resource.size === "number" ? resource.size : undefined }); }
     for (const raw of server.capabilities?.prompts ?? []) { const prompt = object(raw); const name = text(prompt.name); if (name) capabilities.push({ kind: "prompt", id: `mcp.${server.id}.prompt.${name}`, serverId: server.id, name, description: text(prompt.description), arguments: Array.isArray(prompt.arguments) ? prompt.arguments : [] }); }
   }
-  for (const skill of skills) for (const workflow of skill.workflows) capabilities.push({ kind: "workflow", id: `skill.${skill.id}.${workflow.id}`, skillId: skill.id, workflowId: workflow.id, name: workflow.name });
+  // Workflows are no longer part of a Skill. They remain catalogued only while
+  // an imported package still carries them, so they can be converted.
+  for (const skill of skills) for (const workflow of skill.legacyWorkflows ?? []) capabilities.push({ kind: "workflow", id: `skill.${skill.id}.${workflow.id}`, skillId: skill.id, workflowId: workflow.id, name: workflow.name });
   return capabilities;
 }

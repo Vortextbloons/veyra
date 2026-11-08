@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-11-07T22:00:49.630Z
+> Generated: 2026-11-08T08:24:13.693Z
 > Total files: 54
 
 ## Table of Contents
@@ -904,92 +904,109 @@ MCP servers are off by default for each chat. The user must explicitly enable a 
 
 # Skills
 
-Skills are local, reviewed Markdown instruction packages (SKILL.md) that guide the AI chat behavior. They are declarative only — they cannot execute code, modify permissions, or self-activate.
+A Skill is a reusable Markdown instruction set the user can apply to a request. A Skill tells the AI
+how to approach a task. It never runs code, changes permissions, or activates itself.
 
-## Key Files
+Skills follow the [Agent Skills](https://agentskills.io/specification) shape: a directory containing
+`SKILL.md` with `name` and `description` frontmatter, followed by instructions. A Veyra-specific
+manifest is not required.
+
+## The model
+
+Three fields carry all the meaning:
+
+| Field | Purpose |
+|---|---|
+| `name` | Display name and the `/<slug>` identifier in the composer |
+| `description` | When the AI should use the Skill — this is the routing signal |
+| `instructions` | The Markdown body the model follows |
+
+`id` and `contentHash` are internal. The ID is stable across edits so an existing chat keeps working;
+the hash changes whenever the content does, which is what makes a request's record verifiable.
+
+Workflows and capability declarations from older manifests are optional legacies, not part of a Skill
+anymore. Imports keep them as `legacyWorkflows` so each one can be converted into a standalone Skill
+or dropped.
+
+## Where a Skill runs
+
+Veyra decides which Skills a request uses, then sends their instructions with that request:
+
+1. The library stores the Skill and its content hash.
+2. On send, the request's Skills are resolved and snapshotted onto the user message
+   (`SkillInvocation[]` on the event and on the saved `ChatMessage`).
+3. `materialize_pi_skills` writes each Skill to
+   `<app data>/extensions/pi-skills/<slug>/SKILL.md`, copying supporting files from the imported
+   package snapshot.
+4. Those directories are passed to Pi as `--skill` paths, so Pi resolves supporting files through its
+   own `read` tool.
+5. The recorded instructions are included in the request prompt inside a `<skill>` block. Veyra sends
+   the snapshot rather than letting Pi re-read the file, so the instructions that run are always the
+   ones recorded with the request, even after an edit.
+
+Materialized folders carry `disable-model-invocation: true`. Pi will not advertise or auto-load them;
+Veyra is the only thing that selects a Skill. This is what keeps automatic selection a later,
+explicit addition rather than an accident of Pi's discovery.
+
+## Invoking a Skill
+
+- **One message:** type `/` in the composer, pick a Skill. It appears as a chip marked
+  "This message", keeps any text already typed, and clears after sending.
+- **Whole chat:** use **Pin** on that chip, or the Chat settings panel, to promote it. Pinned Skills
+  get a distinct chip and stay until removed.
+- Invoking a Skill once never changes the rest of the chat.
+
+## Library operations
+
+Create, edit, duplicate, delete, import, and export live in **Settings → Skills**. The editor is a
+Markdown textarea plus the name and description. Generated Skills use the same `SKILL.md` format.
+
+Imports accept a folder or ZIP containing `SKILL.md`. A ZIP that wraps everything in one folder is
+unwrapped automatically. Exports write `<slug>/SKILL.md` plus supporting files as a portable ZIP.
+
+## Records and retry
+
+A request's record holds each Skill's ID, content hash, and the instruction snapshot. Editing or
+deleting a Skill never changes it. **Retry** on a user turn replays the stored record rather than
+current library content, so it repeats the original instructions. A request that used no Skill retries
+with none.
+
+## Migration
+
+Older builds stored Skills inside the `veyra.extensions.v1` key with `workflows`,
+`requestedCapabilities`, and a single per-chat `activeSkillIds` entry.
+
+- Installed instructions are preserved, including disabled state.
+- Each old chat selection becomes an explicit chat-scoped Skill, which is the new model's equivalent.
+- Workflows and capability lists move to `legacyWorkflows` and `legacyCapabilities`.
+- The MCP store parks the old payload under `veyra.skills.legacy.v1` before rewriting its own key;
+  `importLegacySkillsOnce()` merges it into the library once at startup and never overwrites a
+  selection the user made after upgrading.
+
+## Key files
 
 | File | Purpose |
-|------|---------|
-| `src/modules/extensions/skill-runtime.ts` | Validation, `draftToSkill` conversion, context block builder |
-| `src/modules/extensions/skill-generator.ts` | AI-powered skill draft generation via the provider |
-| `src/modules/extensions/extension-types.ts` | `SkillRecord`, `SkillDraft`, `SkillValidation`, `SkillWorkflow` |
-| `src/modules/extensions/capability-catalog.ts` | Lists `WorkflowCapability` entries from installed skills |
-| `src/modules/extensions/components/chat-extensions-settings.tsx` | Chat options menu: active skill/workflow and MCP servers for the chat |
-| `src/components/settings/extensions-settings.tsx` | Settings page for importing, generating, and managing skills |
+|---|---|
+| `src/modules/extensions/skill-runtime.ts` | Parsing, validation, hashing, request prompt blocks |
+| `src/modules/extensions/skills-store.ts` | Library state and the two selection scopes |
+| `src/modules/extensions/skills-migration.ts` | Legacy payload conversion |
+| `src/modules/extensions/components/skill-editor.tsx` | Markdown editor and `SKILL.md` preview |
+| `src/modules/extensions/components/skill-chip.tsx` | Composer chips and the Pin action |
+| `src/components/settings/skills-library-settings.tsx` | Settings → Skills |
+| `src-tauri/src/extensions/commands.rs` | Snapshot, materialize, and export commands |
 
-## SKILL.md Format
+## Verification
 
-A skill package is a directory (or ZIP archive) containing at minimum a `SKILL.md` at its root:
+`src/modules/extensions/skill-runtime.test.ts`, `skills-store.test.ts`, and `skills-migration.test.ts`
+cover the format, validation, duplicate names, selection scopes, and legacy conversion.
+`src/__tests__/agents/agent-skill-invocation.test.ts` covers what reaches Pi, the one-request versus
+persistent split, and retry after edit or deletion.
 
-```markdown
-# Skill Name
+## Not in this version
 
-Declarative instructions for the AI model.
-```
-
-Optional files:
-
-- `veyra.json` — Manifest with `id`, `version`, `description`, `requiredCapabilities`, and `workflows`.
-- Any relative-path assets (SVG, text, etc.) referenced from the manifest.
-
-### SKILL.md Frontmatter
-
-Skills can include YAML frontmatter between `---` delimiters:
-
-```markdown
----
-name: Release Notes
-description: Writes concise release notes
-version: 2.0.0
----
-
-Write release notes in a brief, scoped format.
-```
-
-### veyra.json
-
-```json
-{
-  "id": "skill.release-notes",
-  "version": "2.0.0",
-  "description": "Release notes generator",
-  "requiredCapabilities": ["mcp.github.create_issue"],
-  "workflows": [
-    {
-      "id": "brief",
-      "name": "Brief",
-      "instructions": "Use three bullets only."
-    }
-  ],
-  "prompts": ["prompts/template.md"],
-  "resources": ["assets/example.txt"]
-}
-```
-
-## Validation Rules
-
-- SKILL.md must not exceed 60,000 characters.
-- No executable activation hooks (`onInstall`, `onActivate`, `postinstall`, `preinstall`) are permitted.
-- Code blocks are retained as instruction text only and will never execute.
-- Package imports reject symbolic links, path traversal, and files over 512 KB.
-- SVG assets are scanned for active content (`<script>`, `onload=`, etc.).
-- Total package limit: 5 MB, 200 files.
-
-## Import Methods
-
-| Method | Tauri Command | Source |
-|--------|--------------|--------|
-| Folder import | `snapshot_skill_directory` | User-selected directory |
-| ZIP import | `snapshot_skill_zip` | User-selected ZIP archive |
-| AI generation | `generateSkillDraft` | Provider generates a draft from a description |
-
-## Skill Context Injection
-
-When a skill is active for a chat, the orchestrator injects a `<veyra_active_skill>` context block into the system prompt containing the skill instructions and optional workflow instructions.
-
-## Skill Snapshots
-
-Each user message records its active skill as a `skillSnapshot` (`{ id, version, workflowId? }`). The orchestrator resolves the snapshot against the installed skills at response time, ensuring skill versions stay consistent across a conversation.
+Automatic Skill selection. Descriptions are already the routing signal, so advertising available
+Skills to the model and loading full instructions only when needed can be added without changing the
+library, the record, or the composer.
 
 ---
 
@@ -1025,49 +1042,54 @@ Tool call results are rendered in the chat UI's tool call indicators, with `mcpA
 
 ## Skill Context Injection
 
-`src/modules/agents/agent-store.ts` resolves the active skill when it starts a
+`src/modules/agents/agent-store.ts` resolves a request's Skills when it starts a
 session:
 
 ```typescript
-const selectedSkill = extensions.resolveActiveSkillSelection(scopeId, scopeProjectId);
-const contextualPrompt = [
-  project?.systemPrompt ? `Project guidance:
-${project.systemPrompt}` : "",
-  selectedSkill ? buildSkillContext(selectedSkill.skill, selectedSkill.workflowId) : "",
-  userPrompt,
-].filter(Boolean).join("
-
-");
+const invocations = invocationsFor(skills, chatSkillIds, pendingTurnSkillIds);
+const contextualPrompt = [projectGuidance, buildSkillPromptBlock(invocations), userPrompt]
+  .filter(Boolean).join("\n\n");
 ```
 
-The skill block is prepended to the user prompt (after project guidance), so it
-reaches Pi together with the turn it applies to.
+The recorded instructions are sent with the user prompt (after project guidance),
+so the block that runs belongs to that request rather than to whatever the
+library holds now. See [Skills](02-skills.md) for the materialize step that gives
+Pi a resolvable directory for supporting files.
 
 ## UI Components
 
 | Component | Location | Role |
 |-----------|----------|------|
-| `ChatExtensionsSettings` | Chat options menu | Select the active skill or workflow and enable/disable MCP servers for the current chat |
-| `ExtensionsSettings` | Settings → Extensions | Full skill and MCP server management |
+| `ChatExtensionsSettings` | Chat options menu | Pin or remove Skills for the whole chat, and enable/disable MCP servers |
+| `SkillsLibrarySettings` | Settings → Skills | Create, edit, duplicate, delete, import, and export Skills |
 | `McpServerSettings` | Settings → Extensions | Add, inspect, connect, and grant MCP permissions |
 
 ## Data Flow
 
 ```
 Settings page
-  ├─ Import / generate skill → extensions-store (persisted)
+  ├─ Skills → skills-store (library, persisted)
   ├─ Add MCP server → Tauri discovery command → extensions-store
   └─ Grant permissions → extensions-store
 
+Composer
+  ├─ Type / → picker → skills-store pendingTurnSkillIds (one message)
+  └─ Pin a chip → skills-store chatSkillIds (whole chat)
+
 Chat options menu
-  └─ ChatExtensionsSettings → activeSkillId / chatDisabledMcpServerIds → extensions-store
+  └─ ChatExtensionsSettings → chatSkillIds / chatDisabledMcpServerIds
 
 Send message
-  └─ useChatSend → attaches skillSnapshot to user message
+  └─ useChatSend → agent-store startSession
 
-Chat orchestrator
-  ├─ resolveActiveSkillSelection → buildSkillContext → system prompt
-  └─ resolveProviderTooling → buildMcpProviderTools → tool definitions
+Agent start
+  ├─ invocationsFor → recorded on the user event
+  ├─ materialize_pi_skills → --skill paths + file locations
+  ├─ buildSkillPromptBlock → recorded instructions in the prompt
+  └─ buildMcpProviderTools → tool definitions
+
+Retry on a user turn
+  └─ agent-store retryRequest → replays the stored invocation record
 
 Tool execution
   └─ executeToolRound → mcpCalls → resolveMcpTool → grant check → invokeMcpTool
@@ -1106,24 +1128,44 @@ type ExtensionRecord = {
 ## Skill Types
 
 ```typescript
+/** A legacy manifest workflow. Kept only so it can be converted. */
 type SkillWorkflow = { id: string; name: string; instructions: string };
 
 type SkillRecord = ExtensionRecord & {
   type: "skill";
+  /** Instruction body only; frontmatter is generated from name/description. */
   instructions: string;
-  workflows: SkillWorkflow[];
   contentHash: string;
+  /** Spec-compliant folder name used when the Skill is written as SKILL.md. */
+  slug: string;
+  metadata?: Record<string, string>;
+  files?: string[];
   snapshotId?: string;
-  requestedCapabilities: string[];
+  legacyWorkflows?: SkillWorkflow[];
+  legacyCapabilities?: string[];
+};
+
+/** The immutable record of a Skill applied to one request. */
+type SkillInvocation = {
+  id: string;
+  name: string;
+  slug: string;
+  contentHash: string;
+  instructions: string;
+  scope: "turn" | "chat";
+  location?: string;
 };
 
 type SkillDraft = {
   name: string;
   description: string;
-  source: string;
-  provenance: "local" | "generated";
-  packageManifest?: string;
-  packageFiles?: string[];
+  instructions: string;
+  provenance?: "local" | "generated";
+  files?: string[];
+  snapshotId?: string;
+  metadata?: Record<string, string>;
+  legacyWorkflows?: SkillWorkflow[];
+  legacyCapabilities?: string[];
 };
 
 type SkillValidation = {
@@ -1132,8 +1174,8 @@ type SkillValidation = {
   warnings: string[];
   name?: string;
   description?: string;
-  version?: string;
   instructions?: string;
+  metadata?: Record<string, string>;
 };
 ```
 
@@ -1204,19 +1246,37 @@ type ToolCapability = {
 
 ## Store State
 
+Skills live in their own store because they are edited as documents and selected
+per request, which is a different lifecycle from a long-lived server process.
+
 ```typescript
-type ExtensionsStore = {
-  featureFlags: { skills: boolean; mcp: boolean; stdio: boolean; streamableHttp: boolean };
+type SkillsStore = {
   skills: SkillRecord[];
+  /** Persistent for the chat, shown as removable chips. */
+  chatSkillIds: Record<string, string[]>;
+  /** Applies to the next request only; cleared when it is sent. */
+  pendingTurnSkillIds: Record<string, string[]>;
+  skillsEnabled: boolean;
+};
+
+type ExtensionsStore = {
+  featureFlags: { mcp: boolean; stdio: boolean; streamableHttp: boolean };
   mcpServers: McpServerRecord[];
   grants: CapabilityGrant[];
   diagnostics: ExtensionDiagnostic[];
   policies: Record<string, ProjectExtensionPolicy>;
-  activeSkillIds: Record<string, string | null>;
-  activeSkillWorkflowIds: Record<string, string | undefined>;
   chatDisabledMcpServerIds: Record<string, string[]>;
+  chatEnabledMcpServerIds: Record<string, string[]>;
 };
 ```
+
+## Request Records
+
+`SkillInvocation` is stored on the user event (`AgentEvent.skillInvocations`) and
+on the saved `ChatMessage`. It holds the ID, content hash, and instruction
+snapshot, so editing or deleting a Skill cannot change what a past request ran and
+Retry can repeat the original instructions. `ChatMessage.skillSnapshot` is gone;
+it recorded only an ID and version, which no longer identifies the content.
 
 ## ToolCallState Extension
 
@@ -1245,8 +1305,8 @@ MCP (Model Context Protocol) server integration and local SKILL.md instruction p
 ## Contents
 
 - [01-mcp-servers.md](01-mcp-servers.md) — MCP server discovery, transport, capability inspection
-- [02-skills.md](02-skills.md) — Skill runtime, validation, AI generation
-- [03-chat-integration.md](03-chat-integration.md) — MCP tools and skill context in chat
+- [02-skills.md](02-skills.md) — Skill model, library, invocation, records, and migration
+- [03-chat-integration.md](03-chat-integration.md) — MCP tools and Skill instructions in chat
 - [04-types.md](04-types.md) — Key type definitions
 
 ---
@@ -2195,7 +2255,8 @@ value, one of them is a bug waiting to be reported.
 | `src/stores/update-store.ts` | App update state |
 | `src/modules/agents/agent-store.ts` | Pi sessions (the transcript) |
 | `src/modules/projects/project-store.ts` | Projects, active project, workspace resources |
-| `src/modules/extensions/extensions-store.ts` | Skills, MCP servers, approvals |
+| `src/modules/extensions/extensions-store.ts` | MCP servers, approvals, diagnostics |
+| `src/modules/extensions/skills-store.ts` | Skill library and per-request/per-chat selection |
 | `src/modules/memory/memory-store.ts` | Durable memory facts |
 
 ## Ownership
@@ -2325,7 +2386,7 @@ Reference material is admitted only when it fits after the system instructions a
 | `src/lib/prompts.ts` | Prompt construction and assembly |
 | `src/lib/context.ts` | Context budgeting and message assembly |
 | `src/modules/agents/agent-session-context.ts` | Session transcript + memory budget composition |
-| `src/modules/agents/agent-store.ts` | Final prompt assembly: project guidance, skill block, system prompt |
+| `src/modules/agents/agent-store.ts` | Final prompt assembly: project guidance, recorded Skill instructions, system prompt |
 
 ---
 

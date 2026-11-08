@@ -30,7 +30,8 @@ export function flushPiConversations(): void {
       id: turn.id, role: turn.role === "user" ? "user" : "assistant", content: turn.content,
       reasoning: turn.reasoning,
       timestamp: eventTimes.get(turn.id) ?? session.startedAt,
-      modelId: turn.model, attachments: turn.attachments, artifact: turn.artifact, interactiveAnswer: turn.interactiveAnswer,
+      modelId: turn.model, attachments: turn.attachments, skillInvocations: turn.skillInvocations,
+      artifact: turn.artifact, interactiveAnswer: turn.interactiveAnswer,
     }));
     const conversation: Conversation = { ...existing, id, title: session.title, messages, createdAt: existing?.createdAt ?? session.startedAt, updatedAt: session.endedAt ?? Date.now(), projectId: session.projectId, agentSession: { ...session, status: session.status === "running" ? "stopped" : session.status } };
     const index = conversations.findIndex((item) => item.id === id);

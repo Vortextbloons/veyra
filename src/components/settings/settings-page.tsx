@@ -7,6 +7,7 @@ import {
   Puzzle,
   Settings,
   Shield,
+  Sparkles,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { ChatSettings } from "./chat-settings";
 import { ModelsSettings } from "./models-settings";
 import { ToolsSettings } from "./tools-settings";
 import { ExtensionsSettings } from "./extensions-settings";
+import { SkillsLibrarySettings } from "./skills-library-settings";
 import { MemorySettings } from "@/modules/memory/components/memory-settings";
 
 type SettingsTab =
@@ -23,6 +25,7 @@ type SettingsTab =
   | "chat"
   | "models"
   | "tools"
+  | "skills"
   | "memory"
   | "privacy"
   | "extensions";
@@ -32,9 +35,10 @@ const TABS: { id: SettingsTab; label: string; blurb: string; icon: LucideIcon }[
   { id: "chat", label: "Chat", blurb: "Prompt, behavior, and automation", icon: MessageCircle },
   { id: "models", label: "Models", blurb: "Providers, favorites, and sampling", icon: Cpu },
   { id: "tools", label: "Tools", blurb: "Web search and page extraction", icon: Wrench },
+  { id: "skills", label: "Skills", blurb: "Reusable instructions for a task", icon: Sparkles },
   { id: "memory", label: "Memory", blurb: "Facts Veyra keeps about you", icon: Brain },
   { id: "privacy", label: "Privacy", blurb: "Connectivity and data boundaries", icon: Shield },
-  { id: "extensions", label: "Extensions", blurb: "Skills, MCP servers, and approvals", icon: Puzzle },
+  { id: "extensions", label: "Extensions", blurb: "MCP servers and approvals", icon: Puzzle },
 ];
 
 export function SettingsPage() {
@@ -91,6 +95,7 @@ export function SettingsPage() {
             {activeTab === "chat" && <ChatSettings />}
             {activeTab === "models" && <ModelsSettings />}
             {activeTab === "tools" && <ToolsSettings />}
+            {activeTab === "skills" && <SkillsLibrarySettings />}
             {activeTab === "memory" && <MemorySettings />}
             {activeTab === "privacy" && <PrivacyConnectivitySettings />}
             {activeTab === "extensions" && <ExtensionsSettings />}

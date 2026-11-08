@@ -3,6 +3,7 @@ import { REASONING_LEVELS, type ReasoningLevel } from "@/lib/reasoning-capabilit
 import type { MessageAttachment } from "@/lib/message-attachments";
 import type { Artifact } from "@/modules/chat/artifact";
 import type { InteractiveAnswer } from "@/modules/chat/interactive-answer";
+import type { SkillInvocation } from "@/modules/extensions/extension-types";
 
 /** Legacy values remain readable for saved sessions. New conversations use chat. */
 export type AgentMode = "chat" | "plan" | "build";
@@ -31,6 +32,8 @@ export type AgentEvent = {
   sequence?: number;
   toolCallId?: string;
   attachments?: MessageAttachment[];
+  /** Skills applied to this request, stored so edits cannot rewrite history. */
+  skillInvocations?: SkillInvocation[];
   artifact?: Artifact;
   interactiveAnswer?: InteractiveAnswer;
   contextUsage?: ContextTokenUsage;
@@ -77,6 +80,13 @@ export type StartAgentSessionInput = {
   images?: { data: string; mimeType: string }[];
   attachments?: MessageAttachment[];
   webSearchEnabled?: boolean;
+  /** Skills for this request; defaults to the composer's picks and chat pins. */
+  skillInvocations?: SkillInvocation[];
+  /**
+   * Replays a stored invocation record instead of resolving live library
+   * content. Used by retry so an edited or deleted Skill cannot change what runs.
+   */
+  retrySkillInvocations?: SkillInvocation[];
   /** Resolved user-authored system prompt (global or per-model). */
   systemPrompt?: string;
   /** Send `systemPrompt` as the only system prompt instead of appending it. */

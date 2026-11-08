@@ -14,7 +14,8 @@ value, one of them is a bug waiting to be reported.
 | `src/stores/update-store.ts` | App update state |
 | `src/modules/agents/agent-store.ts` | Pi sessions (the transcript) |
 | `src/modules/projects/project-store.ts` | Projects, active project, workspace resources |
-| `src/modules/extensions/extensions-store.ts` | Skills, MCP servers, approvals |
+| `src/modules/extensions/extensions-store.ts` | MCP servers, approvals, diagnostics |
+| `src/modules/extensions/skills-store.ts` | Skill library and per-request/per-chat selection |
 | `src/modules/memory/memory-store.ts` | Durable memory facts |
 
 ## Ownership
