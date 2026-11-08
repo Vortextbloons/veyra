@@ -615,11 +615,11 @@ pub fn run() {
 
             let search_engine_state =
                 web_search::engine::SearchEngineState::new(app.handle().clone());
-            search_engine_state.start_background();
+            // Search starts on the first request through ensure_ready().
             app.manage(search_engine_state);
 
             agents::reasoning::start_reasoning_watcher(app.handle().clone());
-            agents::reasoning::warm_reasoning_worker();
+            // Capability lookups start the worker on demand.
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(

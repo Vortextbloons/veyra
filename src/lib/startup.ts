@@ -1,16 +1,17 @@
 import { initUiScale } from "@/lib/ui-scale";
 
-/** Dev-only startup timing helpers. */
+/** Lightweight startup marks, including release builds for local profiling. */
 export function markStartup(name: string): void {
-  if (import.meta.env.DEV) {
-    performance.mark(name);
-  }
+  performance.clearMarks(name);
+  performance.mark(name);
 }
 
 export function logStartupDuration(startMark: string, endMark: string, label: string): void {
   if (!import.meta.env.DEV) return;
   try {
     performance.measure(`veyra:${label}`, startMark, endMark);
+    // Navigation starts before static imports; main-start alone misses that work.
+    performance.measure("veyra:navigation-to-ready", { start: 0, end: endMark });
     const entry = performance.getEntriesByName(`veyra:${label}`).at(-1);
     if (entry) {
       console.info(`[veyra startup] ${label}: ${Math.round(entry.duration)}ms`);

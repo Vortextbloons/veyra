@@ -1,3 +1,4 @@
+import { StartupScreen } from "@/app/components/startup-screen";
 import { refreshPiModelCatalog } from "@/lib/reasoning-capabilities";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { TitleBar } from "@/app/components/title-bar";
@@ -34,19 +35,6 @@ import { initializePiConversations } from "@/modules/agents/pi-conversation-stor
 import { ProjectSidebar } from "@/modules/projects/components/project-sidebar";
 
 const SettingsPage = lazy(() => import("@/components/settings/settings-page"));
-
-function ChatHydrationSkeleton() {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-3 p-6">
-      <div className="h-6 w-48 animate-pulse rounded bg-white/5" />
-      <div className="mt-4 flex flex-1 flex-col gap-3">
-        <div className="h-16 w-2/3 animate-pulse rounded-xl bg-white/5" />
-        <div className="ml-auto h-16 w-1/2 animate-pulse rounded-xl bg-white/5" />
-        <div className="h-16 w-3/5 animate-pulse rounded-xl bg-white/5" />
-      </div>
-    </div>
-  );
-}
 
 function App() {
   const conversations = useChatStore((state) => state.conversations);
@@ -286,7 +274,7 @@ function App() {
             {activeNav === "settings" && <SettingsPage />}
           </Suspense>
         </div>
-        {isChatMode && hydrationState === "loading" && <ChatHydrationSkeleton />}
+        {isChatMode && hydrationState === "loading" && <StartupScreen status="Loading your conversations..." />}
         {isChatMode && hydrationState === "ready" && (
           <ChatPanel
             onSend={pipelineHandleSend}

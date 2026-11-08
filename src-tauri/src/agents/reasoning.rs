@@ -187,18 +187,6 @@ pub(crate) fn inspect_model(
     Err("Pi model capability lookup failed".into())
 }
 
-/// Start the worker during setup so the first lookup is already warm.
-pub fn warm_reasoning_worker() {
-    std::thread::spawn(|| {
-        let Ok(mut guard) = WORKER.lock() else { return };
-        if guard.is_none() {
-            if let Ok(worker) = ReasoningWorker::spawn() {
-                *guard = Some(worker);
-            }
-        }
-    });
-}
-
 /// Release the worker process before the app exits. Never blocks shutdown: a
 /// lookup in flight owns the lock, and the process exits with the app.
 pub fn stop_reasoning_worker() {

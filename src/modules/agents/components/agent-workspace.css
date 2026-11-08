@@ -71,7 +71,7 @@
 .agent-inspector-scroll { min-height:0; flex:1; overflow:auto; padding:12px; }
 .agent-session-facts { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:8px 4px 20px; border-bottom:1px solid var(--color-border); font-size:11px; color:var(--color-muted); }
 .agent-session-facts strong { color:var(--color-text-dim); text-align:right; font-weight:500; text-transform:capitalize; }
-.agent-tool-log { border-bottom:1px solid var(--color-border); padding:12px 4px; font-size:11px; }
+.agent-tool-log { border-bottom:1px solid var(--color-border); border-left:2px solid color-mix(in srgb, var(--color-accent) 34%, transparent); padding:12px 4px 12px 10px; font-size:11px; }
 .agent-tool-log summary { cursor:pointer; color:var(--color-text-dim); }
 .agent-tool-log time { float:right; font-size:10px; color:var(--color-muted); }
 .agent-tool-log pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:10px; color:var(--color-text-dim); margin-top:8px; }

@@ -67,12 +67,12 @@ export function AgentActivityCard({ turn }: { turn: AgentChatTurnModel }) {
   const isTool = turn.kind === "tool";
   const isReasoning = turn.kind === "reasoning";
   return (
-    <details className="group/activity min-w-0 text-[var(--color-text-dim)]">
+    <details className={`group/activity min-w-0 border-l-2 pl-3 text-[var(--color-text-dim)] ${isTool ? "border-[var(--color-accent-line-soft)]" : "border-transparent"}`}>
       <summary className="flex min-h-7 cursor-pointer list-none items-center gap-2 rounded text-[12px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
         <span className="truncate">{turn.title ?? (isTool ? "Tool" : isReasoning ? "Reasoning" : "Step")}</span>
         <ChevronRight className="size-3 shrink-0 opacity-50 transition-transform group-open/activity:rotate-90" />
       </summary>
-      {turn.content && <pre className="mb-2 mt-1 max-h-96 overflow-auto whitespace-pre-wrap break-words border-l border-[var(--color-border)] pl-4 font-mono text-[12px] leading-relaxed">{turn.content}</pre>}
+      {turn.content && <pre className={`mb-2 mt-1 max-h-96 overflow-auto whitespace-pre-wrap break-words border-l pl-4 font-mono text-[12px] leading-relaxed ${isTool ? "border-[var(--color-accent-line-soft)]" : "border-[var(--color-border)]"}`}>{turn.content}</pre>}
     </details>
   );
 }

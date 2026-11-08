@@ -18,10 +18,12 @@ describe("encrypted Pi conversation history", () => {
   it("restores saved run state and preserves old conversations", () => {
     useChatStore.setState({ hydrationState: "ready", conversations: [{ id: "legacy", title: "Old chat", createdAt: 1, updatedAt: 2, messages: [] }, { id: session.id, title: session.title, createdAt: 1, updatedAt: 2, messages: [], agentSession: { ...session, status: "stopped" } }] });
     useAgentStore.setState({ sessions: [] });
+    const originalHistory = useChatStore.getState().conversations;
     initializePiConversations();
+    expect(useChatStore.getState().conversations).toBe(originalHistory);
     expect(useAgentStore.getState().sessions[0]).toMatchObject({ id: session.id, status: "stopped" });
     expect(useChatStore.getState().conversations.map((item) => item.id)).toContain("legacy");
-    expect(mocks.save).toHaveBeenCalled();
+    expect(mocks.save).not.toHaveBeenCalled();
   });
   it("saves partial output as recoverable stopped work and deletes linked history", () => {
     useAgentStore.setState({ sessions: [session] });

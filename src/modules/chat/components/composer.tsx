@@ -372,6 +372,8 @@ export function Composer({
   const activeAttachError = attachError;
   const isInputBlocked = Boolean(disabled || (busy && !onSteer) || sendingSteer);
   const isControlsBlocked = Boolean(controlsDisabled);
+  // The accent glow is an invitation for the first message only.
+  const awaitingFirstMessage = !activeSession || activeSession.events.length === 0;
 
   const canSend =
     (value.trim().length > 0 || activeAttachments.length > 0) && !isInputBlocked && !extractingFile;
@@ -503,7 +505,9 @@ export function Composer({
   };
 
   return (
-    <div className={`group/composer relative rounded-[28px] border bg-[var(--color-panel)] p-3 transition-colors focus-within:ring-1 focus-within:ring-[var(--color-accent)]/25 ${
+    <div className={`group/composer relative rounded-[28px] border bg-[var(--color-panel)] p-3 transition-[color,box-shadow] focus-within:ring-1 focus-within:ring-[var(--color-accent)]/25 ${
+      awaitingFirstMessage ? "focus-within:shadow-[0_0_26px_-10px_var(--color-accent)]" : ""
+    } ${
       isEditMode
         ? "border-amber-400/40 focus-within:border-amber-400/60"
         : "border-[var(--color-border)] focus-within:border-[var(--color-accent)]/40"

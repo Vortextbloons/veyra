@@ -33,7 +33,7 @@ self.onmessage = async (event: MessageEvent<DecryptRequest>) => {
     const conversations = await decryptSnapshotPayload<Conversation[]>(
       parsed,
       await importConversationKey(keyBytes, ["decrypt"]),
-      await deriveLegacyConversationKey(legacyKeyMaterial, legacySalt),
+      () => deriveLegacyConversationKey(legacyKeyMaterial, legacySalt),
     );
     self.postMessage({
       ok: true,

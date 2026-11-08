@@ -138,7 +138,7 @@ async function decryptSnapshotOnMainThread(raw: string): Promise<DecodedSnapshot
     conversations: await decryptSnapshotPayload<Conversation[]>(
       parsed,
       await getEncryptionKey(),
-      await deriveLegacyConversationKey(LEGACY_KEY_MATERIAL, LEGACY_KEY_SALT),
+      () => deriveLegacyConversationKey(LEGACY_KEY_MATERIAL, LEGACY_KEY_SALT),
     ),
     revision: parsed.revision ?? 0,
   };

@@ -46,6 +46,7 @@ export function CodeBlock({
 }) {
   return (
     <div className="my-3 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[#0d0e14]">
+      <div aria-hidden className="h-px w-full bg-[var(--color-accent-line-soft)]" />
       <CodeBlockHeader language={language} rawCode={rawCode} />
       <div className="overflow-x-auto p-4">
         {children}

@@ -5,19 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Veyra</title>
+    <link rel="stylesheet" href="/startup.css" />
   </head>
-  <body>
+  <body style="margin:0;background:#080808">
     <div id="root">
-      <div style="display:flex;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;background:#0a0b10;color:#e7e8ee;font-family:Sora,ui-sans-serif,system-ui,sans-serif;">
-        <div style="display:grid;width:48px;height:48px;place-items:center;border-radius:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 16px 48px rgba(99,102,241,.24);margin-bottom:16px;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-            <path d="M2 17l10 5 10-5"></path>
-            <path d="M2 12l10 5 10-5"></path>
-          </svg>
+      <div class="veyra-startup" style="min-height:100vh" role="status" aria-live="polite">
+        <div class="veyra-startup__content">
+          <img class="veyra-startup__logo" src="/veyra-logo.png" width="88" height="88" alt="" />
+          <h1 class="veyra-startup__name">Veyra</h1>
+          <p class="veyra-startup__tagline">Your local AI workspace</p>
+          <div class="veyra-startup__track" aria-hidden="true"><span class="veyra-startup__indicator"></span></div>
+          <p class="veyra-startup__status">Opening your workspace...</p>
+          <p class="veyra-startup__footer">Chats &middot; Projects &middot; Ideas</p>
         </div>
-        <div style="font-size:14px;font-weight:600;letter-spacing:-.02em;">Veyra</div>
-        <div style="margin-top:4px;font-size:11px;color:#6b6e7d;">Loading...</div>
       </div>
     </div>
     <script type="module" src="/src/app/main.tsx"></script>

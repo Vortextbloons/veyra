@@ -82,12 +82,18 @@ export function RecentChats({
               return (
                 <li key={chat.id} className="group">
                   <div
-                    className={`flex w-full items-center gap-0.5 rounded-md transition-colors ${
+                    className={`relative flex w-full items-center gap-0.5 overflow-hidden rounded-md transition-colors ${
                       active
                         ? "bg-[var(--color-accent-soft)]"
                         : "hover:bg-white/5"
                     }`}
                   >
+                    {active && (
+                      <span
+                        aria-hidden
+                        className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-[var(--color-accent)]"
+                      />
+                    )}
                     <button
                       onClick={() => onSelect?.(chat.id)}
                       title={chat.title}

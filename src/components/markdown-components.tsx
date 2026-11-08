@@ -50,7 +50,7 @@ export const MARKDOWN_COMPONENTS: Components = {
   },
   thead({ children }) {
     return (
-      <thead className="border-b border-[var(--color-border)] bg-white/[0.03]">
+      <thead className="border-b border-[var(--color-border)] bg-[var(--color-accent-wash)]">
         {children}
       </thead>
     );

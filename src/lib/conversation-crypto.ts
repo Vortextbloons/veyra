@@ -21,7 +21,9 @@ export function bytesToBase64(bytes: Uint8Array): string {
 
 export function base64ToBytes(value: string): Uint8Array {
   const binary = atob(value);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
 export function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -79,7 +81,7 @@ function snapshotAlgorithm(snapshot: EncryptedSnapshot): AesGcmParams {
 export async function decryptSnapshotPayload<T>(
   snapshot: EncryptedSnapshot,
   key: CryptoKey,
-  legacyKey: CryptoKey,
+  legacyKey: CryptoKey | (() => Promise<CryptoKey>),
 ): Promise<T> {
   const data = toArrayBuffer(base64ToBytes(snapshot.data));
   const algorithm = snapshotAlgorithm(snapshot);
@@ -88,7 +90,7 @@ export async function decryptSnapshotPayload<T>(
   try {
     decrypted = await crypto.subtle.decrypt(algorithm, key, data);
   } catch {
-    decrypted = await crypto.subtle.decrypt(algorithm, legacyKey, data);
+    decrypted = await crypto.subtle.decrypt(algorithm, typeof legacyKey === "function" ? await legacyKey() : legacyKey, data);
   }
   return JSON.parse(new TextDecoder().decode(decrypted)) as T;
 }

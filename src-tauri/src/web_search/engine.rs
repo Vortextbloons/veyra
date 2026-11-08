@@ -1,7 +1,7 @@
 //! Bundled local search engine (DonSeTch) lifecycle and MCP bridge.
 //!
 //! The engine is a separate process shipped in the installer. It is started
-//! with the app on an ephemeral loopback port, protected by a per-session
+//! on the first search on an ephemeral loopback port, protected by a per-session
 //! bearer token, and killed with the app. It is never linked as a Rust crate:
 //! DonSeTch is AGPL-3.0 and Veyra talks to it over MCP.
 
@@ -151,15 +151,6 @@ impl SearchEngineState {
     }
 
     /// Start the engine without blocking the UI. Safe to call more than once.
-    pub fn start_background(&self) {
-        let inner = Arc::clone(&self.inner);
-        tauri::async_runtime::spawn(async move {
-            if let Err(error) = inner.ensure_ready().await {
-                eprintln!("[search-engine] startup failed: {error}");
-            }
-        });
-    }
-
     pub fn status(&self) -> SearchEngineStatus {
         self.inner.status.lock().clone()
     }

@@ -42,7 +42,7 @@ export function statusIcon(status: AiJobStatus): ReactNode {
     case "aborted":
       return <AlertCircle className="size-3 text-amber-400" />;
     case "queued":
-      return <Clock className="size-3 text-[var(--color-text-dim)]" />;
+      return <Clock className="size-3 text-[var(--color-muted)]" />;
   }
 }
 
@@ -58,7 +58,7 @@ export function statusColor(status: AiJobStatus): string {
     case "aborted":
       return "text-amber-400 bg-amber-500/15 ring-amber-500/25";
     case "queued":
-      return "text-[var(--color-text-dim)] bg-white/[0.04] ring-white/[0.06]";
+      return "text-[var(--color-muted)] bg-white/[0.04] ring-white/[0.06]";
   }
 }
 

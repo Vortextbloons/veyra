@@ -42,9 +42,11 @@
   --color-accent-line: color-mix(in srgb, var(--color-accent) 38%, var(--color-border));
   --color-accent-tint: color-mix(in srgb, var(--color-accent) 16%, transparent);
   --color-accent-line-soft: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  /* Barely-there purple wash for table headers and similar stripes. */
+  --color-accent-wash: color-mix(in srgb, var(--color-accent) 7%, transparent);
   --color-success: #34d399;
   --color-scrollbar: #2b2b2b;
-  --color-scrollbar-hover: #424242;
+  --color-scrollbar-hover: color-mix(in srgb, var(--color-accent) 26%, #424242);
   --color-focus: #c3b4ec;
   --color-danger: #f87171;
   --color-warning: #fbbf24;

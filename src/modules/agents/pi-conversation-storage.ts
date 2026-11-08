@@ -25,7 +25,7 @@ export function flushPiConversations(): void {
     const existingMessages = new Map(existing?.messages.map((message) => [message.id, message]));
     const eventTimes = new Map(session.events.map((event) => [event.id, event.at]));
     const previousSession = savedSessions.find((item) => item.id === session.id);
-    const messages: ChatMessage[] = existing && previousSession?.events === session.events && previousSession.model === session.model ? existing.messages : buildAgentChatTurns(session.events, session.model).filter((turn) => !turn.kind).map((turn) => ({
+    const messages: ChatMessage[] = existing && existing.messages.length > 0 && previousSession?.events === session.events && previousSession.model === session.model ? existing.messages : buildAgentChatTurns(session.events, session.model).filter((turn) => !turn.kind).map((turn) => ({
       ...existingMessages.get(turn.id),
       id: turn.id, role: turn.role === "user" ? "user" : "assistant", content: turn.content,
       reasoning: turn.reasoning,
@@ -47,7 +47,13 @@ export function initializePiConversations(): void {
   if (initialized) return;
   const restored = useChatStore.getState().conversations.flatMap((conversation) => conversation.agentSession ? [conversation.agentSession] : []);
   const existing = useAgentStore.getState().sessions;
-  useAgentStore.setState({ sessions: [...restored, ...existing.filter((session) => !restored.some((item) => item.id === session.id))] });
+  const restoredIds = new Set(restored.map((session) => session.id));
+  const unsaved = existing.filter((session) => !restoredIds.has(session.id));
+  const sessions = [...restored, ...unsaved];
+  useAgentStore.setState({ sessions });
+  // Restored transcripts already match their encrypted snapshots. Only flush
+  // sessions that have not yet been saved; do not rebuild or rewrite history.
+  savedSessions = unsaved.length ? restored : sessions;
   initialized = true;
   flushPiConversations();
   useAgentStore.subscribe((state, previous) => {
