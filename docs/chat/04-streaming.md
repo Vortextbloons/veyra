@@ -32,6 +32,11 @@ and calls `agent-store.stopSession`, which aborts the request controller and
 terminates the Pi process. The session is marked `stopped` and its events remain
 readable.
 
+The composer's primary button follows `resolveComposerAction`
+(`src/modules/chat/composer-action.ts`). While a response runs it stays a Send
+button when there is text to steer with, and becomes a square **Stop** button
+when the composer is empty, so an empty draft never leaves the run uncancellable.
+
 ## Scroll Behavior
 
 `AgentOutputView` follows the tail while the user is within 100px of the bottom,

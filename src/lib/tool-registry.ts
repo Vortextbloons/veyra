@@ -12,6 +12,7 @@ export const ASK_QUESTION_TOOL_NAME = "ask_question";
 export const INTERACTIVE_ANSWER_TOOL_NAME = "generate_interactive_answer";
 export const CREATE_ARTIFACT_TOOL_NAME = "create_artifact";
 export const INLINE_EDIT_TOOL_NAME = "inline_edit";
+export const USE_SKILL_TOOL_NAME = "use_skill";
 
 export function buildProviderTools(options: {
   webSearchEnabled: boolean;
@@ -180,4 +181,43 @@ export function buildProviderTools(options: {
   }
 
   return tools;
+}
+
+/**
+ * The tool that lets the model load a Skill's instructions on demand.
+ *
+ * The system prompt advertises each Skill by name and description only; this
+ * tool fetches the full instructions when the model decides they apply. That
+ * keeps every Skill body out of the prompt until it is needed.
+ */
+export function buildUseSkillTool(skills: { slug: string; name: string; description: string }[]): ProviderToolDefinition | undefined {
+  if (skills.length === 0) return undefined;
+  const catalogue = skills.map((skill) => `- ${skill.slug}: ${skill.description}`).join("\n");
+  return {
+    type: "function",
+    function: {
+      name: USE_SKILL_TOOL_NAME,
+      description:
+        `Load the instructions for a Skill when the task matches it. These Skills are available:\n${catalogue}\n\nCall this before doing work a Skill covers, then follow the returned instructions. Call it only for a Skill whose description matches the current task.`,
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: `The Skill to load: one of ${skills.map((skill) => skill.slug).join(", ")}.`,
+            enum: skills.map((skill) => skill.slug),
+          },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  };
+}
+
+/** Short routing lines for the system prompt, mirroring the tool's catalogue. */
+export function buildSkillCataloguePrompt(skills: { slug: string; name: string; description: string }[]): string {
+  if (skills.length === 0) return "";
+  const lines = skills.map((skill) => `<skill>\n  <name>${skill.slug}</name>\n  <description>${skill.description.replace(/<[^>]*>/g, "")}</description>\n</skill>`);
+  return `The following Skills provide specialized instructions for specific tasks.\nUse the use_skill tool to load a Skill's instructions when the task matches its description.\n\n<available_skills>\n${lines.join("\n")}\n</available_skills>`;
 }

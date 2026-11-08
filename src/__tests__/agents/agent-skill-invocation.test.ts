@@ -47,7 +47,7 @@ describe("skills on a request", () => {
     mocks.run.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
     mocks.invoke.mockReset();
     mocks.invoke.mockResolvedValue([{ path: "/skills/pdf-tools", name: "pdf-tools" }]);
-    useSkillsStore.setState({ skills: [], chatSkillIds: {}, pendingTurnSkillIds: {}, skillsEnabled: true });
+    useSkillsStore.setState({ skills: [], chatSkillIds: {}, pendingTurnSkillIds: {}, skillsEnabled: true, modelInvocationDefault: false });
     useAgentStore.setState({ sessions: [], activeSessionId: null, projectPath: "", projects: [] });
   });
 
@@ -182,6 +182,59 @@ describe("skills on a request", () => {
       retrySkillInvocations: [],
     });
     expect(mocks.invoke).not.toHaveBeenCalledWith("materialize_pi_skills", expect.anything());
+  });
+
+  it("advertises loadable Skills in the prompt without their instructions", async () => {
+    useSkillsStore.setState({ skills: [skill()], modelInvocationDefault: true });
+    await useAgentStore.getState().startSession({ continueSessionId: null, projectPath: "", model: "test", prompt: "Hello" });
+    const sent = mocks.run.mock.calls[0][0].prompt as string;
+    expect(sent).toContain("<available_skills>");
+    expect(sent).toContain("<name>pdf-tools</name>");
+    expect(sent).toContain("Extract text from PDFs.");
+    // The body arrives only through the tool, so it must not be in the prompt.
+    expect(sent).not.toContain("Read the reference first.");
+  });
+
+  it("advertises nothing when the model default is manual only", async () => {
+    useSkillsStore.setState({ skills: [skill()], modelInvocationDefault: false });
+    await useAgentStore.getState().startSession({ continueSessionId: null, projectPath: "", model: "test", prompt: "Hello" });
+    const sent = mocks.run.mock.calls[0][0].prompt as string;
+    expect(sent).not.toContain("<available_skills>");
+    expect(sent).not.toContain("Read the reference first.");
+  });
+
+  it("advertises a Skill that opted in while the default stays manual", async () => {
+    useSkillsStore.setState({ skills: [skill({ modelInvocable: true })], modelInvocationDefault: false });
+    await useAgentStore.getState().startSession({ continueSessionId: null, projectPath: "", model: "test", prompt: "Hello" });
+    expect(mocks.run.mock.calls[0][0].prompt).toContain("<name>pdf-tools</name>");
+  });
+
+  it("hides a Skill that opted out while the default allows the model", async () => {
+    useSkillsStore.setState({ skills: [skill({ modelInvocable: false })], modelInvocationDefault: true });
+    await useAgentStore.getState().startSession({ continueSessionId: null, projectPath: "", model: "test", prompt: "Hello" });
+    const sent = mocks.run.mock.calls[0][0].prompt as string;
+    expect(sent).not.toContain("<available_skills>");
+  });
+
+  it("still applies a manual-only Skill when the user selects it", async () => {
+    useSkillsStore.setState({ skills: [skill({ modelInvocable: false })], modelInvocationDefault: true, pendingTurnSkillIds: { "new-chat": [skill().id] } });
+    await useAgentStore.getState().startSession({ continueSessionId: null, projectPath: "", model: "test", prompt: "Hello" });
+    expect(mocks.run.mock.calls[0][0].prompt).toContain("Read the reference first.");
+  });
+
+  it("does not advertise a Skill already applied to the request", async () => {
+    useSkillsStore.setState({ skills: [skill()], modelInvocationDefault: true, pendingTurnSkillIds: { "new-chat": [skill().id] } });
+    await useAgentStore.getState().startSession({ continueSessionId: null, projectPath: "", model: "test", prompt: "Hello" });
+    const sent = mocks.run.mock.calls[0][0].prompt as string;
+    // Applied: full instructions inline, not also offered as loadable.
+    expect(sent).toContain("Read the reference first.");
+    expect(sent).not.toContain("<available_skills>");
+  });
+
+  it("advertises nothing when Skills are disabled", async () => {
+    useSkillsStore.setState({ skills: [skill()], skillsEnabled: false, modelInvocationDefault: true });
+    await useAgentStore.getState().startSession({ continueSessionId: null, projectPath: "", model: "test", prompt: "Hello" });
+    expect(mocks.run.mock.calls[0][0].prompt).not.toContain("<available_skills>");
   });
 
   it("spends the one-request pick even when the run later fails", async () => {

@@ -27,11 +27,19 @@ type SkillsStore = {
   chatSkillIds: Record<string, string[]>;
   pendingTurnSkillIds: Record<string, string[]>;
   skillsEnabled: boolean;
+  /**
+   * Library-wide default for whether the model may load Skills on its own.
+   * A Skill's own `modelInvocable` overrides it either way.
+   */
+  modelInvocationDefault: boolean;
   createSkill: (draft: SkillDraft) => Promise<SkillRecord>;
-  updateSkill: (id: string, patch: Partial<SkillDraft> & { enabled?: boolean }) => Promise<SkillRecord>;
+  updateSkill: (id: string, patch: Partial<SkillDraft> & { enabled?: boolean; modelInvocable?: boolean }) => Promise<SkillRecord>;
   duplicateSkill: (id: string) => Promise<SkillRecord | undefined>;
   removeSkill: (id: string) => void;
   setSkillEnabled: (id: string, enabled: boolean) => void;
+  /** `undefined` clears the override so the Skill follows the library default. */
+  setSkillModelInvocable: (id: string, modelInvocable: boolean | undefined) => void;
+  setModelInvocationDefault: (allow: boolean) => void;
   setChatSkills: (chatId: string, skillIds: string[]) => void;
   addChatSkill: (chatId: string, skillId: string) => void;
   removeChatSkill: (chatId: string, skillId: string) => void;
@@ -81,6 +89,9 @@ export const useSkillsStore = create<SkillsStore>()(persist((set, get) => ({
   chatSkillIds: {},
   pendingTurnSkillIds: {},
   skillsEnabled: true,
+  // Model invocation starts off: a Skill the user never asked for should not
+  // start steering the chat because it happens to be installed.
+  modelInvocationDefault: false,
 
   createSkill: async (draft) => {
     const record = await createSkillRecord(draft, get().skills);
@@ -112,6 +123,13 @@ export const useSkillsStore = create<SkillsStore>()(persist((set, get) => ({
       snapshotId: source.snapshotId,
       metadata: source.metadata,
     }, get().skills);
+    // A copy inherits the model-access choice, since it is the same instructions.
+    if (source.modelInvocable !== undefined) {
+      set((state) => ({
+        skills: state.skills.map((skill) => (skill.id === record.id ? { ...skill, modelInvocable: source.modelInvocable } : skill)),
+      }));
+      record.modelInvocable = source.modelInvocable;
+    }
     set((state) => ({ skills: [record, ...state.skills] }));
     return record;
   },
@@ -128,6 +146,14 @@ export const useSkillsStore = create<SkillsStore>()(persist((set, get) => ({
       : skill),
     pendingTurnSkillIds: enabled ? state.pendingTurnSkillIds : withoutId(state.pendingTurnSkillIds, id),
   })),
+
+  setSkillModelInvocable: (id, modelInvocable) => set((state) => ({
+    skills: state.skills.map((skill) => skill.id === id
+      ? { ...skill, modelInvocable, updatedAt: new Date().toISOString() }
+      : skill),
+  })),
+
+  setModelInvocationDefault: (allow) => set({ modelInvocationDefault: allow }),
 
   setChatSkills: (chatId, skillIds) => set((state) => ({
     chatSkillIds: { ...state.chatSkillIds, [chatId]: pruneIds(state.skills, skillIds) },
@@ -207,6 +233,7 @@ export const useSkillsStore = create<SkillsStore>()(persist((set, get) => ({
     // A one-request pick must not survive a reload.
     pendingTurnSkillIds: {},
     skillsEnabled: state.skillsEnabled,
+    modelInvocationDefault: state.modelInvocationDefault,
   }),
 }));
 
@@ -219,6 +246,7 @@ function migratePersistedSkills(persisted: unknown, version: number) {
       chatSkillIds: (state.chatSkillIds && typeof state.chatSkillIds === "object" ? state.chatSkillIds : {}) as Record<string, string[]>,
       pendingTurnSkillIds: {},
       skillsEnabled: state.skillsEnabled !== false,
+      modelInvocationDefault: state.modelInvocationDefault === true,
     };
   }
   const migrated = migrateLegacySkills(state);
@@ -227,6 +255,8 @@ function migratePersistedSkills(persisted: unknown, version: number) {
     chatSkillIds: migrated.chatSkillIds,
     pendingTurnSkillIds: {},
     skillsEnabled: true,
+    // Migrated Skills have never been offered to the model, so keep them manual.
+    modelInvocationDefault: false,
   };
 }
 

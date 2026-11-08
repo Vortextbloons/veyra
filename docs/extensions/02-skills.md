@@ -41,8 +41,9 @@ Veyra decides which Skills a request uses, then sends their instructions with th
    ones recorded with the request, even after an edit.
 
 Materialized folders carry `disable-model-invocation: true`. Pi will not advertise or auto-load them;
-Veyra is the only thing that selects a Skill. This is what keeps automatic selection a later,
-explicit addition rather than an accident of Pi's discovery.
+Veyra is the only thing that selects a Skill. Model selection happens through Veyra's own `use_skill`
+tool instead, so the catalogue, the access rules, and the record stay in one place. This is what keeps
+automatic selection an explicit, user-controlled feature rather than an accident of Pi's discovery.
 
 ## Invoking a Skill
 
@@ -51,6 +52,38 @@ explicit addition rather than an accident of Pi's discovery.
 - **Whole chat:** use **Pin** on that chip, or the Chat settings panel, to promote it. Pinned Skills
   get a distinct chip and stay until removed.
 - Invoking a Skill once never changes the rest of the chat.
+
+## Who can apply a Skill
+
+Two separate questions, with separate controls:
+
+| | Question | Control |
+|---|---|---|
+| Manual use | Can the user apply this Skill? | The Skill is enabled |
+| Model use | May the model load this Skill on its own? | Library default plus a per-Skill override |
+
+**Manual use is always available for an enabled Skill.** The model controls never restrict the user.
+
+For model use there is one library-wide default, **Let the model choose Skills**, and each Skill can
+override it in either direction:
+
+| Skill setting | Default off | Default on |
+|---|---|---|
+| `auto` (Model may use) | model can load it | model can load it |
+| `manual` (Manual only) | model cannot load it | model cannot load it |
+| unset (follows default) | model cannot load it | model can load it |
+
+The default starts **off**, so installing a Skill never starts steering the chat. The usual setup is
+to turn the default on and set the few Skills you want to keep for yourself to Manual only.
+
+When the model may use a Skill, its name and description appear in the prompt as an
+`<available_skills>` catalogue and a `use_skill` tool is registered. The model asks for the Skill by
+slug and receives the instructions then. Bodies stay out of the prompt until they are needed, and the
+composer picker marks such Skills with a small `model` badge.
+
+Access is re-checked when the model asks for a Skill, so disabling a Skill or switching it to manual
+mid-request takes effect immediately. A loaded Skill gets the same framing as one the user applied,
+including the note that it cannot override Veyra policy or tool permissions.
 
 ## Library operations
 
@@ -100,6 +133,5 @@ persistent split, and retry after edit or deletion.
 
 ## Not in this version
 
-Automatic Skill selection. Descriptions are already the routing signal, so advertising available
-Skills to the model and loading full instructions only when needed can be added without changing the
-library, the record, or the composer.
+Nothing further is planned for Skill selection beyond the controls above; the library default plus a
+per-Skill override covers "let the model choose everything" and "keep these few for me".

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SkillRecord } from "./extension-types";
+import { isModelInvocable, manualOnlySkills, modelInvocableSkills } from "./skill-runtime";
 
 const values = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
@@ -18,7 +20,17 @@ const { useSkillsStore, importLegacySkillsOnce, invocationsFor } = await import(
 
 function reset(): void {
   values.clear();
-  useSkillsStore.setState({ skills: [], chatSkillIds: {}, pendingTurnSkillIds: {}, skillsEnabled: true });
+  useSkillsStore.setState({ skills: [], chatSkillIds: {}, pendingTurnSkillIds: {}, skillsEnabled: true, modelInvocationDefault: false });
+}
+
+/** Minimal record shaped like a library entry, for the access-rule cases. */
+function record(overrides: Partial<SkillRecord> = {}): SkillRecord {
+  return {
+    id: "skill.notes.abcd", type: "skill", name: "Notes", slug: "notes", description: "D",
+    instructions: "Body.", version: "1.0.0", enabled: true, provenance: "local",
+    installedAt: "", updatedAt: "", health: "ready", contentHash: "h",
+    ...overrides,
+  } as SkillRecord;
 }
 
 describe("skill library store", () => {
@@ -169,5 +181,82 @@ describe("skill library store", () => {
     useSkillsStore.setState({ skills: [], chatSkillIds: { "chat-a": [] } });
     importLegacySkillsOnce();
     expect(useSkillsStore.getState().chatSkillIds["chat-a"]).toEqual([]);
+  });
+});
+
+describe("who may use a skill", () => {
+  beforeEach(reset);
+
+  it("starts manual-only: the model cannot load a Skill nobody configured", () => {
+    expect(useSkillsStore.getState().modelInvocationDefault).toBe(false);
+    const skill = record();
+    expect(isModelInvocable(skill, false)).toBe(false);
+    expect(modelInvocableSkills([skill], false)).toEqual([]);
+  });
+
+  it("offers every Skill when the user allows model choice", () => {
+    const skill = record();
+    expect(modelInvocableSkills([skill], true)).toEqual([skill]);
+    expect(manualOnlySkills([skill], true)).toEqual([]);
+  });
+
+  it("lets one Skill opt in while the default stays manual", () => {
+    const opted = record({ modelInvocable: true });
+    const plain = record({ id: "b", name: "Plain", slug: "plain" });
+    expect(modelInvocableSkills([opted, plain], false)).toEqual([opted]);
+    expect(manualOnlySkills([opted, plain], false)).toEqual([plain]);
+  });
+
+  it("lets one Skill opt out while the default allows the model", () => {
+    const opted = record({ modelInvocable: false });
+    const plain = record({ id: "b", name: "Plain", slug: "plain" });
+    expect(modelInvocableSkills([opted, plain], true)).toEqual([plain]);
+    expect(manualOnlySkills([opted, plain], true)).toEqual([opted]);
+  });
+
+  it("never offers a disabled Skill even when it opted in", () => {
+    const disabled = record({ enabled: false, modelInvocable: true });
+    expect(modelInvocableSkills([disabled], true)).toEqual([]);
+    expect(manualOnlySkills([disabled], true)).toEqual([]);
+  });
+
+  it("still lets the user apply a manual-only Skill", async () => {
+    const skill = await useSkillsStore.getState().createSkill({ name: "Manual", description: "D", instructions: "Body." });
+    useSkillsStore.getState().setSkillModelInvocable(skill.id, false);
+    useSkillsStore.getState().setPendingTurnSkills("chat-a", [skill.id]);
+    // The picker does not filter on model access; only the tool catalogue does.
+    const invocations = invocationsFor(useSkillsStore.getState().skills, [], useSkillsStore.getState().pendingTurnSkillIds["chat-a"]);
+    expect(invocations.map((item) => item.id)).toEqual([skill.id]);
+  });
+
+  it("stores an explicit override and clears it on reset", async () => {
+    const skill = await useSkillsStore.getState().createSkill({ name: "Notes", description: "D", instructions: "Body." });
+    useSkillsStore.getState().setSkillModelInvocable(skill.id, true);
+    expect(useSkillsStore.getState().skills[0].modelInvocable).toBe(true);
+    useSkillsStore.getState().setSkillModelInvocable(skill.id, false);
+    expect(useSkillsStore.getState().skills[0].modelInvocable).toBe(false);
+    useSkillsStore.getState().setSkillModelInvocable(skill.id, undefined);
+    expect(useSkillsStore.getState().skills[0].modelInvocable).toBeUndefined();
+  });
+
+  it("keeps the override when an unrelated edit saves", async () => {
+    const skill = await useSkillsStore.getState().createSkill({ name: "Notes", description: "D", instructions: "Body." });
+    useSkillsStore.getState().setSkillModelInvocable(skill.id, true);
+    const updated = await useSkillsStore.getState().updateSkill(skill.id, { instructions: "New body." });
+    expect(updated.modelInvocable).toBe(true);
+  });
+
+  it("carries the override onto a duplicate", async () => {
+    const skill = await useSkillsStore.getState().createSkill({ name: "Notes", description: "D", instructions: "Body." });
+    useSkillsStore.getState().setSkillModelInvocable(skill.id, true);
+    const copy = await useSkillsStore.getState().duplicateSkill(skill.id);
+    expect(copy?.modelInvocable).toBe(true);
+  });
+
+  it("flips the library default", () => {
+    useSkillsStore.getState().setModelInvocationDefault(true);
+    expect(useSkillsStore.getState().modelInvocationDefault).toBe(true);
+    useSkillsStore.getState().setModelInvocationDefault(false);
+    expect(useSkillsStore.getState().modelInvocationDefault).toBe(false);
   });
 });

@@ -223,9 +223,14 @@ fn safe_slug(slug: &str) -> Result<String, String> {
 /// Writes each Skill in this request as `<root>/<slug>/SKILL.md` and returns the
 /// paths for Pi's `--skill` flag. Pi then handles discovery, the `/skill:name`
 /// command, and reading supporting files relative to the skill directory.
+///
+/// `prune` removes folders from earlier requests so Pi only sees this request's
+/// selection. A lazy load during a run passes `false`, because the folders for
+/// the session's explicit Skills must survive.
 #[tauri::command]
-pub fn materialize_pi_skills(app: AppHandle, skills: Vec<MaterializedSkillInput>) -> Result<Vec<MaterializedSkill>, String> {
+pub fn materialize_pi_skills(app: AppHandle, skills: Vec<MaterializedSkillInput>, prune: Option<bool>) -> Result<Vec<MaterializedSkill>, String> {
     let root = materialized_root(&app)?;
+    let prune = prune.unwrap_or(true);
     let mut materialized = Vec::new();
     let mut expected: Vec<PathBuf> = Vec::new();
     for skill in skills {
@@ -260,11 +265,13 @@ pub fn materialize_pi_skills(app: AppHandle, skills: Vec<MaterializedSkillInput>
         materialized.push(MaterializedSkill { path: directory.to_string_lossy().into_owned(), name: slug });
     }
     // Remove folders from earlier requests; Pi should only see this selection.
-    if let Ok(entries) = fs::read_dir(&root) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() && !expected.iter().any(|keep| keep == &path) {
-                let _ = fs::remove_dir_all(path);
+    if prune {
+        if let Ok(entries) = fs::read_dir(&root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && !expected.iter().any(|keep| keep == &path) {
+                    let _ = fs::remove_dir_all(path);
+                }
             }
         }
     }
@@ -535,5 +542,14 @@ mod tests {
         assert_eq!(safe_slug("PDF Tools").unwrap(), "pdf-tools");
         assert_eq!(safe_slug("../escape").unwrap(), "escape");
         assert!(safe_slug("!!").is_err());
+    }
+
+    #[test]
+    fn prune_defaults_to_on() {
+        // The command signature keeps `prune` optional so an older caller still
+        // gets the safe default: only this request's Skills stay on disk.
+        let prune: Option<bool> = None;
+        assert!(prune.unwrap_or(true));
+        assert!(!Some(false).unwrap_or(true));
     }
 }

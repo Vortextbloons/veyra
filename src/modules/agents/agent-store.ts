@@ -3,7 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { contextTokensFromUsage, splitContextUsage } from "./context-usage";
 import type { Conversation } from "@/modules/chat/chat-types";
-import { createPiChatTools } from "./pi-chat-tools";
+import { createPiChatTools, loadableSkills } from "./pi-chat-tools";
+import { buildSkillCataloguePrompt } from "@/lib/tool-registry";
+import type { SkillInvocation } from "@/modules/extensions/extension-types";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invocationsFor, useSkillsStore } from "@/modules/extensions/skills-store";
 import { buildSkillPromptBlock } from "@/modules/extensions/skill-runtime";
@@ -599,6 +601,8 @@ export const useAgentStore = create<AgentStore>()(
       try {
         const abortController = new AbortController();
         sessionAbortControllers.set(id, abortController);
+        // Skills the model loads during this run, appended to the request record.
+        const loadedByModel: SkillInvocation[] = [];
         try {
           let memoryBlock = "";
           try {
@@ -628,6 +632,26 @@ export const useAgentStore = create<AgentStore>()(
               const current = state.sessions.find((item) => item.id === id);
               return current ? { sessions: patchSession(state.sessions, id, { events: [...current.events, output] }) } : state;
             });
+          }, onSkillUsed: (invocation) => {
+            // Append to the request's record so the turn shows what the model
+            // chose to load, and a retry replays it.
+            loadedByModel.push(invocation);
+            set((state) => ({
+              sessions: state.sessions.map((session) => session.id !== id ? session : {
+                ...session,
+                events: session.events.map((event) => event.id !== messageId ? event : {
+                  ...event,
+                  skillInvocations: [...invocations, ...loadedByModel],
+                }),
+              }),
+            }));
+            // Make the supporting files reachable for this run without pruning the
+            // session's explicit Skills.
+            const record = useSkillsStore.getState().skills.find((item) => item.id === invocation.id);
+            void invoke("materialize_pi_skills", {
+              prune: false,
+              skills: [{ name: invocation.name, slug: invocation.slug, description: record?.description ?? "", instructions: invocation.instructions, snapshotId: record?.snapshotId }],
+            }).catch(() => undefined);
           } });
           const project = scopeProjectId ? useProjectStore.getState().projects.find((item) => item.id === scopeProjectId) : undefined;
           let skillPaths: string[] = [];
@@ -664,7 +688,19 @@ export const useAgentStore = create<AgentStore>()(
           // The recorded instructions are sent with the request; `--skill` gives
           // the model a resolvable directory for supporting files.
           const skillBlock = buildSkillPromptBlock(promptInvocations);
-          const contextualPrompt = [project?.systemPrompt ? `Project guidance:\n${project.systemPrompt}` : "", skillBlock, userPrompt].filter(Boolean).join("\n\n");
+          // Advertise Skills the model can load on its own. Only the name and
+          // description go in the prompt; the instructions arrive through the
+          // `use_skill` tool when the model decides they apply.
+          const loadable = loadableSkills(scopeProjectId).filter(
+            (skill) => !invocations.some((invocation) => invocation.id === skill.id),
+          );
+          const catalogue = buildSkillCataloguePrompt(loadable);
+          const contextualPrompt = [
+            project?.systemPrompt ? `Project guidance:\n${project.systemPrompt}` : "",
+            skillBlock,
+            catalogue,
+            userPrompt,
+          ].filter(Boolean).join("\n\n");
           const result = await runPiAgent(
             {
               sessionId: id,

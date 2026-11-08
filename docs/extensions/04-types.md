@@ -35,6 +35,12 @@ type SkillRecord = ExtensionRecord & {
   contentHash: string;
   /** Spec-compliant folder name used when the Skill is written as SKILL.md. */
   slug: string;
+  /**
+   * Whether the model may load this Skill on its own.
+   * `undefined` inherits the library default; `true`/`false` override it.
+   * Manual use by the user is unaffected.
+   */
+  modelInvocable?: boolean;
   metadata?: Record<string, string>;
   files?: string[];
   snapshotId?: string;
@@ -154,6 +160,8 @@ type SkillsStore = {
   /** Applies to the next request only; cleared when it is sent. */
   pendingTurnSkillIds: Record<string, string[]>;
   skillsEnabled: boolean;
+  /** Library-wide default for model invocation; per-Skill values override it. */
+  modelInvocationDefault: boolean;
 };
 
 type ExtensionsStore = {

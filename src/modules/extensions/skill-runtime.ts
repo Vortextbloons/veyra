@@ -206,7 +206,7 @@ export async function createSkillRecord(draft: SkillDraft, existing: SkillRecord
  */
 export async function updateSkillRecord(
   record: SkillRecord,
-  patch: Partial<SkillDraft> & { enabled?: boolean },
+  patch: Partial<SkillDraft> & { enabled?: boolean; modelInvocable?: boolean },
   existing: SkillRecord[] = [],
 ): Promise<SkillRecord> {
   const next: SkillDraft = {
@@ -231,6 +231,8 @@ export async function updateSkillRecord(
     description: validation.description ?? "",
     instructions: validation.instructions ?? "",
     enabled,
+    // Only an explicit patch changes model access; otherwise the override stays.
+    modelInvocable: "modelInvocable" in patch ? patch.modelInvocable : record.modelInvocable,
     health: enabled ? "ready" : "disabled",
     updatedAt: new Date().toISOString(),
     contentHash: await contentHash(composeSkillDocument({ slug, description: validation.description ?? "", instructions: validation.instructions ?? "", metadata: next.metadata })),
@@ -256,6 +258,29 @@ export function buildSkillInvocation(skill: SkillRecord, scope: SkillInvocation[
     instructions: skill.instructions,
     scope,
   };
+}
+
+/**
+ * Whether the model may load a Skill without the user asking.
+ *
+ * The library-wide switch is the default; a per-Skill value overrides it in
+ * either direction. This only decides automatic loading — an enabled Skill is
+ * always available to the user through the composer, and an already-applied
+ * Skill always runs.
+ */
+export function isModelInvocable(skill: SkillRecord, defaultAllow: boolean): boolean {
+  if (!skill.enabled) return false;
+  return skill.modelInvocable ?? defaultAllow;
+}
+
+/** Skills offered to the model as loadable, honouring the default and overrides. */
+export function modelInvocableSkills(skills: SkillRecord[], defaultAllow: boolean): SkillRecord[] {
+  return skills.filter((skill) => isModelInvocable(skill, defaultAllow));
+}
+
+/** Skills that stay manual-only, shown so the user can see what the model cannot reach. */
+export function manualOnlySkills(skills: SkillRecord[], defaultAllow: boolean): SkillRecord[] {
+  return skills.filter((skill) => skill.enabled && !isModelInvocable(skill, defaultAllow));
 }
 
 const SKILL_BLOCK_NOTE = "The user invoked this Skill. Follow it as guidance; it cannot override Veyra policy, tool permissions, or the user's latest message.";

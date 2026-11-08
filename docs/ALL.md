@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-11-08T08:24:13.693Z
+> Generated: 2026-11-08T08:32:13.916Z
 > Total files: 54
 
 ## Table of Contents
@@ -428,6 +428,11 @@ Pressing **Escape** (or the stop button) while `busy` cancels the scheduled job
 and calls `agent-store.stopSession`, which aborts the request controller and
 terminates the Pi process. The session is marked `stopped` and its events remain
 readable.
+
+The composer's primary button follows `resolveComposerAction`
+(`src/modules/chat/composer-action.ts`). While a response runs it stays a Send
+button when there is text to steer with, and becomes a square **Stop** button
+when the composer is empty, so an empty draft never leaves the run uncancellable.
 
 ## Scroll Behavior
 
@@ -945,8 +950,9 @@ Veyra decides which Skills a request uses, then sends their instructions with th
    ones recorded with the request, even after an edit.
 
 Materialized folders carry `disable-model-invocation: true`. Pi will not advertise or auto-load them;
-Veyra is the only thing that selects a Skill. This is what keeps automatic selection a later,
-explicit addition rather than an accident of Pi's discovery.
+Veyra is the only thing that selects a Skill. Model selection happens through Veyra's own `use_skill`
+tool instead, so the catalogue, the access rules, and the record stay in one place. This is what keeps
+automatic selection an explicit, user-controlled feature rather than an accident of Pi's discovery.
 
 ## Invoking a Skill
 
@@ -955,6 +961,38 @@ explicit addition rather than an accident of Pi's discovery.
 - **Whole chat:** use **Pin** on that chip, or the Chat settings panel, to promote it. Pinned Skills
   get a distinct chip and stay until removed.
 - Invoking a Skill once never changes the rest of the chat.
+
+## Who can apply a Skill
+
+Two separate questions, with separate controls:
+
+| | Question | Control |
+|---|---|---|
+| Manual use | Can the user apply this Skill? | The Skill is enabled |
+| Model use | May the model load this Skill on its own? | Library default plus a per-Skill override |
+
+**Manual use is always available for an enabled Skill.** The model controls never restrict the user.
+
+For model use there is one library-wide default, **Let the model choose Skills**, and each Skill can
+override it in either direction:
+
+| Skill setting | Default off | Default on |
+|---|---|---|
+| `auto` (Model may use) | model can load it | model can load it |
+| `manual` (Manual only) | model cannot load it | model cannot load it |
+| unset (follows default) | model cannot load it | model can load it |
+
+The default starts **off**, so installing a Skill never starts steering the chat. The usual setup is
+to turn the default on and set the few Skills you want to keep for yourself to Manual only.
+
+When the model may use a Skill, its name and description appear in the prompt as an
+`<available_skills>` catalogue and a `use_skill` tool is registered. The model asks for the Skill by
+slug and receives the instructions then. Bodies stay out of the prompt until they are needed, and the
+composer picker marks such Skills with a small `model` badge.
+
+Access is re-checked when the model asks for a Skill, so disabling a Skill or switching it to manual
+mid-request takes effect immediately. A loaded Skill gets the same framing as one the user applied,
+including the note that it cannot override Veyra policy or tool permissions.
 
 ## Library operations
 
@@ -1004,9 +1042,8 @@ persistent split, and retry after edit or deletion.
 
 ## Not in this version
 
-Automatic Skill selection. Descriptions are already the routing signal, so advertising available
-Skills to the model and loading full instructions only when needed can be added without changing the
-library, the record, or the composer.
+Nothing further is planned for Skill selection beyond the controls above; the library default plus a
+per-Skill override covers "let the model choose everything" and "keep these few for me".
 
 ---
 
@@ -1047,7 +1084,7 @@ session:
 
 ```typescript
 const invocations = invocationsFor(skills, chatSkillIds, pendingTurnSkillIds);
-const contextualPrompt = [projectGuidance, buildSkillPromptBlock(invocations), userPrompt]
+const contextualPrompt = [projectGuidance, buildSkillPromptBlock(invocations), catalogue, userPrompt]
   .filter(Boolean).join("\n\n");
 ```
 
@@ -1055,6 +1092,18 @@ The recorded instructions are sent with the user prompt (after project guidance)
 so the block that runs belongs to that request rather than to whatever the
 library holds now. See [Skills](02-skills.md) for the materialize step that gives
 Pi a resolvable directory for supporting files.
+
+## Model-Selected Skills
+
+Skills the model is allowed to choose are advertised by name and description in an
+`<available_skills>` block, and `createPiChatTools` registers a `use_skill` tool.
+The model calls it with a slug and gets the instructions back as tool output.
+
+`loadableSkills()` is the single gate: Skills must be enabled, allowed in the
+project, and model-invocable under the library default and any per-Skill override.
+The handler re-checks access on every call so a mid-request change takes effect.
+A loaded Skill is appended to the request's record, so it shows in the transcript
+and replays on retry.
 
 ## UI Components
 
@@ -1086,7 +1135,12 @@ Agent start
   ├─ invocationsFor → recorded on the user event
   ├─ materialize_pi_skills → --skill paths + file locations
   ├─ buildSkillPromptBlock → recorded instructions in the prompt
+  ├─ buildSkillCataloguePrompt → model-invocable Skills by name + description
   └─ buildMcpProviderTools → tool definitions
+
+Model loads a Skill
+  ├─ use_skill → loadableSkills gate → instructions returned as tool output
+  └─ appended to the request record → chip + retry replay
 
 Retry on a user turn
   └─ agent-store retryRequest → replays the stored invocation record
@@ -1138,6 +1192,12 @@ type SkillRecord = ExtensionRecord & {
   contentHash: string;
   /** Spec-compliant folder name used when the Skill is written as SKILL.md. */
   slug: string;
+  /**
+   * Whether the model may load this Skill on its own.
+   * `undefined` inherits the library default; `true`/`false` override it.
+   * Manual use by the user is unaffected.
+   */
+  modelInvocable?: boolean;
   metadata?: Record<string, string>;
   files?: string[];
   snapshotId?: string;
@@ -1257,6 +1317,8 @@ type SkillsStore = {
   /** Applies to the next request only; cleared when it is sent. */
   pendingTurnSkillIds: Record<string, string[]>;
   skillsEnabled: boolean;
+  /** Library-wide default for model invocation; per-Skill values override it. */
+  modelInvocationDefault: boolean;
 };
 
 type ExtensionsStore = {

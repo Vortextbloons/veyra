@@ -33,6 +33,7 @@ export function ChatExtensionsSettings() {
   const projectId = useProjectStore((state) => state.activeProjectId) ?? undefined;
   const library = useSkillsStore((state) => state.skills);
   const skillsEnabled = useSkillsStore((state) => state.skillsEnabled);
+  const modelInvocationDefault = useSkillsStore((state) => state.modelInvocationDefault);
   const chatSkillIds = useSkillsStore((state) => state.chatSkillIds[chatId]) ?? [];
   const addChatSkill = useSkillsStore((state) => state.addChatSkill);
   const removeChatSkill = useSkillsStore((state) => state.removeChatSkill);
@@ -81,6 +82,11 @@ export function ChatExtensionsSettings() {
               No Skills run in every message here. Type <span className="font-mono text-white/70">/</span> in the composer to use one for a single message.
             </p>
           )}
+          <p className="px-2 pb-1 pt-1.5 text-[10px] leading-relaxed text-[var(--color-text-dim)]/80">
+            {modelInvocationDefault
+              ? "The model may also load Skills on its own. Choose Manual only in Settings → Skills to keep a specific one for yourself."
+              : "Only you can apply Skills. Turn on “Let the model choose Skills” in Settings → Skills to let it load them on its own."}
+          </p>
 
           {availableSkills.length > 0 && (
             <div className="mt-1">

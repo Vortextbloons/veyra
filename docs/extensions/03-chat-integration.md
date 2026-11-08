@@ -31,7 +31,7 @@ session:
 
 ```typescript
 const invocations = invocationsFor(skills, chatSkillIds, pendingTurnSkillIds);
-const contextualPrompt = [projectGuidance, buildSkillPromptBlock(invocations), userPrompt]
+const contextualPrompt = [projectGuidance, buildSkillPromptBlock(invocations), catalogue, userPrompt]
   .filter(Boolean).join("\n\n");
 ```
 
@@ -39,6 +39,18 @@ The recorded instructions are sent with the user prompt (after project guidance)
 so the block that runs belongs to that request rather than to whatever the
 library holds now. See [Skills](02-skills.md) for the materialize step that gives
 Pi a resolvable directory for supporting files.
+
+## Model-Selected Skills
+
+Skills the model is allowed to choose are advertised by name and description in an
+`<available_skills>` block, and `createPiChatTools` registers a `use_skill` tool.
+The model calls it with a slug and gets the instructions back as tool output.
+
+`loadableSkills()` is the single gate: Skills must be enabled, allowed in the
+project, and model-invocable under the library default and any per-Skill override.
+The handler re-checks access on every call so a mid-request change takes effect.
+A loaded Skill is appended to the request's record, so it shows in the transcript
+and replays on retry.
 
 ## UI Components
 
@@ -70,7 +82,12 @@ Agent start
   ├─ invocationsFor → recorded on the user event
   ├─ materialize_pi_skills → --skill paths + file locations
   ├─ buildSkillPromptBlock → recorded instructions in the prompt
+  ├─ buildSkillCataloguePrompt → model-invocable Skills by name + description
   └─ buildMcpProviderTools → tool definitions
+
+Model loads a Skill
+  ├─ use_skill → loadableSkills gate → instructions returned as tool output
+  └─ appended to the request record → chip + retry replay
 
 Retry on a user turn
   └─ agent-store retryRequest → replays the stored invocation record

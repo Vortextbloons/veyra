@@ -30,6 +30,14 @@ export type SkillRecord = ExtensionRecord & {
   contentHash: string;
   /** Spec-compliant folder name used when the skill is materialized as SKILL.md. */
   slug: string;
+  /**
+   * Whether the model may load this Skill on its own.
+   *
+   * `undefined` inherits the library-wide setting. `true` opts this Skill in even
+   * when other Skills are restricted, and `false` keeps it manual-only. The user
+   * can always invoke any enabled Skill from the composer regardless.
+   */
+  modelInvocable?: boolean;
   /** Extra frontmatter fields Veyra does not interpret, preserved on export. */
   metadata?: Record<string, string>;
   /** Supporting files carried by an imported package. Instruction-only skills omit this. */

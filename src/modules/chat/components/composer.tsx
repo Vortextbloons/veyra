@@ -7,8 +7,10 @@ import {
   Plus,
   ArrowUp,
   SlidersHorizontal,
+  Square,
   X,
 } from "lucide-react";
+import { resolveComposerAction } from "@/modules/chat/composer-action";
 import {
   fileToAttachment,
   formatFileSize,
@@ -26,6 +28,7 @@ import {
 } from "@/lib/reasoning-capabilities";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { useSkillsStore } from "@/modules/extensions/skills-store";
+import { isModelInvocable } from "@/modules/extensions/skill-runtime";
 import { SkillChipRow } from "@/modules/extensions/components/skill-chip";
 import type { SkillRecord } from "@/modules/extensions/extension-types";
 import { useAgentStore } from "@/modules/agents/agent-store";
@@ -227,6 +230,7 @@ export function Composer({
   const policies = useExtensionsStore((state) => state.policies);
   const skillLibrary = useSkillsStore((state) => state.skills);
   const skillsEnabled = useSkillsStore((state) => state.skillsEnabled);
+  const modelInvocationDefault = useSkillsStore((state) => state.modelInvocationDefault);
   const chatSkillIds = useSkillsStore((state) => state.chatSkillIds[conversationId]);
   const pendingSkillIds = useSkillsStore((state) => state.pendingTurnSkillIds[conversationId]);
   const addChatSkill = useSkillsStore((state) => state.addChatSkill);
@@ -381,8 +385,30 @@ export function Composer({
   // The accent glow is an invitation for the first message only.
   const awaitingFirstMessage = !activeSession || activeSession.events.length === 0;
 
-  const canSend =
-    (value.trim().length > 0 || activeAttachments.length > 0) && !isInputBlocked && !extractingFile;
+  const hasComposerInput = value.trim().length > 0 || activeAttachments.length > 0;
+  // Only text can steer a running response; attachments must wait for it to end.
+  const hasComposerText = value.trim().length > 0;
+  // While a response runs, an empty composer turns the submit button into Stop
+  // instead of a disabled dead end.
+  const composerAction = resolveComposerAction({
+    busy,
+    stopAvailable: Boolean(onStop),
+    steerAvailable: Boolean(onSteer),
+    editMode: isEditMode,
+    sendingSteer,
+    hasText: hasComposerText,
+  });
+
+  const canSend = composerAction === "stop"
+    || (composerAction !== "busy" && hasComposerInput && !isInputBlocked && !extractingFile);
+
+  const sendLabel = composerAction === "stop"
+    ? "Stop response"
+    : composerAction === "steer"
+      ? "Steer response"
+      : isEditMode
+        ? "Save edit"
+        : "Send";
 
   const handleSend = () => {
     const text = value.trim();
@@ -601,6 +627,11 @@ export function Composer({
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-[11.5px] font-medium text-white">{skill.name}</span>
                     {selectedSkillIds.includes(skill.id) && <Check className="size-3 shrink-0 text-emerald-400" aria-label="Already applied" />}
+                    {isModelInvocable(skill, modelInvocationDefault) && (
+                      <span className="shrink-0 rounded border border-violet-400/25 px-1 py-px text-[9.5px] text-violet-200" title="The model may also pick this Skill on its own">
+                        model
+                      </span>
+                    )}
                   </span>
                   <span className="line-clamp-2 text-[10px] leading-snug text-[var(--color-text-dim)]">{skill.description || "Applies this Skill to one message"}</span>
                 </button>
@@ -681,12 +712,18 @@ export function Composer({
               </>
             )}
             <button
-              aria-label={busy && onSteer ? "Steer response" : isEditMode ? "Save edit" : "Send"}
+              aria-label={sendLabel}
+              title={sendLabel}
               disabled={!canSend}
-              onClick={handleSend}
+              onClick={() => {
+                if (composerAction === "stop") { onStop?.(); return; }
+                handleSend();
+              }}
               className="group/send grid size-9 shrink-0 place-items-center rounded-full bg-[var(--color-text)] text-[var(--color-bg)] transition-all hover:brightness-90 active:scale-95 disabled:opacity-30 disabled:hover:brightness-100 disabled:active:scale-100"
             >
-              {busy && !onSteer || sendingSteer ? (
+              {composerAction === "stop" ? (
+                <Square className="size-3.5 fill-current" />
+              ) : sendingSteer || composerAction === "busy" ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : isEditMode ? (
                 <Check className="size-4" />

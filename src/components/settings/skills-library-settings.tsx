@@ -5,6 +5,8 @@ import { Copy, Download, FileCode2, FileUp, Pencil, Plus, Trash2 } from "lucide-
 import type { SkillRecord } from "@/modules/extensions/extension-types";
 import { useSkillsStore } from "@/modules/extensions/skills-store";
 import { SkillDocumentPreview, SkillEditor } from "@/modules/extensions/components/skill-editor";
+import { ModelAccessControl } from "@/modules/extensions/components/model-access-control";
+import { modelInvocablePatch } from "@/modules/extensions/components/model-access";
 import { composeSkillDocument } from "@/modules/extensions/skill-runtime";
 import {
   EmptyState,
@@ -35,6 +37,9 @@ export function SkillsLibrarySettings() {
   const duplicateSkill = useSkillsStore((state) => state.duplicateSkill);
   const importSkill = useSkillsStore((state) => state.importSkill);
   const convertWorkflow = useSkillsStore((state) => state.convertWorkflow);
+  const modelInvocationDefault = useSkillsStore((state) => state.modelInvocationDefault);
+  const setModelInvocationDefault = useSkillsStore((state) => state.setModelInvocationDefault);
+  const setSkillModelInvocable = useSkillsStore((state) => state.setSkillModelInvocable);
 
   const [editing, setEditing] = useState<SkillRecord | null | "new">(null);
   const [inspecting, setInspecting] = useState<string | null>(null);
@@ -168,6 +173,14 @@ export function SkillsLibrarySettings() {
                           )}
                         </div>
                         <p className="mt-0.5 line-clamp-2 text-[12px] text-[var(--color-text-dim)]">{skill.description}</p>
+                        <div className="mt-1.5">
+                          <ModelAccessControl
+                            skill={skill}
+                            defaultAllow={modelInvocationDefault}
+                            disabled={!skill.enabled || !skillsEnabled}
+                            onChange={(access) => setSkillModelInvocable(skill.id, modelInvocablePatch(access).modelInvocable)}
+                          />
+                        </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <button type="button" onClick={() => setEditing(skill)} aria-label={`Edit ${skill.name}`} title="Edit" className={settingsIconButtonClass}>
@@ -260,7 +273,10 @@ export function SkillsLibrarySettings() {
         </SettingsCard>
       </SettingsPanel>
 
-      <SettingsPanel title="Behavior" description="Skills are instructions, never actions.">
+      <SettingsPanel
+        title="Who can use Skills"
+        description="Manual use is always available. This only controls whether the model may pick a Skill up on its own."
+      >
         <SettingsCard>
           <SettingsRows>
             <SettingRow
@@ -274,6 +290,24 @@ export function SkillsLibrarySettings() {
                 checked={skillsEnabled}
                 onChange={(event) => setFeatureFlag(event.target.checked)}
                 className="size-4 accent-[var(--color-accent)]"
+              />
+            </SettingRow>
+            <SettingRow
+              label="Let the model choose Skills"
+              description={
+                modelInvocationDefault
+                  ? "The model may load any Skill that is not set to Manual only. You can still apply Skills yourself."
+                  : "Only you can apply Skills. Turn this on to let the model load them on its own, then restrict individual Skills to Manual only as needed."
+              }
+              className="py-3.5"
+            >
+              <input
+                type="checkbox"
+                aria-label="Let the model choose Skills"
+                checked={modelInvocationDefault}
+                disabled={!skillsEnabled}
+                onChange={(event) => setModelInvocationDefault(event.target.checked)}
+                className="size-4 accent-[var(--color-accent)] disabled:opacity-45"
               />
             </SettingRow>
           </SettingsRows>

@@ -39,4 +39,14 @@ describe("skill records in chat turns", () => {
     expect(reused[0]).toBe(first[0]);
     expect(reused[0].skillInvocations?.[0].contentHash).toBe("hash-v1");
   });
+
+  it("re-renders when the model loads another Skill mid-run", () => {
+    const loaded: SkillInvocation = { ...invocation, id: "skill.notes.bbbb", slug: "notes", name: "Notes", contentHash: "hash-v2" };
+    const first = buildAgentChatTurns([promptEvent({ skillInvocations: [invocation] })]);
+    const second = buildAgentChatTurns([promptEvent({ skillInvocations: [invocation, loaded] })]);
+    const reused = reuseAgentChatTurns(second, first);
+    // A longer record must not reuse the stale turn, or the new chip never shows.
+    expect(reused[0]).not.toBe(first[0]);
+    expect(reused[0].skillInvocations).toHaveLength(2);
+  });
 });
