@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MessageSquare, PanelLeftClose, PanelLeftOpen, Search, Trash2 } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Search, Trash2 } from "lucide-react";
 import type { RecentChatsProps } from "@/modules/chat/chat-types";
 
 export function RecentChats({
@@ -95,7 +95,9 @@ export function RecentChats({
                       aria-current={active ? "true" : undefined}
                       className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left max-[760px]:justify-center max-[760px]:px-1"
                     >
-                      <MessageSquare className="size-4 shrink-0 text-[var(--color-text-dim)]" />
+                      <span className="grid size-4 shrink-0 place-items-center">
+                        {chat.working ? <WorkingIndicator title={chat.title} /> : null}
+                      </span>
                       <span className="flex min-w-0 flex-1 items-center gap-1.5 max-[760px]:hidden">
                         <span
                           className={`truncate text-[13px] leading-snug ${
@@ -190,6 +192,31 @@ function DeleteAllConfirm({
         </button>
       </div>
     </div>
+  );
+}
+
+function WorkingIndicator({ title }: { title: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={`Model is working in ${title}`}
+      title="Working"
+      className="grid size-4 shrink-0 place-items-center"
+    >
+      <svg viewBox="0 0 16 16" className="size-4 animate-spin" style={{ animationDuration: "1.15s" }} aria-hidden="true">
+        <circle cx="8" cy="8" r="5.4" fill="none" stroke="var(--color-accent)" strokeOpacity="0.22" strokeWidth="1.6" />
+        <circle
+          cx="8"
+          cy="8"
+          r="5.4"
+          fill="none"
+          stroke="var(--color-accent)"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeDasharray="9.5 24.4"
+        />
+      </svg>
+    </span>
   );
 }
 

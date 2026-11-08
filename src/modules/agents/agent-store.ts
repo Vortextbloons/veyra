@@ -1,5 +1,6 @@
 import { useSettingsStore } from "@/stores/settings-store";
 import { create } from "zustand";
+import { contextTokensFromUsage } from "./context-usage";
 import type { Conversation } from "@/modules/chat/chat-types";
 import { createPiChatTools } from "./pi-chat-tools";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
@@ -247,7 +248,7 @@ function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string; sequence
         if (msg && typeof msg.role === "string" && msg.role === "assistant") {
           const usage = asRecord(msg.usage);
           if (usage && typeof usage.input === "number") {
-            return event("token_update", "Token update", String(usage.input), undefined, raw.sequence);
+            return event("token_update", "Token update", String(contextTokensFromUsage(usage)), undefined, raw.sequence);
           }
         }
         return null;

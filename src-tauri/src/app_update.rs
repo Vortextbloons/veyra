@@ -1,8 +1,10 @@
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -16,6 +18,41 @@ struct DownloadProgress {
     total_bytes: Option<u64>,
 }
 
+// Backend-owned staging: callers never supply a local executable path.
+#[derive(Default)]
+pub struct UpdateState(Mutex<Option<PreparedUpdate>>);
+
+struct PreparedUpdate {
+    path: PathBuf,
+    kind: &'static str,
+    sha256: String,
+}
+
+fn verify_installer(path: &Path, expected: &str) -> Result<(), String> {
+    let mut file = fs::File::open(path).map_err(|e| format!("could not open update: {e}"))?;
+    let mut hash = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .map_err(|e| format!("could not verify update: {e}"))?;
+        if count == 0 {
+            break;
+        }
+        hash.update(&buffer[..count]);
+    }
+    if hash
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+        != expected
+    {
+        return Err("Update verification failed. Download the update again.".into());
+    }
+    Ok(())
+}
+
 fn validate_release_download(download_url: &str, asset_name: &str) -> Result<&'static str, String> {
     let url = url::Url::parse(download_url).map_err(|_| "invalid update download URL")?;
     if url.scheme() != "https" || url.host_str() != Some("github.com") {
@@ -26,7 +63,7 @@ fn validate_release_download(download_url: &str, asset_name: &str) -> Result<&'s
         .path_segments()
         .ok_or("invalid update download path")?
         .collect();
-    if segments.len() < 6
+    if segments.len() != 6
         || !segments[0].eq_ignore_ascii_case("Vortextbloons")
         || !segments[1].eq_ignore_ascii_case("veyra")
         || segments[2] != "releases"
@@ -154,10 +191,17 @@ fn launch_installer(installer_path: &Path, installer_kind: &str) -> Result<(), S
     {
         let mut command = if installer_kind == "msi" {
             let mut command = Command::new("msiexec.exe");
-            command.arg("/i").arg(installer_path);
+            command.arg("/i").arg(installer_path).args([
+                "/passive",
+                "/norestart",
+                "AUTOLAUNCHAPP=True",
+            ]);
             command
         } else {
-            Command::new(installer_path)
+            let mut command = Command::new(installer_path);
+            // Tauri NSIS update protocol; NSIS remembers the installed location.
+            command.args(["/S", "/UPDATE", "/R"]);
+            command
         };
 
         crate::shared::process::hide_console(&mut command);
@@ -175,31 +219,86 @@ fn launch_installer(installer_path: &Path, installer_kind: &str) -> Result<(), S
 }
 
 #[tauri::command]
-pub async fn install_app_update(
+pub async fn prepare_app_update(
     app: AppHandle,
     download_url: String,
     asset_name: String,
+    sha256: String,
 ) -> Result<(), String> {
-    let installer_kind = validate_release_download(&download_url, &asset_name)?;
-    let download_app = app.clone();
-    let installer_path = tauri::async_runtime::spawn_blocking(move || {
-        download_installer(&download_app, &download_url, &asset_name)
+    let kind = validate_release_download(&download_url, &asset_name)?;
+    if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(
+            "This release has no valid SHA-256 checksum. Open releases to update manually.".into(),
+        );
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<UpdateState>();
+        let mut staged = state
+            .0
+            .try_lock()
+            .map_err(|_| "An update operation is already running")?;
+        let sha256 = sha256.to_ascii_lowercase();
+        if let Some(update) = staged.as_ref() {
+            if update.sha256 == sha256 && verify_installer(&update.path, &sha256).is_ok() {
+                return Ok(());
+            }
+        }
+        let path = download_installer(&app, &download_url, &asset_name)?;
+        if let Err(error) = verify_installer(&path, &sha256) {
+            let _ = fs::remove_file(&path);
+            return Err(error);
+        }
+        if let Some(previous) = staged.take() {
+            if previous.path != path {
+                let _ = fs::remove_file(previous.path);
+            }
+        }
+        *staged = Some(PreparedUpdate { path, kind, sha256 });
+        Ok(())
     })
     .await
-    .map_err(|error| format!("the update download task failed: {error}"))??;
+    .map_err(|e| format!("update preparation failed: {e}"))?
+}
 
-    // Release the bundled search engine before the installer replaces it.
-    if let Some(state) = app.try_state::<crate::web_search::engine::SearchEngineState>() {
-        state.stop_now();
-    }
-    launch_installer(&installer_path, installer_kind)?;
-    app.exit(0);
-    Ok(())
+#[tauri::command]
+pub async fn install_app_update(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<UpdateState>();
+        let staged = state
+            .0
+            .try_lock()
+            .map_err(|_| "An update operation is already running")?;
+        let update = staged
+            .as_ref()
+            .ok_or("Download the update before restarting")?;
+        verify_installer(&update.path, &update.sha256)?;
+        if let Some(state) = app.try_state::<crate::web_search::engine::SearchEngineState>() {
+            state.stop_now();
+        }
+        launch_installer(&update.path, update.kind)?;
+        crate::agents::commands::stop_all_pi_agents();
+        crate::agents::reasoning::stop_reasoning_worker();
+        app.exit(0);
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("update installation failed: {e}"))?
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verifies_staged_bytes_and_rejects_modified_files() {
+        let path = std::env::temp_dir().join(format!("veyra-update-test-{}", std::process::id()));
+        fs::write(&path, b"abc").unwrap();
+        let expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        assert!(verify_installer(&path, expected).is_ok());
+        fs::write(&path, b"changed").unwrap();
+        assert!(verify_installer(&path, expected).is_err());
+        fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn accepts_official_windows_release_installers() {

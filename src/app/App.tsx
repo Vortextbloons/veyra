@@ -196,10 +196,12 @@ function App() {
     return [...agent.agentSessions.filter((session) => !session.projectId).map((session) => ({
       id: `pi:${session.id}`, title: session.title,
       meta: session.status === "running" ? "Working" : new Date(session.endedAt ?? session.startedAt).toLocaleDateString(),
+      working: session.status === "running",
     })), ...scoped.filter((conversation) => !importedIds.has(conversation.id)).map((conversation) => ({
       id: conversation.id,
       title: conversation.title,
       meta: new Date(conversation.updatedAt).toLocaleDateString(),
+      working: false,
     }))];
   }, [conversations, agent.agentSessions]);
 

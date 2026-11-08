@@ -3,11 +3,16 @@ import {
   checkForAppUpdate,
   getCurrentAppVersion,
   installAppUpdate,
+  prepareAppUpdate,
   type AppReleaseInfo,
   type UpdateCheckResult,
 } from "@/lib/app-update";
 
 type UpdateStore = {
+  downloading: boolean;
+  preparedRelease: AppReleaseInfo | null;
+  downloadUpdate: (release: AppReleaseInfo) => Promise<void>;
+
   checking: boolean;
   installing: boolean;
   downloadProgress: number | null;
@@ -21,6 +26,8 @@ type UpdateStore = {
 };
 
 export const useUpdateStore = create<UpdateStore>((set, get) => ({
+  downloading: false,
+  preparedRelease: null,
   checking: false,
   installing: false,
   downloadProgress: null,
@@ -66,21 +73,42 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
     }
   },
 
-  installUpdate: async (release) => {
-    if (get().installing) return;
-
-    set({ installing: true, downloadProgress: 0, installError: null });
+  downloadUpdate: async (release) => {
+    if (get().downloading || get().installing) return;
+    set({ downloading: true, downloadProgress: 0, installError: null });
     try {
-      await installAppUpdate(release, ({ downloadedBytes, totalBytes }) => {
-        const downloadProgress =
-          totalBytes && totalBytes > 0
-            ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
-            : null;
-        set({ downloadProgress });
+      await prepareAppUpdate(release, ({ downloadedBytes, totalBytes }) => {
+        const progress = totalBytes && totalBytes > 0
+          ? Math.min(100, Math.round(downloadedBytes / totalBytes * 100)) : null;
+        if (get().downloadProgress !== progress) set({ downloadProgress: progress });
       });
+      set({ downloading: false, preparedRelease: release, downloadProgress: 100 });
     } catch (error) {
-      const installError = error instanceof Error ? error.message : String(error);
-      set({ installing: false, downloadProgress: null, installError });
+      set({ downloading: false, installError: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  },
+
+  installUpdate: async (release) => {
+    if (get().installing || get().downloading) return;
+    if (get().preparedRelease?.version !== release.version) {
+      await get().downloadUpdate(release);
+      return;
+    }
+    set({ installing: true, installError: null });
+    try {
+      // Stop streaming before capturing the final conversation snapshot.
+      const { aiScheduler } = await import("@/lib/ai-scheduler");
+      await aiScheduler.shutdown();
+      const { flushPiConversations } = await import("@/modules/agents/pi-conversation-storage");
+      const { useChatStore } = await import("@/stores/chat-store");
+      const { saveConversationSnapshot, flushConversationSave } = await import("@/lib/conversation-storage");
+      flushPiConversations();
+      await saveConversationSnapshot(useChatStore.getState().conversations);
+      await flushConversationSave();
+      await installAppUpdate();
+    } catch (error) {
+      set({ installing: false, installError: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   },

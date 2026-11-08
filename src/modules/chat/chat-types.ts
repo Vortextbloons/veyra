@@ -242,6 +242,8 @@ export interface RecentChatsItem {
   id: string;
   title: string;
   meta: string;
+  /** True while the model is actively working in this chat. */
+  working?: boolean;
 }
 
 export interface RecentChatsProps {

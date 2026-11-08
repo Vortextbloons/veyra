@@ -25,6 +25,8 @@ export function AboutUpdateSettings() {
   const clearDismissedUpdateVersion = useSettingsStore((s) => s.clearDismissedUpdateVersion);
 
   const checking = useUpdateStore((s) => s.checking);
+  const downloading = useUpdateStore((s) => s.downloading);
+  const preparedRelease = useUpdateStore((s) => s.preparedRelease);
   const installing = useUpdateStore((s) => s.installing);
   const downloadProgress = useUpdateStore((s) => s.downloadProgress);
   const installError = useUpdateStore((s) => s.installError);
@@ -113,15 +115,15 @@ export function AboutUpdateSettings() {
             <button
               type="button"
               onClick={() => void handleUpdate()}
-              disabled={installing || !result.latest.downloadUrl}
+              disabled={installing || downloading || !result.latest.downloadUrl}
               className={settingsPrimaryButtonClass}
             >
-              {installing && <Loader2 className="size-3.5 animate-spin" />}
-              {installing
+              {(installing || downloading) && <Loader2 className="size-3.5 animate-spin" />}
+              {installing ? "Restarting..." : downloading
                 ? downloadProgress === null
                   ? "Downloading update"
                   : `Downloading ${downloadProgress}%`
-                : `Update to ${result.latest.version}`}
+                : preparedRelease?.version === result.latest.version ? "Restart to update" : `Download ${result.latest.version}`}
             </button>
           )}
         </div>
@@ -156,7 +158,7 @@ export function AboutUpdateSettings() {
           <SettingsRows>
             <SettingRow
               label="Check automatically"
-              description="Runs once at startup. Turning this off keeps manual checks available."
+              description="Checks and downloads updates in the background at startup. You choose when to restart."
             >
               <Toggle
                 ariaLabel="Check for updates automatically"

@@ -20,7 +20,7 @@ export function useChatContextPanel({ activeAgentSession }: { activeAgentSession
       percentUsed: resolvedContextLength > 0 ? Math.round(estimatedTokens / resolvedContextLength * 100) : 0,
       includedMessages: activeAgentSession.events.length, droppedMessages: 0,
       reservedOutputTokens: resolvedReservedOutputTokens, includedLabel: "conversation events",
-      contextNote: activeAgentSession.contextTokens ? "Uses Pi-reported tokens." : "Pi token usage appears after the first response.",
+      contextNote: activeAgentSession.contextTokens ? "Last completed model call: input, cached context, and output tokens. Updates after each response; compaction can reduce usage." : "Pi token usage appears after the first response.",
     };
   }, [activeAgentSession, resolvedContextLength, resolvedReservedOutputTokens]);
   return { resolvedContextLength, resolvedReservedOutputTokens, displayContextStats, supportsImages: models.find((model) => model.id === selectedModel)?.supportsImages ?? false };

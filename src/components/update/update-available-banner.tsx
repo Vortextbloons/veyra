@@ -8,6 +8,8 @@ import { useUpdateStore } from "@/stores/update-store";
 export function UpdateAvailableBanner() {
   const result = useUpdateStore((s) => s.result);
   const checking = useUpdateStore((s) => s.checking);
+  const downloading = useUpdateStore((s) => s.downloading);
+  const preparedRelease = useUpdateStore((s) => s.preparedRelease);
   const installing = useUpdateStore((s) => s.installing);
   const downloadProgress = useUpdateStore((s) => s.downloadProgress);
   const installError = useUpdateStore((s) => s.installError);
@@ -65,11 +67,11 @@ export function UpdateAvailableBanner() {
         <p className="truncate text-[11px] text-[var(--color-text-dim)]">
           {installError
             ? installError
-            : installing
+            : installing ? "Restarting Veyra..." : downloading
               ? downloadProgress === null
                 ? "Downloading update…"
                 : `Downloading update… ${downloadProgress}%`
-              : `Released ${formatReleaseDate(latest.publishedAt)}`}
+              : preparedRelease?.version === latest.version ? "Ready to install. Restart when you are ready." : `Released ${formatReleaseDate(latest.publishedAt)}`}
           {latest.downloadAssetName ? ` · ${latest.downloadAssetName}` : ""}
         </p>
       </div>
@@ -78,15 +80,15 @@ export function UpdateAvailableBanner() {
         <button
           type="button"
           onClick={() => void handleUpdate()}
-          disabled={installing || !latest.downloadUrl}
+          disabled={installing || downloading || !latest.downloadUrl}
           className="inline-flex h-7 items-center gap-1.5 rounded-md bg-sky-500/20 px-2.5 text-[11.5px] font-medium text-sky-100 transition-colors hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {installing && <Loader2 className="size-3.5 animate-spin" />}
-          {installing
+          {(installing || downloading) && <Loader2 className="size-3.5 animate-spin" />}
+          {installing ? "Restarting..." : downloading
             ? downloadProgress === null
               ? "Downloading"
               : `${downloadProgress}%`
-            : "Update now"}
+            : preparedRelease?.version === latest.version ? "Restart to update" : "Download update"}
         </button>
         <button
           type="button"

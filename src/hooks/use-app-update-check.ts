@@ -4,7 +4,7 @@ import { useConnectivityStore } from "@/stores/connectivity-store";
 import { ensureSettingsHydrated, useSettingsStore } from "@/stores/settings-store";
 import { useUpdateStore } from "@/stores/update-store";
 
-const STARTUP_DELAY_MS = 8_000;
+import { UPDATE_CONFIG } from "@/lib/update-config";
 
 export function useAppUpdateCheck() {
   const effectiveConnectivity = useConnectivityStore((s) => s.effectiveConnectivity);
@@ -29,9 +29,12 @@ export function useAppUpdateCheck() {
         if (cancelled || !useSettingsStore.getState().autoCheckUpdatesEnabled) {
           return;
         }
-        await checkForUpdates({ skipIfOffline: true });
+        const result = await checkForUpdates({ skipIfOffline: true });
+        if (!cancelled && useSettingsStore.getState().autoCheckUpdatesEnabled && UPDATE_CONFIG.downloadAfterAutomaticCheck && result.status === "update-available" && result.latest.sha256) {
+          await useUpdateStore.getState().downloadUpdate(result.latest).catch(() => undefined);
+        }
       })();
-    }, STARTUP_DELAY_MS);
+    }, UPDATE_CONFIG.startupDelayMs);
 
     return () => {
       cancelled = true;

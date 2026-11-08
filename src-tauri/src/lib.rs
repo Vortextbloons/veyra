@@ -546,6 +546,7 @@ fn app_ready(app: tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(app_update::UpdateState::default())
         .manage(artifact_preview::ArtifactPreviewState::default())
         .register_uri_scheme_protocol("artifact-preview", |context, request| {
             artifact_preview::serve_preview(&request, context.app_handle())
@@ -565,6 +566,7 @@ pub fn run() {
             app_ready,
             artifact_preview::register_artifact_preview,
             exit_app,
+            app_update::prepare_app_update,
             app_update::install_app_update,
             agents::commands::check_pi_available,
             agents::reasoning::inspect_agent_reasoning,

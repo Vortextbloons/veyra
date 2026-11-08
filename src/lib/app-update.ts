@@ -6,13 +6,16 @@ import { resolveEffectiveConnectivity } from "@/lib/connectivity/connectivity-se
 import { useConnectivityStore } from "@/stores/connectivity-store";
 import { useSettingsStore } from "@/stores/settings-store";
 
-export const GITHUB_REPO = "Vortextbloons/veyra";
+import { UPDATE_CONFIG } from "./update-config";
+
+export const GITHUB_REPO = UPDATE_CONFIG.repository;
 export const GITHUB_RELEASES_PAGE = `https://github.com/${GITHUB_REPO}/releases`;
 const GITHUB_LATEST_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 type GitHubReleaseAsset = {
   name: string;
   browser_download_url: string;
+  digest?: string | null;
 };
 
 type GitHubReleaseResponse = {
@@ -35,6 +38,7 @@ export type AppReleaseInfo = {
   releaseNotes: string;
   downloadUrl: string | null;
   downloadAssetName: string | null;
+  sha256: string | null;
 };
 
 export type UpdateCheckResult =
@@ -111,6 +115,7 @@ function mapRelease(payload: GitHubReleaseResponse): AppReleaseInfo {
     releaseNotes: payload.body?.trim() ?? "",
     downloadUrl: asset?.browser_download_url ?? null,
     downloadAssetName: asset?.name ?? null,
+    sha256: asset?.digest?.match(/^sha256:([a-f0-9]{64})$/i)?.[1] ?? null,
   };
 }
 
@@ -174,7 +179,7 @@ export async function checkForAppUpdate(options?: {
   }
 }
 
-export async function installAppUpdate(
+export async function prepareAppUpdate(
   release: AppReleaseInfo,
   onProgress: (progress: UpdateDownloadProgress) => void,
 ): Promise<void> {
@@ -187,7 +192,8 @@ export async function installAppUpdate(
     (event) => onProgress(event.payload),
   );
   try {
-    await invoke("install_app_update", {
+    await invoke("prepare_app_update", {
+      sha256: release.sha256 ?? "",
       downloadUrl: release.downloadUrl,
       assetName: release.downloadAssetName,
     });
@@ -204,4 +210,9 @@ export function formatReleaseDate(iso: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+/** Install only the backend-owned, verified staged update. */
+export async function installAppUpdate(): Promise<void> {
+  await invoke("install_app_update");
 }
