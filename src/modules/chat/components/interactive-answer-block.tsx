@@ -74,7 +74,7 @@ export const InteractiveAnswerBlock = memo(function InteractiveAnswerBlock({
   return (
     <section className="my-2 overflow-hidden rounded-xl border border-white/[0.09] bg-[var(--color-panel)]/55 shadow-lg shadow-black/10">
       <header className="flex items-center gap-2.5 border-b border-white/[0.07] px-3.5 py-2">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-violet-400/10 text-violet-200">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-accent-tint text-accent">
           <Layers3 className="size-3.5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -82,7 +82,7 @@ export const InteractiveAnswerBlock = memo(function InteractiveAnswerBlock({
             {title || "Interactive answer"}
           </div>
         </div>
-        <span className="shrink-0 rounded-full border border-violet-300/15 bg-violet-300/[0.07] px-1.5 py-0.5 text-[8.5px] font-medium uppercase tracking-[0.1em] text-violet-200/80">
+        <span className="shrink-0 rounded-full border border-accent-line-soft bg-accent-tint px-1.5 py-0.5 text-[8.5px] font-medium uppercase tracking-[0.1em] text-accent">
           Interactive
         </span>
       </header>

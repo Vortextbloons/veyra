@@ -56,7 +56,7 @@ export function ShutdownOverlay() {
                 key={item.id}
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] transition-colors ${
                   current
-                    ? "bg-indigo-500/10 text-white"
+                    ? "bg-accent-tint text-white"
                     : done
                       ? "text-[var(--color-text-dim)]"
                       : "text-[var(--color-text-dim)]/45"
@@ -66,7 +66,7 @@ export function ShutdownOverlay() {
                   {done ? (
                     <Check className="size-3.5 text-emerald-400" />
                   ) : current ? (
-                    <Loader2 className="size-3.5 animate-spin text-indigo-400" />
+                    <Loader2 className="size-3.5 animate-spin text-accent" />
                   ) : (
                     <span className="size-1.5 rounded-full bg-current opacity-40" />
                   )}

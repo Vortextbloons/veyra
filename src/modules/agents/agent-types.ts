@@ -1,3 +1,4 @@
+import type { ContextTokenUsage } from "./context-usage";
 import { REASONING_LEVELS, type ReasoningLevel } from "@/lib/reasoning-capabilities";
 import type { MessageAttachment } from "@/lib/message-attachments";
 import type { Artifact } from "@/modules/chat/artifact";
@@ -32,6 +33,7 @@ export type AgentEvent = {
   attachments?: MessageAttachment[];
   artifact?: Artifact;
   interactiveAnswer?: InteractiveAnswer;
+  contextUsage?: ContextTokenUsage;
 };
 
 export type AgentSession = {
@@ -50,6 +52,7 @@ export type AgentSession = {
   events: AgentEvent[];
   exitCode?: number | null;
   contextTokens?: number;
+  contextUsage?: ContextTokenUsage;
   sourceConversationId?: string;
   projectId?: string;
 };

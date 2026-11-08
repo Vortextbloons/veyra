@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ContextBreakdown, ContextBlock } from "@/modules/chat/chat-types";
 import { CONTEXT_BLOCK_ACCENTS } from "@/modules/chat/chat-types";
+import { formatTokenCount } from "@/lib/format-tokens";
 
 function ContextBlockRow({
   block,
@@ -30,7 +31,7 @@ function ContextBlockRow({
         )}
       </span>
       <span className="shrink-0 text-[10.5px] tabular-nums text-[var(--color-text-dim)]">
-        {block.tokenCount.toLocaleString()}
+        {formatTokenCount(block.tokenCount)}
       </span>
       <div
         className="h-1.5 w-10 shrink-0 rounded-full bg-white/5"
@@ -148,16 +149,16 @@ export function ContextBreakdownPanel({
 
       <div className="flex items-center gap-3 border-t border-[var(--color-border)] pt-2 text-[10.5px] text-[var(--color-text-dim)]">
         <span className="flex items-center gap-1">
-          <span className="size-2 rounded-full bg-[#818cf8]" />
-          System: {totalSystemTokens.toLocaleString()}
+          <span className="size-2 rounded-full bg-[var(--color-accent)]" />
+          System: {formatTokenCount(totalSystemTokens)}
         </span>
         <span className="flex items-center gap-1">
           <span className="size-2 rounded-full bg-[#34d399]" />
-          Messages: {totalMessageTokens.toLocaleString()}
+          Messages: {formatTokenCount(totalMessageTokens)}
         </span>
         <span className="flex items-center gap-1">
-          <span className="size-2 rounded-full bg-[#374151]" />
-          Reserved: {reservedOutputTokens.toLocaleString()}
+          <span className="size-2 rounded-full bg-[var(--color-accent-line)]" />
+          Reserved: {formatTokenCount(reservedOutputTokens)}
         </span>
       </div>
     </div>

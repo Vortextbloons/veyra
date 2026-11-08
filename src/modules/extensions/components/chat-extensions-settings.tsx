@@ -16,7 +16,7 @@ function ChatSwitch({ active, onToggle, disabled = false }: { active: boolean; o
       aria-checked={active}
       disabled={disabled}
       onClick={onToggle}
-      className={`h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${active && !disabled ? "bg-blue-500" : "bg-white/10"}`}
+      className={`h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${active && !disabled ? "bg-[var(--color-accent)]" : "bg-white/10"}`}
     >
       <span className={`block size-3 rounded-full bg-white shadow-sm transition-transform ${active && !disabled ? "translate-x-3" : ""}`} />
     </button>

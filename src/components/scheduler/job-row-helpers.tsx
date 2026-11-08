@@ -33,7 +33,7 @@ export function formatDurationMs(ms: number): string {
 export function statusIcon(status: AiJobStatus): ReactNode {
   switch (status) {
     case "running":
-      return <Loader2 className="size-3 animate-spin text-indigo-400" />;
+      return <Loader2 className="size-3 animate-spin text-accent" />;
     case "completed":
       return <CheckCircle2 className="size-3 text-emerald-400" />;
     case "failed":
@@ -49,7 +49,7 @@ export function statusIcon(status: AiJobStatus): ReactNode {
 export function statusColor(status: AiJobStatus): string {
   switch (status) {
     case "running":
-      return "text-indigo-400 bg-indigo-500/15 ring-indigo-500/25";
+      return "text-accent bg-accent-tint ring-accent-line-soft";
     case "completed":
       return "text-emerald-400 bg-emerald-500/15 ring-emerald-500/25";
     case "failed":
@@ -65,7 +65,7 @@ export function statusColor(status: AiJobStatus): string {
 export function statusBorderColor(status: AiJobStatus): string {
   switch (status) {
     case "running":
-      return "border-indigo-500/30";
+      return "border-accent-line-soft";
     case "completed":
       return "border-emerald-500/30";
     case "failed":

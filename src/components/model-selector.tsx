@@ -6,6 +6,7 @@ import {
   Check,
 } from "lucide-react";
 import { useClickOutside } from "@/hooks/use-click-outside";
+import { formatTokenCount } from "@/lib/format-tokens";
 
 export type Model = {
   id: string;
@@ -258,6 +259,5 @@ function ModelGroup({
 }
 
 function formatContext(tokens: number) {
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(tokens % 1000 ? 1 : 0)}K`;
-  return `${tokens}`;
+  return formatTokenCount(tokens);
 }

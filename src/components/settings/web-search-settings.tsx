@@ -34,7 +34,7 @@ export function WebSearchSettings() {
           <SettingsRows>
             <SettingRow
               label="Search by default"
-              description="New chats start with web search on. The composer toolbar still toggles it per chat, and the model decides when a search is actually needed."
+              description="New chats start with web search on. Toggle it per chat from Chat settings, and the model decides when a search is actually needed."
             >
               <Toggle
                 ariaLabel="Enable web search by default"

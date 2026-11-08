@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextTokensFromUsage } from "@/modules/agents/context-usage";
+import { contextTokensFromUsage, splitContextUsage } from "@/modules/agents/context-usage";
 
 describe("context token usage", () => {
   it("keeps cached context in the count as the conversation grows", () => {
@@ -12,4 +12,9 @@ describe("context token usage", () => {
     expect(contextTokensFromUsage({ input: 200, output: 50 })).toBe(250);
     expect(contextTokensFromUsage({ input: NaN, cacheRead: -1, output: Infinity })).toBe(0);
   });
+});
+
+it("separates actual output from input including cached tokens", () => {
+  expect(splitContextUsage({ input: 200, cacheRead: 1000, cacheWrite: 50, output: 100 })).toEqual({ input: 1250, output: 100 });
+  expect(splitContextUsage({ input: NaN, output: -1 })).toEqual({ input: 0, output: 0 });
 });

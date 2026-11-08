@@ -1,8 +1,8 @@
+import { ProjectPicker } from "@/modules/projects/components/project-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Eye,
-  Globe,
   Loader2,
   Plus,
   ArrowUp,
@@ -209,7 +209,6 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
-  const webSearchSpeedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
   const defaultReasoningLevel = useSettingsStore((s) => s.reasoningLevel);
   const reasoningLevelByModel = useSettingsStore((s) => s.reasoningLevelByModel);
   const setModelReasoningLevel = useSettingsStore((s) => s.setModelReasoningLevel);
@@ -373,11 +372,6 @@ export function Composer({
   const activeAttachError = attachError;
   const isInputBlocked = Boolean(disabled || (busy && !onSteer) || sendingSteer);
   const isControlsBlocked = Boolean(controlsDisabled);
-  const webSearchActive = webSearchEnabled && !webSearchDisabled;
-  const webSearchToggleClass =
-    webSearchSpeedPreset === "fast"
-      ? "bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/15 hover:text-cyan-200"
-      : "bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15 hover:text-emerald-200";
 
   const canSend =
     (value.trim().length > 0 || activeAttachments.length > 0) && !isInputBlocked && !extractingFile;
@@ -521,23 +515,22 @@ export function Composer({
         />
       )}
       <div className="flex flex-col gap-1.5">
-        {!isEditMode && <label className="flex items-center gap-2 px-2 text-xs text-[var(--color-text-dim)]">Project
-          <select aria-label="Chat project" value={projectId ?? ""} disabled={busy} onChange={(event) => {
-            const next = event.target.value || undefined;
+        {!isEditMode && <div className="flex items-center gap-2 px-2 text-xs text-[var(--color-text-dim)]">
+          <ProjectPicker value={projectId} projects={projects} disabled={busy} onChange={(next) => {
             const agent = useAgentStore.getState();
             const session = agent.sessions.find((item) => item.id === agent.activeSessionId);
             if (session) {
               useAgentStore.setState({ sessions: agent.sessions.map((item) => item.id === session.id ? { ...item, projectId: next } : item) });
               useChatStore.getState().moveConversation(session.sourceConversationId ?? session.id, next);
             } else {
-              const folder = projects.find((project) => project.id === next)?.settings.resources?.find((resource) => resource.directory)?.path ?? "";
+              const folder = useProjectStore.getState().projects.find((project) => project.id === next)?.settings.resources?.find((resource) => resource.directory)?.path ?? "";
               agent.setProjectPath(folder);
               agent.newSession();
             }
             useProjectStore.getState().setActiveProjectId(next ?? null);
-          }} className="max-w-48 rounded bg-transparent py-1 text-[var(--color-text)]"><option value="">No project</option>{projects.filter((project) => project.status === "active").map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
+          }} />
           {activeSession?.status === "running" && <span>Available after this response</span>}
-        </label>}
+        </div>}
         {isEditMode && (
           <div className="flex items-center justify-between px-2 pb-0.5">
             <span className="text-[11px] font-medium text-amber-300/80">Editing message</span>
@@ -593,7 +586,7 @@ export function Composer({
                   disabled={command.missing.length > 0}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => activateSkill(command)}
-                  className={`w-full rounded-lg px-2 py-2 text-left disabled:cursor-not-allowed disabled:opacity-45 ${index === highlightedSkillIndex ? "bg-violet-400/10" : "hover:bg-white/5"}`}
+                  className={`w-full rounded-lg px-2 py-2 text-left disabled:cursor-not-allowed disabled:opacity-45 ${index === highlightedSkillIndex ? "bg-accent-tint" : "hover:bg-white/5"}`}
                 >
                   <span className="block text-[11.5px] font-medium text-white">/{command.command}</span>
                   <span className="block truncate text-[10px] text-[var(--color-text-dim)]">{command.missing.length > 0 ? `Requires: ${command.missing.join(", ")}` : command.description || "Activate this Skill for the chat"}</span>
@@ -654,29 +647,6 @@ export function Composer({
                   onRefresh={modelReasoning.refresh}
                 />
                 {contextIndicator}
-                {onWebSearchChange && (
-                  <button
-                    type="button"
-                    aria-label={`Web search: ${webSearchActive ? "on" : "off"}`}
-                    aria-pressed={webSearchActive}
-                    title={
-                      webSearchDisabled
-                        ? webSearchDisabledReason ?? "Web search is unavailable"
-                        : webSearchActive
-                          ? `Web search: on${webSearchSpeedPreset === "fast" ? " (fast)" : ""}`
-                          : "Web search: off"
-                    }
-                    disabled={isControlsBlocked || webSearchDisabled}
-                    onClick={() => onWebSearchChange(!webSearchEnabled)}
-                    className={`grid size-7 place-items-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-40 ${
-                      webSearchActive
-                        ? webSearchToggleClass
-                        : "text-[var(--color-text-dim)] hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    <Globe className="size-3.5" />
-                  </button>
-                )}
                 <div ref={optionsRef} className="relative">
                   <IconButton
                     aria-label="Chat options"

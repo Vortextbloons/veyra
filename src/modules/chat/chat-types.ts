@@ -114,6 +114,8 @@ export interface Conversation {
 // ── Context stats ───────────────────────────────────────────────────────────
 
 export interface ContextStats {
+  inputTokens?: number;
+  outputTokens?: number;
   estimatedTokens: number;
   contextLimit: number;
   percentUsed: number;
@@ -141,18 +143,18 @@ export type ContextBlockCategory =
   | "system_message";
 
 export const CONTEXT_BLOCK_ACCENTS: Record<ContextBlockCategory, string> = {
-  system_core: "var(--color-text-dim)",
-  model_identity: "var(--color-text-dim)",
-  user_prompt: "var(--color-accent)",
+  system_core: "#fbbf24",
+  model_identity: "#fb923c",
+  user_prompt: "#f472b6",
   project: "#60a5fa",
   summary: "#2dd4bf",
   retrieved_memory: "#a78bfa",
-  context_anchor: "#64748b",
+  context_anchor: "#e879f9",
   tool_definitions: "#22d3ee",
-  web_search_results: "#22d3ee",
+  web_search_results: "#a3e635",
   user_message: "#4ade80",
-  assistant_message: "#34d399",
-  system_message: "#64748b",
+  assistant_message: "#818cf8",
+  system_message: "#fb7185",
 };
 
 export interface ContextBlock {
@@ -224,6 +226,7 @@ export interface ChatPanelProps {
   /** 0 = all side panels open, 1 = recent chats collapsed */
   sidebarsCollapsed?: number;
   contextStats?: ContextStats;
+  /** Per-chat web search toggle, seeded from the Web search setting. */
   webSearchEnabled?: boolean;
   onWebSearchChange?: (enabled: boolean) => void;
   webSearchDisabled?: boolean;

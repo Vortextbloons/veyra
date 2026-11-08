@@ -16,7 +16,7 @@ function SchedulerStatusDot() {
   if (snapshot.pausedBackground) {
     color = "bg-gray-400";
   } else if (snapshot.isUserJobRunning) {
-    color = "bg-indigo-400";
+    color = "bg-accent";
   } else if (snapshot.activeJob) {
     color = "bg-amber-400";
   } else {
@@ -129,19 +129,19 @@ export function SchedulerPopover() {
                         key={job.id}
                         type="button"
                         onClick={() => handleSelectJob(job)}
-                        className="w-full rounded-lg border border-indigo-500/20 bg-indigo-500/[0.06] p-2 text-left transition-colors hover:bg-indigo-500/[0.1]"
+                        className="w-full rounded-lg border border-accent-line-soft bg-accent-tint p-2 text-left transition-colors hover:bg-accent-soft"
                       >
                         <div className="flex items-center gap-2">
                           <span className="relative flex size-2">
-                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-indigo-400 opacity-60" />
-                            <span className="relative inline-flex size-2 rounded-full bg-indigo-400" />
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-60" />
+                            <span className="relative inline-flex size-2 rounded-full bg-accent" />
                           </span>
                           <span className="text-[11.5px] font-medium text-white">
                             {JOB_LABELS[job.type] ?? job.title}
                           </span>
                           <PriorityChip priority={job.priority} />
                           {job.startedAt && (
-                            <span className="ml-auto font-mono text-[10px] text-indigo-300">
+                            <span className="ml-auto font-mono text-[10px] text-accent">
                               {formatElapsed(job.startedAt)}
                             </span>
                           )}

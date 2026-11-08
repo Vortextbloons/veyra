@@ -7,7 +7,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 export type ChatOptionsMenuProps = {
   open: boolean;
   onClose: () => void;
-  webSearchEnabled: boolean;
+  webSearchEnabled?: boolean;
   onWebSearchChange?: (on: boolean) => void;
   webSearchDisabled?: boolean;
   webSearchDisabledReason?: string;
@@ -19,7 +19,7 @@ function SettingSwitch({ active, muted = false }: { active: boolean; muted?: boo
     <span
       aria-hidden
       className={`h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors ${
-        on ? "bg-blue-500" : "bg-white/10"
+        on ? "bg-[var(--color-accent)]" : "bg-white/10"
       }`}
     >
       <span
@@ -137,19 +137,19 @@ function SectionLabel({ children }: { children: ReactNode }) {
 export function ChatOptionsMenu({
   open,
   onClose,
-  webSearchEnabled,
+  webSearchEnabled = false,
   onWebSearchChange,
   webSearchDisabled = false,
   webSearchDisabledReason,
 }: ChatOptionsMenuProps) {
   const [activeTab, setActiveTab] = useState<"chat" | "skills">("chat");
-  const speedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
+  const webSearchSpeedPreset = useSettingsStore((s) => s.webSearchSpeedPreset);
   const interactiveAnswersEnabled = useSettingsStore((s) => s.interactiveAnswersEnabled);
   const setInteractiveAnswersEnabled = useSettingsStore((s) => s.setInteractiveAnswersEnabled);
   const artifactsEnabled = useSettingsStore((s) => s.artifactsEnabled);
   const setArtifactsEnabled = useSettingsStore((s) => s.setArtifactsEnabled);
   const webSearchOn = webSearchEnabled && !webSearchDisabled;
-  const webSearchIconClass = speedPreset === "fast" ? "text-cyan-300" : "text-emerald-300";
+  const webSearchIconClass = webSearchSpeedPreset === "fast" ? "text-cyan-300" : "text-emerald-300";
 
   return (
     <DialogSurface
@@ -199,7 +199,7 @@ export function ChatOptionsMenu({
                   description="Let AI compose live pages: charts, sliders, checklists, steps"
                   active={interactiveAnswersEnabled}
                   onToggle={setInteractiveAnswersEnabled}
-                  iconActiveClass="text-violet-300"
+                  iconActiveClass="text-accent"
                 />
 
             <div className="mx-2 my-1.5 h-px bg-white/[0.06]" />
@@ -211,7 +211,7 @@ export function ChatOptionsMenu({
               description="Create visual outputs, documents, and downloadable code"
               active={artifactsEnabled}
               onToggle={setArtifactsEnabled}
-              iconActiveClass="text-violet-300"
+              iconActiveClass="text-accent"
             />
             {onWebSearchChange && (
               <>

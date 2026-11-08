@@ -4,9 +4,10 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ContextBreakdown, ContextStats } from "@/modules/chat/chat-types";
 import { CONTEXT_BLOCK_ACCENTS } from "@/modules/chat/chat-types";
 import { getBreakdownInputTokens } from "@/lib/context-breakdown";
+import { formatTokenCount } from "@/lib/format-tokens";
 import { ContextBreakdownPanel } from "@/modules/chat/components/context-breakdown";
 
-const POPOVER_WIDTH = 260;
+const POPOVER_WIDTH = 300;
 const VIEWPORT_PAD = 12;
 const POPOVER_GAP = 10;
 const HIDE_DELAY_MS = 120;
@@ -46,91 +47,68 @@ function getSegments(
   return segments;
 }
 
+const INPUT_COLOR = "#22d3ee";
+const OUTPUT_COLOR = "#f472b6";
+
+function usageSegments(percent: number, usage?: ContextStats): { color: string; length: number }[] {
+  const input = Math.max(0, usage?.inputTokens ?? 0);
+  const output = Math.max(0, usage?.outputTokens ?? 0);
+  const used = Math.min(100, Math.max(0, percent));
+  if (input + output === 0) return [{ color: "var(--color-accent)", length: used }];
+  return [
+    { color: INPUT_COLOR, length: used * input / (input + output) },
+    { color: OUTPUT_COLOR, length: used * output / (input + output) },
+  ];
+}
+
 function percentTextClass(percent: number): string {
   if (percent >= 100) return "text-red-300";
   if (percent >= 85) return "text-amber-300";
   return "text-white";
 }
 
-export function ContextMeterRing({
+export function ContextMeterRing({ percent, breakdown, usage }: { percent: number; breakdown?: ContextBreakdown; usage?: ContextStats }) {
+  const size = 28;
+  const radius = 12;
+  const circumference = 2 * Math.PI * radius;
+  const displayPercent = getRoundedPercent(breakdown, percent);
+  const segments = useMemo(() => breakdown ? getSegments(breakdown, circumference)
+    : usageSegments(displayPercent, usage).map((segment) => ({ ...segment, length: segment.length / 100 * circumference })),
+  [breakdown, circumference, displayPercent, usage]);
+  return (
+    <span className="relative grid size-7 place-items-center">
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <circle cx="14" cy="14" r={radius} fill="none" stroke="var(--color-border)" strokeWidth="3.5" />
+        {segments.map((segment, index) => {
+          const start = segments.slice(0, index).reduce((sum, item) => sum + item.length, 0);
+          return <circle key={index} cx="14" cy="14" r={radius} fill="none" stroke={segment.color} strokeWidth="3.5" strokeDasharray={`${segment.length} ${circumference}`} strokeDashoffset={-start} />;
+        })}
+      </svg>
+      <span className={`absolute text-[7.5px] font-semibold tabular-nums ${percentTextClass(displayPercent)}`}>{displayPercent}%</span>
+    </span>
+  );
+}
+
+export function ContextMeterBar({
   percent,
   breakdown,
-  size = 28,
+  reservedPercent = 0,
+  usage,
 }: {
   percent: number;
   breakdown?: ContextBreakdown;
-  size?: number;
+  reservedPercent?: number;
+  usage?: ContextStats;
 }) {
-  const stroke = size >= 64 ? 8 : 3.5;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const displayPercent = getRoundedPercent(breakdown, percent);
-
-  const segments = useMemo(
-    () => (breakdown ? getSegments(breakdown, circumference) : []),
-    [breakdown, circumference],
-  );
-
-  let cumulative = 0;
-  const segmentCircles = segments.map((segment, index) => {
-    const offset = -cumulative;
-    cumulative += segment.length;
-    return (
-      <circle
-        key={index}
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        stroke={segment.color}
-        strokeWidth={stroke}
-        fill="none"
-        strokeDasharray={`${segment.length} ${circumference}`}
-        strokeDashoffset={offset}
-        strokeLinecap="butt"
-      />
-    );
-  });
-
-  const singleArcLength = Math.min(
-    circumference,
-    (Math.max(0, Math.min(100, percent)) / 100) * circumference,
-  );
-  const singleOffset = circumference - singleArcLength;
-
+  const used = Math.max(0, Math.min(100, getRoundedPercent(breakdown, percent)));
+  const reserved = Math.max(0, Math.min(100 - used, reservedPercent));
+  const segments = useMemo(() => breakdown ? getSegments(breakdown, 100) : usageSegments(used, usage), [breakdown, used, usage]);
   return (
-    <div className="relative grid place-items-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90" aria-hidden>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#1d1f28"
-          strokeWidth={stroke}
-          fill="none"
-        />
-        {breakdown ? (
-          segmentCircles
-        ) : (
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="#6366f1"
-            strokeWidth={stroke}
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={singleOffset}
-            strokeLinecap="round"
-          />
-        )}
-      </svg>
-      <div
-        className={`absolute font-semibold leading-none tracking-tight tabular-nums ${
-          size >= 64 ? "text-[15px]" : "text-[7.5px]"
-        } ${percentTextClass(displayPercent)}`}
-      >
-        {displayPercent}%
-      </div>
+    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]" aria-hidden="true">
+      {segments.map((segment, index) => (
+        <span key={index} style={{ width: `${segment.length}%`, background: segment.color }} />
+      ))}
+      <span style={{ width: `${reserved}%` }} className="bg-white/20" />
     </div>
   );
 }
@@ -157,7 +135,6 @@ function ContextMeterDetails({
     droppedMessages,
     reservedOutputTokens,
     includedLabel = "messages",
-    contextNote,
   } = stats;
   const includedText =
     includedLabel === "messages"
@@ -168,22 +145,20 @@ function ContextMeterDetails({
     <div className={`space-y-1 text-center ${className}`}>
       <p className="text-[12px] text-[var(--color-text-dim)]">
         <span className="font-medium tabular-nums text-[var(--color-text)]">
-          {estimatedTokens.toLocaleString()}
+          {formatTokenCount(estimatedTokens)}
         </span>
         {" / "}
-        <span className="tabular-nums">{contextLimit.toLocaleString()} tokens</span>
+        <span className="tabular-nums">{formatTokenCount(contextLimit)} tokens</span>
       </p>
       <p className="text-[10.5px] text-[var(--color-text-dim)]">
-        {includedText} · {reservedOutputTokens.toLocaleString()} reserved
+        {includedText} · {formatTokenCount(reservedOutputTokens)} reserved
       </p>
       {droppedMessages > 0 && (
         <p className="text-[10.5px] text-amber-400">
           {droppedMessages} message{droppedMessages !== 1 ? "s" : ""} dropped
         </p>
       )}
-      {contextNote && (
-        <p className="text-[10px] leading-snug text-[var(--color-text-dim)]/75">{contextNote}</p>
-      )}
+
     </div>
   );
 }
@@ -196,13 +171,18 @@ export function ContextMeterButton({
   breakdown?: ContextBreakdown;
 }) {
   const percent = getRoundedPercent(breakdown, stats?.percentUsed ?? 0);
+  const limit = breakdown?.contextLimit ?? stats?.contextLimit ?? 0;
+  const usedTokens = breakdown ? getBreakdownInputTokens(breakdown) : stats?.estimatedTokens ?? 0;
+  const reservedTokens = breakdown?.reservedOutputTokens ?? stats?.reservedOutputTokens ?? 0;
+  const remainingTokens = Math.max(0, limit - usedTokens - reservedTokens);
+  const reservedPercent = limit > 0 ? reservedTokens / limit * 100 : 0;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | null>(null);
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [positioned, setPositioned] = useState(false);
-  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(true);
   const [position, setPosition] = useState({ left: 0, bottom: 0 });
 
   const clearHideTimer = useCallback(() => {
@@ -298,9 +278,12 @@ export function ContextMeterButton({
         onMouseEnter={showPopover}
         onMouseLeave={hidePopover}
         onFocus={showPopover}
-        className="grid size-8 place-items-center rounded-full transition-colors hover:bg-white/5"
+        onBlur={(event) => {
+          if (!popoverRef.current?.contains(event.relatedTarget as Node | null)) hidePopover();
+        }}
+        className="grid size-8 place-items-center rounded-full transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent)]"
       >
-        <ContextMeterRing percent={percent} breakdown={breakdown} size={28} />
+        <ContextMeterRing percent={percent} breakdown={breakdown} usage={stats} />
       </button>
 
       {open &&
@@ -316,6 +299,7 @@ export function ContextMeterButton({
               left: position.left,
               bottom: position.bottom,
               width: POPOVER_WIDTH,
+              maxWidth: `calc(100vw - ${VIEWPORT_PAD * 2}px)`,
               maxHeight,
             }}
             className={`overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-3 shadow-xl shadow-black/50 scrollbar-thin transition-opacity duration-150 ${
@@ -328,9 +312,30 @@ export function ContextMeterButton({
                 {percent}% used
               </span>
             </div>
-            <div className="grid place-items-center py-2.5">
-              <ContextMeterRing percent={percent} breakdown={breakdown} size={72} />
+            <div className="py-3">
+              <ContextMeterBar percent={percent} breakdown={breakdown} reservedPercent={reservedPercent} usage={stats} />
             </div>
+            <dl className="mb-3 space-y-1.5 text-[11px]">
+              {[
+                ["Used context", usedTokens, "bg-accent"],
+                ["Reserved for next reply", reservedTokens, "bg-white/20"],
+                ["Remaining after reserve", remainingTokens, "bg-white/[0.07]"],
+              ].map(([label, count, color]) => (
+                <div key={String(label)} className="flex items-center justify-between gap-3">
+                  <dt className="flex items-center gap-2 text-[var(--color-text-dim)]"><span className={`size-1.5 rounded-sm ${color}`} />{label}</dt>
+                  <dd className="tabular-nums text-[var(--color-text)]">{Number(count).toLocaleString()}</dd>
+                </div>
+              ))}
+            </dl>
+            <dl className="mb-3 space-y-1.5 border-t border-[var(--color-border)] pt-2 text-[11px]">
+              <div className="mb-2 text-[10px] text-[var(--color-text-dim)]">Latest model call</div>
+              {[["Input (includes cache)", stats?.inputTokens], ["Output", stats?.outputTokens]].map(([label, count]) => (
+                <div key={String(label)} className="flex items-center justify-between gap-3">
+                  <dt className="flex items-center gap-2 text-[var(--color-text-dim)]"><span className="size-1.5 rounded-sm" style={{ background: label === "Output" ? OUTPUT_COLOR : INPUT_COLOR }} />{label}</dt>
+                  <dd className="tabular-nums text-[var(--color-text)]">{typeof count === "number" ? formatTokenCount(count) : "Pending"}</dd>
+                </div>
+              ))}
+            </dl>
             <ContextMeterDetails stats={stats} />
             {breakdown && (
               <>

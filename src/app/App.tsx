@@ -1,5 +1,5 @@
 import { refreshPiModelCatalog } from "@/lib/reasoning-capabilities";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { TitleBar } from "@/app/components/title-bar";
 import { PrimarySidebar } from "@/app/components/primary-sidebar";
 import { RecentChats } from "@/components/recent-chats";
@@ -69,11 +69,10 @@ function App() {
   const defaultWebSearchEnabled = useSettingsStore(
     (state) => state.defaultWebSearchEnabled,
   );
+  // Per-chat override seeded from the setting; the setting stays the default for new chats.
   const [webSearchEnabled, setWebSearchEnabled] = useState(defaultWebSearchEnabled);
-  const effectiveConnectivity = useConnectivityStore((state) => state.effectiveConnectivity);
-  const startProbeListener = useConnectivityStore((state) => state.startProbeListener);
-
   const webSearchAvailability = useIsFeatureAvailable("webSearch");
+  const startProbeListener = useConnectivityStore((state) => state.startProbeListener);
 
   const isChatMode = isChatModeNav(activeNav);
 
@@ -100,7 +99,6 @@ function App() {
 
     void (async () => {
       await ensureSettingsHydrated();
-      setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
       await useChatStore.getState().hydrateConversations();
       await useProjectStore.getState().hydrateProjects();
       initializePiConversations();
@@ -129,16 +127,6 @@ function App() {
   useAppUpdateCheck();
 
   // ── Connectivity effects ─────────────────────────────────────────────────
-
-  const prevEffectiveConnectivityRef = useRef(effectiveConnectivity);
-
-  useEffect(() => {
-    const prev = prevEffectiveConnectivityRef.current;
-    prevEffectiveConnectivityRef.current = effectiveConnectivity;
-    if (prev === "offline" && effectiveConnectivity === "online") {
-      setWebSearchEnabled(useSettingsStore.getState().defaultWebSearchEnabled);
-    }
-  }, [effectiveConnectivity]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

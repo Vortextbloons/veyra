@@ -38,6 +38,10 @@
   --color-text-dim: #aeaeae;
   --color-accent: #8669c9;
   --color-accent-soft: #242424;
+  /* Accent tints for chips, status pills, and small indicators. */
+  --color-accent-line: color-mix(in srgb, var(--color-accent) 38%, var(--color-border));
+  --color-accent-tint: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  --color-accent-line-soft: color-mix(in srgb, var(--color-accent) 32%, transparent);
   --color-success: #34d399;
   --color-scrollbar: #2b2b2b;
   --color-scrollbar-hover: #424242;

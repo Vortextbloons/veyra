@@ -46,7 +46,7 @@ export function TypewriterMarkdown({ content, enabled }: { content: string; enab
         <MarkdownRenderer className="leading-snug" deferHighlight={enabled && visible !== content}>{visible}</MarkdownRenderer>
       </Suspense>
       {enabled && visible.length < content.length && (
-        <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-300 align-middle" />
+        <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-[var(--color-accent)] align-middle" />
       )}
     </>
   );

@@ -1,6 +1,6 @@
 import { useSettingsStore } from "@/stores/settings-store";
 import { create } from "zustand";
-import { contextTokensFromUsage } from "./context-usage";
+import { contextTokensFromUsage, splitContextUsage } from "./context-usage";
 import type { Conversation } from "@/modules/chat/chat-types";
 import { createPiChatTools } from "./pi-chat-tools";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
@@ -248,7 +248,7 @@ function parsePiEvent(raw: { stream: "stdout" | "stderr"; line: string; sequence
         if (msg && typeof msg.role === "string" && msg.role === "assistant") {
           const usage = asRecord(msg.usage);
           if (usage && typeof usage.input === "number") {
-            return event("token_update", "Token update", String(contextTokensFromUsage(usage)), undefined, raw.sequence);
+            return { ...event("token_update", "Token update", String(contextTokensFromUsage(usage)), undefined, raw.sequence), contextUsage: splitContextUsage(usage) };
           }
         }
         return null;
@@ -638,13 +638,14 @@ export const useAgentStore = create<AgentStore>()(
               if (!parsedEvent) return;
               if (parsedEvent.type === "token_update") {
                 const tokens = parseInt(parsedEvent.detail ?? "0", 10);
-                if (tokens > 0) {
+                if (Number.isFinite(tokens) && tokens >= 0) {
                   set((state) => {
                     const current = state.sessions.find((item) => item.id === id);
                     if (!current || current.status !== "running") return state;
                     return {
                       sessions: patchSession(state.sessions, id, {
                         contextTokens: tokens,
+                        contextUsage: parsedEvent.contextUsage,
                       }),
                     };
                   });

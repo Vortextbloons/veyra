@@ -11,7 +11,7 @@ type ToggleProps = {
 export function Toggle({ on, onChange, label, ariaLabel, disabled }: ToggleProps) {
   const [pressed, setPressed] = useState(false);
 
-  const track = on ? "bg-emerald-500" : "bg-zinc-700";
+  const track = on ? "bg-[var(--color-accent)]" : "bg-white/[0.14]";
   const knobPos = on ? "translate-x-[18px]" : "translate-x-0.5";
   const scale = pressed && !disabled ? "scale-[0.97]" : "scale-100";
 
@@ -36,7 +36,7 @@ export function Toggle({ on, onChange, label, ariaLabel, disabled }: ToggleProps
         onMouseLeave={() => setPressed(false)}
         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${track} ${
           disabled ? "cursor-not-allowed opacity-50" : ""
-        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40`}
+        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40`}
       >
         {knob}
       </button>

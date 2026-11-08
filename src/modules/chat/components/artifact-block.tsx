@@ -284,7 +284,7 @@ function HtmlArtifactPreview({ artifact }: { artifact: Artifact }) {
   return (
     <div className="overflow-hidden rounded-md border border-white/10 bg-white">
       {isTauri() && !previewUrl ? (
-        <div className="grid min-h-[260px] place-items-center text-[12px] text-neutral-500">Preparing secure preview…</div>
+        <div className="grid min-h-[260px] place-items-center text-[12px] text-[var(--color-text-dim)]">Preparing secure preview…</div>
       ) : (
         <iframe
           title={artifact.title}

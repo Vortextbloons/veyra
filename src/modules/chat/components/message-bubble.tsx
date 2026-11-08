@@ -141,7 +141,7 @@ export const MessageBubble = memo(function MessageBubble({
             </Suspense>
           )}
           {showPulseInReply && (
-            <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-indigo-400 align-middle" />
+            <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-accent align-middle" />
           )}
         </div>
         )}

@@ -6,7 +6,7 @@ export const ThinkingIndicator = memo(function ThinkingIndicator() {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="block size-1.5 rounded-full bg-indigo-400"
+          className="block size-1.5 rounded-full bg-[var(--color-accent)]"
           style={{
             animation: "thinkingBounce 1.2s ease-in-out infinite",
             animationDelay: `${i * 0.15}s`,
