@@ -67,6 +67,14 @@ export async function buildPatchedSearchEngine(target, binary, repo, version) {
     run("git", ["apply", PATCH], source);
     await writeFile(applied, patchSha256);
   }
+  // The Windows release archive is checksum-verified by the caller and already
+  // contains this runtime. Seed upstream's supported vendor cache so its build
+  // script does not download the same dependency again from GitHub.
+  if (process.platform === "win32") {
+    const onnx = path.join(source, "vendor", "onnx");
+    await mkdir(onnx, { recursive: true });
+    await copyFile(path.join(target, "onnxruntime.dll"), path.join(onnx, "onnxruntime.dll"));
+  }
   console.log("[search-engine] Building adaptive recall (first build requires Rust, CMake, NASM and libclang)...");
   run("cargo", ["build", "--release", "--locked", "--features", FEATURES, "--target-dir", build], source);
   if (await digest(PATCH) !== patchSha256) {
