@@ -12,6 +12,7 @@
  *   node scripts/fetch-search-engine.mjs [--force]
  */
 
+import { fetchWithRetry } from "./search-engine/download.mjs";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, copyFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -76,14 +77,7 @@ async function sha256(file) {
 }
 
 async function download(url, destination, expectedSha256) {
-  const response = await fetch(url, {
-    headers: { "User-Agent": "Veyra-build" },
-    redirect: "follow",
-  });
-  if (!response.ok) {
-    throw new Error(`Download failed (${response.status}) for ${url}`);
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const bytes = await fetchWithRetry(url, async (response) => Buffer.from(await response.arrayBuffer()));
   const actual = createHash("sha256").update(bytes).digest("hex");
   if (expectedSha256 && actual !== expectedSha256) {
     throw new Error(
@@ -96,14 +90,8 @@ async function download(url, destination, expectedSha256) {
 }
 
 async function releaseSha256(asset) {
-  const response = await fetch(`${REPO}/releases/download/v${VERSION}/${asset}.sha256`, {
-    headers: { "User-Agent": "Veyra-build" },
-    redirect: "follow",
-  });
-  if (!response.ok) {
-    throw new Error(`Could not read release checksum for ${asset}: HTTP ${response.status}`);
-  }
-  return (await response.text()).trim().split(/\s+/)[0];
+  const checksum = await fetchWithRetry(`${REPO}/releases/download/v${VERSION}/${asset}.sha256`, response => response.text());
+  return checksum.trim().split(/\s+/)[0];
 }
 
 async function ensureModel(directory, url, filename, expectedSha256) {
