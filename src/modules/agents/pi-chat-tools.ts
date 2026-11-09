@@ -1,3 +1,4 @@
+import { runJavaScript } from "@/lib/code-execution/runner";
 import type { ProviderToolCall } from "@/lib/providers/types";
 import { buildProviderTools, buildUseSkillTool, USE_SKILL_TOOL_NAME } from "@/lib/tool-registry";
 import { runSearch, buildSearchContextBlock, resolveSearchContextTokenLimit } from "@/modules/web-search/orchestrator/SearchOrchestrator";
@@ -126,7 +127,7 @@ export function createPiChatTools(options: {
     const policy = projectId ? state.policies[projectId] : undefined;
     const servers = state.mcpServers.filter((server) => (!server.projectIds.length || Boolean(projectId && server.projectIds.includes(projectId))) && (!policy?.enabledMcpServerIds.length || policy.enabledMcpServerIds.includes(server.id)));
     const useSkillTool = buildUseSkillTool(skills);
-    return [...buildProviderTools({ webSearchEnabled: options.webSearchEnabled && useConnectivityStore.getState().effectiveConnectivity === "online", codeExecutionEnabled: false, enhancedMode: true, interactiveAnswersEnabled: useSettingsStore.getState().interactiveAnswersEnabled, artifactsEnabled: useSettingsStore.getState().artifactsEnabled }).filter((tool) => tool.function.name !== "scratchpad_write"),
+    return [...buildProviderTools({ webSearchEnabled: options.webSearchEnabled && useConnectivityStore.getState().effectiveConnectivity === "online", codeExecutionEnabled: useSettingsStore.getState().codeExecutionEnabled, enhancedMode: true, interactiveAnswersEnabled: useSettingsStore.getState().interactiveAnswersEnabled, artifactsEnabled: useSettingsStore.getState().artifactsEnabled }).filter((tool) => tool.function.name !== "scratchpad_write"),
       ...(useSkillTool ? [useSkillTool] : []),
       ...buildMcpProviderTools(servers, projectId, state.featureFlags, state.chatDisabledMcpServerIds[scopeId], state.chatEnabledMcpServerIds[scopeId]).filter((tool) => !policy?.disabledCapabilityIds.includes(tool.function.name))];
   };
@@ -151,6 +152,10 @@ export function createPiChatTools(options: {
       // gate never turns on a tool the user disabled.
       const gate = await authorizeHostTool({ sessionId, toolCallId: call.id, toolName: call.name, args: call.arguments, cwd: options.cwd ?? "", signal });
       if (gate) return gate;
+      if (call.name === "code_execution") {
+        if (!useSettingsStore.getState().codeExecutionEnabled) throw new Error("Code execution is no longer enabled.");
+        return JSON.stringify(await runJavaScript(call.arguments, signal));
+      }
       if (call.name === USE_SKILL_TOOL_NAME) {
         const slug = String(call.arguments.name ?? "").trim();
         const skill = skillsBySlug.get(slug);

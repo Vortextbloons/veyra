@@ -5,6 +5,23 @@ All notable changes to Veyra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-11-08
+
+Minor release since [2.4.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.4.0), adding tool approvals, password-locked projects, and local JavaScript execution.
+
+### Added
+
+- **Tool permissions**: Settings > Permissions configures protected tools and a default Ask, Auto, or Full access mode, with per-chat overrides. Ask offers Accept once or Deny for each invocation. Auto uses an isolated reviewer model; unavailable reviews fall back to manual approval. Approvals are bound to the exact tool arguments, session, and working directory, and cover both native Pi tools and Veyra host tools.
+- **Password-locked projects**: Encrypt project data stored by Veyra in a password-protected vault, unlock it to work, and lock it again from the project sidebar. Password setup includes confirmation and strength feedback. There is no password recovery; original files outside Veyra remain outside the vault.
+- **Local JavaScript execution**: The code_execution tool runs synchronous JavaScript in a bundled QuickJS WebAssembly worker without Python, internet access, or an attached project. It accepts supplied input, captures console logs, and returns JSON results. Each call has execution, memory, output, and log limits, cancellation, and worker cleanup. Settings > Tools controls availability and the permission gate applies when protected.
+
+### Changed
+
+- **Native tool controls**: Global and per-chat tool switches determine which tools Pi receives. Disabled tools remain unavailable in every permission mode, and disabling a tool denies its pending approval requests.
+- **Bash availability**: Detect a usable shell before offering Bash, with Windows shell discovery handled by the backend.
+- **Interactive answers**: Accept structured JSON components with named properties and optional state, compiled into the existing OpenUI renderer contract. Unknown components and properties return repairable validation errors.
+- **Sandbox packaging**: Bundle the QuickJS runtime and WebAssembly locally and allow WebAssembly compilation in development and production content security policies.
+
 ## [2.4.0] - 2026-11-08
 
 Minor release since [2.3.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.3.0). Skills become a standalone library you apply per message or pin to a chat, and the model can be allowed to choose them. Updates now download and verify in the background and install when you restart, and startup no longer repeats work it used to do on every launch.

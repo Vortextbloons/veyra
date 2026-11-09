@@ -86,7 +86,7 @@ export const PERMISSION_TOOL_CATALOGUE: PermissionToolDefinition[] = [
   {
     id: "code_execution",
     label: "Code execution",
-    description: "Run a local Python snippet through Veyra's sandboxed runner.",
+    description: "Run JavaScript in an isolated WebAssembly sandbox with supplied input data.",
     bridge: "host",
     native: false,
   },

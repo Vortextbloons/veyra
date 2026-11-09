@@ -90,6 +90,7 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     bundleWikipediaSearch: state.bundleWikipediaSearch,
     interactiveAnswersEnabled: state.interactiveAnswersEnabled,
     artifactsEnabled: state.artifactsEnabled,
+    codeExecutionEnabled: state.codeExecutionEnabled,
     connectivityPreference: state.connectivityPreference,
     autoCheckUpdatesEnabled: state.autoCheckUpdatesEnabled,
     dismissedUpdateVersion: state.dismissedUpdateVersion,

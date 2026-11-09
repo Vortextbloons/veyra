@@ -11,7 +11,7 @@ the Pi bridge in `src/modules/agents/pi-chat-tools.ts`.
 | `ask_question` | interactive answers enabled | Pause the turn and ask the user |
 | `create_artifact` | artifacts enabled | Attach HTML, code, or document output to the turn |
 | `generate_interactive_answer` | interactive answers enabled | Attach a live UI page written in OpenUI Lang |
-| `run-python` | code execution enabled | Native Python; the Pi path currently passes `false` |
+| `code_execution` | code execution enabled | Isolated QuickJS WebAssembly worker; supplied input only |
 
 MCP tools are appended per chat from the extensions store and always require a
 capability grant.

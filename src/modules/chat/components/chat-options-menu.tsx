@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { FileText, Globe, LayoutDashboard, Terminal, X } from "lucide-react";
+import { Code2, FileText, Globe, LayoutDashboard, Terminal, X } from "lucide-react";
 import { DialogSurface } from "@/components/dialog-surface";
 import { ChatExtensionsSettings } from "@/modules/extensions/components/chat-extensions-settings";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -162,6 +162,8 @@ export function ChatOptionsMenu({
   const setInteractiveAnswersEnabled = useSettingsStore((s) => s.setInteractiveAnswersEnabled);
   const artifactsEnabled = useSettingsStore((s) => s.artifactsEnabled);
   const setArtifactsEnabled = useSettingsStore((s) => s.setArtifactsEnabled);
+  const codeExecutionEnabled = useSettingsStore((s) => s.codeExecutionEnabled);
+  const setCodeExecutionEnabled = useSettingsStore((s) => s.setCodeExecutionEnabled);
   const globallyDisabledTools = useSettingsStore((s) => s.disabledNativeToolIds);
   // Subscribing to the maps keeps an open menu in sync with the composer control.
   const chatDisabledTools = usePermissionStore((s) => s.chatDisabledNativeTools);
@@ -223,6 +225,15 @@ export function ChatOptionsMenu({
             <div className="mx-2 my-1.5 h-px bg-white/[0.06]" />
 
             <SectionLabel>Tools</SectionLabel>
+            <SettingRow
+              icon={<Code2 className="size-4" />}
+              label="Code execution"
+              description="Run JavaScript calculations and transform supplied data"
+              active={codeExecutionEnabled}
+              onToggle={setCodeExecutionEnabled}
+              iconActiveClass="text-emerald-300"
+              title="Shared with Settings → Tools"
+            />
             {TOGGLEABLE_NATIVE_TOOLS.map((toolId) => {
               const globallyOff = globallyDisabledTools.includes(toolId);
               // Read from the subscribed maps so toggling one surface updates the other.

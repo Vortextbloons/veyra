@@ -1,6 +1,6 @@
 # Veyra — Complete Documentation
 > Auto-generated from docs/INDEX.md by scripts/combine-docs.mjs
-> Generated: 2026-11-09T03:37:12.542Z
+> Generated: 2026-11-09T03:57:46.377Z
 > Total files: 55
 
 ## Table of Contents
@@ -291,14 +291,16 @@ the execution, so no tool code runs inside the Pi process.
 
 | Tool | Condition | Description |
 |------|-----------|-------------|
+| `code_execution` | code execution enabled | Runs synchronous JavaScript in a local WebAssembly sandbox with supplied input |
 | `web_search` | web search enabled **and** connectivity is online | Runs the bundled search orchestrator and returns a context block |
 | `ask_question` | interactive answers enabled | Asks the user one or more questions and returns their answers |
 | `create_artifact` | artifacts enabled | Attaches an HTML, code, or document artifact to the conversation |
 | `generate_interactive_answer` | interactive answers enabled | Attaches a live UI page: the model writes an OpenUI Lang program that Veyra renders with its own component library |
 | `mcp_*` | server connected, chat-enabled, grant present | Proxied MCP tool calls, capped at 60 KB of output |
 
-`scratchpad_write` is filtered out of the Pi tool list. Code execution is passed
-as `codeExecutionEnabled: false`, so `run-python` is never offered to the model.
+`scratchpad_write` is filtered out of the Pi tool list. Code execution follows
+the persisted Settings > Tools switch and the existing host permission gate.
+See [Code execution](../code-execution/01-overview.md) for file workflows and limits.
 
 ## How Tools Reach Pi
 
@@ -2442,23 +2444,25 @@ own.
 
 > Source: `docs/code-execution/01-overview.md`
 
-# Code Execution
+# Code execution
 
-Native host code execution is disabled until Veyra has a real OS-enforced
-sandbox. Timeouts, process termination, working-directory selection, and source
-filtering are not security boundaries.
+The `code_execution` host tool runs synchronous JavaScript in QuickJS compiled to WebAssembly, inside a dedicated worker. It works without a project, internet connection, or installed interpreter. Settings > Tools > Code execution controls availability and is enabled by default. The setting is persisted. Tool availability is checked again before each call, and the existing host permission gate applies when code execution is protected in permission settings.
 
-Veyra therefore does not register a Tauri command that spawns Python or expose
-`code_execution` in provider tool definitions. The legacy tool name remains
-recognized so stored or model-emitted calls fail closed with a clear disabled
-error.
+## Workflow
 
-Settings expose an `Enable Python execution` toggle. Until the Pi path actually
-registers an executor and a sandbox exists, that toggle does not change model
-capabilities: `pi-chat-tools.ts` passes `codeExecutionEnabled: false` when it
-builds the tool list, because there is no handler that can run `run-python`
-safely. Treat the control as a preference that takes effect only when execution
-is re-enabled end to end.
+The tool accepts a JavaScript function body in `code` and optional text in `input`. Code receives `input` and uses `return` for a JSON-serializable result. `console.log`, `info`, `warn`, `error`, and `debug` are captured. The response is JSON containing `logs` and `result`; a missing return becomes null. Errors return ordinary tool failure feedback so the AI can correct its code.
+
+For example, use `return JSON.parse(input).reduce((sum, n) => sum + n, 0);` with input `[1,2,3]`.
+
+For files, the AI first uses the existing permitted read tool and passes the contents as input. A project must be attached for project file tools. The sandbox cannot open a path. Output can be turned into a downloadable file using `create_artifact`, or saved using separately enabled and permitted write/edit tools. This tool does not execute arbitrary existing project files with their dependencies.
+
+## Isolation and limits
+
+Generated code is evaluated only in QuickJS, never host eval or Function. No host callbacks or module loader are installed. The guest has no filesystem, network, shell, Node, DOM, Tauri IPC, credentials, package installation, or async APIs. This is a WebAssembly runtime boundary, not an OS process sandbox. Native host interpreter execution remains unsupported.
+
+Each call creates a fresh worker and runtime. Limits are 1,000,000 combined code/input characters, 64 MiB QuickJS guest allocation, a 512 KiB guest stack, five seconds of execution, 60,000 serialized output characters, and 1,000 log entries. The memory limit covers the guest allocator, not all worker/browser overhead. A parent watchdog terminates the worker after ten seconds including startup; cancellation also terminates it. Workers and VM handles are disposed after completion or failure. Keep the bundled QuickJS dependency updated as part of normal dependency maintenance.
+
+The worker and Wasm are bundled locally by Vite. Production and development CSP permit WebAssembly compilation via `wasm-unsafe-eval`, without enabling host JavaScript unsafe-eval. Runtime code lives under `src/lib/code-execution`; routing uses the existing Pi host-tool bridge.
 
 ---
 
@@ -2466,14 +2470,11 @@ is re-enabled end to end.
 
 > Source: `docs/code-execution/README.md`
 
-# Code Execution
+# Code execution
 
-Native host code execution is disabled. Veyra does not spawn Python or another
-host interpreter without an OS-enforced sandbox.
+Veyra runs JavaScript locally in a QuickJS WebAssembly sandbox.
 
-## Contents
-
-- [01-overview.md](01-overview.md) — Disabled boundary and compatibility behavior
+- [Overview](01-overview.md): workflow, capabilities, and limits.
 
 ---
 
@@ -2527,7 +2528,7 @@ old orchestrator.
 | `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, recent-chats collapsed |
 | `model-slice` | `model-slice.ts` | Model defaults, per-model overrides, prompts, reasoning |
 | `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, extraction |
-| `code-execution-slice` | `code-execution-slice.ts` | Python execution toggle |
+| `chat-slice` | `chat-slice.ts` | Rich output and sandboxed JavaScript execution toggles |
 | `connectivity-slice` | `connectivity-slice.ts` | Online/offline preference |
 | `chat-slice` | `chat-slice.ts` | Interactive answers, artifacts, background jobs |
 | `update-slice` | `update-slice.ts` | Auto-check updates, dismissed version |
@@ -2717,7 +2718,7 @@ the Pi bridge in `src/modules/agents/pi-chat-tools.ts`.
 | `ask_question` | interactive answers enabled | Pause the turn and ask the user |
 | `create_artifact` | artifacts enabled | Attach HTML, code, or document output to the turn |
 | `generate_interactive_answer` | interactive answers enabled | Attach a live UI page written in OpenUI Lang |
-| `run-python` | code execution enabled | Native Python; the Pi path currently passes `false` |
+| `code_execution` | code execution enabled | Isolated QuickJS WebAssembly worker; supplied input only |
 
 MCP tools are appended per chat from the extensions store and always require a
 capability grant.

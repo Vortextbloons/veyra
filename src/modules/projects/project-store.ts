@@ -28,7 +28,7 @@ import {
 } from "@/modules/projects/locked-project-controller";
 import { useVaultSessionStore } from "@/modules/projects/vault-session-store";
 import { deleteLockedProject, enableProjectLock } from "@/lib/project-vault";
-import { readLockedMemories, saveLockedMemories } from "@/modules/projects/locked-project-storage";
+import { readLockedMemories } from "@/modules/projects/locked-project-storage";
 import { useMemoryStore } from "@/modules/memory/memory-store";
 
 type LockOptions = {

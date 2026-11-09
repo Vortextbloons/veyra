@@ -1,8 +1,5 @@
-# Code Execution
+# Code execution
 
-Native host code execution is disabled. Veyra does not spawn Python or another
-host interpreter without an OS-enforced sandbox.
+Veyra runs JavaScript locally in a QuickJS WebAssembly sandbox.
 
-## Contents
-
-- [01-overview.md](01-overview.md) — Disabled boundary and compatibility behavior
+- [Overview](01-overview.md): workflow, capabilities, and limits.

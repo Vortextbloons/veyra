@@ -44,7 +44,7 @@ old orchestrator.
 | `ui-layout-slice` | `ui-layout-slice.ts` | Active nav, recent-chats collapsed |
 | `model-slice` | `model-slice.ts` | Model defaults, per-model overrides, prompts, reasoning |
 | `web-search-slice` | `web-search-slice.ts` | Search defaults, parameters, extraction |
-| `code-execution-slice` | `code-execution-slice.ts` | Python execution toggle |
+| `chat-slice` | `chat-slice.ts` | Rich output and sandboxed JavaScript execution toggles |
 | `connectivity-slice` | `connectivity-slice.ts` | Online/offline preference |
 | `chat-slice` | `chat-slice.ts` | Interactive answers, artifacts, background jobs |
 | `update-slice` | `update-slice.ts` | Auto-check updates, dismissed version |

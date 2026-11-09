@@ -56,13 +56,17 @@ export function buildProviderTools(options: {
       function: {
         name: CODE_EXEC_TOOL_NAME,
         description:
-          "Run a local Python snippet for calculations, text processing, and read-only inspection of files in the current workspace. Dangerous imports and write helpers are blocked.",
+          "Run synchronous JavaScript in an isolated local WebAssembly sandbox. Use for calculations and JSON, CSV, or text transformations. Supply data as input and use return for the result; console.log captures logs. No filesystem, network, shell, imports, packages, or async APIs. To process a file, read it with the existing read tool and pass its contents as input. To save results, use create_artifact or the separately permitted write/edit tools. Limits: 5 seconds, 64 MB guest memory, 60,000 output characters.",
         parameters: {
           type: "object",
           properties: {
             code: {
               type: "string",
-              description: "A Python 3 snippet to execute locally.",
+              description: "JavaScript function body. Receives input; use return to produce a JSON-serializable result.",
+            },
+            input: {
+              type: "string",
+              description: "Optional input text, such as file contents or JSON text. Available as input inside the code. Parse with JSON.parse when needed.",
             },
           },
           required: ["code"],

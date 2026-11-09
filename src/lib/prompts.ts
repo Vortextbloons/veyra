@@ -205,7 +205,7 @@ export function buildToolUseGuidance(names?: readonly string[]): string {
   const enabled = new Set(names);
   const guidance = ["Use the tools attached to this request proactively when they improve accuracy or complete the user's task. Only call tools present in the supplied definitions."];
   if (enabled.has("web_search")) guidance.push("Use web_search for explicit lookup requests, current or changing information, and facts you are uncertain about. Ground conclusions in the returned evidence; do not imply you read pages beyond the content returned by the tool.");
-  if (enabled.has("code_execution")) guidance.push("Use code_execution for calculations, data analysis, and transformations when it improves accuracy. Inspect the output before reporting results. Execution is restricted; do not assume unrestricted filesystem access or installed packages.");
+  if (enabled.has("code_execution")) guidance.push("Use code_execution for calculations, data analysis, and transformations when it improves accuracy. Inspect the output before reporting results. Run synchronous JavaScript with supplied input and return a result. For files, read their contents first and pass them as input. The sandbox has no filesystem, network, shell, packages, or async APIs.");
   if (enabled.has("ask_question")) guidance.push("Use ask_question when a missing answer materially changes the result; continue independent useful work when possible.");
   if (enabled.has("generate_interactive_answer")) {
     guidance.push(

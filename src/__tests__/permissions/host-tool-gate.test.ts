@@ -10,8 +10,9 @@ const mocks = vi.hoisted(() => {
       removeItem: (key: string) => values.delete(key),
     },
   });
-  return { search: vi.fn(), invokeMcpTool: vi.fn(), resolveMcpTool: vi.fn() };
+  return { search: vi.fn(), execute: vi.fn(), invokeMcpTool: vi.fn(), resolveMcpTool: vi.fn() };
 });
+vi.mock("@/lib/code-execution/runner", () => ({ runJavaScript: mocks.execute }));
 
 vi.mock("@/modules/web-search/orchestrator/SearchOrchestrator", () => ({
   runSearch: mocks.search,
@@ -52,11 +53,13 @@ function bridge(signal = new AbortController().signal) {
 describe("host tool permission gate", () => {
   beforeEach(() => {
     mocks.search.mockReset().mockResolvedValue({});
+    mocks.execute.mockReset().mockResolvedValue({ logs: [], result: 2 });
     mocks.invokeMcpTool.mockReset().mockResolvedValue({ ok: true });
     mocks.resolveMcpTool.mockReset();
     useConnectivityStore.setState({ effectiveConnectivity: "online" });
     useSettingsStore.setState({
       artifactsEnabled: false,
+      codeExecutionEnabled: true,
       interactiveAnswersEnabled: false,
       permissionMode: "ask",
       protectedToolIds: ["bash"],
@@ -70,6 +73,27 @@ describe("host tool permission gate", () => {
       chatDisabledMcpServerIds: {},
       chatEnabledMcpServerIds: {},
     });
+  });
+
+  it("gates code execution and honors disabling it while approval is pending", async () => {
+    useSettingsStore.setState({ protectedToolIds: ["code_execution"] });
+    const call = bridge().handle(toolRequest("code_execution", { code: "return 1+1;" }));
+    await vi.waitFor(() => expect(usePermissionStore.getState().pending).toHaveLength(1));
+    expect(mocks.execute).not.toHaveBeenCalled();
+    useSettingsStore.setState({ codeExecutionEnabled: false });
+    usePermissionStore.getState().acceptOnce(usePermissionStore.getState().pending[0].id);
+    await expect(call).resolves.toContain("no longer enabled");
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it("runs protected JavaScript only after acceptance", async () => {
+    useSettingsStore.setState({ protectedToolIds: ["code_execution"] });
+    const call = bridge().handle(toolRequest("code_execution", { code: "return 1+1;" }));
+    await vi.waitFor(() => expect(usePermissionStore.getState().pending).toHaveLength(1));
+    expect(mocks.execute).not.toHaveBeenCalled();
+    usePermissionStore.getState().acceptOnce(usePermissionStore.getState().pending[0].id);
+    await expect(call).resolves.toBe('{"logs":[],"result":2}');
+    expect(mocks.execute).toHaveBeenCalledOnce();
   });
 
   it("lets an unprotected tool run without queueing a request", async () => {

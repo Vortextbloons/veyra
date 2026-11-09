@@ -8,7 +8,6 @@ export const FEATURE_CAPABILITIES = {
   codeExecution: {
     requirement: "none" as const,
     label: "Code Execution",
-    disabledReason: "Code execution requires an OS-enforced sandbox and is currently disabled.",
   },
   webSearch: { requirement: "internet" as const, label: "Web Search" },
   backgroundJobs: { requirement: "local_service" as const, label: "Background AI" },

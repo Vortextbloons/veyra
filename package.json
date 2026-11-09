@@ -1,7 +1,7 @@
 {
   "name": "veyra",
   "private": true,
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Local-first AI desktop workspace (Tauri + React)",
   "homepage": "https://github.com/Vortextbloons/veyra#readme",
   "repository": {
@@ -34,6 +34,7 @@
     "prompt:ui": "node scripts/generate-interactive-prompt.mjs"
   },
   "dependencies": {
+    "@jitl/quickjs-wasmfile-release-sync": "^0.32.0",
     "@openuidev/lang-core": "^1.1.0",
     "@openuidev/react-lang": "^1.1.0",
     "@tauri-apps/api": "^2.11.1",
@@ -43,6 +44,7 @@
     "clsx": "^2.1.1",
     "katex": "^0.19.1",
     "lucide-react": "^1.24.0",
+    "quickjs-emscripten-core": "^0.32.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",

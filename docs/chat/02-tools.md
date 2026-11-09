@@ -7,14 +7,16 @@ the execution, so no tool code runs inside the Pi process.
 
 | Tool | Condition | Description |
 |------|-----------|-------------|
+| `code_execution` | code execution enabled | Runs synchronous JavaScript in a local WebAssembly sandbox with supplied input |
 | `web_search` | web search enabled **and** connectivity is online | Runs the bundled search orchestrator and returns a context block |
 | `ask_question` | interactive answers enabled | Asks the user one or more questions and returns their answers |
 | `create_artifact` | artifacts enabled | Attaches an HTML, code, or document artifact to the conversation |
 | `generate_interactive_answer` | interactive answers enabled | Attaches a live UI page: the model writes an OpenUI Lang program that Veyra renders with its own component library |
 | `mcp_*` | server connected, chat-enabled, grant present | Proxied MCP tool calls, capped at 60 KB of output |
 
-`scratchpad_write` is filtered out of the Pi tool list. Code execution is passed
-as `codeExecutionEnabled: false`, so `run-python` is never offered to the model.
+`scratchpad_write` is filtered out of the Pi tool list. Code execution follows
+the persisted Settings > Tools switch and the existing host permission gate.
+See [Code execution](../code-execution/01-overview.md) for file workflows and limits.
 
 ## How Tools Reach Pi
 
