@@ -41,6 +41,7 @@ mod extensions;
 mod file_extraction;
 mod projects;
 mod shared;
+mod vault;
 mod web_search;
 
 const CONVERSATIONS_FILE: &str = "conversations.json";
@@ -569,6 +570,7 @@ pub fn run() {
             app_update::prepare_app_update,
             app_update::install_app_update,
             agents::commands::check_pi_available,
+            agents::commands::check_bash_available,
             agents::reasoning::inspect_agent_reasoning,
             agents::reasoning::refresh_agent_models,
             agents::workspace::inspect_agent_workspace,
@@ -595,6 +597,22 @@ pub fn run() {
             projects::commands::list_projects,
             projects::commands::delete_project,
             projects::commands::export_project_manifest,
+            projects::vault_commands::get_project_vault_status,
+            projects::vault_commands::list_unlocked_project_vaults,
+            projects::vault_commands::enable_project_lock,
+            projects::vault_commands::unlock_project,
+            projects::vault_commands::lock_project,
+            projects::vault_commands::lock_all_projects,
+            projects::vault_commands::read_vault_record,
+            projects::vault_commands::write_vault_record,
+            projects::vault_commands::delete_vault_record,
+            projects::vault_commands::list_vault_records,
+            projects::vault_commands::change_project_password,
+            projects::vault_commands::write_vault_blob,
+            projects::vault_commands::read_vault_blob,
+            projects::vault_commands::delete_vault_blob,
+            projects::vault_commands::delete_locked_project,
+            projects::vault_commands::export_locked_project,
             file_extraction::commands::extract_file_text,
             extensions::commands::snapshot_skill_directory,
             extensions::commands::snapshot_skill_zip,
@@ -614,6 +632,17 @@ pub fn run() {
             let project_db_state = projects::db::ProjectDbState::new(app.handle().clone());
             project_db_state.spawn_background_init();
             app.manage(project_db_state);
+
+            // Locked-project vaults live beside the other app data. Keys are
+            // only ever held in memory by `VaultManager`, never written here.
+            let vault_manager = vault::state::VaultManager::new();
+            let vault_root = app
+                .path()
+                .app_data_dir()
+                .map_err(|error| format!("failed to resolve app data dir: {error}"))?
+                .join("project-vaults");
+            vault_manager.set_root(vault_root);
+            app.manage(vault_manager);
 
             let search_engine_state =
                 web_search::engine::SearchEngineState::new(app.handle().clone());
@@ -648,6 +677,10 @@ pub fn run() {
                     reveal_main_window(app_handle, false);
                 }
                 RunEvent::ExitRequested { .. } => {
+                    // Drop every unlocked project key before the process exits.
+                    if let Some(state) = app_handle.try_state::<vault::state::VaultManager>() {
+                        state.lock_all();
+                    }
                     agents::commands::stop_all_pi_agents();
                     agents::reasoning::stop_reasoning_worker();
                     if let Some(state) =

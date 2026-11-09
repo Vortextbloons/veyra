@@ -7,8 +7,10 @@ import { createWebSearchSlice, DEFAULT_WEB_SEARCH_STATE } from "./slices/web-sea
 import { createConnectivitySlice, DEFAULT_CONNECTIVITY_STATE } from "./slices/connectivity-slice";
 import { createChatSlice, DEFAULT_CHAT_STATE } from "./slices/chat-slice";
 import { createUpdateSlice, DEFAULT_UPDATE_STATE } from "./slices/update-slice";
+import { createPermissionsSlice, DEFAULT_PERMISSIONS_STATE, isPermissionMode } from "./slices/permissions-slice";
 
 export type { ModelSettings, ResolvedModelSettings } from "./slices/model-slice";
+export type { PermissionMode } from "./slices/permissions-slice";
 
 const SETTINGS_STORAGE_KEY = "veyra.settings.v1";
 
@@ -20,6 +22,7 @@ export type SettingsStoreState = UiLayoutSliceState
   & WebSearchSliceState
   & ConnectivitySliceState
   & ChatSliceState
+  & PermissionsSliceState
   & UpdateSliceState;
 
 export type SettingsStore = SettingsStoreState
@@ -28,6 +31,7 @@ export type SettingsStore = SettingsStoreState
   & WebSearchSliceActions
   & ConnectivitySliceActions
   & ChatSliceActions
+  & PermissionsSliceActions
   & UpdateSliceActions;
 
 // Re-import state types for the combined type above.
@@ -36,6 +40,7 @@ import type { ModelSliceState, ModelSliceActions } from "./slices/model-slice";
 import type { WebSearchSliceState, WebSearchSliceActions } from "./slices/web-search-slice";
 import type { ConnectivitySliceState, ConnectivitySliceActions } from "./slices/connectivity-slice";
 import type { ChatSliceState, ChatSliceActions } from "./slices/chat-slice";
+import type { PermissionsSliceState, PermissionsSliceActions } from "./slices/permissions-slice";
 import type { UpdateSliceState, UpdateSliceActions } from "./slices/update-slice";
 
 // ── Defaults (for merge) ────────────────────────────────────────────────────
@@ -46,6 +51,7 @@ const DEFAULT_STATE: SettingsStoreState = {
   ...DEFAULT_WEB_SEARCH_STATE,
   ...DEFAULT_CONNECTIVITY_STATE,
   ...DEFAULT_CHAT_STATE,
+  ...DEFAULT_PERMISSIONS_STATE,
   ...DEFAULT_UPDATE_STATE,
 };
 
@@ -87,6 +93,11 @@ function partializeSettings(state: SettingsStore): SettingsStoreState {
     connectivityPreference: state.connectivityPreference,
     autoCheckUpdatesEnabled: state.autoCheckUpdatesEnabled,
     dismissedUpdateVersion: state.dismissedUpdateVersion,
+    permissionMode: state.permissionMode,
+    protectedToolIds: state.protectedToolIds,
+    disabledNativeToolIds: state.disabledNativeToolIds,
+    autoReviewProviderId: state.autoReviewProviderId,
+    autoReviewModelId: state.autoReviewModelId,
   };
 }
 
@@ -110,6 +121,7 @@ export const useSettingsStore = create<SettingsStore>()(
       ...createWebSearchSlice(...a),
       ...createConnectivitySlice(...a),
       ...createChatSlice(...a),
+      ...createPermissionsSlice(...a),
       ...createUpdateSlice(...a),
     }),
     {
@@ -136,6 +148,20 @@ export const useSettingsStore = create<SettingsStore>()(
         }
         if (parsed.reasoningLevelByModel === undefined) {
           migrated.reasoningLevelByModel = {};
+        }
+        // A persisted mode outside the supported set must never widen access.
+        if (parsed.permissionMode !== undefined && !isPermissionMode(parsed.permissionMode)) {
+          migrated.permissionMode = DEFAULT_PERMISSIONS_STATE.permissionMode;
+        }
+        if (parsed.protectedToolIds !== undefined) {
+          migrated.protectedToolIds = Array.isArray(parsed.protectedToolIds)
+            ? [...new Set(parsed.protectedToolIds.filter((id): id is string => typeof id === "string" && Boolean(id)))]
+            : DEFAULT_PERMISSIONS_STATE.protectedToolIds;
+        }
+        if (parsed.disabledNativeToolIds !== undefined) {
+          migrated.disabledNativeToolIds = Array.isArray(parsed.disabledNativeToolIds)
+            ? [...new Set(parsed.disabledNativeToolIds.filter((id): id is string => typeof id === "string" && Boolean(id)))]
+            : DEFAULT_PERMISSIONS_STATE.disabledNativeToolIds;
         }
         return { ...current, ...DEFAULT_STATE, ...migrated };
       },

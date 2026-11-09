@@ -6,12 +6,21 @@ import type {
   UpdateProjectInput,
 } from "@/modules/projects/project-types";
 
-type ProjectRow = Omit<ProjectRecord, "settings"> & { settingsJson: string };
+type ProjectRow = Omit<ProjectRecord, "settings"> & {
+  settingsJson: string;
+  lockState?: string;
+};
 
 function fromRow(row: ProjectRow): ProjectRecord {
   let settings: ProjectRecord["settings"] = {};
   try { settings = JSON.parse(row.settingsJson) as ProjectRecord["settings"]; } catch { /* Preserve access to projects with invalid settings. */ }
-  return { ...row, settings: settings ?? {} };
+  // A locked row's content columns are redacted server-side. `name` is left
+  // empty on purpose so nothing downstream can present a stale title as real.
+  return {
+    ...row,
+    settings: settings ?? {},
+    lockState: row.lockState === "locked" ? "locked" : "none",
+  };
 }
 
 export async function listProjects(status?: string): Promise<ProjectRecord[]> {
@@ -58,4 +67,50 @@ export async function updateProject(input: UpdateProjectInput): Promise<ProjectR
 
 export async function deleteProject(id: string): Promise<void> {
   await invoke<void>("delete_project", { id });
+}
+
+// ── Locked project content ──────────────────────────────────────────────────
+//
+// A lock-enabled project's details live inside its vault. These helpers keep all
+// vault-aware reads/writes in one place so no screen has to remember the rule.
+
+export type LockedProjectContent = {
+  name: string;
+  description: string;
+  kind: string;
+  color: string;
+  icon: string;
+  systemPrompt: string;
+  settings: ProjectRecord["settings"];
+};
+
+export function toLockedContent(project: ProjectRecord): LockedProjectContent {
+  return {
+    name: project.name,
+    description: project.description,
+    kind: project.kind,
+    color: project.color,
+    icon: project.icon,
+    systemPrompt: project.systemPrompt,
+    settings: project.settings,
+  };
+}
+
+/** Reads a locked project's real content. Throws when the project is not unlocked. */
+export async function readLockedProjectContent(
+  projectId: string,
+  generation: number | null,
+): Promise<LockedProjectContent | null> {
+  const { readVaultJson } = await import("@/lib/project-vault");
+  return readVaultJson<LockedProjectContent>(projectId, generation, "project", projectId);
+}
+
+/** Writes a locked project's content back into its vault. */
+export async function writeLockedProjectContent(
+  projectId: string,
+  generation: number | null,
+  content: LockedProjectContent,
+): Promise<void> {
+  const { writeVaultRecord } = await import("@/lib/project-vault");
+  await writeVaultRecord(projectId, generation, "project", projectId, content);
 }

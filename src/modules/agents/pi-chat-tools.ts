@@ -11,6 +11,81 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useSkillsStore } from "@/modules/extensions/skills-store";
 import type { SkillInvocation, SkillRecord } from "@/modules/extensions/extension-types";
 import { buildSkillPromptBlock, isModelInvocable, modelInvocableSkills } from "@/modules/extensions/skill-runtime";
+import { usePermissionStore } from "@/modules/permissions/permission-store";
+import { PERMISSION_REQUEST_TITLE } from "./permission-request";
+
+/**
+ * Answer a native-tool permission question from Pi.
+ *
+ * Pi is blocked inside `tool_call` until this returns, so every path produces
+ * a JSON decision. Anything unparsable is a denial: the safe direction when the
+ * host cannot describe what is being asked.
+ */
+async function respondToPermissionRequest(
+  request: Record<string, unknown>,
+  context: { sessionId: string; cwd?: string; signal: AbortSignal },
+): Promise<string> {
+  let payload: { id?: unknown; name?: unknown; arguments?: unknown; cwd?: unknown } = {};
+  try {
+    payload = JSON.parse(String(request.placeholder ?? "{}")) as typeof payload;
+  } catch {
+    return JSON.stringify({ outcome: "deny", reason: "Veyra could not read the command details." });
+  }
+  const toolName = typeof payload.name === "string" ? payload.name : "";
+  const toolCallId = typeof payload.id === "string" ? payload.id : "";
+  const args = payload.arguments && typeof payload.arguments === "object" && !Array.isArray(payload.arguments)
+    ? payload.arguments as Record<string, unknown>
+    : null;
+  if (!toolName || !toolCallId || !args) {
+    return JSON.stringify({ outcome: "deny", reason: "Veyra could not read the command details." });
+  }
+  if (context.signal.aborted) {
+    return JSON.stringify({ outcome: "deny", reason: "The request was cancelled." });
+  }
+
+  const decision = await usePermissionStore.getState().authorize(
+    {
+      sessionId: context.sessionId,
+      toolCallId,
+      toolName,
+      args,
+      cwd: typeof payload.cwd === "string" && payload.cwd ? payload.cwd : context.cwd ?? "",
+      bridge: "native",
+    },
+    context.signal,
+  );
+  return decision.outcome === "allow"
+    ? JSON.stringify({ outcome: "allow" })
+    : JSON.stringify({ outcome: "deny", reason: decision.reason });
+}
+
+/**
+ * Gate a Veyra-bridged tool. Returns the text the model should see when the
+ * call was denied, or undefined when execution may continue.
+ */
+async function authorizeHostTool(input: {
+  sessionId: string;
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  cwd: string;
+  signal: AbortSignal;
+}): Promise<string | undefined> {
+  const decision = await usePermissionStore.getState().authorize(
+    {
+      sessionId: input.sessionId,
+      toolCallId: input.toolCallId,
+      toolName: input.toolName,
+      args: input.args,
+      cwd: input.cwd,
+      bridge: "host",
+    },
+    input.signal,
+  );
+  if (decision.outcome === "allow") return undefined;
+  // A denial is normal tool feedback: the assistant can explain it and continue.
+  return `Tool failed: ${decision.reason}`;
+}
 
 /**
  * Skills the model may load on its own for this request.
@@ -37,6 +112,8 @@ export function createPiChatTools(options: {
   webSearchEnabled: boolean;
   signal: AbortSignal;
   onOutput: (event: AgentEvent) => void;
+  /** Working directory Pi reported for this run; the gate binds approvals to it. */
+  cwd?: string;
   /** Called when the model loads a Skill, so the request can record it. */
   onSkillUsed?: (invocation: SkillInvocation) => void;
 }) {
@@ -56,6 +133,13 @@ export function createPiChatTools(options: {
   const tools = toolsNow();
   return { tools, async handle(request: Record<string, unknown>): Promise<string | undefined> {
     if (signal.aborted) return undefined;
+
+    // A native Pi tool reached the permission boundary. Pi blocks execution
+    // until this answer arrives, so the reply must always be a decision.
+    if (request.title === PERMISSION_REQUEST_TITLE) {
+      return respondToPermissionRequest(request, { sessionId, cwd: options.cwd, signal });
+    }
+
     if (request.title !== "veyra_tool") {
       return askPiQuestion(sessionId, String(request.title ?? "Question"), request.method === "confirm" ? ["true", "false"] : Array.isArray(request.options) ? request.options.map(String) : undefined, signal);
     }
@@ -63,6 +147,10 @@ export function createPiChatTools(options: {
       const call = JSON.parse(String(request.placeholder)) as ProviderToolCall;
       if (!tools.some((tool) => tool.function.name === call.name) || !toolsNow().some((tool) => tool.function.name === call.name)) throw new Error("This tool is no longer enabled.");
       if (!call.arguments || typeof call.arguments !== "object") throw new Error("Invalid tool arguments");
+      // Enablement above stays authoritative: Full access in the permission
+      // gate never turns on a tool the user disabled.
+      const gate = await authorizeHostTool({ sessionId, toolCallId: call.id, toolName: call.name, args: call.arguments, cwd: options.cwd ?? "", signal });
+      if (gate) return gate;
       if (call.name === USE_SKILL_TOOL_NAME) {
         const slug = String(call.arguments.name ?? "").trim();
         const skill = skillsBySlug.get(slug);

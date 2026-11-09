@@ -9,6 +9,7 @@ import type { SkillInvocation } from "@/modules/extensions/extension-types";
 import { useExtensionsStore } from "@/modules/extensions/extensions-store";
 import { invocationsFor, useSkillsStore } from "@/modules/extensions/skills-store";
 import { buildSkillPromptBlock } from "@/modules/extensions/skill-runtime";
+import { usePermissionStore, enabledNativeToolsForChat } from "@/modules/permissions/permission-store";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AgentEvent,
@@ -65,6 +66,8 @@ function abortAgentSession(sessionId: string): void {
   const controller = sessionAbortControllers.get(sessionId);
   controller?.abort();
   sessionAbortControllers.delete(sessionId);
+  // A stopped chat must not leave approval cards for calls that can no longer run.
+  usePermissionStore.getState().cancelSession(sessionId);
   void stopPiAgent(sessionId).catch(() => undefined);
 }
 
@@ -461,6 +464,7 @@ export const useAgentStore = create<AgentStore>()(
         const current = get().sessions.find((session) => session.id === sessionId);
         if (!current) return;
         notifyMemoryDeletion({ sourceType: "agent", sourceId: sessionId });
+        usePermissionStore.getState().cancelSession(sessionId);
         if (current.status === "running") {
           abortAgentSession(sessionId);
         }
@@ -601,11 +605,13 @@ export const useAgentStore = create<AgentStore>()(
       try {
         const abortController = new AbortController();
         sessionAbortControllers.set(id, abortController);
+        // A new turn cannot inherit an approval card from the previous one.
+        usePermissionStore.getState().cancelSession(id);
         // Skills the model loads during this run, appended to the request record.
         const loadedByModel: SkillInvocation[] = [];
         try {
           let memoryBlock = "";
-          try {
+          if (!input.replaceSystemPrompt) try {
             const { retrieveMemoryContext } = await import("@/modules/memory/memory-service");
             const retrieved = await retrieveMemoryContext({
               query: userPrompt,
@@ -626,7 +632,7 @@ export const useAgentStore = create<AgentStore>()(
           }
           if (abortController.signal.aborted) return id;
 
-          const bridge = createPiChatTools({ sessionId: id, scopeId, projectId: scopeProjectId, webSearchEnabled: input.webSearchEnabled ?? false, signal: abortController.signal, onOutput: (output) => {
+          const bridge = createPiChatTools({ sessionId: id, scopeId, projectId: scopeProjectId, webSearchEnabled: input.webSearchEnabled ?? false, cwd: projectPath, signal: abortController.signal, onOutput: (output) => {
             if (abortController.signal.aborted) return;
             set((state) => {
               const current = state.sessions.find((item) => item.id === id);
@@ -656,7 +662,7 @@ export const useAgentStore = create<AgentStore>()(
           const project = scopeProjectId ? useProjectStore.getState().projects.find((item) => item.id === scopeProjectId) : undefined;
           let skillPaths: string[] = [];
           let promptInvocations = invocations;
-          if (invocations.length) {
+          if (invocations.length && !input.replaceSystemPrompt) {
             try {
               const materialized = await invoke<{ path: string; name: string }[]>("materialize_pi_skills", {
                 skills: invocations.map((invocation) => {
@@ -695,7 +701,7 @@ export const useAgentStore = create<AgentStore>()(
             (skill) => !invocations.some((invocation) => invocation.id === skill.id),
           );
           const catalogue = buildSkillCataloguePrompt(loadable);
-          const contextualPrompt = [
+          const contextualPrompt = input.replaceSystemPrompt ? userPrompt : [
             project?.systemPrompt ? `Project guidance:\n${project.systemPrompt}` : "",
             skillBlock,
             catalogue,
@@ -705,7 +711,7 @@ export const useAgentStore = create<AgentStore>()(
             {
               sessionId: id,
               projectPath,
-              prompt: agentPromptWithMemory(contextualPrompt, memoryBlock, {
+              prompt: agentPromptWithMemory(contextualPrompt, input.replaceSystemPrompt ? "" : memoryBlock, {
                 session: shouldContinue ? activeSession ?? null : null,
                 contextLength: input.contextLength,
                 reservedOutputTokens: input.reservedOutputTokens,
@@ -724,6 +730,10 @@ export const useAgentStore = create<AgentStore>()(
               skillPaths,
               systemPrompt: input.systemPrompt,
               replaceSystemPrompt: input.replaceSystemPrompt,
+              // Built-in tools this chat switched on. The Rust side also
+              // filters against its own allowlist, so a stale caller cannot
+              // introduce a capability by naming it.
+              nativeTools: enabledNativeToolsForChat(id),
             },
             (rawEvent) => {
               const parsedEvent = parsePiEvent(rawEvent);
@@ -761,6 +771,8 @@ export const useAgentStore = create<AgentStore>()(
           if (currentSession?.status === "stopped" || abortController.signal.aborted) {
             return id;
           }
+          // The run is over, so nothing can still be waiting on a decision.
+          usePermissionStore.getState().cancelSession(id);
 
           const failed = result.exitCode !== 0;
           const stderrText = stripAnsi(result.stderr);

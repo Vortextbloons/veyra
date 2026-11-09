@@ -9,7 +9,7 @@ use tauri::Emitter;
 
 use super::pi_runner::{
     resolve_thinking_level, run_pi_agent_blocking,
-    validate_pi_agent_input, PiRunFinishedEvent, PiRunResult,
+    validate_pi_agent_input, PiRunFinishedEvent, PiRunResult, DEFAULT_NATIVE_TOOLS,
 };
 use super::process::AGENT_CANCELLATION;
 use super::process::{kill_agent_process, kill_pid, RUNNING_AGENT_PIDS, RUNNING_AGENT_STDIN};
@@ -43,6 +43,8 @@ pub struct StartPiAgentInput {
     pub system_prompt: Option<String>,
     /// When true, `system_prompt` replaces the default system prompt entirely.
     pub replace_system_prompt: Option<bool>,
+    /// Built-in Pi tools this chat may use. Missing means the default set.
+    pub native_tools: Option<Vec<String>>,
 }
 
 #[tauri::command]
@@ -81,6 +83,19 @@ pub async fn check_pi_available() -> bool {
     })
     .await
     .unwrap_or(false)
+}
+
+/// Reports whether the bundled Bash tool can run, and what to install if not.
+#[tauri::command]
+pub async fn check_bash_available() -> super::shell::BashAvailability {
+    tauri::async_runtime::spawn_blocking(super::shell::resolve_bash)
+        .await
+        .unwrap_or_else(|error| super::shell::BashAvailability {
+            available: false,
+            shell_path: None,
+            message: Some(format!("Could not check for Bash: {error}")),
+            searched: Vec::new(),
+        })
 }
 
 #[tauri::command]
@@ -166,7 +181,7 @@ pub async fn run_pi_agent(
                 &custom_system_prompt,
                 replace_system_prompt,
                 input.skill_paths.as_deref().unwrap_or(&[]),
-                &cancelled,
+                input.native_tools.as_deref().unwrap_or(&DEFAULT_NATIVE_TOOLS.map(str::to_string)),                &cancelled,
             )
         })();
         AGENT_CANCELLATION.lock().remove(&sid);

@@ -209,7 +209,7 @@ export function buildToolUseGuidance(names?: readonly string[]): string {
   if (enabled.has("ask_question")) guidance.push("Use ask_question when a missing answer materially changes the result; continue independent useful work when possible.");
   if (enabled.has("generate_interactive_answer")) {
     guidance.push(
-      "Use generate_interactive_answer when the answer is easier to explore than to read: adjustable inputs, comparisons, plans, checklists, calculations, step-by-step how-to, or anything with numbers, choices or parts. Its `program` argument is an openui-lang document written with the component library below; write one short chat sentence about the answer and let the program carry the content.",
+      "Use generate_interactive_answer when the answer is easier to explore than to read: adjustable inputs, comparisons, plans, checklists, calculations, step-by-step how-to, when interaction helps the user. Ordinary prose and lists can stay in chat. Its `program` argument is an openui-lang document written with the component library below; write one short chat sentence about the answer and let the program carry the content.",
     );
     guidance.push(INTERACTIVE_ANSWER_PROMPT);
   }

@@ -1,3 +1,4 @@
+import { prepareProgram } from "./ui/structured";
 import { MAX_PROGRAM_CHARS, validateProgram } from "@/modules/chat/ui/validate";
 
 /**
@@ -41,7 +42,11 @@ export function normalizeInteractiveAnswer(
     return { ok: false, error: "This interactive answer version is not supported." };
   }
 
-  const program = typeof raw.program === "string" ? raw.program.trim() : "";
+  let program = typeof raw.program === "string" ? raw.program.trim() : "";
+  if (program.length <= MAX_INTERACTIVE_ANSWER_CHARS) {
+    try { program = prepareProgram(program); }
+    catch (error) { return { ok: false, error: `Repair the answer and retry: ${error instanceof Error ? error.message : String(error)}` }; }
+  }
   if (!program) {
     return {
       ok: false,

@@ -23,6 +23,8 @@ type StartPiAgentInput = {
   systemPrompt?: string;
   /** When true, `systemPrompt` replaces the default system prompt entirely. */
   replaceSystemPrompt?: boolean;
+  /** Built-in Pi tools this chat may use. Missing means the default set. */
+  nativeTools?: string[];
 };
 
 type PiRunFinishedEvent = {

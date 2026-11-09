@@ -6,6 +6,7 @@ import { AgentOutputView } from "./agent-output-view";
 import { AgentInspector } from "./agent-inspector";
 import "./agent-workspace.css";
 import { PiQuestion } from "../pi-questions";
+import { PermissionRequestCards } from "@/modules/permissions/components/permission-request-card";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useAgentStore } from "../agent-store";
 
@@ -43,6 +44,7 @@ export function AgentsPanel({ sessions, activeSessionId, runtimeAvailable, proje
         <h2 className="text-[clamp(24px,3vw,32px)] font-normal leading-tight tracking-tight text-[var(--color-text)]">What's on your mind today?</h2>
       </div>}
       <PiQuestion sessionId={activeSessionId} />
+      <PermissionRequestCards sessionId={activeSessionId} />
       {composer}
       {empty && <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5">
         <div className="mx-auto flex w-full max-w-[1052px] flex-col gap-1">

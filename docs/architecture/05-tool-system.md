@@ -42,6 +42,10 @@ Native code execution is not offered to models on the Pi path. Artifacts and
 interactive answers are normalized and size-checked before they are stored, and
 tool results are treated as untrusted context in later prompts.
 
+Bash, and any other tool the user adds to the protected list, passes a shared
+permission gate at the execution boundary. See
+[Tool Permissions](../permissions/README.md).
+
 An interactive answer program is model-written UI, so the library treats it as
 untrusted: CSS values that could load resources (`url(...)`, `var(...)`) are
 dropped, links and images only accept absolute `http(s)` URLs, `@OpenUrl`

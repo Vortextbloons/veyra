@@ -96,3 +96,36 @@ describe("generated interactive answer artifacts", () => {
     expect(INTERACTIVE_ANSWER_PROMPT).toContain("@Set");
   });
 });
+
+
+describe("friendly answer input", () => {
+  it("compiles named properties and preserves later optional positions", () => {
+    const result = normalizeInteractiveAnswer({program: JSON.stringify({type:"Text", text:"Hello", weight:"semibold"})}, "json");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.answer.program).toContain('Text("Hello",null,null,"semibold")');
+  });
+  it("accepts a complete fenced program at ingestion", () => {
+    const result = normalizeInteractiveAnswer({program: "```openui\n" + program + "\n```"}, "fence");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.answer.program).toBe(program);
+  });
+  it("supports named interactive state and expressions", () => {
+    const result = normalizeInteractiveAnswer({program: JSON.stringify({root:{type:"Col",children:[{type:"Text",text:{$expr:'$count + " items"'}},{type:"Button",label:"Add",action:{$expr:"@Set($count, $count + 1)"}}]},state:{count:2}})}, "state");
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+  });
+  it("rejects unknown named properties rather than dropping content", () => {
+    const result = normalizeInteractiveAnswer({program:'{"type":"Text","text":"Hi","typo":2}'}, "bad");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('unknown property "typo"');
+  });
+  it("deduplicates unknown components and gives a line and correction", () => {
+    const result = validateProgram('root = Col([TextContent("one"), TextContent("two")])');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.match(/Unknown component/g)).toHaveLength(1);
+      expect(result.error).toContain('Text("your text")');
+      expect(result.error).toContain('line 1');
+      expect(result.error).not.toContain('Available components');
+    }
+  });
+});

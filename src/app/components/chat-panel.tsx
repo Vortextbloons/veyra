@@ -9,6 +9,7 @@ import { Composer } from "@/modules/chat/components/composer";
 import { ContextMeterButton } from "@/modules/chat/components/context-meter";
 import { aiScheduler } from "@/lib/ai-scheduler";
 import { useAgentStore } from "@/modules/agents/agent-store";
+import { useBashAvailability } from "@/modules/agents/use-bash-availability";
 
 export function ChatPanel({
   onSend, supportsImages = false, providers = [], selectedProvider = "", onProviderChange,
@@ -24,6 +25,9 @@ export function ChatPanel({
   const pendingJob = [scheduler.activeJob, ...scheduler.queuedJobs].find((job) => job?.type === "agent_pi" && job.conversationId === `agent:${agentProjectPath.trim()}`);
   const running = agentSessions.find((session) => session.projectPath === agentProjectPath && session.status === "running");
   const busy = Boolean(running || pendingJob);
+  // Bash is only exposed while a project folder is attached, so this probe
+  // only matters there.
+  const bashAvailability = useBashAvailability(Boolean(agentProjectPath.trim()));
   const currentProvider = providers.find((provider) => provider.id === selectedProvider);
   const selectorModels: Model[] = useMemo(() => {
     const favorites = new Set(favoriteModels);
@@ -60,7 +64,13 @@ export function ChatPanel({
           <ModelSelector value={selectedModel} models={selectorModels} onChange={onModelChange} onToggleFavorite={onToggleFavorite} />
         </>}
       />
-      <p className="mt-2 text-center text-[11px] text-[var(--color-muted)]">{agentProjectPath ? "Can edit project files and run commands" : "Ask anything · Attach a project when you need file access"}</p>
+      {bashAvailability && !bashAvailability.available ? (
+        <p role="status" className="mx-auto mt-2 max-w-[720px] text-center text-[11px] leading-relaxed text-amber-300/85">
+          {bashAvailability.message}
+        </p>
+      ) : (
+        <p className="mt-2 text-center text-[11px] text-[var(--color-muted)]">{agentProjectPath ? "Can edit project files and run commands" : "Ask anything · Attach a project when you need file access"}</p>
+      )}
     </div>}
   />;
 }

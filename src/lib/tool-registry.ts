@@ -136,7 +136,7 @@ export function buildProviderTools(options: {
         function: {
           name: INTERACTIVE_ANSWER_TOOL_NAME,
           description:
-            "Compose an interactive answer: a live, self-contained UI page instead of prose. Use it when the answer is easier to explore than to read — such as adjustable inputs, comparisons, plans, checklists, calculations, step-by-step how-to, or anything with numbers, choices or parts. The program is an openui-lang document written with the component library described in the system prompt: it holds its own state in $variables, computes what it shows with @functions, and reacts to the user without another message. Compose the page for the user's actual content, never a template with placeholder rows. Do not repeat the program in your reply: write one short sentence about the answer and call this tool.",
+            "Compose an interactive answer: a live, self-contained UI page instead of prose. Use it when the answer is easier to explore than to read — such as adjustable inputs, comparisons, plans, checklists, calculations, step-by-step how-to, when interaction helps the user. Ordinary prose and lists can stay in chat. The program is an openui-lang document written with the component library described in the system prompt: it holds its own state in $variables, computes what it shows with @functions, and reacts to the user without another message. Compose the page for the user's actual content, never a template with placeholder rows. Do not repeat the program in your reply: write one short sentence about the answer and call this tool.",
           parameters: {
             type: "object",
             properties: {
@@ -146,7 +146,7 @@ export function buildProviderTools(options: {
               },
               program: {
                 type: "string",
-                description: "The complete openui-lang program. Must start with `root = Col(...)`, one statement per line, no markdown fences and no prose.",
+                description: "A complete OpenUI program starting with root = Col(...), or a JSON component document with named properties (type, children, text, etc.). See the system prompt.",
               },
             },
             required: ["program"],

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import type { MemoryRecord, MemoryTurnInput } from "@/modules/memory/memory-types";
 import { invalidatePendingMemoryExtraction, isMemorySourceDeleted } from "./memory-lifecycle";
+import { stripLockedMemories } from "@/modules/projects/locked-project-registry";
 
 const ENVELOPE_VERSION = 1;
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
@@ -44,6 +45,10 @@ type MemoryStoreState = {
   deleteMemory: (id: string) => Promise<void>;
   clearMemories: (projectId?: string) => Promise<void>;
   retrySave: () => Promise<void>;
+  /** Merges a locked project's vault memories into the in-memory view. */
+  absorbLockedMemories: (projectId: string, records: MemoryRecord[]) => void;
+  /** Drops a locked project's memories from memory when it locks. */
+  dropLockedMemories: (projectId: string) => void;
 };
 
 let keyPromise: Promise<CryptoKey> | null = null;
@@ -288,7 +293,9 @@ function createPersistedSnapshot(): PersistedMemory {
   const state = useMemoryStore.getState();
   return {
     enabled: state.enabled,
-    records: state.records,
+    // Lock-enabled projects keep their memories in their own vault. Filtering
+    // here means no future caller can persist a protected record globally.
+    records: stripLockedMemories(state.records),
     processedTurns: [...processedTurns],
   };
 }
@@ -554,6 +561,22 @@ export const useMemoryStore = create<MemoryStoreState>((set, get) => ({
       if (pendingEnabledRequest === false) set({ enabled: false });
       await persistCurrentSnapshot(needsMirroredRetry || pendingEnabledRequest === false);
       if (pendingEnabledRequest === false) pendingEnabledRequest = null;
+    });
+  },
+
+  absorbLockedMemories: (projectId, records) => {
+    set((state) => ({
+      records: [
+        ...state.records.filter((record) => record.projectId !== projectId),
+        ...records.filter((record) => record.projectId === projectId),
+      ],
+    }));
+  },
+
+  dropLockedMemories: (projectId) => {
+    set((state) => {
+      const records = state.records.filter((record) => record.projectId !== projectId);
+      return records.length === state.records.length ? state : { records };
     });
   },
 }));

@@ -7,6 +7,7 @@ import {
   Puzzle,
   Settings,
   Shield,
+  ShieldCheck,
   Sparkles,
   Wrench,
   type LucideIcon,
@@ -16,6 +17,7 @@ import { PrivacyConnectivitySettings } from "./privacy-connectivity-settings";
 import { ChatSettings } from "./chat-settings";
 import { ModelsSettings } from "./models-settings";
 import { ToolsSettings } from "./tools-settings";
+import { PermissionsSettings } from "./permissions-settings";
 import { ExtensionsSettings } from "./extensions-settings";
 import { SkillsLibrarySettings } from "./skills-library-settings";
 import { MemorySettings } from "@/modules/memory/components/memory-settings";
@@ -25,6 +27,7 @@ type SettingsTab =
   | "chat"
   | "models"
   | "tools"
+  | "permissions"
   | "skills"
   | "memory"
   | "privacy"
@@ -35,6 +38,7 @@ const TABS: { id: SettingsTab; label: string; blurb: string; icon: LucideIcon }[
   { id: "chat", label: "Chat", blurb: "Prompt, behavior, and automation", icon: MessageCircle },
   { id: "models", label: "Models", blurb: "Providers, favorites, and sampling", icon: Cpu },
   { id: "tools", label: "Tools", blurb: "Web search and page extraction", icon: Wrench },
+  { id: "permissions", label: "Permissions", blurb: "Tool approval modes and the Auto reviewer", icon: ShieldCheck },
   { id: "skills", label: "Skills", blurb: "Reusable instructions for a task", icon: Sparkles },
   { id: "memory", label: "Memory", blurb: "Facts Veyra keeps about you", icon: Brain },
   { id: "privacy", label: "Privacy", blurb: "Connectivity and data boundaries", icon: Shield },
@@ -95,6 +99,7 @@ export function SettingsPage() {
             {activeTab === "chat" && <ChatSettings />}
             {activeTab === "models" && <ModelsSettings />}
             {activeTab === "tools" && <ToolsSettings />}
+            {activeTab === "permissions" && <PermissionsSettings />}
             {activeTab === "skills" && <SkillsLibrarySettings />}
             {activeTab === "memory" && <MemorySettings />}
             {activeTab === "privacy" && <PrivacyConnectivitySettings />}

@@ -66,7 +66,14 @@ export function validateProgram(program: string): ProgramValidation {
   // A component error can prevent root construction. Report that cause before
   // suggesting a missing root or unreachable statements as secondary symptoms.
   if (result.meta.errors.length) {
-    const errors = result.meta.errors.slice(0, 4).map((error) => error.message);
+    const errors = [...new Set(result.meta.errors.map((error) => {
+      const unknown = /Unknown component "([^"]+)"/.exec(error.message);
+      if (!unknown) return error.message;
+      const name = unknown[1];
+      const suggestion = name === "TextContent" ? ' Use Text("your text").' : "";
+      const line = trimmed.split("\n").findIndex(line => line.includes(name + "("));
+      return `Unknown component "${name}"${line >= 0 ? ` on line ${line + 1}` : ""}.${suggestion}`;
+    }))].slice(0, 4);
     const hint = errors.some((message) => message.includes('"Stack"'))
       ? " Use Col([...]) for vertical layout or Row([...]) for horizontal layout; Stack is not supported."
       : "";

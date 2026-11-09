@@ -1,12 +1,25 @@
 import { useState, type ReactNode } from "react";
-import { FileText, Globe, LayoutDashboard, X } from "lucide-react";
+import { FileText, Globe, LayoutDashboard, Terminal, X } from "lucide-react";
 import { DialogSurface } from "@/components/dialog-surface";
 import { ChatExtensionsSettings } from "@/modules/extensions/components/chat-extensions-settings";
 import { useSettingsStore } from "@/stores/settings-store";
+import { usePermissionStore } from "@/modules/permissions/permission-store";
+import { TOGGLEABLE_NATIVE_TOOLS } from "@/modules/permissions/permission-policy";
+
+/** Copy for the built-in tools a chat can switch on and off. */
+const CHAT_TOOL_LABEL: Record<string, string> = {
+  bash: "Bash commands",
+};
+
+const CHAT_TOOL_DESCRIPTION: Record<string, string> = {
+  bash: "Run shell commands in this project",
+};
 
 export type ChatOptionsMenuProps = {
   open: boolean;
   onClose: () => void;
+  /** Chat whose per-chat switches this menu edits; null before a chat exists. */
+  sessionId?: string | null;
   webSearchEnabled?: boolean;
   onWebSearchChange?: (on: boolean) => void;
   webSearchDisabled?: boolean;
@@ -137,6 +150,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 export function ChatOptionsMenu({
   open,
   onClose,
+  sessionId = null,
   webSearchEnabled = false,
   onWebSearchChange,
   webSearchDisabled = false,
@@ -148,6 +162,10 @@ export function ChatOptionsMenu({
   const setInteractiveAnswersEnabled = useSettingsStore((s) => s.setInteractiveAnswersEnabled);
   const artifactsEnabled = useSettingsStore((s) => s.artifactsEnabled);
   const setArtifactsEnabled = useSettingsStore((s) => s.setArtifactsEnabled);
+  const globallyDisabledTools = useSettingsStore((s) => s.disabledNativeToolIds);
+  // Subscribing to the maps keeps an open menu in sync with the composer control.
+  const chatDisabledTools = usePermissionStore((s) => s.chatDisabledNativeTools);
+  const setChatNativeToolEnabled = usePermissionStore((s) => s.setChatNativeToolEnabled);
   const webSearchOn = webSearchEnabled && !webSearchDisabled;
   const webSearchIconClass = webSearchSpeedPreset === "fast" ? "text-cyan-300" : "text-emerald-300";
 
@@ -205,6 +223,33 @@ export function ChatOptionsMenu({
             <div className="mx-2 my-1.5 h-px bg-white/[0.06]" />
 
             <SectionLabel>Tools</SectionLabel>
+            {TOGGLEABLE_NATIVE_TOOLS.map((toolId) => {
+              const globallyOff = globallyDisabledTools.includes(toolId);
+              // Read from the subscribed maps so toggling one surface updates the other.
+              const chatOff = Boolean(sessionId && (chatDisabledTools[sessionId] ?? []).includes(toolId));
+              const on = !globallyOff && !chatOff;
+              return (
+                <SettingRow
+                  key={toolId}
+                  icon={<Terminal className="size-4" />}
+                  label={CHAT_TOOL_LABEL[toolId] ?? toolId}
+                  description={globallyOff
+                    ? "Off for every chat in Settings → Permissions"
+                    : CHAT_TOOL_DESCRIPTION[toolId] ?? ""}
+                  active={on}
+                  onToggle={(next) => {
+                    if (sessionId) setChatNativeToolEnabled(sessionId, toolId, next);
+                  }}
+                  iconActiveClass="text-emerald-300"
+                  disabled={!sessionId || globallyOff}
+                  disabledReason={
+                    !sessionId
+                      ? "Send a message first, then change this for the chat"
+                      : "Turned off in Settings → Permissions"
+                  }
+                />
+              );
+            })}
             <SettingRow
               icon={<FileText className="size-4" />}
               label="Artifacts"

@@ -13,6 +13,14 @@ export type ProjectKind =
 
 export type ProjectStatus = "active" | "paused" | "archived";
 
+/**
+ * `none` for an ordinary project whose details live in SQLite. `locked` for a
+ * project that owns an encrypted vault: its name, instructions, settings, and
+ * conversations only exist inside the vault and are only readable after an
+ * unlock in this process.
+ */
+export type ProjectLockState = "none" | "locked";
+
 export interface ProjectSettings {
   projectSystemVersion?: number;
   resources?: { path: string; directory: boolean }[];
@@ -46,6 +54,12 @@ export interface ProjectRecord {
   createdAt: string;
   updatedAt: string;
   lastOpenedAt?: string;
+  /**
+   * A locked project's row is an opaque index entry. `name` is empty and
+   * `settings` is empty until the project is unlocked, and the UI must render a
+   * placeholder rather than inventing content.
+   */
+  lockState?: ProjectLockState;
 }
 
 /** Input to create a new project. */

@@ -39,28 +39,14 @@ viewer = Card([Row([Badge("Step " + ($step + 1) + " of 4", "info"), Spacer(), Ca
 strip = Grid(@Each(@Range(0, 4), "i", Pressable([drawings[i], Caption((i + 1) + ". " + steps[i].title)], @Set($step, i), i == $step, 2)), 4, 110, 2)`;
 
 const rules = [
-  "Treat component signatures as a strict contract; choose the content, visual metaphor, composition and interactions creatively within that contract. Examples demonstrate syntax, not required page templates. Combine supported components to fit this answer rather than copying an example's subject or layout.",
-  "Children occupy ONE argument: an array containing all child components or references. Write Col([heading, body, controls]), never Col(heading, body, controls). A children argument must resolve to an array, never null or an undefined name; @Each may supply that array. Close the children array before supplying layout options.",
-  "Col has at most THREE positional arguments: Col([children], gap, align). For example Col([Title(\"Overview\"), Text(\"Details\")], 2, \"start\"). gap is a number; align is exactly \"start\", \"center\", \"end\" or \"stretch\", never a number. Padding, width, radius and background belong to Box in its documented argument positions, not extra Col arguments. Omit trailing optional arguments; use null only to skip an optional position when a later argument is needed.",
-  "Before calling the tool, silently check each component against its signature: argument count, positional order, value types and enum spellings; children arrays and matching brackets; defined references reachable from root; literal state defaults and supported functions. Split deeply nested layouts into named statements to make this check easier. Do not include this check in the answer. If the tool reports a validation error, repair the offending call and inspect similar calls, then resubmit the complete program without explaining parser internals to the user.",
-  "Use only catalog components and listed builtins. Stack, VStack and HStack do not exist: use Col([...]) for vertical layout and Row([...]) for horizontal layout. Start with root = Col([...]) and reference every statement from it. If validation fails, correct the reported cause and call generate_interactive_answer again with the complete corrected program.",
-  "Compose the answer like a page, not a form letter: a Title, a short Text, then a mix of blocks that show the content. Row and Grid set things side by side, Badge rows carry quick facts, Card groups a block, Popover-style asides become a Caption or a Quote.",
-  "Spacing is a system with three tiers that nest: inner (gap 1-2) for a title with its subtitle or a label with its value; group (gap 3-4) between blocks inside a Card or a grid cell; section (24px) between the blocks of the page. Leave gap unset on the page's root Col and on Card contents; set a gap only on a Row or Grid. Never use one gap for everything, and never a gap larger than the section gap.",
-  "A photo beside text is a media row: Row([Box([Image(src, alt, 1.33)]), Col([Title(..., \"md\"), Row([Badge(...), Badge(...)], 1, null, null, true), Text(..., \"sm\")], 2)], 4, \"start\"). Only use Image with a real http(s) URL the user or a tool supplied; never invent a URL, and never claim you cannot show an image.",
-  "Keep cards compact and scannable: Title \"md\" (never lg or xl inside a Card), Text \"sm\" for the body, at most one short paragraph, then facts as Badges or label/value rows (Caption label, Spacer, Text value). Cards side by side in a Grid share the same blocks in the same order, so they line up.",
-  "Answer with a working tool whenever the request involves numbers, choices, lists, steps or something to explore: keep inputs and lists in $variables, compute everything shown from them with expressions and @functions, and change them with @Set. The page must work on its own, without another message.",
-  "Use @ToAssistant only for what the page cannot compute: a Form's submit Button, or a new request (\"Plan another day\"). Its message is short and first person, like the user typing it; the form values travel with it, so never repeat them in the message.",
-  "$variable defaults are literals (numbers, strings, lists, objects), never expressions or @calls. Edit lists with @Append, @Remove, @RemoveAt and @Update; track selections with @Toggle and @Includes.",
-  "cond ? a : b also picks between components; there is no @If. Use only the listed @functions; you cannot define your own.",
-  "Derive rows once in a statement with @Each(list, \"x\", {...}), then reuse them in @Each, Table, Chart, @Sum(rows.field) and @Join. @Each(@Range(0, n), \"i\", ...) builds a series or repeats a step.",
-  "@Random and @Shuffle give a new value on every evaluation: call them inside @Set, so a click draws once and the page stays still.",
-  "Pick the medium that shows the idea: Chart for numbers across time or categories; Svg drawings for shapes, parts and movement; Table for comparisons; Progress for a single share of a whole; Markdown for prose that needs headings or tables.",
-  "Draw with Svg whenever the user would otherwise have to picture it: assembly and how-to steps, knots and folds, how a machine, mechanism or the body works, geometry and science diagrams, the layout of a room, garden or board, chord and clock faces. Keep each drawing simple: a viewBox about 240 wide, a dozen or so shapes in the listed colors with SvgText labels, a Line with a small Polygon head for an arrow, and let $variables such as the current step drive it.",
-  "Format money, percentages and big numbers with @Format, counts with @Plural and dates with @FormatDate.",
-  "Dates relative to now (today, this week, next month) start from @Today(), never a fixed date. <, >, <= and >= compare numbers only, so order two dates with @DaysBetween(a, b) > 0.",
-  "Read a number input for a count or amount through @Default and @Clamp with a sensible minimum, e.g. @Clamp(@Default($people, 1), 1, 50), so 0, empty or negative cannot divide by zero or zero out the page.",
-  "Every input changes something visible, and every statement except root is referenced from root. Keep the program to the answer at hand: about 40 statements is plenty, and anything unreferenced is dropped.",
-  "A plain knowledge or safety question does not need a program: answer it in chat instead of calling this tool.",
+  'Start small: Col, Row, Card, Title, Text, Button, Input, Slider, Table and Chart cover most answers. Use advanced components only when useful.',
+  'Choose interactions only when they help the user. Ordinary prose, lists and numbers do not require an interactive page.',
+  'The program string can also contain JSON with named properties: {"type":"Col","children":[{"type":"Text","text":"Hello","size":"sm"}]}. Property names match the component signatures. Do not mix positional calls and named properties.',
+  'For interactive JSON use {"root":{"type":"Text","text":{"$expr":"$count"}},"state":{"count":2}}. A value {"$expr":"..."} contains an OpenUI expression, including bindings and actions. Other strings are literal text. State defaults are JSON literals. Use $expr for data objects containing type.',
+  'For OpenUI use root = Col([...]), children in one array, positional arguments in signature order, and references reachable from root. Omit trailing optional arguments. Only use supported components and functions. TextContent is called Text.',
+  'Use literal state defaults and keep every input connected to visible output. Use @Set for local actions and @ToAssistant for requests requiring another answer. Guard numeric inputs against empty values and division by zero.',
+  'Use subtle spacing and concise text. Tables and charts should clarify real supplied data. Only use image URLs supplied by the user or a tool.',
+  'On errors repair the reported cause and resubmit the complete program. Unknown components and ambiguous changes are not automatically guessed.',
 ];
 
 export const promptOptions: PromptOptions = {
@@ -70,8 +56,7 @@ export const promptOptions: PromptOptions = {
   builtinFunctions: true,
   additionalRules: rules,
   examples: [
-    `Example 1: A shopping list that scales with the guest count, with a checklist and a copy button:\n\n${exampleShoppingList}`,
-    `Example 2: A composed comparison with a table, a chart and a form:\n\n${exampleComparison}`,
-    `Example 3: Step-by-step instructions with a drawing for each step, driven by $step:\n\n${exampleSteps}`,
+    'Minimal: root = Col([Title("Overview"), Text("Details")])',
+    `Interactive example:\n${exampleShoppingList}`,
   ],
 };

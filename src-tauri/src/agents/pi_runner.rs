@@ -49,16 +49,14 @@ const VEYRA_CHAT_SYSTEM: &str = "You are Veyra, a helpful assistant for question
 ///
 /// `custom` is the user's own system prompt. When `replace` is set it becomes
 /// the only system prompt (`--system-prompt`), dropping both Pi's coding
-/// assistant prompt and Veyra's defaults. An empty `custom` in replace mode
-/// leaves Pi's own prompt untouched. Otherwise the custom prompt is appended
+/// assistant prompt and Veyra's defaults, including when custom is empty.
+/// Otherwise the custom prompt is appended
 /// after Veyra's defaults.
 fn system_prompt_args(custom: &str, replace: bool) -> Vec<String> {
     let custom = custom.trim();
     let mut args = Vec::new();
     if replace {
-        if !custom.is_empty() {
-            args.extend(["--system-prompt".to_string(), custom.to_string()]);
-        }
+        args.extend(["--system-prompt".to_string(), custom.to_string()]);
         return args;
     }
     args.extend([
@@ -74,6 +72,41 @@ fn system_prompt_args(custom: &str, replace: bool) -> Vec<String> {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Builds the `--tools` / `--no-tools` arguments.
+///
+/// `native_tools` is the set of built-in tools this chat has switched on. A
+/// disabled tool is simply absent from the allowlist, so Pi neither declares
+/// nor runs it. Names outside the known built-in set are ignored, which keeps a
+/// stale or hostile caller from introducing a capability.
+fn tool_allowlist_args(
+    tools: &[serde_json::Value],
+    native_tools: &[String],
+    has_project: bool,
+) -> Vec<String> {
+    let mut allowed: Vec<String> = tools
+        .iter()
+        .filter_map(|tool| tool["function"]["name"].as_str().map(str::to_string))
+        .collect();
+    if has_project {
+        allowed.extend(
+            native_tools
+                .iter()
+                .filter(|tool| NATIVE_TOOL_NAMES.contains(&tool.as_str()))
+                .cloned(),
+        );
+    }
+    // Keep the declaration order stable for easier debugging and snapshots.
+    allowed.dedup();
+    let mut args = Vec::new();
+    if allowed.is_empty() {
+        args.push("--no-tools".to_string());
+    } else {
+        args.extend(["--tools".to_string(), allowed.join(",")]);
+    }
+    args.extend(["--exclude-tools".to_string(), "mcp__*".to_string()]);
+    args
+}
 
 pub(crate) fn validate_pi_agent_input(
     input: &super::commands::StartPiAgentInput,
@@ -96,6 +129,13 @@ pub(crate) fn validate_pi_agent_input(
 
 const AGENT_PROCESS_TIMEOUT: Duration = Duration::from_secs(2 * 60 * 60);
 const AGENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Built-in Pi tools Veyra may expose. Anything outside this set is ignored,
+/// so a caller cannot introduce a capability by naming it.
+const NATIVE_TOOL_NAMES: [&str; 7] = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+
+/// The full built-in set, used when the caller does not specify one.
+pub(crate) const DEFAULT_NATIVE_TOOLS: [&str; 7] = NATIVE_TOOL_NAMES;
 
 struct ChatExtension(std::path::PathBuf);
 impl Drop for ChatExtension {
@@ -145,6 +185,7 @@ pub(crate) fn run_pi_agent_blocking(
     custom_system_prompt: &str,
     replace_system_prompt: bool,
     skill_paths: &[String],
+    native_tools: &[String],
     cancelled: &AtomicBool,
 ) -> Result<PiAgentOutput, String> {
     let mut args = vec![
@@ -157,10 +198,10 @@ pub(crate) fn run_pi_agent_blocking(
     args.extend(["--no-extensions".to_string(), "--no-skills".to_string(), "--no-prompt-templates".to_string()]);
     // Explicit `--skill` paths still load after `--no-skills`, which keeps Pi's
     // own discovery from picking up unrelated user or project skills.
-    for path in skill_paths {
+    for path in skill_paths.iter().filter(|_| !replace_system_prompt) {
         args.extend(["--skill".to_string(), path.clone()]);
     }
-    if !has_project { args.push("--no-context-files".to_string()); }
+    if !has_project || replace_system_prompt { args.push("--no-context-files".to_string()); }
 
     let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|error| error.to_string())?.as_nanos();
     let extension = ChatExtension(std::env::temp_dir().join(format!("veyra-chat-tools-{}-{nonce}.mjs", std::process::id())));
@@ -170,13 +211,7 @@ pub(crate) fn run_pi_agent_blocking(
     drop(extension_file);
     args.extend(["--extension".to_string(), extension.0.to_string_lossy().into_owned()]);
     args.extend(system_prompt_args(custom_system_prompt, replace_system_prompt));
-    {
-        let mut allowed: Vec<String> = tools.iter().filter_map(|tool| tool["function"]["name"].as_str().map(str::to_string)).collect();
-        if has_project { allowed.extend(["read", "bash", "edit", "write", "grep", "find", "ls"].map(str::to_string)); }
-        if allowed.is_empty() { args.push("--no-tools".to_string()); }
-        else { args.extend(["--tools".to_string(), allowed.join(",")]); }
-        args.extend(["--exclude-tools".to_string(), "mcp__*".to_string()]);
-    }
+    args.extend(tool_allowlist_args(tools, native_tools, has_project));
 
 
     args.extend([
@@ -192,6 +227,9 @@ pub(crate) fn run_pi_agent_blocking(
     let mut command = super::runtime::pi_command()?;
     command.args(&args)
         .env("VEYRA_PI_API_KEY", api_key)
+        .env("VEYRA_NO_PROJECT", if has_project { "0" } else { "1" })
+        .env("VEYRA_REPLACE_SYSTEM_PROMPT", if replace_system_prompt { "1" } else { "0" })
+        .env("VEYRA_SYSTEM_PROMPT", if replace_system_prompt || !has_project { custom_system_prompt.trim() } else { "" })
         .env("VEYRA_CHAT_TOOLS", serde_json::to_string(tools).unwrap_or_else(|_| "[]".to_string()))
         .current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     crate::shared::process::hide_console(&mut command);
@@ -386,6 +424,59 @@ fn successful_exit_status() -> std::process::ExitStatus {
 }
 
 #[cfg(test)]
+mod tool_allowlist_tests {
+    use super::*;
+
+    fn names(list: &[String]) -> Vec<String> {
+        let joined = list.iter().position(|arg| arg == "--tools")
+            .map(|index| list[index + 1].clone())
+            .unwrap_or_default();
+        joined.split(',').filter(|name| !name.is_empty()).map(str::to_string).collect()
+    }
+
+    #[test]
+    fn disabled_bash_is_absent_from_the_allowlist() {
+        let host = vec![serde_json::json!({ "function": { "name": "web_search" } })];
+        let enabled: Vec<String> = ["read", "edit", "write", "grep", "find", "ls"]
+            .iter().map(|name| name.to_string()).collect();
+        let args = tool_allowlist_args(&host, &enabled, true);
+        let allowed = names(&args);
+        assert!(allowed.contains(&"web_search".to_string()));
+        assert!(allowed.contains(&"read".to_string()));
+        assert!(!allowed.contains(&"bash".to_string()));
+    }
+
+    #[test]
+    fn bash_is_offered_when_enabled() {
+        let enabled: Vec<String> = DEFAULT_NATIVE_TOOLS.iter().map(|name| name.to_string()).collect();
+        let args = tool_allowlist_args(&[], &enabled, true);
+        assert!(names(&args).contains(&"bash".to_string()));
+    }
+
+    #[test]
+    fn unknown_names_are_ignored() {
+        let enabled: Vec<String> = vec!["bash".to_string(), "powershell".to_string(), "rm".to_string()];
+        let allowed = names(&tool_allowlist_args(&[], &enabled, true));
+        assert_eq!(allowed, vec!["bash".to_string()]);
+    }
+
+    #[test]
+    fn no_project_means_no_native_tools() {
+        let enabled: Vec<String> = DEFAULT_NATIVE_TOOLS.iter().map(|name| name.to_string()).collect();
+        let args = tool_allowlist_args(&[], &enabled, false);
+        assert_eq!(args, vec!["--no-tools".to_string(), "--exclude-tools".to_string(), "mcp__*".to_string()]);
+        assert!(names(&args).is_empty());
+    }
+
+    #[test]
+    fn mcp_tools_are_always_excluded() {
+        let args = tool_allowlist_args(&[], &[], false);
+        let excludeIndex = args.iter().position(|arg| arg == "--exclude-tools").unwrap();
+        assert_eq!(args[excludeIndex + 1], "mcp__*");
+    }
+}
+
+#[cfg(test)]
 mod system_prompt_tests {
     use super::*;
 
@@ -416,8 +507,8 @@ mod system_prompt_tests {
     }
 
     #[test]
-    fn replace_mode_with_empty_prompt_sets_nothing() {
-        assert!(system_prompt_args("   ", true).is_empty());
+    fn replace_mode_with_empty_prompt_still_overrides_defaults() {
+        assert_eq!(system_prompt_args("   ", true), vec!["--system-prompt", ""]);
     }
 }
 

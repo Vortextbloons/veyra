@@ -34,6 +34,11 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 rusqlite = { version = "0.40", features = ["bundled"] }
 parking_lot = "0.12"
+# Locked-project vault cryptography. Both crates are maintained RustCrypto
+# implementations; no custom primitives are implemented in this crate.
+argon2 = { version = "0.5", features = ["std", "zeroize"] }
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+zeroize = "1"
 chrono = "0.4"
 url = "2"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "blocking", "form", "query"] }

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Conversation } from "@/modules/chat/chat-types";
+import { stripLockedConversations } from "@/modules/projects/locked-project-registry";
 import {
   base64ToBytes,
   decryptSnapshotPayload,
@@ -236,8 +237,11 @@ async function writeConversationSnapshot(conversations: Conversation[]): Promise
     });
     return;
   }
+  // Lock-enabled projects keep their conversations in their own vault. Filtering
+  // here (not at each call site) means no future caller can reintroduce a leak.
+  const shared = stripLockedConversations(conversations);
   try {
-    const encrypted = await encryptSnapshot(conversations);
+    const encrypted = await encryptSnapshot(shared);
     try {
       await invoke("save_conversations", { conversationsJson: encrypted });
       try {

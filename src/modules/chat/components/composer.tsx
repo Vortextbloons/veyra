@@ -32,6 +32,7 @@ import { isModelInvocable } from "@/modules/extensions/skill-runtime";
 import { SkillChipRow } from "@/modules/extensions/components/skill-chip";
 import type { SkillRecord } from "@/modules/extensions/extension-types";
 import { useAgentStore } from "@/modules/agents/agent-store";
+import { PermissionModeControl } from "@/modules/permissions/components/permission-mode-control";
 import { useProjectStore } from "@/modules/projects/project-store";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -691,6 +692,7 @@ export function Composer({
                   onRefresh={modelReasoning.refresh}
                 />
                 {contextIndicator}
+                <PermissionModeControl sessionId={piConversationId} />
                 <div ref={optionsRef} className="relative">
                   <IconButton
                     aria-label="Chat options"
@@ -703,6 +705,7 @@ export function Composer({
                   <ChatOptionsMenu
                     open={optionsOpen}
                     onClose={() => setOptionsOpen(false)}
+                    sessionId={piConversationId}
                     webSearchEnabled={webSearchEnabled}
                     onWebSearchChange={onWebSearchChange}
                     webSearchDisabled={webSearchDisabled}
