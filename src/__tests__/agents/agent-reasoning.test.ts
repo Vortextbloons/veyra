@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pathToFileURL } from "node:url";
 import { delimiter, join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { effectiveReasoningLevel, reasoningToggleState } from "@/modules/agents/agent-reasoning";
 import type { AgentReasoningLevel } from "@/modules/agents/agent-types";
@@ -101,6 +101,8 @@ describe("Pi reasoning routing", () => {
     const fixture = mkdtempSync(join(tmpdir(), "veyra-pi-catalog-"));
     const store = join(fixture, "models-store.json");
     writeFileSync(store, "{}");
+    const timestamp = new Date("2026-01-01T00:00:00Z");
+    utimesSync(store, timestamp, timestamp);
     let reads = 0;
     const written: string[] = [];
     try {
@@ -122,6 +124,7 @@ describe("Pi reasoning routing", () => {
           yield JSON.stringify(requests[1]);
           // A catalog refresh rewrites the store between lookups.
           writeFileSync(store, JSON.stringify({ refreshed: 1 }));
+          utimesSync(store, timestamp, timestamp);
           yield JSON.stringify(requests[2]);
         })(),
       });

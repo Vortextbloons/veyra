@@ -94,9 +94,9 @@ async function loadPiRuntime() {
   return { sdk, ai: await import(pathToFileURL(aiPath).href) };
 }
 
-/** models.json mtime; 0 when the file does not exist yet. */
+/** Include size so rapid catalog writes with the same timestamp invalidate the cache. */
 function modelsRevision(path) {
-  try { return statSync(path).mtimeMs; } catch { return 0; }
+  try { const stat = statSync(path); return `${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`; } catch { return 0; }
 }
 
 /** Registry inputs: hand-written routes plus the refreshed provider catalog. */
