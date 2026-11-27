@@ -5,6 +5,20 @@ All notable changes to Veyra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-11-27
+
+Minor release since [2.5.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.5.0), improving web search speed and result quality, raising the search context cap, and fixing the chat scroll-to-top bug.
+
+### Changed
+
+- **Web search speed**: Pre-warm the bundled DonSeTch search engine and persistent MCP session in the background after app startup, reuse the persistent MCP client across searches instead of handshaking on every call, and add a 5-minute in-memory SERP query cache.
+- **Overlapped & bounded chat fetching**: Start fetching top DonSeTch URLs immediately without waiting for ArXiv/Wikipedia direct calls, prioritize distinct domains when selecting pages to fetch, and tighten chat fetch tail-latency (`batchGraceSecs: 1`, `maxAttempts: 1`).
+- **Passage ranking & context budget**: Cap passage chunks at `1,500` characters, filter stopwords, add exact-phrase boosting, retain/merge short factual lines, include `publishedAt` metadata when available, allocate per-source token budgets fairly across fetched sources, and raise the configurable `webSearchContextTokenLimit` cap from `8,000` to `10,000` tokens.
+
+### Fixed
+
+- **Chat scrolling**: Remove `contentVisibility: "auto"` / `containIntrinsicSize` from turn wrappers in `AgentOutputView`, disable browser scroll anchoring, eagerly load `MarkdownRenderer` so turns do not collapse to `0px` inside `<Suspense>`, replace render-time state caching with `useRef`, and disengage auto-follow on upward wheel scroll.
+
 ## [2.5.0] - 2026-11-08
 
 Minor release since [2.4.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.4.0), adding tool approvals, password-locked projects, and local JavaScript execution.
