@@ -54,7 +54,7 @@ describe("chat search reading budget", () => {
     expect(bundle.sources).toHaveLength(8);
     expect(mocks.fetch).toHaveBeenCalledWith(
       ["https://example.com/0", "https://example.com/1", "https://example.com/2"],
-      3, 4, 8000, { advancedSearchBundleEnabled: true, waybackFallbackEnabled: false },
+      3, 4, 8000, { advancedSearchBundleEnabled: true, waybackFallbackEnabled: false, batchGraceSecs: 1, maxAttempts: 1 },
     );
     expect(mocks.arxiv).not.toHaveBeenCalled();
     expect(mocks.wikipedia).not.toHaveBeenCalled();

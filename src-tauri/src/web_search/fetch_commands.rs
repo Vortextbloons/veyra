@@ -287,7 +287,7 @@ async fn fetch_one(req: FetchRequest) -> FetchedPage {
                 let budget_left = remaining_budget(req.deadline)
                     .map(|remaining| remaining > Duration::from_secs(1))
                     .unwrap_or(true);
-                if failure.retryable && attempt + 1 < FETCH_MAX_ATTEMPTS && budget_left {
+                if failure.retryable && attempt + 1 < req.max_attempts && budget_left {
                     let delay =
                         fetch_retry_delay(attempt, failure.retry_after).min(Duration::from_secs(1));
                     attempt += 1;
@@ -598,6 +598,8 @@ pub async fn fetch_and_extract_pages(
     cache_dir: PathBuf,
     advanced_search_bundle_enabled: Option<bool>,
     wayback_fallback_enabled: Option<bool>,
+    batch_grace_secs: Option<u64>,
+    max_attempts: Option<u32>,
 ) -> Result<Vec<FetchedPage>, String> {
     if cache_dir.as_os_str().is_empty() {
         return Err("Cache directory is required".into());
@@ -609,9 +611,15 @@ pub async fn fetch_and_extract_pages(
     let timeout = timeout_secs.clamp(2, 30);
     let bundle_enabled = advanced_search_bundle_enabled.unwrap_or(true);
     let wayback_enabled = wayback_fallback_enabled.unwrap_or(true);
+    let grace_secs = batch_grace_secs
+        .unwrap_or(FETCH_BUDGET_GRACE_SECS)
+        .min(FETCH_BUDGET_GRACE_SECS);
+    let effective_max_attempts = max_attempts
+        .unwrap_or(FETCH_MAX_ATTEMPTS)
+        .clamp(1, FETCH_MAX_ATTEMPTS);
     // One shared wall-clock budget keeps a single dead host from stalling the
     // whole batch: retries, redirect hops and Wayback recovery all share it.
-    let deadline = Instant::now() + Duration::from_secs(timeout + FETCH_BUDGET_GRACE_SECS);
+    let deadline = Instant::now() + Duration::from_secs(timeout + grace_secs);
 
     let mut tasks = Vec::with_capacity(urls.len());
     for url in urls {
@@ -628,6 +636,7 @@ pub async fn fetch_and_extract_pages(
                 advanced_search_bundle_enabled: bundle_enabled,
                 wayback_fallback_enabled: wayback_enabled,
                 deadline: Some(deadline),
+                max_attempts: effective_max_attempts,
             };
             // Hard stop for the page, including extraction work that the network
             // deadline does not cover.
@@ -697,6 +706,7 @@ mod tests {
             advanced_search_bundle_enabled: true,
             wayback_fallback_enabled: wayback,
             deadline,
+            max_attempts: FETCH_MAX_ATTEMPTS,
         }
     }
 

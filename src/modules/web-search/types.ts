@@ -82,6 +82,9 @@ export type SearchContextBundle = {
   summary: string;
   sources: SearchSource[];
   tokenCount: number;
+  /** Pre-built context block matching the run's tokenLimit, avoiding duplicate work. */
+  contextBlock?: string;
+  contextTokenLimit?: number;
   fetchedPages?: FetchedPageSummary[];
   diagnostics?: {
     queries: Array<{ query: string; lane: string }>;

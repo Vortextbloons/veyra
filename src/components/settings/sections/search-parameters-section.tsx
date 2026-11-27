@@ -46,7 +46,7 @@ export function SearchParametersSection({
               value={webSearchContextTokenLimit}
               onChange={setWebSearchContextTokenLimit}
               min={500}
-              max={8000}
+              max={10000}
               step={250}
               formatValue={(n) => n.toLocaleString()}
             />

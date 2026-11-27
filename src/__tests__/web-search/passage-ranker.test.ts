@@ -17,4 +17,14 @@ describe("rankSearchPassages", () => {
     expect(passages[0]?.text).toContain("Retry-After");
     expect(passages[0]?.startOffset).toBeGreaterThan(0);
   });
+
+  it("ignores stopwords and retains short factual lines matching the query", () => {
+    const content = [
+      "What is the history of the project and what are the details.",
+      "",
+      "Released: v4.2.1 on 2026-10-15.",
+    ].join("\n");
+    const passages = rankSearchPassages("source-2", content, "what is v4.2.1 release", 1);
+    expect(passages[0]?.text).toContain("v4.2.1");
+  });
 });

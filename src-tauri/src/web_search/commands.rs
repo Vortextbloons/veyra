@@ -145,7 +145,7 @@ static WIKIPEDIA_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::n
         .map_err(|e| format!("Failed to build wikipedia HTTP client: {e}"))
 });
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TauriSearchResult {
     pub id: String,
     pub title: String,
@@ -156,7 +156,7 @@ pub struct TauriSearchResult {
     pub published_at: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TauriSearchResponse {
     pub query: String,
     pub results: Vec<TauriSearchResult>,

@@ -6,9 +6,10 @@
 //! DonSeTch is AGPL-3.0 and Veyra talks to it over MCP.
 
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
@@ -18,6 +19,12 @@ const ENGINE_START_TIMEOUT: Duration = Duration::from_secs(25);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(150);
 const MCP_CALL_TIMEOUT: Duration = Duration::from_secs(45);
 const ENGINE_VERSION_FALLBACK: &str = "unknown";
+const SERP_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const SERP_CACHE_MAX_ENTRIES: usize = 128;
+
+type SerpCacheKey = (String, usize, Option<String>);
+static SERP_CACHE: LazyLock<parking_lot::Mutex<HashMap<SerpCacheKey, (TauriSearchResponse, Instant)>>> =
+    LazyLock::new(|| parking_lot::Mutex::new(HashMap::new()));
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -897,6 +904,22 @@ pub async fn web_search(
         return Err("Search query is too long.".into());
     }
 
+    let effective_limit = limit.unwrap_or(8).clamp(1, 12);
+    let mapped_intent = map_intent(intent.as_deref());
+    let cache_key: SerpCacheKey = (
+        query.to_lowercase(),
+        effective_limit,
+        mapped_intent.map(str::to_string),
+    );
+    {
+        let guard = SERP_CACHE.lock();
+        if let Some((cached, fetched_at)) = guard.get(&cache_key) {
+            if fetched_at.elapsed() <= SERP_CACHE_TTL {
+                return Ok(cached.clone());
+            }
+        }
+    }
+
     let _url = state.ensure_ready().await?;
     let endpoint = state
         .inner
@@ -913,12 +936,21 @@ pub async fn web_search(
         &state.inner,
         &endpoint,
         query,
-        limit.unwrap_or(8),
-        map_intent(intent.as_deref()),
+        effective_limit,
+        mapped_intent,
     )
     .await?;
 
-    extract_search_response(query, &value)
+    let response = extract_search_response(query, &value)?;
+    if !response.results.is_empty() {
+        let mut guard = SERP_CACHE.lock();
+        guard.retain(|_, (_, fetched_at)| fetched_at.elapsed() <= SERP_CACHE_TTL);
+        if guard.len() >= SERP_CACHE_MAX_ENTRIES {
+            guard.clear();
+        }
+        guard.insert(cache_key, (response.clone(), Instant::now()));
+    }
+    Ok(response)
 }
 
 #[cfg(test)]

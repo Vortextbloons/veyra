@@ -54,8 +54,14 @@ pub struct FetchRequest {
     /// Hard wall-clock budget for this page (shared across retries and fallbacks).
     #[serde(skip)]
     pub deadline: Option<Instant>,
+    #[serde(default = "default_max_attempts")]
+    pub max_attempts: u32,
 }
 
 fn default_bundle_enabled() -> bool {
     true
+}
+
+fn default_max_attempts() -> u32 {
+    2
 }

@@ -153,36 +153,84 @@ export async function runSearch(
 
     const providerResultCounts: Record<string, number> = {};
 
-    const [engineResults, arxivResults, wikipediaResults] = await Promise.all([
-      provider.search({
-        query,
-        limit: request.limit ?? maxResults,
-        intent: request.intent,
-      }),
-      direct.arxiv
-        ? withSoftTimeout(
-            new ArXivProvider({
-              id: "arxiv-direct",
-              name: "ArXiv",
-              enabled: true,
-              maxResults: directLimit,
-            }).search({ query, limit: directLimit }),
-            DIRECT_PROVIDER_TIMEOUT_MS,
-            "ArXiv",
-          )
-        : Promise.resolve([] as SearchResult[]),
-      direct.wikipedia
-        ? withSoftTimeout(
-            new WikipediaProvider({
-              id: "wikipedia-direct",
-              name: "Wikipedia",
-              enabled: true,
-              maxResults: directLimit,
-            }).search({ query, limit: directLimit }),
-            DIRECT_PROVIDER_TIMEOUT_MS,
-            "Wikipedia",
-          )
-        : Promise.resolve([] as SearchResult[]),
+    const enginePromise = provider.search({
+      query,
+      limit: request.limit ?? maxResults,
+      intent: request.intent,
+    });
+    const arxivPromise = direct.arxiv
+      ? withSoftTimeout(
+          new ArXivProvider({
+            id: "arxiv-direct",
+            name: "ArXiv",
+            enabled: true,
+            maxResults: directLimit,
+          }).search({ query, limit: directLimit }),
+          DIRECT_PROVIDER_TIMEOUT_MS,
+          "ArXiv",
+        )
+      : Promise.resolve([] as SearchResult[]);
+    const wikipediaPromise = direct.wikipedia
+      ? withSoftTimeout(
+          new WikipediaProvider({
+            id: "wikipedia-direct",
+            name: "Wikipedia",
+            enabled: true,
+            maxResults: directLimit,
+          }).search({ query, limit: directLimit }),
+          DIRECT_PROVIDER_TIMEOUT_MS,
+          "Wikipedia",
+        )
+      : Promise.resolve([] as SearchResult[]);
+
+    // Start fetching DonSeTch's top URLs immediately once DonSeTch returns,
+    // without waiting for ArXiv/Wikipedia direct calls to finish.
+    const engineResults = await enginePromise;
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const fetchOptions = {
+      advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
+      waybackFallbackEnabled: !isChat && settings.bundleWaybackFallback,
+      ...(isChat ? { batchGraceSecs: 1, maxAttempts: 1 } : {}),
+    };
+
+    const runFetch = async (urls: string[]): Promise<FetchedPageSummary[]> => {
+      if (skipFetch || !fetchEnabled || urls.length === 0) return [];
+      onFetchProgress?.(0, urls.length);
+      try {
+        const pages = await invokeFetchAndExtractPages(
+          urls,
+          // Fetch pages in a single wave where possible; the Rust side bounds the
+          // whole batch with one shared deadline, so more parallelism is safe.
+          Math.min(urls.length, 6),
+          perPageTimeoutSecs,
+          maxCharsPerSource,
+          fetchOptions,
+        );
+        onFetchProgress?.(pages.length, urls.length);
+        return pages.map((p: FetchedPage) => ({
+          url: p.url,
+          status: p.status,
+          title: p.title,
+          content: p.content,
+          error_reason: p.error_reason,
+        }));
+      } catch (error) {
+        console.warn("[web-search] fetch+extract failed, continuing with snippets:", error);
+        onFetchProgress?.(0, urls.length);
+        return [];
+      }
+    };
+
+    const earlyUrls = selectFetchUrls(dedupeResults(engineResults, maxResults), fetchCount);
+    const earlyFetchPromise = runFetch(earlyUrls);
+
+    const [arxivResults, wikipediaResults, earlyFetchedPages] = await Promise.all([
+      arxivPromise,
+      wikipediaPromise,
+      earlyFetchPromise,
     ]);
 
     providerResultCounts.donsetch = engineResults.length;
@@ -204,36 +252,10 @@ export async function runSearch(
       );
     }
 
-    let fetchedPages: FetchedPageSummary[] = [];
-    const topForFetch = results.slice(0, fetchCount).map((r) => r.url);
-    if (!skipFetch && fetchEnabled && topForFetch.length > 0) {
-      onFetchProgress?.(0, topForFetch.length);
-      try {
-        const pages = await invokeFetchAndExtractPages(
-          topForFetch,
-          // Fetch pages in a single wave where possible; the Rust side bounds the
-          // whole batch with one shared deadline, so more parallelism is safe.
-          Math.min(topForFetch.length, 6),
-          perPageTimeoutSecs,
-          maxCharsPerSource,
-          {
-            advancedSearchBundleEnabled: settings.advancedSearchBundleEnabled,
-            waybackFallbackEnabled: !isChat && settings.bundleWaybackFallback,
-          },
-        );
-        onFetchProgress?.(pages.length, topForFetch.length);
-        fetchedPages = pages.map((p: FetchedPage) => ({
-          url: p.url,
-          status: p.status,
-          title: p.title,
-          content: p.content,
-          error_reason: p.error_reason,
-        }));
-      } catch (error) {
-        console.warn("[web-search] fetch+extract failed, continuing with snippets:", error);
-        onFetchProgress?.(0, topForFetch.length);
-      }
-    }
+    const fetchedPages =
+      earlyUrls.length > 0
+        ? earlyFetchedPages
+        : await runFetch(selectFetchUrls(results, fetchCount));
 
     if (signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
@@ -288,6 +310,8 @@ export async function runSearch(
       summary,
       sources,
       tokenCount,
+      contextBlock: contextForBudget,
+      contextTokenLimit: tokenLimit,
       fetchedPages,
       diagnostics: {
         queries: [{ query, lane: "general" }],
@@ -304,6 +328,39 @@ export async function runSearch(
   });
   activeSearch = pending;
   return pending;
+}
+
+/**
+ * Prefer distinct hostnames first so we don't spend multiple fetch slots on the
+ * same site, then backfill from remaining results if fewer distinct hosts exist.
+ */
+function selectFetchUrls(results: SearchResult[], limit: number): string[] {
+  if (limit <= 0) return [];
+  const selected: string[] = [];
+  const seenDomains = new Set<string>();
+  const deferred: string[] = [];
+
+  for (const result of results) {
+    let host = "";
+    try {
+      host = new URL(result.url).hostname.replace(/^www\./, "").toLowerCase();
+    } catch {
+      host = "";
+    }
+    if (host && !seenDomains.has(host)) {
+      seenDomains.add(host);
+      selected.push(result.url);
+      if (selected.length >= limit) return selected;
+    } else {
+      deferred.push(result.url);
+    }
+  }
+
+  for (const url of deferred) {
+    if (selected.length >= limit) break;
+    selected.push(url);
+  }
+  return selected;
 }
 
 function dedupeResults(results: SearchResult[], limit: number): SearchResult[] {
@@ -340,9 +397,21 @@ function buildContextBlock(
   const headerFooterTokens = estimateTokens(header + footer);
   const maxContentTokens = Math.max(0, tokenLimit - headerFooterTokens);
 
+  const fetchedSourceCount = sources.filter((source) => {
+    const page = fetchedByUrl.get(source.url);
+    return Boolean(page && page.status === "ok" && page.content);
+  }).length;
+  // Reserve ~20% of the budget for non-fetched snippets so Source #1 cannot
+  // crowd out Sources #2-#8.
+  const perFetchedCapTokens =
+    fetchedSourceCount > 0
+      ? Math.max(400, Math.floor((maxContentTokens * 0.8) / fetchedSourceCount))
+      : maxContentTokens;
+
   const sourceEntries: string[] = [];
   for (const source of sources) {
     const page = fetchedByUrl.get(source.url);
+    const publishedLine = source.publishedAt ? `Published: ${source.publishedAt}\n` : "";
     let body: string;
     if (page && page.status === "ok" && page.content) {
       const passages = source.passages ?? rankSearchPassages(source.id, page.content, query);
@@ -355,12 +424,18 @@ function buildContextBlock(
               )
               .join("\n\n")
           : page.content;
+      const rawEntry = `Source: ${source.title}\nURL: ${source.url}\n${publishedLine}${body}`;
+      const cappedEntry =
+        estimateTokens(rawEntry) > perFetchedCapTokens
+          ? rawEntry.slice(0, perFetchedCapTokens * 4)
+          : rawEntry;
+      sourceEntries.push(cappedEntry);
     } else {
       const reason = page?.error_reason ?? "content not fetched";
       const prefix = page ? `[content unavailable: ${reason}]\n` : "";
       body = `${prefix}Snippet: ${source.snippet}`;
+      sourceEntries.push(`Source: ${source.title}\nURL: ${source.url}\n${publishedLine}${body}`);
     }
-    sourceEntries.push(`Source: ${source.title}\nURL: ${source.url}\n${body}`);
   }
 
   const lines: string[] = [];
@@ -401,7 +476,7 @@ export function resolveSearchContextTokenLimit(
     projectRecord?.settings?.webSearchContextTokenLimit ??
     settings.webSearchContextTokenLimit ??
     4000;
-  return Math.max(500, Math.min(8000, configured));
+  return Math.max(500, Math.min(10000, configured));
 }
 
 export function buildSearchContextBlock(
@@ -409,6 +484,9 @@ export function buildSearchContextBlock(
   options: { tokenLimit?: number } = {},
 ): string {
   const maxContextTokens = options.tokenLimit ?? resolveSearchContextTokenLimit();
+  if (bundle.contextBlock && bundle.contextTokenLimit === maxContextTokens) {
+    return bundle.contextBlock;
+  }
   const fetchedByUrl = new Map<string, FetchedPageSummary>();
   for (const page of bundle.fetchedPages ?? []) {
     fetchedByUrl.set(page.url, page);
