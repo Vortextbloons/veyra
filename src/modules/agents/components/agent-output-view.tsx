@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 import type { AgentSession } from "@/modules/agents/agent-types";
 import { AgentChatTurn } from "@/modules/agents/components/agent-chat-turn";
@@ -27,18 +27,33 @@ export function AgentOutputView({
   }, [session.events]);
 
   const turns = useMemo(() => buildAgentChatTurns(session.events, session.model), [session.events, session.model]);
-  const [cached, setCached] = useState({ source: turns, turns });
-  const stableTurns = cached.source === turns ? cached.turns : reuseAgentChatTurns(turns, cached.turns);
-  if (cached.source !== turns) setCached({ source: turns, turns: stableTurns });
+  const prevTurnsRef = useRef<AgentChatTurnModel[]>([]);
+  const stableTurns = useMemo(() => {
+    const next = reuseAgentChatTurns(turns, prevTurnsRef.current);
+    prevTurnsRef.current = next;
+    return next;
+  }, [turns]);
   const hasAssistantAfterLastPrompt = turns.at(-1)?.role === "assistant";
   const showWorkingTurn = isRunning && !hasAssistantAfterLastPrompt;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={outputRef} onScroll={() => { const el = outputRef.current; if (el) followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }} className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={outputRef}
+        onWheel={(e) => {
+          if (e.deltaY < 0) followOutput.current = false;
+        }}
+        onScroll={() => {
+          const el = outputRef.current;
+          if (el) {
+            followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          }
+        }}
+        className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
+      >
         <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-3 px-5 pb-8 pt-6">
           {stableTurns.map((turn) => (
-            <div key={turn.id} style={turn === stableTurns.at(-1) ? undefined : { contentVisibility: "auto", containIntrinsicSize: "auto 160px" }}>
+            <div key={turn.id}>
               <AgentChatTurn turn={turn} isStreaming={isRunning && turn === stableTurns.at(-1)} onFollowUp={onFollowUp} onRetry={onRetry} />
             </div>
           ))}

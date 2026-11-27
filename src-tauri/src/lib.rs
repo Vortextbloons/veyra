@@ -646,7 +646,9 @@ pub fn run() {
 
             let search_engine_state =
                 web_search::engine::SearchEngineState::new(app.handle().clone());
-            // Search starts on the first request through ensure_ready().
+            // Pre-warm the local search engine in the background so the first
+            // search does not pay process startup and model-seeding latency.
+            search_engine_state.spawn_prewarm();
             app.manage(search_engine_state);
 
             agents::reasoning::start_reasoning_watcher(app.handle().clone());

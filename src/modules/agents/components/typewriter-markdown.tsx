@@ -1,8 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-
-const MarkdownRenderer = lazy(() =>
-  import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
-);
+import { useEffect, useRef, useState } from "react";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 
 export function TypewriterMarkdown({ content, enabled }: { content: string; enabled: boolean }) {
   const [visible, setVisible] = useState(enabled ? "" : content);
@@ -42,9 +39,7 @@ export function TypewriterMarkdown({ content, enabled }: { content: string; enab
 
   return (
     <>
-      <Suspense>
-        <MarkdownRenderer className="leading-snug" deferHighlight={enabled && visible !== content}>{visible}</MarkdownRenderer>
-      </Suspense>
+      <MarkdownRenderer className="leading-snug" deferHighlight={enabled && visible !== content}>{visible}</MarkdownRenderer>
       {enabled && visible.length < content.length && (
         <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-[var(--color-accent)] align-middle" />
       )}

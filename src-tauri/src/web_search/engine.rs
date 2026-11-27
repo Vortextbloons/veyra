@@ -43,6 +43,11 @@ struct EngineEndpoint {
     token: String,
 }
 
+struct McpClientEntry {
+    url: String,
+    client: rmcp::service::RunningService<rmcp::RoleClient, ()>,
+}
+
 /// Kill-on-close job object. If Veyra crashes, Windows closes the handle and
 /// terminates the engine's whole process tree with it.
 #[cfg(target_os = "windows")]
@@ -113,6 +118,7 @@ struct EngineInner {
     status: parking_lot::Mutex<SearchEngineStatus>,
     child: parking_lot::Mutex<Option<Child>>,
     endpoint: parking_lot::Mutex<Option<EngineEndpoint>>,
+    mcp_client: tokio::sync::Mutex<Option<McpClientEntry>>,
     start_lock: tokio::sync::Mutex<()>,
     #[cfg(target_os = "windows")]
     job: parking_lot::Mutex<Option<EngineJob>>,
@@ -143,6 +149,7 @@ impl SearchEngineState {
                 }),
                 child: parking_lot::Mutex::new(None),
                 endpoint: parking_lot::Mutex::new(None),
+                mcp_client: tokio::sync::Mutex::new(None),
                 start_lock: tokio::sync::Mutex::new(()),
                 #[cfg(target_os = "windows")]
                 job: parking_lot::Mutex::new(None),
@@ -157,6 +164,27 @@ impl SearchEngineState {
 
     pub async fn ensure_ready(&self) -> Result<String, String> {
         self.inner.ensure_ready().await
+    }
+
+    /// Pre-warm the search engine and its persistent MCP session in the
+    /// background after a short delay so app startup stays snappy.
+    pub fn spawn_prewarm(&self) {
+        if engine_directory(&self.inner.app).is_err() {
+            return;
+        }
+        let inner = Arc::clone(&self.inner);
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(1_500)).await;
+            if let Ok(_url) = inner.ensure_ready().await {
+                let endpoint = inner.endpoint.lock().as_ref().map(|ep| EngineEndpoint {
+                    url: ep.url.clone(),
+                    token: ep.token.clone(),
+                });
+                if let Some(endpoint) = endpoint {
+                    let _ = get_or_connect_mcp_peer(&inner, &endpoint).await;
+                }
+            }
+        });
     }
 
     pub async fn restart(&self) -> Result<SearchEngineStatus, String> {
@@ -340,6 +368,9 @@ impl EngineInner {
             close_engine_job(job);
         }
         *self.endpoint.lock() = None;
+        if let Ok(mut guard) = self.mcp_client.try_lock() {
+            *guard = None;
+        }
         let already_stopped = self.status.lock().state == SearchEngineStatusKind::Stopped;
         if !already_stopped {
             self.set_status(SearchEngineStatusKind::Stopped, None, None);
@@ -594,13 +625,9 @@ fn log_tail(path: Option<&Path>, max_chars: usize) -> String {
 
 // ── MCP bridge ─────────────────────────────────────────────────────────────
 
-async fn call_web_search(
+async fn connect_mcp_client(
     endpoint: &EngineEndpoint,
-    query: &str,
-    limit: usize,
-    intent: Option<&str>,
-) -> Result<serde_json::Value, String> {
-    use rmcp::model::CallToolRequestParams;
+) -> Result<rmcp::service::RunningService<rmcp::RoleClient, ()>, String> {
     use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
     use rmcp::transport::StreamableHttpClientTransport;
     use rmcp::ServiceExt;
@@ -611,10 +638,49 @@ async fn call_web_search(
     ))
     .auth_header(endpoint.token.clone());
     let transport = StreamableHttpClientTransport::from_config(config);
-    let mut client = ()
+    ()
         .serve(transport)
         .await
-        .map_err(|error| format!("Could not connect to the local search engine: {error}"))?;
+        .map_err(|error| format!("Could not connect to the local search engine: {error}"))
+}
+
+async fn get_or_connect_mcp_peer(
+    inner: &EngineInner,
+    endpoint: &EngineEndpoint,
+) -> Result<rmcp::Peer<rmcp::RoleClient>, String> {
+    let mut guard = inner.mcp_client.lock().await;
+    if let Some(entry) = guard.as_ref() {
+        if entry.url == endpoint.url && !entry.client.is_closed() {
+            return Ok(entry.client.peer().clone());
+        }
+    }
+    if let Some(mut old) = guard.take() {
+        let _ = old.client.close().await;
+    }
+    let client = connect_mcp_client(endpoint).await?;
+    let peer = client.peer().clone();
+    *guard = Some(McpClientEntry {
+        url: endpoint.url.clone(),
+        client,
+    });
+    Ok(peer)
+}
+
+async fn invalidate_mcp_client(inner: &EngineInner, url: &str) {
+    let mut guard = inner.mcp_client.lock().await;
+    if guard.as_ref().is_some_and(|entry| entry.url == url) {
+        if let Some(mut old) = guard.take() {
+            let _ = old.client.close().await;
+        }
+    }
+}
+
+fn build_web_search_request(
+    query: &str,
+    limit: usize,
+    intent: Option<&str>,
+) -> rmcp::model::CallToolRequestParams {
+    use rmcp::model::CallToolRequestParams;
 
     let mut arguments = serde_json::Map::new();
     arguments.insert("query".into(), serde_json::json!(query));
@@ -623,7 +689,53 @@ async fn call_web_search(
         arguments.insert("intent".into(), serde_json::json!(intent));
     }
 
-    let request = CallToolRequestParams::new("web_search").with_arguments(arguments);
+    CallToolRequestParams::new("web_search").with_arguments(arguments)
+}
+
+async fn call_web_search_persistent(
+    inner: &EngineInner,
+    endpoint: &EngineEndpoint,
+    query: &str,
+    limit: usize,
+    intent: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let mut attempt = 0u8;
+    loop {
+        let peer = get_or_connect_mcp_peer(inner, endpoint).await?;
+        let request = build_web_search_request(query, limit, intent);
+        match tokio::time::timeout(MCP_CALL_TIMEOUT, peer.call_tool(request)).await {
+            Ok(Ok(result)) => {
+                return serde_json::to_value(result)
+                    .map_err(|error| format!("Could not read the search engine response: {error}"));
+            }
+            Ok(Err(error)) if attempt == 0 => {
+                // The persistent session may have been dropped by the engine;
+                // clear it and reconnect once before surfacing an error.
+                invalidate_mcp_client(inner, &endpoint.url).await;
+                attempt += 1;
+                eprintln!("[search-engine] reconnecting MCP session after error: {error}");
+            }
+            Ok(Err(error)) => {
+                invalidate_mcp_client(inner, &endpoint.url).await;
+                return Err(format!("The local search engine failed: {error}"));
+            }
+            Err(_) => {
+                invalidate_mcp_client(inner, &endpoint.url).await;
+                return Err("The local search engine timed out.".to_string());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+async fn call_web_search(
+    endpoint: &EngineEndpoint,
+    query: &str,
+    limit: usize,
+    intent: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let mut client = connect_mcp_client(endpoint).await?;
+    let request = build_web_search_request(query, limit, intent);
     let result = tokio::time::timeout(MCP_CALL_TIMEOUT, client.peer().call_tool(request))
         .await
         .map_err(|_| "The local search engine timed out.".to_string())?
@@ -797,7 +909,8 @@ pub async fn web_search(
         })
         .ok_or_else(|| "The local search engine is not ready.".to_string())?;
 
-    let value = call_web_search(
+    let value = call_web_search_persistent(
+        &state.inner,
         &endpoint,
         query,
         limit.unwrap_or(8),

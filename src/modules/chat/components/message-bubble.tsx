@@ -21,9 +21,7 @@ const InteractiveAnswerBlock = lazy(() =>
   })),
 );
 
-const MarkdownRenderer = lazy(() =>
-  import("@/components/markdown-renderer").then((m) => ({ default: m.MarkdownRenderer })),
-);
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 
 type ChatMessageLayout = {
   messagesPx: string;
@@ -116,11 +114,9 @@ export const MessageBubble = memo(function MessageBubble({
                 </div>
               )}
               {message.content.trim() && (
-                <Suspense>
-                  <MarkdownRenderer className="leading-snug" deferHighlight={isStreaming}>
-                    {message.content.trim()}
-                  </MarkdownRenderer>
-                </Suspense>
+                <MarkdownRenderer className="leading-snug" deferHighlight={isStreaming}>
+                  {message.content.trim()}
+                </MarkdownRenderer>
               )}
             </div>
           </div>
@@ -154,11 +150,9 @@ export const MessageBubble = memo(function MessageBubble({
           {showThinking && !body ? (
               <ThinkingIndicator />
           ) : (
-            <Suspense>
-              <MarkdownRenderer className="leading-snug" deferHighlight={isStreaming}>
-                {body}
-              </MarkdownRenderer>
-            </Suspense>
+            <MarkdownRenderer className="leading-snug" deferHighlight={isStreaming}>
+              {body}
+            </MarkdownRenderer>
           )}
           {showPulseInReply && (
             <span className="ml-0.5 inline-block size-2 animate-pulse rounded-full bg-accent align-middle" />
