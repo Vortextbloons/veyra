@@ -542,11 +542,14 @@ export function Composer({
           <ProjectPicker value={projectId} projects={projects} disabled={busy} onChange={(next) => {
             const agent = useAgentStore.getState();
             const session = agent.sessions.find((item) => item.id === agent.activeSessionId);
+            const folder = useProjectStore.getState().projects.find((project) => project.id === next)?.settings.resources?.find((resource) => resource.directory)?.path ?? "";
             if (session) {
-              useAgentStore.setState({ sessions: agent.sessions.map((item) => item.id === session.id ? { ...item, projectId: next } : item) });
+              useAgentStore.setState({
+                sessions: agent.sessions.map((item) => item.id === session.id ? { ...item, projectId: next, projectPath: folder } : item),
+                projectPath: folder,
+              });
               useChatStore.getState().moveConversation(session.sourceConversationId ?? session.id, next);
             } else {
-              const folder = useProjectStore.getState().projects.find((project) => project.id === next)?.settings.resources?.find((resource) => resource.directory)?.path ?? "";
               agent.setProjectPath(folder);
               agent.newSession();
             }

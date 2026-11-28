@@ -38,12 +38,6 @@ export default function (pi) {
   // Override after Pi assembles its prompt, including runtime metadata.
   if (process.env.VEYRA_REPLACE_SYSTEM_PROMPT === "1") {
     pi.on("before_agent_start", async () => ({ systemPrompt: process.env.VEYRA_SYSTEM_PROMPT ?? "" }));
-  } else if (process.env.VEYRA_NO_PROJECT === "1") {
-    // Pi's default prompt includes its process cwd even with --no-context-files.
-    // A discussion without a project must never inherit that workspace metadata.
-    pi.on("before_agent_start", async () => ({
-      systemPrompt: `${process.env.VEYRA_SYSTEM_PROMPT ?? ""}\nYou are Veyra, a helpful assistant. No project is attached. There is no workspace or current folder for this conversation. Ask the user to attach a project when file access is needed.`,
-    }));
   }
   const tools = JSON.parse(process.env.VEYRA_CHAT_TOOLS || "[]");
   for (const { function: tool } of tools) {

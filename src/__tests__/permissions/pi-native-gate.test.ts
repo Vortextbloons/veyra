@@ -141,17 +141,14 @@ describe("Pi native tool gate extension", () => {
 
 
 describe("Pi system prompt replacement", () => {
-  it("omits inherited workspace context when no project is attached", async () => {
+  it("keeps Pi's default system prompt when replacement is disabled", async () => {
     vi.stubEnv("VEYRA_REPLACE_SYSTEM_PROMPT", "0");
-    vi.stubEnv("VEYRA_NO_PROJECT", "1");
     vi.stubEnv("VEYRA_SYSTEM_PROMPT", "User instructions.");
     vi.stubEnv("VEYRA_CHAT_TOOLS", "[]");
     try {
       const handlers = new Map<string, () => Promise<unknown>>();
       registerExtension({ registerTool: vi.fn(), on: (name: string, handler: () => Promise<unknown>) => handlers.set(name, handler) });
-      const result = await handlers.get("before_agent_start")?.();
-      expect(result).toEqual({ systemPrompt: expect.stringContaining("No project is attached.") });
-      expect(result).toEqual({ systemPrompt: expect.stringContaining("User instructions.") });
+      expect(handlers.has("before_agent_start")).toBe(false);
     } finally { vi.unstubAllEnvs(); }
   });
   it.each(["Only my instructions.", ""])("overrides the assembled prompt exactly: %j", async (prompt) => {

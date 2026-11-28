@@ -3,7 +3,7 @@ use crate::shared::db_utils::run_db_command;
 use crate::shared::path_utils::validate_export_file_path;
 use crate::vault::state::VaultManager;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Manager, State};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -14,11 +14,58 @@ pub struct ProjectExportManifest {
     pub chat_ids: Vec<String>,
 }
 
+fn ensure_project_workspace_folder(app: &tauri::AppHandle, input: String) -> Result<String, String> {
+    let mut payload: serde_json::Value =
+        serde_json::from_str(&input).map_err(|e| format!("invalid create_project input: {e}"))?;
+    let project_id = payload["id"]
+        .as_str()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| "create_project requires id".to_string())?
+        .to_string();
+
+    let settings_str = payload["settingsJson"].as_str().unwrap_or("{}");
+    let mut settings: serde_json::Value =
+        serde_json::from_str(settings_str).unwrap_or_else(|_| serde_json::json!({}));
+    let has_directory = settings["resources"]
+        .as_array()
+        .is_some_and(|resources| {
+            resources.iter().any(|item| {
+                item["directory"].as_bool() == Some(true)
+                    && item["path"].as_str().is_some_and(|p| !p.trim().is_empty())
+            })
+        });
+
+    if !has_directory {
+        let workspace_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("failed to resolve app data dir: {e}"))?
+            .join("projects")
+            .join(&project_id);
+        std::fs::create_dir_all(&workspace_dir)
+            .map_err(|e| format!("failed to create project workspace folder: {e}"))?;
+        let workspace_str = workspace_dir.to_string_lossy().into_owned();
+        if !settings.is_object() {
+            settings = serde_json::json!({});
+        }
+        let mut resources = settings["resources"].as_array().cloned().unwrap_or_default();
+        resources.push(serde_json::json!({ "path": workspace_str, "directory": true }));
+        settings["resources"] = serde_json::Value::Array(resources);
+        settings["agentProjectPath"] = serde_json::Value::String(workspace_str);
+        payload["settingsJson"] = serde_json::Value::String(settings.to_string());
+    }
+
+    Ok(payload.to_string())
+}
+
 #[tauri::command]
 pub async fn create_project(
+    app: tauri::AppHandle,
     input: String,
     state: State<'_, ProjectDbState>,
 ) -> Result<project_db::ProjectRow, String> {
+    let input = ensure_project_workspace_folder(&app, input)?;
     run_db_command(state.inner(), "project", move |conn| {
         project_db::create_project(conn, input)
     })

@@ -69,7 +69,7 @@ export function ChatPanel({
           {bashAvailability.message}
         </p>
       ) : (
-        <p className="mt-2 text-center text-[11px] text-[var(--color-muted)]">{agentProjectPath ? "Can edit project files and run commands" : "Ask anything · Attach a project when you need file access"}</p>
+        <p className="mt-2 text-center text-[11px] text-[var(--color-muted)]">{agentProjectPath ? "Can edit project files and run commands" : "Can edit files and run commands"}</p>
       )}
     </div>}
   />;
