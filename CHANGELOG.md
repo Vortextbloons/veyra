@@ -5,6 +5,20 @@ All notable changes to Veyra are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1] - 2026-11-27
+
+Patch release since [2.6.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.6.0), enabling Pi's native file and shell tools outside projects, automatically provisioning project workspace folders, and keeping mid-chat project switching in sync.
+
+### Changed
+
+- **Native tools outside projects**: Allow Pi's enabled native tools (`read`, `bash`, `edit`, `write`, `grep`, `find`, `ls`) to run even when no project folder is attached, and remove the `VEYRA_NO_PROJECT` system prompt override that blocked file access.
+- **Automatic project workspace folders**: Automatically create `<app_data_dir>/projects/<project-id>` and attach it to `settings.resources` and `agentProjectPath` when creating a project without selecting an existing folder.
+- **Pi runtime flags**: Allow Pi's own skills, prompt templates, and project context files to load while keeping `--no-extensions` so global `~/.pi` extensions do not conflict with Veyra's host tools.
+
+### Fixed
+
+- **Mid-chat project switching**: Update `session.projectPath` and `useAgentStore.projectPath` when switching projects in the composer `ProjectPicker` during an active session.
+
 ## [2.6.0] - 2026-11-27
 
 Minor release since [2.5.0](https://github.com/Vortextbloons/veyra/releases/tag/v2.5.0), improving web search speed and result quality, raising the search context cap, and fixing the chat scroll-to-top bug.
